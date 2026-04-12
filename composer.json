@@ -1,0 +1,15 @@
+{
+    "name": "kreabank/module",
+    "description": "KreaBank module-local dependencies",
+    "type": "project",
+    "license": "GPL-3.0-or-later",
+    "authors": [
+        {
+            "name": "Kreativität Works",
+            "email": "mail@kreativitat.com"
+        }
+    ],
+    "require": {
+        "php-ai/php-ml": "^0.10.0"
+    }
+}
