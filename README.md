@@ -1,143 +1,133 @@
-# KREABANK FOR [DOLIBARR ERP & CRM](https://www.dolibarr.org)
+# KreaBank for [Dolibarr ERP & CRM](https://www.dolibarr.org)
 
-## Features
+KreaBank is a native-first bank statement import and reconciliation assistant for Dolibarr.
 
-- Assistant UX over native bank module (`/compta/bank`)
-- Import wizard with field mapping confirmation (CSV, OFX, CAMT.053 XML, XLS, XLSX)
-- Format/profile recognition per bank layout (saved mapping profiles)
-- Idempotent import (hash + account + date + amount + reference/description)
-- Matching suggestions for open customer/supplier invoices
-- Reconciliation persisted in native Dolibarr domain (bank/payment links + native conciliation)
-- Quick-entry helper + audit telemetry (`llx_kreabank_recon_audit`)
-- Multi-entity aware and permission-gated with native bank rights
-- Cron-ready scaffold for bank feed sync settings
+It is designed to accelerate bank operations without creating a parallel accounting engine: imported statements and reconciliation results are persisted in Dolibarr's native bank domain, while KreaBank stores only the metadata required to support import, matching, and audit flows.
+
+## What KreaBank does
+
+- Imports bank statements from CSV, OFX, CAMT.053 XML, XLS, and XLSX files.
+- Lets the user confirm field mapping before import.
+- Detects reusable import layouts per bank/export format.
+- Prevents duplicate imports with contextual idempotency checks.
+- Suggests matching customer and supplier documents for reconciliation.
+- Persists reconciliation through native Dolibarr bank/payment links and native reconciliation status.
+- Provides pending, reconciliation, and history workspaces on top of the native bank module.
+- Respects Dolibarr permissions and active `entity` scoping.
 
 ## Native-first architecture
 
-- Official source of truth for statements/reconciliation:
-  - `llx_bank`
-  - `llx_bank_url`
-  - native payment tables linked by `update_fk_bank(...)`
-- KreaBank auxiliary tables are metadata only:
-  - `llx_kreabank_bankmeta`
-  - `llx_kreabank_import_profile`
-  - `llx_kreabank_pattern`
-  - `llx_kreabank_quick_entry`
-  - `llx_kreabank_recon_audit`
+Official statement and reconciliation data remains in native Dolibarr tables:
 
-<!--
-![Screenshot kreabank](img/screenshot_kreabank.png?raw=true "KreaBank"){imgmd}
--->
+- `llx_bank`
+- `llx_bank_url`
+- native payment/bank linkage flows triggered through Dolibarr business logic
 
-Other external modules are available on [Dolistore.com](https://www.dolistore.com).
+KreaBank auxiliary tables are limited to metadata and operational support:
 
-## Translations
+- `llx_kreabank_bankmeta`
+- `llx_kreabank_import_profile`
+- `llx_kreabank_pattern`
+- `llx_kreabank_quick_entry`
+- `llx_kreabank_recon_audit`
 
-Translations can be completed manually by editing files in the module directories under `langs`.
+This keeps bank reconciliation aligned with Dolibarr core behavior and avoids a second source of truth for financial data.
 
-<!--
-This module contains also a sample configuration for Transifex, under the hidden directory [.tx](.tx), so it is possible to manage translation using this service.
+## Requirements
 
-For more information, see the [translator's documentation](https://wiki.dolibarr.org/index.php/Translator_documentation).
-
-There is a [Transifex project](https://transifex.com/projects/p/dolibarr-module-template) for this module.
--->
-
+- Dolibarr with native bank module support (`modBanque`)
+- Dolibarr version `>= 19`
+- PHP `>= 7.1`
+- Composer only when the deployment package does not already contain the module-local `vendor/` directory
 
 ## Installation
 
-Prerequisites: You must have Dolibarr ERP & CRM software installed. You can download it from [Dolistore.org](https://www.dolibarr.org).
-You can also get a ready-to-use instance in the cloud from https://saas.dolibarr.org
+### From GitHub
 
-
-### From the ZIP file and GUI interface
-
-If the module is a ready-to-deploy zip file, so with a name `module_xxx-version.zip` (e.g., when downloading it from a marketplace like [Dolistore](https://www.dolistore.com)),
-go to menu `Home> Setup> Modules> Deploy external module` and upload the zip file.
-
-<!--
-
-Note: If this screen tells you that there is no "custom" directory, check that your setup is correct:
-
-- In your Dolibarr installation directory, edit the `htdocs/conf/conf.php` file and check that following lines are not commented:
-
-    ```php
-    //$dolibarr_main_url_root_alt ...
-    //$dolibarr_main_document_root_alt ...
-    ```
-
-- Uncomment them if necessary (delete the leading `//`) and assign the proper value according to your Dolibarr installation
-
-    For example :
-
-    - UNIX:
-        ```php
-        $dolibarr_main_url_root_alt = '/custom';
-        $dolibarr_main_document_root_alt = '/var/www/Dolibarr/htdocs/custom';
-        ```
-
-    - Windows:
-        ```php
-        $dolibarr_main_url_root_alt = '/custom';
-        $dolibarr_main_document_root_alt = 'C:/My Web Sites/Dolibarr/htdocs/custom';
-        ```
--->
-
-<!--
-
-### From a GIT repository
-
-Clone the repository in `$dolibarr_main_document_root_alt/kreabank`
-
-```shell
-cd ....../custom
-git clone git@github.com:gitlogin/kreabank.git kreabank
-```
-
--->
-
-### Final steps
-
-Using your browser:
-
-  - Log into Dolibarr as a super-administrator
-  - Go to "Setup"> "Modules"
-  - You should now be able to find and enable the module
-
-### Module-local ML dependency
-
-KreaBank uses its own local `vendor` directory for ML-assisted header mapping.
-Install dependencies inside the module root:
+Clone the repository into Dolibarr's custom modules directory:
 
 ```bash
-cd custom/kreabank
+cd /path/to/dolibarr/htdocs/custom
+git clone https://github.com/kreativitat/kreaBank.git kreabank
+```
+
+If the deployed copy does not contain the module-local dependencies, install them from the module root:
+
+```bash
+cd /path/to/dolibarr/htdocs/custom/kreabank
 composer install --no-dev --prefer-dist
 ```
 
+### From a ZIP package
+
+If you deploy the module from a packaged ZIP, upload it from:
+
+`Home -> Setup -> Modules -> Deploy external module`
+
+If the ZIP package does not ship the `vendor/` directory, run the same `composer install --no-dev --prefer-dist` command inside `custom/kreabank` after deployment.
+
+### Activation
+
+1. Log into Dolibarr as a super administrator.
+2. Open `Setup -> Modules`.
+3. Enable `KreaBank`.
+
+## Operational flow
+
+### Import
+
+1. Open `/custom/kreabank/import.php`.
+2. Upload a statement file and confirm the detected mapping.
+3. KreaBank normalizes the imported data and persists the result into Dolibarr's native bank domain.
+4. Technical metadata is stored in KreaBank support tables for idempotency, profile reuse, and auditability.
+
+### Reconciliation
+
+1. Open `/custom/kreabank/reconcile.php`.
+2. Review the proposed matches for invoices or payments.
+3. Confirm reconciliation.
+4. Reconciled state remains visible in the native Dolibarr bank pages under `/compta/bank/...`.
+
+### History and pending review
+
+- `/custom/kreabank/pending.php` lists statement lines still awaiting action.
+- `/custom/kreabank/history.php` exposes reconciliation and audit history.
+
+## Permissions and multicompany
+
+- Read access follows native bank read rights: `banque->lire`
+- Write/import/reconciliation actions follow native bank write rights: `banque->modifier`
+- Queries and writes are scoped to the active Dolibarr `entity`
+
+KreaBank is intended for real ERP environments and must not leak bank or reconciliation data across entities.
+
 ## Regression checks
 
-Run quick checks:
+Run the module regression script from the repository root:
 
 ```bash
-bash custom/kreabank/test/run_regression_native.sh
+bash test/run_regression_native.sh
 ```
 
-## Native assistant documentation
+The script includes:
 
-Short architecture guide (PT):
+- PHP lint checks on key entrypoints and classes
+- route safety checks for KreaBank and native bank URLs
+- optional HTTP smoke checks against a running local container
+- parser wiring checks
+- format consistency tests
+- reconciliation guard tests
 
-```text
-custom/kreabank/doc/KREABANK_NATIVE_ASSISTANT.md
-```
+## Additional documentation
 
+- Native assistant architecture note (Portuguese): `doc/KREABANK_NATIVE_ASSISTANT.md`
 
-
-## Licenses
+## License
 
 ### Main code
 
-GPLv3 or (at your option) any later version. See file COPYING for more information.
+GPL v3 or later. See [COPYING](COPYING).
 
 ### Documentation
 
-All texts and readme's are licensed under [GFDL](https://www.gnu.org/licenses/fdl-1.3.en.html).
+Project documentation and README content are licensed under [GFDL 1.3](https://www.gnu.org/licenses/fdl-1.3.en.html).
