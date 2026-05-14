@@ -714,7 +714,7 @@ class KreaBankService
 			null,
 			null,
 			array(
-				'statement_id' => 0,
+				'statement_id' => (int) (!empty($result['statement_id']) ? $result['statement_id'] : 0),
 				'statement_ref' => !empty($result['statement_ref']) ? (string) $result['statement_ref'] : '',
 				'file' => $fileName,
 				'format' => $format,
@@ -729,7 +729,7 @@ class KreaBankService
 		);
 
 		return array(
-			'statement_id' => 0,
+			'statement_id' => (int) (!empty($result['statement_id']) ? $result['statement_id'] : 0),
 			'statement_ref' => !empty($result['statement_ref']) ? (string) $result['statement_ref'] : '',
 			'imported_lines' => (int) $result['imported_lines'],
 			'duplicates' => (int) $result['duplicates'],
@@ -1030,6 +1030,9 @@ class KreaBankService
 		};
 
 		$appendDocuments($this->getOpenNativeBankDocuments($direction, $limit, $anchorDate, $intervalDays, $excludeNativeLineId, (int) $bankAccountId));
+		if ($direction !== 0) {
+			$appendDocuments($this->getOpenNativeBankDocuments(0, $limit, $anchorDate, $intervalDays, $excludeNativeLineId, (int) $bankAccountId));
+		}
 		$appendDocuments($this->getOpenPaymentDocuments(0, $limit, $anchorDate, $intervalDays));
 		$appendDocuments($this->getOpenInvoiceDocuments($direction, $limit, $anchorDate, $intervalDays));
 		$appendDocuments($this->getLinkedPaymentDocuments(0, $limit, $anchorDate, $intervalDays, null, (int) $bankAccountId, $includeReconciledLinked));
@@ -1940,6 +1943,7 @@ class KreaBankService
 		}
 		$lineDirection = (int) (isset($line['direction']) ? $line['direction'] : 0);
 		$selectedNativeBankLink = $this->findSelectedNativeBankLink($links);
+		$selectedLinkedPaymentBankLink = $this->findSelectedLinkedPaymentBankLink($links);
 		$nativeLineId = 0;
 		$nativeLine = $line;
 
@@ -1978,6 +1982,15 @@ class KreaBankService
 				);
 				$nativeLineId = (int) $resolvedNativeBankLine['source_line_id'];
 				$nativeLine = $this->buildNativeLineContext($line, $nativeLineId);
+			} elseif ($selectedLinkedPaymentBankLink !== null) {
+				$resolvedNativeBankLine = $this->resolveLinkedPaymentNativeBankLineForReconciliation(
+					$line,
+					(string) $selectedLinkedPaymentBankLink['doc_type'],
+					(int) $selectedLinkedPaymentBankLink['fk_doc'],
+					(float) $selectedLinkedPaymentBankLink['allocated_amount']
+				);
+				$nativeLineId = (int) $resolvedNativeBankLine['source_line_id'];
+				$nativeLine = $this->buildNativeLineContext($line, $nativeLineId);
 			} else {
 				$nativeLineId = $this->resolveNativeLineIdFromStatementLine($line, true);
 				$nativeLine = $this->buildNativeLineContext($line, $nativeLineId);
@@ -1989,8 +2002,10 @@ class KreaBankService
 					continue;
 				}
 
-				$docType = $this->normalizeReconciliationDocType((string) $link['doc_type']);
-				if (!$this->isDocTypeCompatibleWithLineDirection($docType, $lineDirection)) {
+				$rawDocType = trim((string) $link['doc_type']);
+				$docType = $this->normalizeReconciliationDocType($rawDocType);
+				$compatibilityDocType = ($rawDocType === 'payment_linked' || $rawDocType === 'payment_supplier_linked') ? $rawDocType : $docType;
+				if (!$this->isDocTypeCompatibleWithLineDirection($compatibilityDocType, $lineDirection)) {
 					throw new Exception('Document type ' . $docType . ' is not compatible with this statement line direction');
 				}
 				$docId = (int) $link['fk_doc'];
@@ -1999,6 +2014,8 @@ class KreaBankService
 				}
 
 				if ($docType === 'native_bank') {
+					continue;
+				} elseif ($rawDocType === 'payment_linked' || $rawDocType === 'payment_supplier_linked') {
 					continue;
 				} elseif ($docType === 'payment') {
 					$attached = $this->attachExistingCustomerPaymentToBankLine($nativeLine, $docId, $allocatedAmount);
@@ -5581,6 +5598,30 @@ class KreaBankService
 	}
 
 	/**
+	 * Return the selected linked-payment reconciliation link, if any.
+	 *
+	 * @param array<int,array<string,mixed>> $links
+	 * @return array<string,mixed>|null
+	 */
+	protected function findSelectedLinkedPaymentBankLink($links)
+	{
+		foreach ((array) $links as $link) {
+			if (!is_array($link)) {
+				continue;
+			}
+			$docType = trim((string) (!empty($link['doc_type']) ? $link['doc_type'] : ''));
+			$docId = (int) (!empty($link['fk_doc']) ? $link['fk_doc'] : 0);
+			if (($docType !== 'payment_linked' && $docType !== 'payment_supplier_linked') || $docId <= 0) {
+				continue;
+			}
+
+			return $link;
+		}
+
+		return null;
+	}
+
+	/**
 	 * Normalize reconciliation doc type aliases.
 	 *
 	 * @param string $docType
@@ -5615,6 +5656,9 @@ class KreaBankService
 			return true;
 		}
 		if ($docType === 'native_bank') {
+			return true;
+		}
+		if ($docType === 'payment_linked' || $docType === 'payment_supplier_linked') {
 			return true;
 		}
 
@@ -5749,6 +5793,55 @@ class KreaBankService
 			'source_line_id' => $sourceLineId,
 			'source_ref' => $this->resolveNativeBankLineRef($sourceLine),
 		);
+	}
+
+	/**
+	 * Resolve the native bank line already linked to a customer/supplier payment.
+	 *
+	 * @param array<string,mixed> $statementLine
+	 * @param string $docType
+	 * @param int $paymentId
+	 * @param float $allocatedAmount
+	 * @return array<string,mixed>
+	 */
+	protected function resolveLinkedPaymentNativeBankLineForReconciliation($statementLine, $docType, $paymentId, $allocatedAmount)
+	{
+		$docType = trim((string) $docType);
+		$paymentId = (int) $paymentId;
+		if (($docType !== 'payment_linked' && $docType !== 'payment_supplier_linked') || $paymentId <= 0) {
+			throw new Exception('Linked payment reference is invalid');
+		}
+
+		if ($docType === 'payment_linked') {
+			$sql = 'SELECT p.fk_bank, p.amount';
+			$sql .= ' FROM ' . $this->db->prefix() . 'paiement as p';
+			$sql .= ' WHERE p.entity = ' . ((int) $this->entity);
+			$sql .= ' AND p.rowid = ' . $paymentId;
+		} else {
+			$sql = 'SELECT p.fk_bank, p.amount';
+			$sql .= ' FROM ' . $this->db->prefix() . 'paiementfourn as p';
+			$sql .= ' WHERE p.entity = ' . ((int) $this->entity);
+			$sql .= ' AND p.rowid = ' . $paymentId;
+		}
+		$sql .= $this->db->plimit(1, 0);
+
+		$resql = $this->db->query($sql);
+		if (!$resql) {
+			throw new Exception($this->db->lasterror());
+		}
+		$obj = $this->db->fetch_object($resql);
+		if (!$obj || empty($obj->fk_bank)) {
+			throw new Exception('Linked payment has no native bank line');
+		}
+
+		$bankLineId = (int) $obj->fk_bank;
+		$allocatedAmount = abs((float) price2num((string) $allocatedAmount, 'MU'));
+		$paymentAmount = abs((float) $obj->amount);
+		if ($allocatedAmount > 0.00001 && $paymentAmount > 0.00001 && abs($allocatedAmount - $paymentAmount) > 0.01) {
+			throw new Exception('Allocated amount must match linked payment amount');
+		}
+
+		return $this->resolveExistingNativeBankLineForReconciliation($statementLine, $bankLineId, $allocatedAmount);
 	}
 
 	/**

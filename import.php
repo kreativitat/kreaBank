@@ -442,9 +442,6 @@ if ($action === 'analyze') {
 	try {
 		$service->logSchemaDiagnostics('import_analyze');
 
-		if ($bankAccountId <= 0) {
-			throw new Exception($langs->trans('ErrorFieldRequired', $langs->trans('BankAccount')));
-		}
 		if ($tmpName === '' || $fileError !== 0 || $fileName === '' || !is_readable($tmpName)) {
 			throw new Exception($langs->trans('ErrorFileNotUploaded'));
 		}
@@ -489,6 +486,9 @@ if ($action === 'analyze') {
 		$wizardToken = $newWizardToken;
 		$currentWizard = $wizardPayload;
 
+		if ($bankAccountId <= 0) {
+			setEventMessages($langs->trans('ErrorFieldRequired', $langs->trans('BankAccount')), null, 'warnings');
+		}
 		if (!empty($analysis['profile_applied']) && !empty($analysis['profile']['label'])) {
 			setEventMessages($langs->trans('KreaBankImportProfileApplied') . ': ' . dol_escape_htmltag((string) $analysis['profile']['label']), null, 'mesgs');
 		}
@@ -658,6 +658,9 @@ if ($action === 'confirm' && !empty($currentWizard)) {
 				$fileName = (string) $currentWizard['file_name'];
 				if ($filePath === '' || !is_readable($filePath)) {
 					throw new Exception($langs->trans('ErrorFileNotFound'));
+				}
+				if ($confirmBankAccountId <= 0) {
+					throw new Exception($langs->trans('ErrorFieldRequired', $langs->trans('BankAccount')));
 				}
 
 				if ($useMappingParse) {

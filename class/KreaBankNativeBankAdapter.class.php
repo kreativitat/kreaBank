@@ -10,10 +10,10 @@
 require_once DOL_DOCUMENT_ROOT . '/compta/bank/class/account.class.php';
 
 /**
- * Adapter to persist KreaBank operations into Dolibarr native bank domain.
+ * Adapter to persist KreaBank statement imports and native reconciliation links.
  *
- * Statements are stored in Dolibarr native llx_bank rows.
- * KreaBank metadata is stored in llx_kreabank_bankmeta.
+ * Pending statements are staged in KreaBank tables. Dolibarr native bank rows are
+ * only created or bound during reconciliation.
  */
 class KreaBankNativeBankAdapter
 {
@@ -57,10 +57,11 @@ class KreaBankNativeBankAdapter
 	public function ensureSchema()
 	{
 		$this->ensureMetaTable();
+		$this->ensureStagingTables();
 	}
 
 	/**
-	 * Import parsed statement lines into native bank table + metadata table.
+	 * Import parsed statement lines into KreaBank staging tables.
 	 *
 	 * @param array<int,array<string,mixed>> $lines
 	 * @param string $fileName
@@ -73,6 +74,7 @@ class KreaBankNativeBankAdapter
 	public function importLines($lines, $fileName, $format, $bankAccountId, $statementDate = null, $options = array())
 	{
 		$this->ensureMetaTable();
+		$this->ensureStagingTables();
 
 		$bankAccountId = (int) $bankAccountId;
 		if ($bankAccountId <= 0) {
@@ -83,6 +85,7 @@ class KreaBankNativeBankAdapter
 		$defaultCurrency = $this->resolveImportCurrency($bankAccountId, $account);
 
 		$statementRef = $this->buildImportedStatementRef($bankAccountId, $statementDate, $fileName);
+		$statementId = 0;
 		$insertedLineIds = array();
 		$imported = 0;
 		$duplicates = 0;
@@ -149,43 +152,28 @@ class KreaBankNativeBankAdapter
 					);
 				}
 
-				$dateo = $this->toTimestamp((string) $normalized['operation_date']);
-				$datev = $this->toTimestamp((string) $normalized['value_date']);
-				$amount = (float) price2num((string) $normalized['amount'], 'MU');
-				$operationCode = $this->guessOperationCode($amount);
-				$label = $this->buildLabel($normalized);
-				$numChq = (string) (!empty($normalized['payment_reference']) ? $normalized['payment_reference'] : $normalized['bank_reference']);
-				$notePrivate = 'KreaBank import ' . strtoupper((string) $format) . ' / ' . trim((string) $fileName);
-
-				$newLineId = $account->addline(
-					$dateo,
-					$operationCode,
-					$label,
-					$amount,
-					$numChq,
-					0,
-					$this->user,
-					'',
-					'',
-					'',
-					$datev,
-					$statementRef,
-					null,
-					$notePrivate
-				);
-				if ((int) $newLineId <= 0) {
-					throw new Exception($this->langs->trans('ErrorFailedToCreateBankEntry'));
+				if ($statementId <= 0) {
+					$statementId = $this->insertStatementRow(
+						$statementRef,
+						$bankAccountId,
+						(string) $format,
+						(string) $fileName,
+						(string) $statementDate,
+						(string) $defaultCurrency
+					);
+					if ($statementId <= 0) {
+						throw new Exception($this->db->lasterror());
+					}
 				}
 
-				$okMeta = $this->insertMetaRow(
-					(int) $newLineId,
-					$bankAccountId,
-					$hashForStorage,
+				$newLineId = $this->insertStatementLineRow(
+					$statementId,
+					((int) $index + 1),
 					$normalized,
-					(string) $fileName,
-					(string) $format
+					$hashForStorage,
+					($isDuplicate ? 1 : 0)
 				);
-				if (!$okMeta) {
+				if ((int) $newLineId <= 0) {
 					throw new Exception($this->db->lasterror());
 				}
 
@@ -201,6 +189,7 @@ class KreaBankNativeBankAdapter
 
 		return array(
 			'statement_ref' => ($imported > 0 ? $statementRef : ''),
+			'statement_id' => $statementId,
 			'imported_lines' => $imported,
 			'duplicates' => $duplicates,
 			'duplicates_skipped' => $duplicatesSkipped,
@@ -213,7 +202,7 @@ class KreaBankNativeBankAdapter
 	}
 
 	/**
-	 * Get pending bank lines from native bank table + metadata.
+	 * Get pending imported statement lines.
 	 *
 	 * @param int $limit
 	 * @param int $offset
@@ -226,6 +215,12 @@ class KreaBankNativeBankAdapter
 	public function getPendingLines($limit = 200, $offset = 0, $sortfield = 'operation_date', $sortorder = 'ASC', $filters = array(), $includeSkipped = false)
 	{
 		$this->ensureMetaTable();
+		$this->ensureStagingTables();
+
+		$stagedRows = $this->getPendingLinesFromStaging((int) $limit, (int) $offset, (string) $sortfield, (string) $sortorder, (array) $filters, (bool) $includeSkipped);
+		if (!empty($stagedRows)) {
+			return $stagedRows;
+		}
 
 		$sql = 'SELECT b.rowid as rowid, 0 as fk_statement, b.rowid as fk_native_bank_line,';
 		$sql .= ' COALESCE(l.operation_date, b.dateo) as operation_date, COALESCE(l.value_date, b.datev) as value_date,';
@@ -355,6 +350,12 @@ class KreaBankNativeBankAdapter
 	public function getPendingLinesCount($filters = array(), $includeSkipped = false)
 	{
 		$this->ensureMetaTable();
+		$this->ensureStagingTables();
+
+		$stagedCount = $this->getPendingLinesCountFromStaging((array) $filters, (bool) $includeSkipped);
+		if ($stagedCount > 0) {
+			return $stagedCount;
+		}
 
 		$sql = 'SELECT COUNT(l.rowid) as nb';
 		$sql .= ' FROM ' . $this->db->prefix() . 'kreabank_bankmeta as l';
@@ -2135,7 +2136,7 @@ class KreaBankNativeBankAdapter
 		$paymentReference = (string) (isset($line['payment_reference']) ? $line['payment_reference'] : '');
 		$bankReference = (string) (isset($line['bank_reference']) ? $line['bank_reference'] : '');
 
-		return array(
+		return $this->repairBalanceMappedAsAmount(array(
 			'line_uid' => (string) (isset($line['line_uid']) ? $line['line_uid'] : ''),
 			'operation_date' => $operationDate,
 			'value_date' => $valueDate,
@@ -2149,7 +2150,103 @@ class KreaBankNativeBankAdapter
 			'bank_reference' => $bankReference,
 			'direction' => isset($line['direction']) ? (int) $line['direction'] : ($amount >= 0 ? 1 : -1),
 			'operation_type' => (string) (isset($line['operation_type']) ? $line['operation_type'] : ''),
-		);
+		));
+	}
+
+	/**
+	 * Repair a known mapping failure where the statement balance was imported as amount
+	 * and the real movement amount was imported as a numeric reference/description.
+	 *
+	 * @param array<string,mixed> $line
+	 * @return array<string,mixed>
+	 */
+	protected function repairBalanceMappedAsAmount($line)
+	{
+		if (!is_array($line) || empty($line)) {
+			return $line;
+		}
+
+		$amount = isset($line['amount']) ? (float) price2num((string) $line['amount'], 'MU') : 0.0;
+		if (abs($amount) < 100.0) {
+			return $line;
+		}
+
+		$referenceAmount = $this->extractDecimalAmountLikeReference($line);
+		if ($referenceAmount === null || abs((float) $referenceAmount) < 0.00001) {
+			return $line;
+		}
+
+		$referenceAbs = abs((float) $referenceAmount);
+		if ($referenceAbs > 10000.0 || abs($amount) < ($referenceAbs * 5.0)) {
+			return $line;
+		}
+
+		$direction = isset($line['direction']) ? (int) $line['direction'] : 0;
+		if ($direction === 0) {
+			$direction = ($amount >= 0.0 ? 1 : -1);
+		}
+
+		if (!array_key_exists('running_balance', $line) || $line['running_balance'] === null || $line['running_balance'] === '') {
+			$line['running_balance'] = $amount;
+		}
+		$line['amount'] = ($direction < 0 ? -$referenceAbs : $referenceAbs);
+		$line['direction'] = $direction;
+		foreach (array('description', 'payment_reference', 'bank_reference') as $field) {
+			$value = isset($line[$field]) ? trim((string) $line[$field]) : '';
+			if ($value !== '' && $this->isDecimalAmountTokenForValue($value, $referenceAbs)) {
+				$line[$field] = '';
+			}
+		}
+
+		return $line;
+	}
+
+	/**
+	 * Extract a decimal amount accidentally mapped into a text/reference field.
+	 *
+	 * @param array<string,mixed> $line
+	 * @return float|null
+	 */
+	protected function extractDecimalAmountLikeReference($line)
+	{
+		foreach (array('description', 'payment_reference', 'bank_reference') as $field) {
+			$value = isset($line[$field]) ? trim((string) $line[$field]) : '';
+			if ($value === '') {
+				continue;
+			}
+			if (!preg_match('/^[+-]?\d+[,.]\d+$/', $value)) {
+				continue;
+			}
+			$parsed = price2num($value, 'MU');
+			if ($parsed === '' || !is_numeric($parsed)) {
+				continue;
+			}
+
+			return (float) $parsed;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Check whether a token is only the decimal amount used for repair.
+	 *
+	 * @param string $value
+	 * @param float $amount
+	 * @return bool
+	 */
+	protected function isDecimalAmountTokenForValue($value, $amount)
+	{
+		$value = trim((string) $value);
+		if ($value === '' || !preg_match('/^[+-]?\d+[,.]\d+$/', $value)) {
+			return false;
+		}
+		$parsed = price2num($value, 'MU');
+		if ($parsed === '' || !is_numeric($parsed)) {
+			return false;
+		}
+
+		return (abs(abs((float) $parsed) - abs((float) $amount)) <= 0.00001);
 	}
 
 	/**
@@ -2342,7 +2439,7 @@ class KreaBankNativeBankAdapter
 		$isReconciled = ((int) $obj->status === 2 || (int) $obj->rappro === 1);
 		$allocated = (float) $obj->allocated_amount;
 
-		return array(
+		$line = array(
 			'rowid' => (int) $obj->rowid,
 			'fk_statement' => (int) $obj->fk_statement,
 			'statement_ref' => (string) (!empty($obj->statement_ref) ? $obj->statement_ref : ''),
@@ -2371,6 +2468,13 @@ class KreaBankNativeBankAdapter
 			'source_type' => (string) (!empty($obj->source_type) ? $obj->source_type : ''),
 			'source_file' => (string) (!empty($obj->source_file) ? $obj->source_file : ''),
 		);
+
+		$line = $this->repairBalanceMappedAsAmount($line);
+		if (abs((float) $allocated) > abs((float) $line['amount']) && (int) $line['status'] < 2) {
+			$line['allocated_amount'] = 0.0;
+		}
+
+		return $line;
 	}
 
 	/**
@@ -2396,7 +2500,7 @@ class KreaBankNativeBankAdapter
 		$metaStatus = (int) (isset($obj->meta_status) ? $obj->meta_status : 0);
 		$status = ((int) $obj->rappro === 1 ? 2 : $metaStatus);
 
-		return array(
+		$line = array(
 			'rowid' => (int) $obj->rowid,
 			'fk_statement' => 0,
 			'statement_ref' => (string) (!empty($obj->num_releve) ? $obj->num_releve : ''),
@@ -2425,6 +2529,13 @@ class KreaBankNativeBankAdapter
 			'source_type' => (string) (!empty($obj->source_type) ? $obj->source_type : ''),
 			'source_file' => (string) (!empty($obj->source_file) ? $obj->source_file : ''),
 		);
+
+		$line = $this->repairBalanceMappedAsAmount($line);
+		if (abs((float) $line['allocated_amount']) > abs((float) $line['amount']) && (int) $line['status'] < 2) {
+			$line['allocated_amount'] = 0.0;
+		}
+
+		return $line;
 	}
 
 	/**

@@ -96,8 +96,11 @@ if ($reconcileBody === '') {
 	$errors[] = 'Unable to parse reconcileLine body';
 } else {
 	$assertContains($reconcileBody, '$selectedNativeBankLink = $this->findSelectedNativeBankLink($links);', 'reconcile should pre-detect selected native bank candidates', $errors);
+	$assertContains($reconcileBody, '$selectedLinkedPaymentBankLink = $this->findSelectedLinkedPaymentBankLink($links);', 'reconcile should pre-detect linked payment native bank candidates', $errors);
 	$assertContains($reconcileBody, '$this->resolveExistingNativeBankLineForReconciliation(', 'reconcile should reuse an existing native bank line instead of cloning it', $errors);
+	$assertContains($reconcileBody, '$this->resolveLinkedPaymentNativeBankLineForReconciliation(', 'reconcile should reuse the native bank line already attached to linked payments', $errors);
 	$assertContains($reconcileBody, "if (\$docType === 'native_bank') {", 'reconcile should short-circuit native-bank links after target resolution', $errors);
+	$assertContains($reconcileBody, "\$rawDocType === 'payment_linked' || \$rawDocType === 'payment_supplier_linked'", 'reconcile should short-circuit linked payment aliases after target resolution', $errors);
 }
 
 $pendingBody = $extractFunctionBody($nativeSource, 'markStatementLinePending');
@@ -140,15 +143,15 @@ $pendingListBody = $extractFunctionBody($nativeSource, 'getPendingLines');
 if ($pendingListBody === '') {
 	$errors[] = 'Unable to parse getPendingLines body';
 } else {
-	$assertContains($pendingListBody, 'if (!$this->hasAnyNativeMetaImportedLines()) {', 'pending lines should fallback to staging only when no native/meta imports exist', $errors);
-	$assertContains($pendingListBody, 'return array();', 'pending lines should not unconditionally return staging fallback on filtered-empty native result', $errors);
+	$assertContains($pendingListBody, '$stagedRows = $this->getPendingLinesFromStaging(', 'pending lines should load staged imports before native/meta legacy rows', $errors);
+	$assertContains($pendingListBody, 'return $stagedRows;', 'pending lines should expose staged imports without requiring native bank rows', $errors);
 }
 
 $statementRefExistsBody = $extractFunctionBody($nativeSource, 'statementRefExists');
 if ($statementRefExistsBody === '') {
 	$errors[] = 'Unable to parse statementRefExists body';
 } else {
-	$assertContains($statementRefExistsBody, "AND ba.entity = '.((int) \$this->entity);", 'statementRefExists native fallback should enforce entity scope', $errors);
+	$assertContains($statementRefExistsBody, "' AND ba.entity = ' . ((int) \$this->entity);", 'statementRefExists native fallback should enforce entity scope', $errors);
 }
 
 $tableHasColumnBody = $extractFunctionBody($nativeSource, 'tableHasColumn');
@@ -173,6 +176,15 @@ if ($stagedRowToLineArrayBody === '') {
 	if (strpos($stagedRowToLineArrayBody, 'if ($isReconciled && $allocated <= 0.00001)') !== false) {
 		$errors[] = 'stagedRowToLineArray should not force allocated amount to full absolute amount at read time';
 	}
+	$assertContains($stagedRowToLineArrayBody, '$this->repairBalanceMappedAsAmount($line)', 'staged rows should repair balance-as-amount mapping failures before reconciliation', $errors);
+}
+
+$legacyNativeRowToLineArrayBody = $extractFunctionBody($nativeSource, 'legacyNativeRowToLineArray');
+if ($legacyNativeRowToLineArrayBody === '') {
+	$errors[] = 'Unable to parse legacyNativeRowToLineArray body';
+} else {
+	$assertContains($legacyNativeRowToLineArrayBody, '$this->repairBalanceMappedAsAmount($line)', 'legacy native rows should repair balance-as-amount mapping failures before candidate matching', $errors);
+	$assertContains($legacyNativeRowToLineArrayBody, '$line[\'allocated_amount\'] = 0.0;', 'legacy native rows should clear stale over-allocation after repaired amount changes', $errors);
 }
 
 $buildIdempotencyHashBody = $extractFunctionBody($nativeSource, 'buildIdempotencyHash');
@@ -188,11 +200,25 @@ if ($importLinesBody === '') {
 	$errors[] = 'Unable to parse importLines body';
 } else {
 	$assertContains($importLinesBody, '$legacyDuplicateHash = $this->buildLegacyIdempotencyHash($bankAccountId, $normalized);', 'importLines should keep legacy duplicate-hash compatibility checks after hash payload expansion', $errors);
+	$assertContains($importLinesBody, '$this->insertStatementLineRow(', 'importLines should stage imported statement lines instead of creating native bank entries', $errors);
+	if (strpos($importLinesBody, '->addline(') !== false) {
+		$errors[] = 'importLines should not create Dolibarr native bank entries before reconciliation';
+	}
+}
+
+$repairBalanceMappedBody = $extractFunctionBody($nativeSource, 'repairBalanceMappedAsAmount');
+if ($repairBalanceMappedBody === '') {
+	$errors[] = 'Unable to parse repairBalanceMappedAsAmount body';
+} else {
+	$assertContains($repairBalanceMappedBody, '$line[\'running_balance\'] = $amount;', 'balance-as-amount repair should preserve original balance-like value', $errors);
+	$assertContains($repairBalanceMappedBody, '$line[\'amount\'] = ($direction < 0 ? -$referenceAbs : $referenceAbs);', 'balance-as-amount repair should restore signed movement amount from numeric reference', $errors);
 }
 
 $assertContains($nativeSource, 'protected function hasAnyNativeMetaImportedLines()', 'native adapter should expose helper for native-meta fallback gating', $errors);
 $assertContains($nativeSource, 'protected function buildLegacyIdempotencyHash(', 'native adapter should keep legacy idempotency hash builder for compatibility checks', $errors);
 $assertContains($nativeSource, 'protected function getRecentReconciledLinesFromStaging(', 'native adapter should expose legacy reconciled-history fallback loader', $errors);
+$assertContains($nativeSource, 'protected function extractDecimalAmountLikeReference(', 'native adapter should detect decimal movement amounts accidentally mapped into references', $errors);
+$assertContains($nativeSource, 'protected function isDecimalAmountTokenForValue(', 'native adapter should clear numeric-only reference fields consumed as repaired amount', $errors);
 
 $recentReconciledBody = $extractFunctionBody($nativeSource, 'getRecentReconciledLines');
 if ($recentReconciledBody === '') {
@@ -205,12 +231,15 @@ if ($recentReconciledBody === '') {
 $assertContains($serviceSource, 'public function getSuggestionsForLines(', 'service should expose batch suggestions API', $errors);
 $assertContains($serviceSource, 'protected function loadBatchMlSamples()', 'service should keep DB-backed batch ML sample loader', $errors);
 $assertContains($serviceSource, 'protected function findSelectedNativeBankLink(', 'service should expose native-bank reuse helper', $errors);
+$assertContains($serviceSource, 'protected function findSelectedLinkedPaymentBankLink(', 'service should expose linked-payment native-bank reuse helper', $errors);
 $assertContains($serviceSource, 'protected function resolveExistingNativeBankLineForReconciliation(', 'service should validate selected native bank lines without cloning them', $errors);
+$assertContains($serviceSource, 'protected function resolveLinkedPaymentNativeBankLineForReconciliation(', 'service should resolve linked payment fk_bank without creating staged native rows', $errors);
 $assertContains($serviceSource, 'protected function getSupplierMlHashBinCount()', 'service should expose supplier ML hash-bin configuration helper', $errors);
 $assertContains($serviceSource, 'return 64;', 'service should use 64 hashed bins for supplier ML text features', $errors);
 $assertContains($serviceSource, 'file_put_contents($tmpPath, $payloadJson, LOCK_EX)', 'service should write batch ML cache payload to temp file with lock', $errors);
 $assertContains($serviceSource, 'if (!rename($tmpPath, $path))', 'service should atomically replace batch ML cache file after temp write', $errors);
 $assertContains($serviceSource, "\$nativeLinkedPaymentIds = array(", 'service should track native-linked payment ids for dedupe', $errors);
+$assertContains($serviceSource, '$appendDocuments($this->getOpenNativeBankDocuments(0, $limit, $anchorDate, $intervalDays, $excludeNativeLineId, (int) $bankAccountId));', 'service should search native bank rows without direction filter when staged import direction is unreliable', $errors);
 $assertContains($serviceSource, "if (\$docType === 'payment_linked' && isset(\$nativeLinkedPaymentIds['payment'][\$docId]))", 'service should suppress linked customer payment duplicates when native candidate already exists', $errors);
 $assertContains($serviceSource, "if (\$docType === 'payment_supplier_linked' && isset(\$nativeLinkedPaymentIds['payment_supplier'][\$docId]))", 'service should suppress linked supplier payment duplicates when native candidate already exists', $errors);
 $assertContains($serviceSource, 'public function predictSupplierForLine(', 'service should expose supplier ML prediction API', $errors);
@@ -226,7 +255,11 @@ $assertContains($nativeSource, 'protected function hasManagedNativeLine(', 'nati
 $assertContains($nativeSource, "'operation_date' => 'l.operation_date'", 'native adapter pending sort allowlist should expose logical operation_date key', $errors);
 $assertContains($historySource, 'getLineLinksBatch(', 'history should use batch link retrieval', $errors);
 $assertContains($importSource, 'KREABANK_IMPORT_WIZARD_TTL', 'import wizard should support stale session TTL', $errors);
-$assertContains($importSource, "glob(\$wizardImportTempDir.'/wiz_*')", 'import wizard should garbage-collect stale temp files', $errors);
+$assertContains($importSource, "glob(\$wizardImportTempDir . '/wiz_*')", 'import wizard should garbage-collect stale temp files', $errors);
+$assertContains($importSource, 'setEventMessages($langs->trans(\'ErrorFieldRequired\', $langs->trans(\'BankAccount\')), null, \'warnings\');', 'import analysis should warn but not abort when bank account is missing', $errors);
+if (strpos($importSource, "if (\$bankAccountId <= 0) {\n\t\t\tthrow new Exception(\$langs->trans('ErrorFieldRequired', \$langs->trans('BankAccount')));") !== false) {
+	$errors[] = 'import analysis should not abort before parsing when bank account is missing';
+}
 $assertContains($pendingSource, "if (empty(\$sortfield)) {\n\t\$sortfield = 'operation_date';", 'pending page should default sortfield to logical operation_date key', $errors);
 $assertContains($pendingSource, "if (\$sortorder !== 'ASC' && \$sortorder !== 'DESC') {\n\t\$sortorder = 'ASC';", 'pending page should validate sortorder locally', $errors);
 $assertContains($pendingSource, "GETPOST('button_removefilter_x', 'alpha')", 'pending page should detect Dolibarr clear-filter button _x variant', $errors);
