@@ -50,12 +50,12 @@ class modKreaBank extends DolibarrModules
 		$this->descriptionlong = 'ModuleKreaBankDescLong';
 		$this->editor_name = 'Kreativität Works';
 		$this->editor_url = 'http://kreativitat.com';
-		$this->version = '1.12.50';
+		$this->version = '1.12.53';
 		$this->const_name = 'MAIN_MODULE_' . strtoupper($this->name);
 		$this->picto = 'kreaproducts@kreaproducts';
 
 		$this->module_parts = array(
-			'triggers' => 1,
+			'triggers' => 0,
 			'login' => 0,
 			'substitutions' => 0,
 			'menus' => 0,

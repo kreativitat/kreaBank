@@ -234,6 +234,9 @@ $latestAuditByLine = array();
 $availableAuditTypes = array();
 foreach ($auditRows as $auditRow) {
 	$auditType = trim((string) (isset($auditRow['audit_type']) ? $auditRow['audit_type'] : ''));
+	if ($auditType === 'trigger_event') {
+		continue;
+	}
 	if ($auditType !== '') {
 		$availableAuditTypes[$auditType] = true;
 	}
@@ -477,6 +480,9 @@ $summarizeAuditPayload = static function ($audit) use ($langs) {
 $preparedAuditRows = array();
 foreach ($auditRows as $auditRow) {
 	$auditType = trim((string) (isset($auditRow['audit_type']) ? $auditRow['audit_type'] : ''));
+	if ($auditType === 'trigger_event') {
+		continue;
+	}
 	if ($historyAuditType !== 'all' && $auditType !== $historyAuditType) {
 		continue;
 	}
@@ -733,62 +739,59 @@ print '<input type="hidden" name="audit_search_summary" value="' . dol_escape_ht
 print_barre_liste($langs->trans('KreaBankHistory'), $page, $_SERVER['PHP_SELF'], $historyParam, '', '', '', $historyPagerNum, $historyTotalRecords, 'title_setup', 0, '', '', $limit, 0, 0, 1);
 print '</form>';
 
-if ($historyTotalRecords === 0) {
-	print '<div class="opacitymedium">' . $langs->trans('None') . '</div>';
-} else {
-	print '<div class="div-table-responsive">';
-	print '<table class="tagtable nobottomiftotal liste">';
-	print '<tr class="liste_titre_filter">';
-	print '<td class="liste_titre">';
-	print '<div style="display:flex;gap:4px;flex-direction:column;min-width:130px">';
-	print '<input class="flat" type="date" name="hist_date_from" value="' . dol_escape_htmltag($historyDateFrom) . '" title="' . $langs->trans('From') . '" form="kreaHistoryFilterForm">';
-	print '<input class="flat" type="date" name="hist_date_to" value="' . dol_escape_htmltag($historyDateTo) . '" title="' . $langs->trans('To') . '" form="kreaHistoryFilterForm">';
-	print '</div>';
-	print '</td>';
-	print '<td class="liste_titre">';
-	print '<input class="flat minwidth300" type="text" name="hist_description" value="' . dol_escape_htmltag($historyDescription) . '" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankHistoryDescriptionPlaceholder')) . '" title="' . dol_escape_htmltag($langs->trans('KreaBankDescription')) . '" form="kreaHistoryFilterForm">';
-	print '</td>';
-	print '<td class="liste_titre right">';
-	print '<select name="hist_direction" class="flat" form="kreaHistoryFilterForm">';
-	print '<option value="all"' . ($historyDirection === 'all' ? ' selected' : '') . '>' . $langs->trans('KreaBankDirectionAll') . '</option>';
-	print '<option value="debit"' . ($historyDirection === 'debit' ? ' selected' : '') . '>' . $langs->trans('KreaBankDirectionDebit') . '</option>';
-	print '<option value="credit"' . ($historyDirection === 'credit' ? ' selected' : '') . '>' . $langs->trans('KreaBankDirectionCredit') . '</option>';
-	print '</select>';
-	print '</td>';
-	print '<td class="liste_titre">';
-	print '<select name="hist_link_type" class="flat" form="kreaHistoryFilterForm">';
-	print '<option value="all"' . ($historyLinkType === 'all' ? ' selected' : '') . '>' . $langs->trans('KreaBankLinkTypeAll') . '</option>';
-	foreach ($availableLinkTypeOptions as $linkTypeOption) {
-		$linkTypeLabel = str_replace('_', ' ', (string) $linkTypeOption);
-		print '<option value="' . dol_escape_htmltag((string) $linkTypeOption) . '"' . ($historyLinkType === $linkTypeOption ? ' selected' : '') . '>' . dol_escape_htmltag($linkTypeLabel) . '</option>';
+print '<div class="div-table-responsive">';
+print '<table class="tagtable nobottomiftotal liste">';
+print '<tr class="liste_titre_filter">';
+print '<td class="liste_titre">';
+print '<div style="display:flex;gap:4px;flex-direction:column;min-width:130px">';
+print '<input class="flat" type="date" name="hist_date_from" value="' . dol_escape_htmltag($historyDateFrom) . '" title="' . $langs->trans('From') . '" form="kreaHistoryFilterForm">';
+print '<input class="flat" type="date" name="hist_date_to" value="' . dol_escape_htmltag($historyDateTo) . '" title="' . $langs->trans('To') . '" form="kreaHistoryFilterForm">';
+print '</div>';
+print '</td>';
+print '<td class="liste_titre">';
+print '<input class="flat minwidth300" type="text" name="hist_description" value="' . dol_escape_htmltag($historyDescription) . '" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankHistoryDescriptionPlaceholder')) . '" title="' . dol_escape_htmltag($langs->trans('KreaBankDescription')) . '" form="kreaHistoryFilterForm">';
+print '</td>';
+print '<td class="liste_titre right">';
+print '<select name="hist_direction" class="flat" form="kreaHistoryFilterForm">';
+print '<option value="all"' . ($historyDirection === 'all' ? ' selected' : '') . '>' . $langs->trans('KreaBankDirectionAll') . '</option>';
+print '<option value="debit"' . ($historyDirection === 'debit' ? ' selected' : '') . '>' . $langs->trans('KreaBankDirectionDebit') . '</option>';
+print '<option value="credit"' . ($historyDirection === 'credit' ? ' selected' : '') . '>' . $langs->trans('KreaBankDirectionCredit') . '</option>';
+print '</select>';
+print '</td>';
+print '<td class="liste_titre">';
+print '<select name="hist_link_type" class="flat" form="kreaHistoryFilterForm">';
+print '<option value="all"' . ($historyLinkType === 'all' ? ' selected' : '') . '>' . $langs->trans('KreaBankLinkTypeAll') . '</option>';
+foreach ($availableLinkTypeOptions as $linkTypeOption) {
+	$linkTypeLabel = str_replace('_', ' ', (string) $linkTypeOption);
+	print '<option value="' . dol_escape_htmltag((string) $linkTypeOption) . '"' . ($historyLinkType === $linkTypeOption ? ' selected' : '') . '>' . dol_escape_htmltag($linkTypeLabel) . '</option>';
+}
+print '</select>';
+print '</td>';
+print '<td class="liste_titre">';
+print '<select name="hist_audit_type" class="flat" form="kreaHistoryFilterForm">';
+print '<option value="all"' . ($historyAuditType === 'all' ? ' selected' : '') . '>' . $langs->trans('KreaBankDirectionAll') . '</option>';
+foreach ($availableAuditTypeOptions as $auditTypeOption) {
+	$auditTypeLangKey = $auditTypeToLangKey($auditTypeOption);
+	$auditTypeLabel = ($auditTypeLangKey !== '' ? $langs->trans($auditTypeLangKey) : '');
+	if ($auditTypeLabel === '' || $auditTypeLabel === $auditTypeLangKey) {
+		$auditTypeLabel = (string) $auditTypeOption;
 	}
-	print '</select>';
-	print '</td>';
-	print '<td class="liste_titre">';
-	print '<select name="hist_audit_type" class="flat" form="kreaHistoryFilterForm">';
-	print '<option value="all"' . ($historyAuditType === 'all' ? ' selected' : '') . '>' . $langs->trans('KreaBankDirectionAll') . '</option>';
-	foreach ($availableAuditTypeOptions as $auditTypeOption) {
-		$auditTypeLangKey = $auditTypeToLangKey($auditTypeOption);
-		$auditTypeLabel = ($auditTypeLangKey !== '' ? $langs->trans($auditTypeLangKey) : '');
-		if ($auditTypeLabel === '' || $auditTypeLabel === $auditTypeLangKey) {
-			$auditTypeLabel = (string) $auditTypeOption;
-		}
-		print '<option value="' . dol_escape_htmltag((string) $auditTypeOption) . '"' . ($historyAuditType === $auditTypeOption ? ' selected' : '') . '>' . dol_escape_htmltag((string) $auditTypeLabel) . '</option>';
-	}
-	print '</select>';
-	print '</td>';
-	print '<td class="liste_titre center">&nbsp;</td>';
-	print '<td class="liste_titre center maxwidthsearch"><div class="nowraponall"><button type="submit" class="liste_titre button_search reposition" name="button_search_x" value="x" form="kreaHistoryFilterForm"><span class="fas fa-search"></span></button><button type="submit" class="liste_titre button_removefilter reposition" name="button_removefilter_x" value="x" form="kreaHistoryFilterForm"><span class="fas fa-times"></span></button></div></td>';
-	print '</tr>';
-	print '<tr class="liste_titre">';
-	print_liste_field_titre($langs->trans('KreaBankWhen'), '', '', '', '', '');
-	print_liste_field_titre($langs->trans('KreaBankDescription'), '', '', '', '', '');
-	print_liste_field_titre($langs->trans('KreaBankAmount'), '', '', '', '', 'class="right"');
-	print_liste_field_titre($langs->trans('KreaBankLinkedDocuments'), '', '', '', '', '');
-	print_liste_field_titre($langs->trans('Type'), '', '', '', '', '');
-	print_liste_field_titre($langs->trans('KreaBankStatus'), '', '', '', '', '');
-	print_liste_field_titre($langs->trans('Action'), '', '', '', '', 'class="center"');
-	print '</tr>';
+	print '<option value="' . dol_escape_htmltag((string) $auditTypeOption) . '"' . ($historyAuditType === $auditTypeOption ? ' selected' : '') . '>' . dol_escape_htmltag((string) $auditTypeLabel) . '</option>';
+}
+print '</select>';
+print '</td>';
+print '<td class="liste_titre center">&nbsp;</td>';
+print '<td class="liste_titre center maxwidthsearch"><div class="nowraponall"><button type="submit" class="liste_titre button_search reposition" name="button_search_x" value="x" form="kreaHistoryFilterForm"><span class="fas fa-search"></span></button><button type="submit" class="liste_titre button_removefilter reposition" name="button_removefilter_x" value="x" form="kreaHistoryFilterForm"><span class="fas fa-times"></span></button></div></td>';
+print '</tr>';
+print '<tr class="liste_titre">';
+print_liste_field_titre($langs->trans('KreaBankWhen'), '', '', '', '', '');
+print_liste_field_titre($langs->trans('KreaBankDescription'), '', '', '', '', '');
+print_liste_field_titre($langs->trans('KreaBankAmount'), '', '', '', '', 'class="right"');
+print_liste_field_titre($langs->trans('KreaBankLinkedDocuments'), '', '', '', '', '');
+print_liste_field_titre($langs->trans('Type'), '', '', '', '', '');
+print_liste_field_titre($langs->trans('KreaBankStatus'), '', '', '', '', '');
+print_liste_field_titre($langs->trans('Action'), '', '', '', '', 'class="center"');
+print '</tr>';
 
 	$renderLinkedDocument = static function ($link) {
 		if (!is_array($link)) {
@@ -815,6 +818,9 @@ if ($historyTotalRecords === 0) {
 		return $out;
 	};
 
+if ($historyTotalRecords === 0) {
+	print '<tr class="oddeven"><td colspan="7"><span class="opacitymedium">' . $langs->trans('None') . '</span></td></tr>';
+} else {
 	foreach ($preparedRecentRowsPage as $preparedRow) {
 		$row = $preparedRow['row'];
 		$lineId = (int) $preparedRow['line_id'];
@@ -977,10 +983,9 @@ if ($historyTotalRecords === 0) {
 
 		print '</tr>';
 	}
-
-	print '</table>';
-	print '</div>';
 }
+print '</table>';
+print '</div>';
 
 print '<br><h3>' . $langs->trans('KreaBankAuditLog') . '</h3>';
 print '<form method="GET" id="kreaAuditFilterForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
@@ -1020,26 +1025,26 @@ print '<input type="hidden" name="audit_search_line" value="' . dol_escape_htmlt
 print '<input type="hidden" name="audit_search_summary" value="' . dol_escape_htmltag($auditSearchSummary) . '">';
 print_barre_liste($langs->trans('KreaBankAuditLog'), $auditPage, $_SERVER['PHP_SELF'], $auditParam, '', '', '', $auditPagerNum, $auditTotalRecords, 'title_setup', 0, '', '', $limit, 0, 0, 1);
 print '</form>';
-if ($auditTotalRecords === 0) {
-	print '<div class="opacitymedium">' . $langs->trans('None') . '</div>';
-} else {
-	print '<div class="div-table-responsive">';
-	print '<table class="tagtable nobottomiftotal liste">';
-	print '<tr class="liste_titre_filter">';
-	print '<td class="liste_titre"><div style="display:flex;gap:4px;flex-direction:column;min-width:130px"><input class="flat" type="date" name="audit_search_when_from" value="' . dol_escape_htmltag($auditSearchWhenFrom) . '" title="' . dol_escape_htmltag($langs->trans('From')) . '" form="kreaAuditFilterForm"><input class="flat" type="date" name="audit_search_when_to" value="' . dol_escape_htmltag($auditSearchWhenTo) . '" title="' . dol_escape_htmltag($langs->trans('To')) . '" form="kreaAuditFilterForm"></div></td>';
-	print '<td class="liste_titre"><input class="flat width100" type="text" name="audit_search_action" value="' . dol_escape_htmltag($auditSearchAction) . '" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankAction')) . '" form="kreaAuditFilterForm"></td>';
-	print '<td class="liste_titre"><input class="flat width100" type="text" name="audit_search_user" value="' . dol_escape_htmltag($auditSearchUser) . '" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankUser')) . '" form="kreaAuditFilterForm"></td>';
-	print '<td class="liste_titre"><input class="flat width75" type="text" name="audit_search_line" value="' . dol_escape_htmltag($auditSearchLine) . '" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankLine')) . '" form="kreaAuditFilterForm"></td>';
-	print '<td class="liste_titre"><div style="display:flex;gap:6px;align-items:center"><input class="flat width100" type="text" name="audit_search_summary" value="' . dol_escape_htmltag($auditSearchSummary) . '" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankAuditPayloadSummary')) . '" form="kreaAuditFilterForm"><div class="nowraponall"><button type="submit" class="liste_titre button_search reposition" name="button_search_x" value="x" form="kreaAuditFilterForm"><span class="fas fa-search"></span></button><button type="submit" class="liste_titre button_removefilter reposition" name="button_removefilter_x" value="x" form="kreaAuditFilterForm"><span class="fas fa-times"></span></button></div></div></td>';
-	print '</tr>';
-	print '<tr class="liste_titre">';
-	print_liste_field_titre($langs->trans('KreaBankWhen'), '', '', '', '', '');
-	print_liste_field_titre($langs->trans('KreaBankAction'), '', '', '', '', '');
-	print_liste_field_titre($langs->trans('KreaBankUser'), '', '', '', '', '');
-	print_liste_field_titre($langs->trans('KreaBankLine'), '', '', '', '', '');
-	print_liste_field_titre($langs->trans('KreaBankAuditPayloadSummary'), '', '', '', '', '');
-	print '</tr>';
+print '<div class="div-table-responsive">';
+print '<table class="tagtable nobottomiftotal liste">';
+print '<tr class="liste_titre_filter">';
+print '<td class="liste_titre"><div style="display:flex;gap:4px;flex-direction:column;min-width:130px"><input class="flat" type="date" name="audit_search_when_from" value="' . dol_escape_htmltag($auditSearchWhenFrom) . '" title="' . dol_escape_htmltag($langs->trans('From')) . '" form="kreaAuditFilterForm"><input class="flat" type="date" name="audit_search_when_to" value="' . dol_escape_htmltag($auditSearchWhenTo) . '" title="' . dol_escape_htmltag($langs->trans('To')) . '" form="kreaAuditFilterForm"></div></td>';
+print '<td class="liste_titre"><input class="flat width100" type="text" name="audit_search_action" value="' . dol_escape_htmltag($auditSearchAction) . '" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankAction')) . '" form="kreaAuditFilterForm"></td>';
+print '<td class="liste_titre"><input class="flat width100" type="text" name="audit_search_user" value="' . dol_escape_htmltag($auditSearchUser) . '" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankUser')) . '" form="kreaAuditFilterForm"></td>';
+print '<td class="liste_titre"><input class="flat width75" type="text" name="audit_search_line" value="' . dol_escape_htmltag($auditSearchLine) . '" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankLine')) . '" form="kreaAuditFilterForm"></td>';
+print '<td class="liste_titre"><div style="display:flex;gap:6px;align-items:center"><input class="flat width100" type="text" name="audit_search_summary" value="' . dol_escape_htmltag($auditSearchSummary) . '" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankAuditPayloadSummary')) . '" form="kreaAuditFilterForm"><div class="nowraponall"><button type="submit" class="liste_titre button_search reposition" name="button_search_x" value="x" form="kreaAuditFilterForm"><span class="fas fa-search"></span></button><button type="submit" class="liste_titre button_removefilter reposition" name="button_removefilter_x" value="x" form="kreaAuditFilterForm"><span class="fas fa-times"></span></button></div></div></td>';
+print '</tr>';
+print '<tr class="liste_titre">';
+print_liste_field_titre($langs->trans('KreaBankWhen'), '', '', '', '', '');
+print_liste_field_titre($langs->trans('KreaBankAction'), '', '', '', '', '');
+print_liste_field_titre($langs->trans('KreaBankUser'), '', '', '', '', '');
+print_liste_field_titre($langs->trans('KreaBankLine'), '', '', '', '', '');
+print_liste_field_titre($langs->trans('KreaBankAuditPayloadSummary'), '', '', '', '', '');
+print '</tr>';
 
+if ($auditTotalRecords === 0) {
+	print '<tr class="oddeven"><td colspan="5"><span class="opacitymedium">' . $langs->trans('None') . '</span></td></tr>';
+} else {
 	foreach ($preparedAuditRowsPage as $preparedAuditRow) {
 		$audit = $preparedAuditRow['audit'];
 		$summary = $preparedAuditRow['summary'];
@@ -1061,9 +1066,9 @@ if ($auditTotalRecords === 0) {
 		print '<td>' . dol_escape_htmltag((string) $summary['summary']) . '</td>';
 		print '</tr>';
 	}
-	print '</table>';
-	print '</div>';
 }
+print '</table>';
+print '</div>';
 
 print dol_get_fiche_end();
 llxFooter();
