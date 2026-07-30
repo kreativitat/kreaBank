@@ -974,36 +974,10 @@ $findSubsetForTargetAmount = static function ($documentCandidates, $targetAmount
 	);
 };
 if (!$isLoteBatchLine && !empty($suggestions)) {
-	$paymentLikeSuggestions = array_values(array_filter($suggestions, static function ($suggestion) {
-		$docType = (string) (isset($suggestion['doc_type']) ? $suggestion['doc_type'] : '');
-		return in_array($docType, array('native_bank', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked'), true);
-	}));
-
-	if (!empty($paymentLikeSuggestions)) {
-		usort($paymentLikeSuggestions, static function ($a, $b) {
-			$sa = (int) (isset($a['score']) ? $a['score'] : 0);
-			$sb = (int) (isset($b['score']) ? $b['score'] : 0);
-			if ($sb !== $sa) {
-				return $sb <=> $sa;
-			}
-			$aa = abs((float) (isset($a['amount_open']) ? $a['amount_open'] : 0.0));
-			$ab = abs((float) (isset($b['amount_open']) ? $b['amount_open'] : 0.0));
-			return $aa <=> $ab;
-		});
-
-		$topSuggestion = $paymentLikeSuggestions[0];
-		$topScore = (int) (isset($topSuggestion['score']) ? $topSuggestion['score'] : 0);
-		$secondScore = isset($paymentLikeSuggestions[1]) ? (int) $paymentLikeSuggestions[1]['score'] : -999;
-		$topDetails = array_flip((array) (isset($topSuggestion['details']) ? $topSuggestion['details'] : array()));
-		if (
-			$topScore >= (int) $minSuggestionScore
-			&& isset($topDetails['amount'])
-			&& isset($topDetails['date'])
-			&& (($topScore - $secondScore) >= 20)
-		) {
-			$topKey = (string) $topSuggestion['doc_type'] . '__' . ((int) $topSuggestion['doc_id']);
-			$autoSelectDocKeys[$topKey] = true;
-		}
+	$safeSuggestion = $service->getSafeSuggestion($suggestions, $safeScore);
+	if (is_array($safeSuggestion) && (string) $safeSuggestion['doc_type'] === 'native_bank') {
+		$safeKey = (string) $safeSuggestion['doc_type'] . '__' . ((int) $safeSuggestion['doc_id']);
+		$autoSelectDocKeys[$safeKey] = true;
 	}
 }
 
@@ -1916,7 +1890,7 @@ if (!$selectedLine) {
 			if ($isLocked) {
 				print '<span class="badge ' . ($isLockedReconciled ? 'badge-status4' : 'badge-status7') . '">' . $lockedStatusLabel . '</span>';
 			} else {
-				$shouldCheck = (($score >= $safeScore) || !empty($autoSelectDocKeys[$docKey]));
+				$shouldCheck = !empty($autoSelectDocKeys[$docKey]);
 				print '<input type="checkbox" name="selected_docs[]" value="' . $docKey . '"' . ($shouldCheck ? ' checked' : '') . '>';
 			}
 			print '<span>';

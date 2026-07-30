@@ -1415,17 +1415,26 @@ class KreaBankService
 		$dateRange = $this->resolveOpenDocumentsDateRange($anchorDate, $intervalDays);
 
 		if ($direction >= 0) {
-			$sql = 'SELECT f.rowid, f.ref, f.ref_client, f.total_ttc as amount_open, f.datef as doc_date, f.fk_soc, s.nom as thirdparty_name';
+			$customerAmountOpenSql = '(f.total_ttc';
+			$customerAmountOpenSql .= ' - COALESCE((SELECT SUM(pf.amount) FROM ' . $this->db->prefix() . 'paiement_facture as pf WHERE pf.fk_facture = f.rowid), 0)';
+			$customerAmountOpenSql .= ' - COALESCE((SELECT SUM(rc.amount_ttc) FROM ' . $this->db->prefix() . 'societe_remise_except as rc';
+			$customerAmountOpenSql .= ' INNER JOIN ' . $this->db->prefix() . 'facture as rf ON rf.rowid = rc.fk_facture_source';
+			$customerAmountOpenSql .= ' WHERE rc.entity = ' . ((int) $this->entity) . ' AND rf.entity = ' . ((int) $this->entity);
+			$customerAmountOpenSql .= ' AND rc.fk_facture = f.rowid AND rf.type IN (0, 2, 3, 5)), 0)';
+			$customerAmountOpenSql .= ')';
+			$sql = 'SELECT f.rowid, f.ref, f.ref_client, ' . $customerAmountOpenSql . ' as amount_open, f.datef as doc_date, f.fk_soc, s.nom as thirdparty_name';
 			$sql .= " FROM " . $this->db->prefix() . "facture as f";
 			$sql .= ' LEFT JOIN ' . $this->db->prefix() . 'societe as s ON s.rowid = f.fk_soc';
 			$sql .= ' WHERE f.entity = ' . ((int) $this->entity);
-			$sql .= ' AND f.fk_statut > 0 AND f.paye = 0';
+			$sql .= ' AND f.fk_statut = 1 AND f.paye = 0';
+			$sql .= ' AND f.type <> 2';
+			$sql .= ' AND ' . $customerAmountOpenSql . ' > 0.0000001';
 			if (!empty($dateRange['enabled'])) {
 				$sql .= ' AND f.datef >= ' . $this->sqlDate($dateRange['start']);
 				$sql .= ' AND f.datef <= ' . $this->sqlDate($dateRange['end']);
 			}
 			if ($discardZeroInvoices) {
-				$sql .= ' AND ABS(f.total_ttc) > 0.0000001';
+				$sql .= ' AND ABS(' . $customerAmountOpenSql . ') > 0.0000001';
 			}
 			$sql .= ' ORDER BY f.datef ASC';
 			$sql .= $this->db->plimit($limit, 0);
@@ -1434,7 +1443,7 @@ class KreaBankService
 			if ($resql) {
 				while ($obj = $this->db->fetch_object($resql)) {
 					$amountOpen = (float) $obj->amount_open;
-					if ($discardZeroInvoices && abs($amountOpen) <= 0.0000001) {
+					if ($amountOpen <= 0.0000001) {
 						continue;
 					}
 					$documents[] = array(
@@ -1453,17 +1462,26 @@ class KreaBankService
 		}
 
 		if ($direction <= 0) {
-			$sqlf = 'SELECT f.rowid, f.ref, f.ref_supplier as ref_client, f.total_ttc as amount_open, f.datef as doc_date, f.fk_soc, s.nom as thirdparty_name';
+			$supplierAmountOpenSql = '(f.total_ttc';
+			$supplierAmountOpenSql .= ' - COALESCE((SELECT SUM(pff.amount) FROM ' . $this->db->prefix() . 'paiementfourn_facturefourn as pff WHERE pff.fk_facturefourn = f.rowid), 0)';
+			$supplierAmountOpenSql .= ' - COALESCE((SELECT SUM(rc.amount_ttc) FROM ' . $this->db->prefix() . 'societe_remise_except as rc';
+			$supplierAmountOpenSql .= ' INNER JOIN ' . $this->db->prefix() . 'facture_fourn as rf ON rf.rowid = rc.fk_invoice_supplier_source';
+			$supplierAmountOpenSql .= ' WHERE rc.entity = ' . ((int) $this->entity) . ' AND rf.entity = ' . ((int) $this->entity);
+			$supplierAmountOpenSql .= ' AND rc.fk_invoice_supplier = f.rowid AND rf.type IN (0, 2, 3)), 0)';
+			$supplierAmountOpenSql .= ')';
+			$sqlf = 'SELECT f.rowid, f.ref, f.ref_supplier as ref_client, ' . $supplierAmountOpenSql . ' as amount_open, f.datef as doc_date, f.fk_soc, s.nom as thirdparty_name';
 			$sqlf .= ' FROM ' . $this->db->prefix() . 'facture_fourn as f';
 			$sqlf .= ' LEFT JOIN ' . $this->db->prefix() . 'societe as s ON s.rowid = f.fk_soc';
 			$sqlf .= ' WHERE f.entity = ' . ((int) $this->entity);
-			$sqlf .= ' AND f.fk_statut > 0 AND f.paye = 0';
+			$sqlf .= ' AND f.fk_statut = 1 AND f.paye = 0';
+			$sqlf .= ' AND f.type <> 2';
+			$sqlf .= ' AND ' . $supplierAmountOpenSql . ' > 0.0000001';
 			if (!empty($dateRange['enabled'])) {
 				$sqlf .= ' AND f.datef >= ' . $this->sqlDate($dateRange['start']);
 				$sqlf .= ' AND f.datef <= ' . $this->sqlDate($dateRange['end']);
 			}
 			if ($discardZeroInvoices) {
-				$sqlf .= ' AND ABS(f.total_ttc) > 0.0000001';
+				$sqlf .= ' AND ABS(' . $supplierAmountOpenSql . ') > 0.0000001';
 			}
 			$sqlf .= ' ORDER BY f.datef ASC';
 			$sqlf .= $this->db->plimit($limit, 0);
@@ -1472,7 +1490,7 @@ class KreaBankService
 			if ($resqlf) {
 				while ($obj = $this->db->fetch_object($resqlf)) {
 					$amountOpen = (float) $obj->amount_open;
-					if ($discardZeroInvoices && abs($amountOpen) <= 0.0000001) {
+					if ($amountOpen <= 0.0000001) {
 						continue;
 					}
 					$documents[] = array(
@@ -2242,6 +2260,18 @@ class KreaBankService
 	}
 
 	/**
+	 * Return the only suggestion that satisfies the shared automatic-match safety contract.
+	 *
+	 * @param array<int,array<string,mixed>> $suggestions
+	 * @param int $safeScore
+	 * @return array<string,mixed>|null
+	 */
+	public function getSafeSuggestion($suggestions, $safeScore)
+	{
+		return $this->matcher->getSafeSuggestion((array) $suggestions, (int) $safeScore);
+	}
+
+	/**
 	 * Apply safe suggestions on a batch of pending lines.
 	 *
 	 * @param int $safeScore
@@ -2261,7 +2291,7 @@ class KreaBankService
 		foreach ($lines as $line) {
 			$lineId = (int) $line['rowid'];
 			$suggestions = !empty($suggestionsByLine[$lineId]) ? (array) $suggestionsByLine[$lineId] : array();
-			$safe = $this->matcher->getSafeSuggestion($suggestions, (int) $safeScore);
+			$safe = $this->getSafeSuggestion($suggestions, (int) $safeScore);
 			if (!$safe) {
 				continue;
 			}
@@ -6148,6 +6178,7 @@ class KreaBankService
 		require_once DOL_DOCUMENT_ROOT . '/compta/facture/class/facture.class.php';
 		require_once DOL_DOCUMENT_ROOT . '/compta/paiement/class/paiement.class.php';
 
+		$this->lockInvoiceForPayment('facture', (int) $invoiceId, 'Customer invoice');
 		$invoice = new Facture($this->db);
 		if ($invoice->fetch((int) $invoiceId) <= 0) {
 			throw new Exception('Customer invoice not found #' . ((int) $invoiceId));
@@ -6155,6 +6186,13 @@ class KreaBankService
 		if ((int) $invoice->entity !== (int) $this->entity) {
 			throw new Exception('Customer invoice is outside current entity');
 		}
+		if ((int) $invoice->type === Facture::TYPE_CREDIT_NOTE) {
+			throw new Exception('Customer credit notes require a dedicated refund reconciliation workflow');
+		}
+		if ((int) $invoice->status !== Facture::STATUS_VALIDATED || !empty($invoice->paye)) {
+			throw new Exception('Customer invoice is no longer open for payment');
+		}
+		$this->assertInvoiceAllocationWithinRemaining($invoice, $allocatedAmount, 'Customer invoice');
 		$invoice->fetch_thirdparty();
 
 		$payment = new Paiement($this->db);
@@ -6172,7 +6210,7 @@ class KreaBankService
 		$payment->note_private = (string) $note;
 		$payment->fk_account = (int) $line['bank_account_id'];
 
-		$paymentId = (int) $payment->create($this->user, 0, $invoice->thirdparty);
+		$paymentId = (int) $payment->create($this->user, 1, $invoice->thirdparty);
 		if ($paymentId <= 0) {
 			throw new Exception($this->extractObjectErrorMessage($payment, 'Failed to create customer payment'));
 		}
@@ -6293,6 +6331,7 @@ class KreaBankService
 		require_once DOL_DOCUMENT_ROOT . '/fourn/class/fournisseur.facture.class.php';
 		require_once DOL_DOCUMENT_ROOT . '/fourn/class/paiementfourn.class.php';
 
+		$this->lockInvoiceForPayment('facture_fourn', (int) $invoiceId, 'Supplier invoice');
 		$invoice = new FactureFournisseur($this->db);
 		if ($invoice->fetch((int) $invoiceId) <= 0) {
 			throw new Exception('Supplier invoice not found #' . ((int) $invoiceId));
@@ -6300,6 +6339,13 @@ class KreaBankService
 		if ((int) $invoice->entity !== (int) $this->entity) {
 			throw new Exception('Supplier invoice is outside current entity');
 		}
+		if ((int) $invoice->type === FactureFournisseur::TYPE_CREDIT_NOTE) {
+			throw new Exception('Supplier credit notes require a dedicated refund reconciliation workflow');
+		}
+		if ((int) $invoice->status !== FactureFournisseur::STATUS_VALIDATED || !empty($invoice->paye)) {
+			throw new Exception('Supplier invoice is no longer open for payment');
+		}
+		$this->assertInvoiceAllocationWithinRemaining($invoice, $allocatedAmount, 'Supplier invoice');
 		$invoice->fetch_thirdparty();
 
 		$payment = new PaiementFourn($this->db);
@@ -6317,14 +6363,13 @@ class KreaBankService
 		$payment->note_private = (string) $note;
 		$payment->fk_account = (int) $line['bank_account_id'];
 
-		$paymentId = (int) $payment->create($this->user, 0, $invoice->thirdparty);
+		$paymentId = (int) $payment->create($this->user, 1, $invoice->thirdparty);
 		if ($paymentId <= 0) {
 			throw new Exception($this->extractObjectErrorMessage($payment, 'Failed to create supplier payment'));
 		}
 		if ((int) $payment->update_fk_bank((int) $line['rowid']) <= 0) {
 			throw new Exception($this->extractObjectErrorMessage($payment, 'Failed to attach supplier payment to bank line'));
 		}
-		$this->ensureSupplierInvoicePaidAfterPayment($invoice);
 
 		return array(
 			'payment_id' => $paymentId,
@@ -6334,44 +6379,62 @@ class KreaBankService
 	}
 
 	/**
-	 * Ensure one supplier invoice is marked as paid after payment creation.
+	 * Lock one invoice row before validating and creating its payment.
 	 *
-	 * @param FactureFournisseur $invoice
+	 * @param string $tableName
+	 * @param int $invoiceId
+	 * @param string $invoiceLabel
 	 * @return void
 	 */
-	protected function ensureSupplierInvoicePaidAfterPayment($invoice)
+	protected function lockInvoiceForPayment($tableName, $invoiceId, $invoiceLabel)
 	{
-		if (!is_object($invoice) || empty($invoice->id)) {
-			return;
+		$allowedTables = array('facture', 'facture_fourn');
+		if (!in_array((string) $tableName, $allowedTables, true)) {
+			throw new Exception('Unsupported invoice table for reconciliation lock');
 		}
 
-		$invoiceId = (int) $invoice->id;
-		$invoiceEntity = !empty($invoice->entity) ? (int) $invoice->entity : 0;
-		if ($invoiceEntity > 0 && $invoiceEntity !== (int) $this->entity) {
-			throw new Exception('Supplier invoice is outside current entity');
+		$sql = 'SELECT rowid FROM ' . $this->db->prefix() . $tableName;
+		$sql .= ' WHERE rowid = ' . ((int) $invoiceId);
+		$sql .= ' AND entity = ' . ((int) $this->entity);
+		$sql .= ' FOR UPDATE';
+		$resql = $this->db->query($sql);
+		if (!$resql) {
+			throw new Exception($this->db->lasterror());
 		}
-		if (!empty($invoice->paye) && (int) $invoice->paye > 0) {
-			return;
+		if ($this->db->num_rows($resql) !== 1) {
+			throw new Exception($invoiceLabel . ' not found in current entity #' . ((int) $invoiceId));
+		}
+	}
+
+	/**
+	 * Validate the requested allocation against Dolibarr's current remaining balance.
+	 *
+	 * @param CommonInvoice $invoice
+	 * @param float $allocatedAmount
+	 * @param string $invoiceLabel
+	 * @return void
+	 */
+	protected function assertInvoiceAllocationWithinRemaining($invoice, $allocatedAmount, $invoiceLabel)
+	{
+		if (!is_object($invoice) || empty($invoice->id) || !method_exists($invoice, 'getRemainToPay')) {
+			throw new Exception($invoiceLabel . ' cannot provide a remaining balance');
 		}
 
-		$resMarkPaid = 0;
-		if (method_exists($invoice, 'set_paid')) {
-			$resMarkPaid = (int) $invoice->set_paid($this->user);
-		} elseif (method_exists($invoice, 'setPaid')) {
-			$resMarkPaid = (int) $invoice->setPaid($this->user);
+		$remainingRaw = $invoice->getRemainToPay(0);
+		if (!is_numeric($remainingRaw)) {
+			throw new Exception($this->extractObjectErrorMessage($invoice, 'Failed to read current invoice remaining balance'));
 		}
 
-		$invoiceCheck = new FactureFournisseur($this->db);
-		if ($invoiceCheck->fetch($invoiceId) > 0 && !empty($invoiceCheck->paye) && (int) $invoiceCheck->paye > 0) {
-			return;
+		$remaining = (float) price2num((string) $remainingRaw, 'MT');
+		$allocation = abs((float) price2num((string) $allocatedAmount, 'MT'));
+		if ($remaining <= 0.00001) {
+			throw new Exception($invoiceLabel . ' no longer has an outstanding balance');
 		}
-
-		if ($resMarkPaid <= 0) {
-			throw new Exception($this->extractObjectErrorMessage($invoice, 'Failed to mark supplier invoice as paid'));
+		if ($allocation <= 0.00001) {
+			throw new Exception('Invoice allocation amount must be greater than zero');
 		}
-
-		if ($invoiceCheck->fetch($invoiceId) <= 0 || empty($invoiceCheck->paye)) {
-			throw new Exception('Supplier invoice payment was created but invoice is still not marked as paid');
+		if (($allocation - $remaining) > 0.01) {
+			throw new Exception($invoiceLabel . ' allocation exceeds the current remaining balance');
 		}
 	}
 

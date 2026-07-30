@@ -120,6 +120,13 @@ function kreabankRunRuntimeReconciliationAssertions($rootDir)
 	$assertTrue((int) $exactScore['score'] === 100, 'Exact amount+date score should be 100');
 	$assertTrue(isset($exactDetailMap['amount']), 'Exact amount+date should include amount evidence');
 	$assertTrue(isset($exactDetailMap['date']), 'Exact amount+date should include date evidence');
+	$amountDateOnlySafe = $matcher->getSafeSuggestion(array(array(
+		'score' => (int) $exactScore['score'],
+		'details' => (array) $exactScore['details'],
+		'doc_id' => 1,
+		'amount_open' => -15.80,
+	)), 100);
+	$assertTrue($amountDateOnlySafe === null, 'Exact amount+date without strong identity must not be treated as an automatic safe match');
 
 	$linkedLine = array(
 		'amount' => -9.00,
@@ -305,6 +312,22 @@ function kreabankRunRuntimeReconciliationAssertions($rootDir)
 	);
 	$safeGapTop = $matcher->getSafeSuggestion($safeGapSuggestions, 150);
 	$assertTrue($safeGapTop === null, 'Safe suggestion requires at least 35-point gap between top and second candidate');
+	$strongSafeSuggestions = array(
+		array(
+			'score' => 210,
+			'details' => array('amount', 'ref_payment', 'date'),
+			'doc_id' => 110,
+			'amount_open' => -20.00,
+		),
+		array(
+			'score' => 160,
+			'details' => array('amount', 'date', 'name_partial'),
+			'doc_id' => 111,
+			'amount_open' => -20.00,
+		),
+	);
+	$strongSafeTop = $matcher->getSafeSuggestion($strongSafeSuggestions, 150);
+	$assertTrue(is_array($strongSafeTop) && (int) $strongSafeTop['doc_id'] === 110, 'Strong identity with exact amount and sufficient score gap should remain automatically safe');
 
 	$GLOBALS['__kb_last_nospecial_input'] = null;
 	$normalizedProbe = kreabankNormalizeText('  ABC   DEF  ');

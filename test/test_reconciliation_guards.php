@@ -12,6 +12,7 @@ $rootDir = dirname(__DIR__);
 $serviceFile = $rootDir.'/class/KreaBankService.class.php';
 $nativeFile = $rootDir.'/class/KreaBankNativeBankAdapter.class.php';
 $bulkFile = $rootDir.'/bulkmatch.php';
+$reconcileFile = $rootDir.'/reconcile.php';
 $pendingFile = $rootDir.'/pending.php';
 $historyFile = $rootDir.'/history.php';
 $importFile = $rootDir.'/import.php';
@@ -68,6 +69,7 @@ try {
 	$serviceSource = $readFile($serviceFile);
 	$nativeSource = $readFile($nativeFile);
 	$bulkSource = $readFile($bulkFile);
+	$reconcileSource = $readFile($reconcileFile);
 	$pendingSource = $readFile($pendingFile);
 	$historySource = $readFile($historyFile);
 	$importSource = $readFile($importFile);
@@ -229,6 +231,7 @@ if ($recentReconciledBody === '') {
 }
 
 $assertContains($serviceSource, 'public function getSuggestionsForLines(', 'service should expose batch suggestions API', $errors);
+$assertContains($serviceSource, 'public function getSafeSuggestion(', 'service should expose the shared automatic-match safety contract', $errors);
 $assertContains($serviceSource, 'protected function loadBatchMlSamples()', 'service should keep DB-backed batch ML sample loader', $errors);
 $assertContains($serviceSource, 'protected function findSelectedNativeBankLink(', 'service should expose native-bank reuse helper', $errors);
 $assertContains($serviceSource, 'protected function findSelectedLinkedPaymentBankLink(', 'service should expose linked-payment native-bank reuse helper', $errors);
@@ -250,6 +253,49 @@ $assertContains($serviceSource, 'public function purgeAuditRowsOlderThanRetentio
 $assertContains($serviceSource, "'minimum_gap_pct' => 15", 'supplier ML should expose minimum confidence gap guard', $errors);
 $assertContains($serviceSource, 'low_confidence_gap', 'supplier ML should distinguish low-gap predictions from low-confidence predictions', $errors);
 $assertContains($serviceSource, 'public function createQuickSupplierInvoiceAndReconcile(', 'service should expose quick supplier invoice reconciliation API', $errors);
+$openInvoiceBody = $extractFunctionBody($serviceSource, 'getOpenInvoiceDocuments');
+if ($openInvoiceBody === '') {
+	$errors[] = 'Unable to parse getOpenInvoiceDocuments body';
+} else {
+	$assertContains($openInvoiceBody, 'paiement_facture as pf WHERE pf.fk_facture = f.rowid', 'customer invoice candidates should subtract existing payments from open balance', $errors);
+	$assertContains($openInvoiceBody, 'paiementfourn_facturefourn as pff WHERE pff.fk_facturefourn = f.rowid', 'supplier invoice candidates should subtract existing payments from open balance', $errors);
+	$assertContains($openInvoiceBody, 'societe_remise_except as rc', 'invoice candidates should subtract applied deposits and credit notes', $errors);
+	$assertContains($openInvoiceBody, 'WHERE rc.entity = ', 'applied deposit and credit-note lookups should enforce explicit entity scope', $errors);
+	if (substr_count($openInvoiceBody, "' AND f.fk_statut = 1 AND f.paye = 0'") < 2) {
+		$errors[] = 'customer and supplier invoice candidates should include only validated unpaid invoices';
+	}
+	if (substr_count($openInvoiceBody, "' AND f.type <> 2'") < 2) {
+		$errors[] = 'customer and supplier invoice candidates should exclude credit notes until a dedicated refund workflow exists';
+	}
+}
+$customerPaymentBody = $extractFunctionBody($serviceSource, 'createCustomerPaymentForBankLine');
+if ($customerPaymentBody === '') {
+	$errors[] = 'Unable to parse createCustomerPaymentForBankLine body';
+} else {
+	$assertContains($customerPaymentBody, "\$this->lockInvoiceForPayment('facture',", 'customer invoice payment should lock the invoice row before validation', $errors);
+	$assertContains($customerPaymentBody, '$invoice->status !== Facture::STATUS_VALIDATED', 'customer invoice payment should reject non-validated invoice states', $errors);
+	$assertContains($customerPaymentBody, '$this->assertInvoiceAllocationWithinRemaining(', 'customer invoice payment should validate the current remaining balance', $errors);
+	$assertContains($customerPaymentBody, '$payment->create($this->user, 1, $invoice->thirdparty)', 'customer payment should use Dolibarr native paid-invoice lifecycle handling', $errors);
+}
+$supplierPaymentBody = $extractFunctionBody($serviceSource, 'createSupplierPaymentForBankLine');
+if ($supplierPaymentBody === '') {
+	$errors[] = 'Unable to parse createSupplierPaymentForBankLine body';
+} else {
+	$assertContains($supplierPaymentBody, "\$this->lockInvoiceForPayment('facture_fourn',", 'supplier invoice payment should lock the invoice row before validation', $errors);
+	$assertContains($supplierPaymentBody, '$invoice->status !== FactureFournisseur::STATUS_VALIDATED', 'supplier invoice payment should reject non-validated invoice states', $errors);
+	$assertContains($supplierPaymentBody, '$this->assertInvoiceAllocationWithinRemaining(', 'supplier invoice payment should validate the current remaining balance', $errors);
+	$assertContains($supplierPaymentBody, '$payment->create($this->user, 1, $invoice->thirdparty)', 'supplier payment should use Dolibarr native paid-invoice lifecycle handling', $errors);
+}
+$invoiceAllocationBody = $extractFunctionBody($serviceSource, 'assertInvoiceAllocationWithinRemaining');
+if ($invoiceAllocationBody === '') {
+	$errors[] = 'Unable to parse assertInvoiceAllocationWithinRemaining body';
+} else {
+	$assertContains($invoiceAllocationBody, '$invoice->getRemainToPay(0)', 'invoice payment validation should use Dolibarr native remaining balance calculation', $errors);
+	$assertContains($invoiceAllocationBody, 'allocation exceeds the current remaining balance', 'invoice payment validation should reject stale over-allocation', $errors);
+}
+if (strpos($serviceSource, 'ensureSupplierInvoicePaidAfterPayment') !== false) {
+	$errors[] = 'service should not force supplier invoices to paid after partial payments';
+}
 $assertContains($nativeSource, 'public function getLineLinksBatch(', 'native adapter should expose batch links API', $errors);
 $assertContains($nativeSource, 'protected function hasManagedNativeLine(', 'native adapter should distinguish imported native lines from reused external ones', $errors);
 $assertContains($nativeSource, "'operation_date' => 'l.operation_date'", 'native adapter pending sort allowlist should expose logical operation_date key', $errors);
@@ -304,7 +350,10 @@ $assertContains($bulkSource, "'doc_type' => (string) (!empty(\$suggestion['doc_t
 $assertContains($bulkSource, "'doc_id' => (int) (!empty(\$suggestion['doc_id']) ? \$suggestion['doc_id'] : 0)", 'bulkmatch scan cache should persist compact document id in cache', $errors);
 $assertContains($bulkSource, "'score' => (int) (!empty(\$suggestion['score']) ? \$suggestion['score'] : 0)", 'bulkmatch scan cache should persist compact score in cache', $errors);
 $assertContains($bulkSource, 'KreaBankBulkMatchLowConfidenceSkipped', 'bulkmatch should warn when selected lines are skipped for low confidence', $errors);
-$assertContains($bulkSource, "'is_bulk_safe' => (\$matchScore >= \$bulkMatchMinScore)", 'bulkmatch should classify suggestions by minimum score threshold', $errors);
+$assertContains($bulkSource, '$safeSuggestion = $service->getSafeSuggestion($orderedSuggestions, $bulkMatchMinScore);', 'bulkmatch should use the shared identity, amount, and score-gap safety contract', $errors);
+if (strpos($bulkSource, "'is_bulk_safe' => (\$matchScore >= \$bulkMatchMinScore)") !== false) {
+	$errors[] = 'bulkmatch should not classify amount-and-date-only suggestions as safe by score alone';
+}
 $assertContains($bulkSource, 'reload_count', 'bulkmatch should track bounded auto-refresh attempts in scan state', $errors);
 $assertContains($bulkSource, '$formatDisplayDate = static function ($value)', 'bulkmatch should centralize guarded date rendering helper', $errors);
 $assertContains($bulkSource, 'if ($ts === false || $ts <= 0)', 'bulkmatch should guard strtotime failures before rendering dates', $errors);
@@ -463,7 +512,9 @@ if (strpos($serviceSource, '@unlink(') !== false) {
 if (strpos($serviceSource, 'array_fill(0, 16, 0.0)') !== false) {
 	$errors[] = 'service should not keep the old 16-bin supplier ML hash vector';
 }
-$assertContains($readFile($rootDir.'/reconcile.php'), "entry_submit_action\" value=\"supplier_invoice", 'reconcile should expose supplier invoice submit button in quick entry form', $errors);
+$assertContains($reconcileSource, "entry_submit_action\" value=\"supplier_invoice", 'reconcile should expose supplier invoice submit button in quick entry form', $errors);
+$assertContains($reconcileSource, '$safeSuggestion = $service->getSafeSuggestion($suggestions, $safeScore);', 'manual reconciliation should use the shared automatic-match safety contract', $errors);
+$assertContains($reconcileSource, '$shouldCheck = !empty($autoSelectDocKeys[$docKey]);', 'manual reconciliation should preselect only explicitly safe or batch-selected documents', $errors);
 
 $bulkBatchCalls = substr_count($bulkSource, 'getSuggestionsForLines(');
 if ($bulkBatchCalls < 2) {

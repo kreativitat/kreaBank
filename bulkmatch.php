@@ -90,7 +90,7 @@ if ($dateTolerance <= 0) {
 	$dateTolerance = 3;
 }
 $bulkScanCacheStoreKey = 'kreabank_bulkmatch_scan_state';
-$bulkScanMatcherRevision = 10;
+$bulkScanMatcherRevision = 11;
 $bulkScanFilterScope = array(
 	'bank_account_id' => GETPOSTINT('bank_account_id'),
 );
@@ -154,7 +154,7 @@ $resolveSuggestionDirection = static function ($suggestion) {
 
 	return 0;
 };
-$resolveLineBestSuggestion = static function ($line, $suggestions) use ($resolveLineDirection, $resolveSuggestionDirection, $bulkMatchMinScore) {
+$resolveLineBestSuggestion = static function ($line, $suggestions) use ($service, $resolveLineDirection, $resolveSuggestionDirection, $bulkMatchMinScore) {
 	$outstanding = max(0.0, abs((float) $line['amount']) - abs((float) $line['allocated_amount']));
 	if ($outstanding <= 0.00001) {
 		$outstanding = abs((float) $line['amount']);
@@ -178,8 +178,7 @@ $resolveLineBestSuggestion = static function ($line, $suggestions) use ($resolve
 		'supplier_invoice' => 1,
 	);
 
-	$firstValidCandidate = null;
-	$firstSafeCandidate = null;
+	$validCandidates = array();
 
 	foreach ((array) $suggestions as $suggestion) {
 		$docType = (string) (isset($suggestion['doc_type']) ? $suggestion['doc_type'] : '');
@@ -213,22 +212,57 @@ $resolveLineBestSuggestion = static function ($line, $suggestions) use ($resolve
 			'suggestion' => $suggestion,
 			'allocation' => $allocation,
 			'outstanding' => $outstanding,
-			'is_bulk_safe' => ($matchScore >= $bulkMatchMinScore),
+			'is_bulk_safe' => false,
 		);
-		if ($firstValidCandidate === null) {
-			$firstValidCandidate = $candidate;
-		}
-		if (!empty($candidate['is_bulk_safe'])) {
-			$firstSafeCandidate = $candidate;
-			break;
-		}
+		$validCandidates[] = $candidate;
 	}
 
-	if (is_array($firstSafeCandidate)) {
-		return $firstSafeCandidate;
-	}
-	if (is_array($firstValidCandidate)) {
-		return $firstValidCandidate;
+	if (!empty($validCandidates)) {
+		usort($validCandidates, static function ($a, $b) {
+			$suggestionA = (array) $a['suggestion'];
+			$suggestionB = (array) $b['suggestion'];
+			$scoreA = (int) (isset($suggestionA['score']) ? $suggestionA['score'] : 0);
+			$scoreB = (int) (isset($suggestionB['score']) ? $suggestionB['score'] : 0);
+			if ($scoreB !== $scoreA) {
+				return $scoreB <=> $scoreA;
+			}
+			$amountA = abs((float) (isset($suggestionA['amount_open']) ? $suggestionA['amount_open'] : 0.0));
+			$amountB = abs((float) (isset($suggestionB['amount_open']) ? $suggestionB['amount_open'] : 0.0));
+			if (abs($amountA - $amountB) > 0.0000001) {
+				return $amountA <=> $amountB;
+			}
+			$typeComparison = strcmp(
+				(string) (isset($suggestionA['doc_type']) ? $suggestionA['doc_type'] : ''),
+				(string) (isset($suggestionB['doc_type']) ? $suggestionB['doc_type'] : '')
+			);
+			if ($typeComparison !== 0) {
+				return $typeComparison;
+			}
+
+			return ((int) (isset($suggestionA['doc_id']) ? $suggestionA['doc_id'] : 0)) <=> ((int) (isset($suggestionB['doc_id']) ? $suggestionB['doc_id'] : 0));
+		});
+
+		$orderedSuggestions = array();
+		foreach ($validCandidates as $candidate) {
+			$orderedSuggestions[] = (array) $candidate['suggestion'];
+		}
+		$safeSuggestion = $service->getSafeSuggestion($orderedSuggestions, $bulkMatchMinScore);
+		if (is_array($safeSuggestion)) {
+			$safeDocType = (string) (isset($safeSuggestion['doc_type']) ? $safeSuggestion['doc_type'] : '');
+			$safeDocId = (int) (isset($safeSuggestion['doc_id']) ? $safeSuggestion['doc_id'] : 0);
+			foreach ($validCandidates as $candidate) {
+				$candidateSuggestion = (array) $candidate['suggestion'];
+				if (
+					(string) (isset($candidateSuggestion['doc_type']) ? $candidateSuggestion['doc_type'] : '') === $safeDocType
+					&& (int) (isset($candidateSuggestion['doc_id']) ? $candidateSuggestion['doc_id'] : 0) === $safeDocId
+				) {
+					$candidate['is_bulk_safe'] = true;
+					return $candidate;
+				}
+			}
+		}
+
+		return $validCandidates[0];
 	}
 
 	return array(
@@ -701,26 +735,6 @@ try {
 				$pageSuggestionsByLine = array();
 			}
 		}
-		$findSuggestionByDoc = static function ($suggestions, $docType, $docId) {
-			$docType = (string) $docType;
-			$docId = (int) $docId;
-			foreach ((array) $suggestions as $suggestion) {
-				if (!is_array($suggestion)) {
-					continue;
-				}
-				if ((string) (!empty($suggestion['doc_type']) ? $suggestion['doc_type'] : '') !== $docType) {
-					continue;
-				}
-				if ((int) (!empty($suggestion['doc_id']) ? $suggestion['doc_id'] : 0) !== $docId) {
-					continue;
-				}
-
-				return $suggestion;
-			}
-
-			return null;
-		};
-
 		foreach ($pageMatchedRows as $matchedRow) {
 			if (!is_array($matchedRow)) {
 				continue;
@@ -736,8 +750,12 @@ try {
 			$line = $pageLinesById[$lineId];
 			$suggestions = !empty($pageSuggestionsByLine[$lineId]) ? (array) $pageSuggestionsByLine[$lineId] : array();
 			$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestions, $dateTolerance);
-			$suggestion = $findSuggestionByDoc($suggestions, $docType, $docId);
+			$resolvedCurrent = $resolveLineBestSuggestion($line, $suggestions);
+			$suggestion = !empty($resolvedCurrent['suggestion']) ? (array) $resolvedCurrent['suggestion'] : null;
+			$allocation = !empty($resolvedCurrent['allocation']) ? (float) $resolvedCurrent['allocation'] : $cachedAllocation;
+			$isBulkSafe = !empty($resolvedCurrent['is_bulk_safe']);
 			if (!is_array($suggestion)) {
+				$isBulkSafe = false;
 				$suggestion = array(
 					'doc_type' => $docType,
 					'doc_id' => $docId,
@@ -750,14 +768,13 @@ try {
 				);
 			}
 			$suggestionScore = (int) (!empty($suggestion['score']) ? $suggestion['score'] : $cachedScore);
-			$isBulkSafe = ($suggestionScore >= $bulkMatchMinScore);
 			if ($isBulkSafe) {
 				$preselectedCount++;
 			}
 			$rows[] = array(
 				'line' => $line,
 				'suggestion' => $suggestion,
-				'allocation' => $cachedAllocation,
+				'allocation' => $allocation,
 				'preselected' => $isBulkSafe,
 				'is_bulk_safe' => $isBulkSafe,
 				'score' => $suggestionScore,
