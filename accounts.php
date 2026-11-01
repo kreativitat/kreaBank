@@ -60,10 +60,10 @@ if ($view !== '' && in_array($view,$allowedViews,true)) {
 }
 $kind = GETPOST('kind','aZ09');
 if (!in_array($kind,array('bank','cash','closed'),true)) {
-	$kind = 'bank';
+	$kind = $account ? ((int) $account->clos === 1 ? 'closed' : ((int) $account->type === 2 ? 'cash' : 'bank')) : 'bank';
 }
 $report = new KreaBankIntegration($db,$conf->entity);
-$rows = $report->accounts($kind);
+$rows = $report->accounts($kind, $accountId);
 llxHeader('', $langs->trans('KreaBankAccounts'));
 kreabankPrintWorkspaceNavigation('accounts',$account);
 print '<div class="kb-accounts-toolbar"><h2>' . $langs->trans('KreaBankAccounts') . '</h2><div class="kb-view-switch">';
@@ -75,7 +75,7 @@ if ($user->hasRight('banque','configurer')) {
 	print '<a class="button" href="' . dol_buildpath('/compta/bank/card.php?action=create',1) . '">' . $langs->trans('NewFinancialAccount') . '</a>';
 }
 print '</div><div class="div-table-responsive"><table class="kb-accounts-table"><tr>';
-foreach (array('BankAccount','Currency','KreaBankCurrentBalance','KreaBankPending','Action') as $label) {
+foreach (array('BankAccount','Currency','KreaBankCurrentBalance','KreaBankPending','KreaBankActions') as $label) {
 	print '<th>' . $langs->trans($label) . '</th>';
 }
 print '</tr>';

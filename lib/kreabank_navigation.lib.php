@@ -98,12 +98,20 @@ function kreabankBankingHeader($page, $account = null)
 		}
 		$html .= '</div>';
 	}
+	if ($page === 'movements') {
+		$matched = (bool) GETPOSTINT('kreabank_matched');
+		$html .= '<div class="kb-view-switch" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankNavMovements')) . '">';
+		foreach (array(0 => 'KreaBankAllMovements', 1 => 'KreaBankReconciledMovements') as $filter => $label) {
+			$html .= '<a' . ($matched === (bool) $filter ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag(kreabankNativeEntriesUrl($accountId, (bool) $filter)) . '">' . $langs->trans($label) . '</a>';
+		}
+		$html .= '</div>';
+	}
 	$html .= '<details class="kb-more"><summary>' . $langs->trans('KreaBankMoreOptions') . '</summary><div>';
 	foreach (($accountId > 0 ? array('card.php?id=' => 'KreaBankAccountDetails', 'document.php?id=' => 'Documents', 'annuel.php?id=' => 'Reports', 'treso.php?id=' => 'KreaBankForecast', 'releve.php?native_statements=1&account=' => 'KreaBankNativeStatements', 'bankentries_list.php?action=reconcile&search_conciliated=0&id=' => 'KreaBankStatementNumbering') : array()) as $route => $label) {
 		$html .= '<a href="' . dol_escape_htmltag(dol_buildpath('/compta/bank/' . $route . $accountId, 1)) . '">' . $langs->trans($label) . '</a>';
 	}
 	if ($user->hasRight('banque','modifier')) {
-		$html .= '<a href="' . dol_buildpath('/compta/bank/transfer.php',1) . '">' . $langs->trans('Transfer') . '</a>';
+		$html .= '<a href="' . dol_buildpath('/compta/bank/transfer.php',1) . '">' . $langs->trans('KreaBankTransfer') . '</a>';
 		$html .= '<a href="' . dol_buildpath('/compta/paiement/cheque/index.php',1) . '">' . $langs->trans('KreaBankChequeDeposits') . '</a>';
 	}
 	if (!empty($user->admin)) {

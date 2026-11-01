@@ -63,7 +63,7 @@ function kreabankPrepareHead($accountId = 0)
 	$langs->load('kreabank@kreabank');
 	$head = array();
 	if ($user->hasRight('kreabank', 'reconciliation', 'read') && $user->hasRight('banque', 'lire')) {
-		foreach (array('accounts' => 'KreaBankAccounts', 'movements' => 'KreaBankNavMovements', 'statement' => 'KreaBankNavStatements', 'reconcile' => 'KreaBankReconcile') as $page => $label) {
+		foreach (array('accounts' => 'KreaBankNavAccounts', 'movements' => 'KreaBankNavMovements', 'statement' => 'KreaBankNavStatements', 'reconcile' => 'KreaBankReconcile') as $page => $label) {
 			$head[] = array(kreabankBankingUrl($page, $accountId), $langs->trans($label), $page);
 		}
 	}

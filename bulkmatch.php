@@ -743,9 +743,6 @@ if (!$isScanRequest) {
 	print load_fiche_titre($langs->trans('KreaBankBulkMatchTitle'), '', 'title_setup');
 
 	print '<style>';
-	print '.krea-bulk-intro{margin:8px 0 14px 0;padding:10px 12px;border:1px solid #d5e0ea;background:#f8fbfe;border-radius:8px}';
-	print '.krea-bulk-intro-title{margin:0;font-size:18px;font-weight:800;color:#204060}';
-	print '.krea-bulk-intro-subtitle{margin:6px 0 0 0;color:#486174;font-size:13px}';
 	print '.krea-bulk-score{display:inline-block;padding:2px 6px;border-radius:10px;font-size:11px;font-weight:700;background:#eef6ff;color:#1f4e79;border:1px solid #c3d9ef}';
 	print '.krea-bulk-summary{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px 0}';
 	print '.krea-bulk-summary .badge{font-size:12px}';
@@ -814,7 +811,7 @@ if (empty($rows)) {
 	print '<input type="hidden" name="limit" value="' . ((int) $limit) . '">';
 	$reviewExpires = dol_now() + 1800;
 	print '<input type="hidden" name="review_expires" value="' . $reviewExpires . '">';
-	print '<p>' . $langs->trans('KreaBankBulkMatchScoreHelp') . '</p>';
+	print '<details class="kb-help"><summary>' . $langs->trans('KreaBankScoreGuide') . '</summary><p>' . $langs->trans('KreaBankBulkMatchScoreHelp') . '</p></details>';
 	print '<label class="krea-bulk-select-all"><input type="checkbox" id="krea_bulk_match_all"' . ($preselectedCount === count($rows) ? ' checked' : '') . '> ' . $langs->trans('KreaBankSelectAll') . '</label>';
 	print '<div class="krea-bulk-list">';
 	$normalizeCompact = static function ($value) {

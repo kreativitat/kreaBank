@@ -95,4 +95,7 @@ $_SERVER['PHP_SELF'] = '/compta/bank/bankentries_list.php';
 $navigationRequest = array('kreabank_matched' => 0);
 $hooks->printFieldListWhere(array(),$object,$action,null);
 checkNavigation(strpos($hooks->resprints, 'ba.entity=7') !== false, 'Native movements restrict owner company even when accounts are shared');
+$navigationRequest = array('kreabank_matched' => 1);
+$html = kreabankBankingHeader('movements', (object) array('id' => 45));
+checkNavigation(strpos($html, 'id=45&amp;kreabank_matched=1') !== false && strpos($html, 'KreaBankReconciledMovements') !== false, 'Movement views retain selected account and expose reconciled entries');
 print "OK: $checks navigation and account-scope checks\n";

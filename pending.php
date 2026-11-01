@@ -167,7 +167,6 @@ if ($limit > 0 && $limit !== (int) $conf->liste_limit) {
 llxHeader('', $langs->trans('KreaBankPending'), '', '', 0, 0, '', '', '', 'mod-kreabank page-pending bodyforlist');
 
 kreabankPrintWorkspaceNavigation('pending', $navigationAccount);
-print load_fiche_titre($langs->trans('KreaBankPending'), '', 'title_setup');
 
 print '<form method="GET" id="searchFormList" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 print kreabankNavigationHiddenFields($navigationAccountId);

@@ -52,3 +52,7 @@ body.kreabank-banking.kb-native-bank #id-right > .fiche > .tabs { display:none !
 }
 
 .kb-page-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin:16px 0 20px; }
+
+.kb-help { margin:12px 0; color:#526477; font-size:12px; }
+.kb-help summary { cursor:pointer; }
+.kb-help p { max-width:95ch; line-height:1.5; }

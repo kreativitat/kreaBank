@@ -1559,9 +1559,6 @@ print '<style>';
 print '.krea-embedded-success-alert .ok{margin:0 0 12px 0}';
 print '.krea-embedded-success-alert .ok a{font-weight:700;text-decoration:underline}';
 print '.krea-recon-layout{display:flex;gap:16px;margin-top:8px}';
-print '.krea-page-intro{margin:8px 0 12px 0;padding:10px 12px;border:1px solid #d6e2ec;background:#f8fbfe;border-radius:8px}';
-print '.krea-page-intro-title{margin:0;font-size:20px;line-height:1.2;color:#1b3f5f;font-weight:800}';
-print '.krea-page-intro-subtitle{margin:6px 0 0 0;color:#496276;font-size:13px;line-height:1.5}';
 print '.krea-left{flex:1;min-width:0;padding-right:4px}';
 print '.krea-right{flex:1;min-width:0}';
 print '.krea-line-card{border:1px solid #d8d8d8;border-radius:6px;background:#fff;padding:10px;margin-bottom:10px;transition:all .2s ease}';
@@ -1613,10 +1610,7 @@ print '@media (max-width: 900px){.krea-modal-dialog{padding:10px}.krea-product-l
 print '@media (max-width: 1200px){.krea-recon-layout{flex-direction:column}}';
 print '</style>';
 
-print '<div class="krea-page-intro">';
-print '<h2 class="krea-page-intro-title">' . $langs->trans('KreaBankAssistedReconciliationTitle') . '</h2>';
-print '<p class="krea-page-intro-subtitle">' . $langs->trans('KreaBankAssistedReconciliationSubtitle') . '</p>';
-print '</div>';
+print '<details class="kb-help"><summary>' . $langs->trans('KreaBankAssistedGuide') . '</summary><p>' . $langs->trans('KreaBankAssistedReconciliationSubtitle') . '</p></details>';
 
 print '<div class="krea-recon-layout">';
 

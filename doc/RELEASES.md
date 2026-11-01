@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.14.15 — 2026-11-01
+
+- Keep the accounts overview consistent with its selected account and native
+  account type. Restore a compact all/reconciled view switch in Movements.
+- Fold longer reconciliation guidance into optional help and refine banking labels.
+
 ## 1.14.14 — 2026-11-01
 
 - Use the full banking content width after hiding the native sidebar, and remove
