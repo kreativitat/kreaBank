@@ -98,7 +98,7 @@ if ($dateTolerance <= 0) {
 	$dateTolerance = 3;
 }
 $bulkScanCacheStoreKey = 'kreabank_bulkmatch_scan_state';
-$bulkScanMatcherRevision = 13;
+$bulkScanMatcherRevision = 14;
 $bulkScanFilterScope = array(
 	'bank_account_id' => $navigationAccountId,
 );
@@ -278,7 +278,9 @@ $resolveLineBestSuggestion = static function ($line, $suggestions) use ($service
 			}
 		}
 
-		return $validCandidates[0];
+		if (kreabankBulkSuggestionIsUnambiguous($orderedSuggestions)) {
+			return $validCandidates[0];
+		}
 	}
 
 	return array(
@@ -893,6 +895,8 @@ if (empty($rows)) {
 
 		print '<table class="krea-bulk-panel">';
 		print '<tr><th colspan="2">' . $langs->trans('KreaBankPendingStatementLines') . ($lineDirectionLabel !== '' ? '<span class="krea-dir-badge ' . $lineDirectionClass . '">' . dol_escape_htmltag((string) $lineDirectionLabel) . '</span>' : '') . '</th></tr>';
+		print '<tr><td class="krea-label">' . $langs->trans('BankAccount') . '</td><td>' . dol_escape_htmltag(trim(($line['bank_account_ref'] ?? '') . ' — ' . ($line['bank_account_label'] ?? ''))) . '</td></tr>';
+		print '<tr><td class="krea-label">' . $langs->trans('KreaBankAccountOwner') . '</td><td>' . dol_escape_htmltag($mysoc->name) . '</td></tr>';
 		print '<tr><td class="krea-label">' . $langs->trans('KreaBankDate') . '</td><td class="nowrap">' . $formatDisplayDate($lineDate) . '</td></tr>';
 		print '<tr><td class="krea-label">' . $langs->trans('KreaBankCounterparty') . '</td><td><strong>' . dol_escape_htmltag($counterpartyValue) . '</strong>' . ($counterpartyExtra !== '' ? '<br><span class="opacitymedium">' . dol_escape_htmltag($counterpartyExtra) . '</span>' : '') . '</td></tr>';
 		print '<tr><td class="krea-label">' . $langs->trans('KreaBankAmount') . '</td><td class="right nowrap"><strong>' . price((float) $line['amount']) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong></td></tr>';
@@ -926,6 +930,7 @@ if (empty($rows)) {
 		}
 		print '<table class="krea-bulk-panel">';
 		print '<tr><th colspan="2">' . $langs->trans('KreaBankBulkMatchSuggested') . ($docDirectionLabel !== '' ? '<span class="krea-dir-badge ' . $docDirectionClass . '">' . dol_escape_htmltag((string) $docDirectionLabel) . '</span>' : '') . $paymentBadgeHtml . '</th></tr>';
+		print '<tr><td class="krea-label">' . $langs->trans('Ref') . '</td><td><a href="' . dol_escape_htmltag($docUrl) . '">' . dol_escape_htmltag($docRef) . '</a></td></tr>';
 		print '<tr><td class="krea-label">' . $langs->trans('KreaBankDate') . '</td><td class="nowrap">' . $docDate . '</td></tr>';
 		print '<tr><td class="krea-label">' . $langs->trans('KreaBankCounterparty') . '</td><td><strong>' . dol_escape_htmltag($docThirdparty) . '</strong></td></tr>';
 		print '<tr><td class="krea-label">' . $langs->trans('KreaBankAmount') . '</td><td class="right nowrap">';

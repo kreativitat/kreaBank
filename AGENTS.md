@@ -98,3 +98,7 @@
 - Statements list both staging and legacy native imports without double-counting mapped native lines. Native balance always comes from native bank movements, never staging totals.
 - Native footer/list hooks provide account-aware cross-links and an optional `kreabank_matched` filter. Keep native posting dates and owned-company boundaries. Flag historical missing/amount/status/reference discrepancies for review; never guess a replacement financial record.
 - `php test/test_bank_integration_database.php` extends the automatic reconciliation suite on its same disposable local database; see `doc/BANK_INTEGRATION.md`.
+
+- Company/account ownership is revalidated by `KreaBankReconciliationScope` for prepared sources and all execution targets, including parent invoices of payments. Entity sharing does not grant reconciliation authority.
+- Bulk review must not choose an arbitrary best candidate when competing documents are fewer than 35 points apart. Keep those lines pending; explicit manual approval of a unique weak pair remains separate from automatic safe matching.
+- `php test/test_company_isolation_database.php` extends ONLY the disposable local MariaDB fixture and covers these boundaries plus the equal-amount/date invoice tie.

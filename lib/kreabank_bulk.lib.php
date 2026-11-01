@@ -3,6 +3,24 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+/** Manual review may choose a unique weak suggestion, never an arbitrary tied document. */
+function kreabankBulkSuggestionIsUnambiguous($suggestions)
+{
+	if (!$suggestions) {
+		return false;
+	}
+	$first = $suggestions[0];
+	foreach (array_slice($suggestions, 1) as $other) {
+		if (($first['doc_type'] ?? '') === ($other['doc_type'] ?? '') && (int) ($first['doc_id'] ?? 0) === (int) ($other['doc_id'] ?? 0)) {
+			continue;
+		}
+		if ((int) ($first['score'] ?? 0) - (int) ($other['score'] ?? 0) < 35) {
+			return false;
+		}
+	}
+	return true;
+}
+
 /** Financial and displayed source facts bound to the user's review. */
 function kreabankBulkReviewLineFacts($line)
 {

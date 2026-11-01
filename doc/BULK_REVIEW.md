@@ -16,6 +16,13 @@ match index. Pages contain at most 100 suggestions. Presentation can remain cach
 for the configured scan TTL. Preselection still uses the shared safe suggestion;
 the score is points, not a probability. Amount and date alone give 100 points.
 
+Competing candidate documents within 35 points remain pending; the page never
+chooses an arbitrary first invoice from an amount/date tie. Source account/owner
+and target document reference are shown separately from the counterparty name.
+Every prepared source and execution target must belong to the current company;
+native movement/payment links must use the same bank account. Payment parents
+cannot cross companies. These checks also run inside the execution transaction.
+
 Users can select suggestions requiring manual review and tick the explicit approval
 checkbox before confirming. This is a manual decision, including for pairs without
 a reference/IBAN; unattended matching and automatic batch approval retain their

@@ -10,6 +10,7 @@
 require_once __DIR__ . '/KreaBankParser.class.php';
 require_once __DIR__ . '/KreaBankMatcher.class.php';
 require_once __DIR__ . '/KreaBankNativeBankAdapter.class.php';
+require_once __DIR__ . '/KreaBankReconciliationScope.class.php';
 require_once __DIR__ . '/../lib/kreabank.lib.php';
 
 /**
@@ -1100,6 +1101,7 @@ class KreaBankService
 			$sql .= ' LEFT JOIN ' . $this->db->prefix() . 'facture as f ON f.rowid = pf.fk_facture';
 			$sql .= ' LEFT JOIN ' . $this->db->prefix() . 'societe as s ON s.rowid = f.fk_soc';
 			$sql .= ' WHERE p.entity = ' . ((int) $this->entity);
+			$sql .= ' AND NOT EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'paiement_facture kpl JOIN ' . $this->db->prefix() . 'facture kf ON kf.rowid=kpl.fk_facture WHERE kpl.fk_paiement=p.rowid AND kf.entity<>p.entity)';
 			$sql .= ' AND (p.fk_bank IS NULL OR p.fk_bank = 0)';
 			$sql .= ' AND ABS(p.amount) > 0.0000001';
 			if (!empty($dateRange['enabled'])) {
@@ -1143,6 +1145,7 @@ class KreaBankService
 			$sqlf .= ' LEFT JOIN ' . $this->db->prefix() . 'facture_fourn as ff ON ff.rowid = pf.fk_facturefourn';
 			$sqlf .= ' LEFT JOIN ' . $this->db->prefix() . 'societe as s ON s.rowid = ff.fk_soc';
 			$sqlf .= ' WHERE p.entity = ' . ((int) $this->entity);
+			$sqlf .= ' AND NOT EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'paiementfourn_facturefourn kpl JOIN ' . $this->db->prefix() . 'facture_fourn kf ON kf.rowid=kpl.fk_facturefourn WHERE kpl.fk_paiementfourn=p.rowid AND kf.entity<>p.entity)';
 			$sqlf .= ' AND (p.fk_bank IS NULL OR p.fk_bank = 0)';
 			$sqlf .= ' AND ABS(p.amount) > 0.0000001';
 			if (!empty($dateRange['enabled'])) {
@@ -1212,10 +1215,12 @@ class KreaBankService
 			$sql .= " GROUP_CONCAT(DISTINCT s.nom ORDER BY s.nom SEPARATOR ' / ') as thirdparty_name";
 			$sql .= ' FROM ' . $this->db->prefix() . 'paiement as p';
 			$sql .= ' INNER JOIN ' . $this->db->prefix() . 'bank as b ON b.rowid = p.fk_bank';
+			$sql .= ' INNER JOIN ' . $this->db->prefix() . 'bank_account as kba ON kba.rowid = b.fk_account AND kba.entity = p.entity';
 			$sql .= ' LEFT JOIN ' . $this->db->prefix() . 'paiement_facture as pf ON pf.fk_paiement = p.rowid';
 			$sql .= ' LEFT JOIN ' . $this->db->prefix() . 'facture as f ON f.rowid = pf.fk_facture';
 			$sql .= ' LEFT JOIN ' . $this->db->prefix() . 'societe as s ON s.rowid = f.fk_soc';
 			$sql .= ' WHERE p.entity = ' . ((int) $this->entity);
+			$sql .= ' AND NOT EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'paiement_facture kpl JOIN ' . $this->db->prefix() . 'facture kf ON kf.rowid=kpl.fk_facture WHERE kpl.fk_paiement=p.rowid AND kf.entity<>p.entity)';
 			$sql .= ' AND p.fk_bank IS NOT NULL AND p.fk_bank > 0';
 			$sql .= ' AND ABS(p.amount) > 0.0000001';
 			if ($bankAccountId > 0) {
@@ -1271,10 +1276,12 @@ class KreaBankService
 			$sqlf .= " GROUP_CONCAT(DISTINCT s.nom ORDER BY s.nom SEPARATOR ' / ') as thirdparty_name";
 			$sqlf .= ' FROM ' . $this->db->prefix() . 'paiementfourn as p';
 			$sqlf .= ' INNER JOIN ' . $this->db->prefix() . 'bank as b ON b.rowid = p.fk_bank';
+			$sqlf .= ' INNER JOIN ' . $this->db->prefix() . 'bank_account as kba ON kba.rowid = b.fk_account AND kba.entity = p.entity';
 			$sqlf .= ' LEFT JOIN ' . $this->db->prefix() . 'paiementfourn_facturefourn as pf ON pf.fk_paiementfourn = p.rowid';
 			$sqlf .= ' LEFT JOIN ' . $this->db->prefix() . 'facture_fourn as ff ON ff.rowid = pf.fk_facturefourn';
 			$sqlf .= ' LEFT JOIN ' . $this->db->prefix() . 'societe as s ON s.rowid = ff.fk_soc';
 			$sqlf .= ' WHERE p.entity = ' . ((int) $this->entity);
+			$sqlf .= ' AND NOT EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'paiementfourn_facturefourn kpl JOIN ' . $this->db->prefix() . 'facture_fourn kf ON kf.rowid=kpl.fk_facturefourn WHERE kpl.fk_paiementfourn=p.rowid AND kf.entity<>p.entity)';
 			$sqlf .= ' AND p.fk_bank IS NOT NULL AND p.fk_bank > 0';
 			$sqlf .= ' AND ABS(p.amount) > 0.0000001';
 			if ($bankAccountId > 0) {
@@ -1528,6 +1535,8 @@ class KreaBankService
 	 */
 	protected function getSuggestionsForPreparedLine($line, $patterns, $minScore, $dateTolerance, &$documentsCache, $openDocumentsIntervalDays = null, $includeReconciledLinked = true)
 	{
+		$scope = new KreaBankReconciliationScope($this->db, $this->entity);
+		$scope->assertLine($line);
 		$lineDate = !empty($line['operation_date']) ? (string) $line['operation_date'] : (!empty($line['value_date']) ? (string) $line['value_date'] : null);
 		$excludeNativeLineId = !empty($line['native_bank_line_id']) ? (int) $line['native_bank_line_id'] : 0;
 		$direction = (int) (!empty($line['direction']) ? $line['direction'] : 0);
@@ -1883,6 +1892,8 @@ class KreaBankService
 		if (!$line) {
 			throw new Exception('Unknown bank line');
 		}
+		$scope = new KreaBankReconciliationScope($this->db, $this->entity);
+		$scope->assertLine($line);
 		if (empty($links)) {
 			throw new Exception('No links submitted for reconciliation');
 		}
@@ -1976,6 +1987,10 @@ class KreaBankService
 				$confidenceScore = (int) $fresh['suggestion']['score'];
 				$links[0]['match_score'] = $confidenceScore;
 				$links[0]['match_reasons'] = $fresh['suggestion']['details'];
+			}
+			$scope->assertLine($line);
+			foreach ($links as $link) {
+				$scope->assertDocument((string) $link['doc_type'], (int) $link['fk_doc'], (int) $line['bank_account_id']);
 			}
 			if ($selectedNativeBankLink !== null) {
 				$resolvedNativeBankLine = $this->resolveExistingNativeBankLineForReconciliation(
@@ -5970,6 +5985,11 @@ class KreaBankService
 		}
 		if ($targetBankAccountId > 0 && $sourceBankAccountId !== $targetBankAccountId) {
 			throw new Exception('Source native bank line bank account mismatch #' . $sourceLineId);
+		}
+
+		if ((float) $sourceLine['amount'] * (float) $statementLine['amount'] <= 0
+			|| strtoupper((string) $sourceLine['currency']) !== strtoupper((string) $statementLine['currency'])) {
+			throw new Exception('Selected native movement direction or currency differs from the statement');
 		}
 
 		$sourceAmount = abs((float) $sourceLine['amount']);

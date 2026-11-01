@@ -488,3 +488,4 @@ KreaBankWorkspaceHelp_statement=Open a statement to see every imported line and 
 KreaBankAllNativeMovements=All Dolibarr movements
 KreaBankReconciled=Reconciled
 KreaBankSkipped=Skipped
+KreaBankAccountOwner=Account owner

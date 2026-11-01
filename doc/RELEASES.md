@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.14.12 — 2026-11-01
+
+- Leave competing bulk candidates pending instead of selecting the first equal
+  amount/date invoice. Preserve explicit review of unique suggestions.
+- Revalidate company and bank-account ownership for prepared lines and every
+  execution target before native writes; reject foreign payment parents, account
+  links, signed-direction and currency conflicts.
+- Show the source account/owner and target document reference in bulk review.
+  No schema, scheduler or financial-data migration.
+
 ## 1.14.11 — 2026-11-01
 
 - Reconcile explicitly reviewed bulk selections through the native service instead
