@@ -131,7 +131,7 @@ KreaBankBulkMatch=Reconciliar em lote
 KreaBankGuide=Como usar
 KreaBankImport=Importar extratos
 KreaBankPending=Linhas pendentes
-KreaBankHistory=Historico e auditoria
+KreaBankHistory=Histórico e auditoria
 KreaBankOpenNativeBank=Abrir modulo nativo de banco
 KreaBankOpenNativeLine=Abrir linha nativa
 KreaBankOpenNativeStatement=Abrir extrato nativo
@@ -427,3 +427,17 @@ KreaBankAutoStatementLine=Linha importada
 KreaBankAutoBankMovement=Movimento bancário existente
 KreaBankAutoScore=Pontuação
 KreaBankAutoError=Não foi possível concluir a reconciliação automática. Verifique as contas selecionadas, as permissões de reconciliação e os resultados das tarefas agendadas.
+
+# Shared bank account workspace
+KreaBankWorkspace=KreaBank
+KreaBankAccounts=Contas bancárias
+KreaBankAllAccounts=Todas as contas desta empresa
+KreaBankReviewOneByOne=Rever uma a uma
+KreaBankStatementNumbering=Numerar extratos
+KreaBankWorkspaceHelp_reconcile=Associe as operações importadas aos movimentos, pagamentos ou faturas existentes. Selecione uma conta acima para a manter em toda a área de trabalho.
+KreaBankWorkspaceHelp_bulkmatch=Reveja as sugestões seguras de várias operações importadas antes de as confirmar em conjunto.
+KreaBankWorkspaceHelp_pending=Consulte as operações importadas por rever, incluindo as linhas ignoradas. Abra uma linha para continuar a reconciliação.
+KreaBankWorkspaceHelp_import=Carregue um ficheiro de extrato bancário. A importação prepara as operações para reconciliação; não cria pagamentos.
+KreaBankWorkspaceHelp_feed=Consulte as contas bancárias ligadas, os saldos recolhidos e o estado da sincronização.
+KreaBankWorkspaceHelp_history=Consulte as reconciliações concluídas da conta selecionada. O registo de auditoria da empresa, abaixo, inclui também eventos comuns a todas as contas.
+KreaBankCompanyAuditHelp=Auditoria da empresa: eventos de todas as contas da empresa ativa.

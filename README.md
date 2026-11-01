@@ -74,6 +74,15 @@ If the ZIP package does not ship the `vendor/` directory, run the same `composer
 2. Open `Setup -> Modules`.
 3. Enable `KreaBank`.
 
+## Account navigation
+
+Open a native bank account and choose **KreaBank**. The selected account stays
+available across native account tabs and KreaBank tasks. The four main tasks are
+**Reconcile**, **Import statements**, **Bank connections**, and **History**.
+Batch review and pending lines are tools inside reconciliation. Native statement
+numbering remains a separate, clearly labelled account tool. See
+[navigation and upgrade instructions](doc/NAVIGATION.md).
+
 ## Operational flow
 
 ### Import

@@ -15,6 +15,8 @@ $langs->loadLangs(array('banks', 'kreabank@kreabank'));
 if (!isModEnabled('kreabank') || !$user->hasRight('banque', 'lire')) {
 	accessforbidden();
 }
+$navigationAccountId = max(0, GETPOSTINT('account_context'));
+$navigationAccount = kreabankNavigationAccount($navigationAccountId);
 $sync = new KreaBankFintableSync($db);
 $installationAdmin = !empty($user->admin) && empty($user->entity) && empty($user->socid);
 if (GETPOST('action', 'aZ09') === 'collect') {
@@ -27,12 +29,12 @@ if (GETPOST('action', 'aZ09') === 'collect') {
 	} catch (Throwable $e) {
 		setEventMessages($e->getMessage(), null, 'errors');
 	}
-	header('Location: ' . $_SERVER['PHP_SELF']);
+	header('Location: ' . kreabankWorkspaceUrl('feed', $navigationAccountId));
 	exit;
 }
 llxHeader('', $langs->trans('KreaBankFeeds'));
 print load_fiche_titre($langs->trans('KreaBankFeeds'), '', 'bank');
-print dol_get_fiche_head(kreabankPrepareHead(), 'feed', $langs->trans('ModuleKreaBankName'), -1, 'bank');
+kreabankPrintWorkspaceNavigation('feed', $navigationAccount);
 print '<p>' . $langs->trans('KreaBankFeedPurpose') . ' <a href="https://fintable.io" target="_blank" rel="noopener noreferrer">Fintable</a>.</p>';
 print '<p class="opacitymedium">' . $langs->trans('KreaBankFeedPdfNotice') . '</p>';
 print '<p>' . $langs->trans('KreaBankFeedSchedule') . ': <strong>' . dol_escape_htmltag($sync->setting('KREABANK_FINTABLE_TIMES', '08:45,20:45'))
@@ -40,11 +42,12 @@ print '<p>' . $langs->trans('KreaBankFeedSchedule') . ': <strong>' . dol_escape_
 if ($installationAdmin) {
 	print '<div class="tabsAction"><a class="butAction" href="' . dol_buildpath('/custom/kreabank/admin/fintable.php', 1) . '">' . $langs->trans('Settings') . '</a>';
 	print '<form method="post" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" style="display:inline">';
+	print kreabankNavigationHiddenFields($navigationAccountId);
 	print '<input type="hidden" name="token" value="' . newToken() . '"><input type="hidden" name="action" value="collect">';
 	print '<button class="butAction" type="submit">' . $langs->trans('KreaBankFeedCollectAll') . '</button></form></div>';
 }
 $showUnidentified = GETPOSTINT('show_unidentified') === 1;
-print '<p><a href="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '?mainmenu=bank&amp;leftmenu=kreabank_feed&amp;show_unidentified=' . ($showUnidentified ? '0' : '1') . '">'
+print '<p><a href="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '?mainmenu=bank&amp;leftmenu=kreabank_feed&amp;account_context=' . $navigationAccountId . '&amp;show_unidentified=' . ($showUnidentified ? '0' : '1') . '">'
 	. $langs->trans($showUnidentified ? 'KreaBankFeedShowEligible' : 'KreaBankFeedShowOtherRecords') . '</a></p>';
 print '<div class="div-table-responsive"><table class="liste centpercent">';
 print '<tr class="liste_titre">';
@@ -54,6 +57,9 @@ foreach (array('BankAccount', 'IBAN', 'KreaBankFeedBalance', 'KreaBankFeedAvaila
 print '</tr>';
 try {
 	$rows = $sync->accountStatus((int) $conf->entity, $showUnidentified);
+	if ($navigationAccountId > 0) {
+		$rows = array_values(array_filter($rows, static function ($row) use ($navigationAccountId) { return (int) $row->rowid === $navigationAccountId; }));
+	}
 	foreach ($rows as $row) {
 		$state = $row->status ?: 'unmapped';
 		print '<tr class="oddeven"><td><a href="' . DOL_URL_ROOT . '/compta/bank/card.php?id=' . (int) $row->rowid . '">'

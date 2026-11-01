@@ -353,3 +353,17 @@ KreaBankAuditBatch=sammelbestaetigung
 KreaBankAuditFeedSync=feed_sync
 KreaBankAuditSkip=ueberspringen
 KreaBankAuditDeleteStatement=auszug_loeschen
+
+# Shared bank account workspace
+KreaBankWorkspace=KreaBank
+KreaBankAccounts=Bankkonten
+KreaBankAllAccounts=Alle Konten dieses Unternehmens
+KreaBankReviewOneByOne=Einzeln prüfen
+KreaBankStatementNumbering=Kontoauszüge nummerieren
+KreaBankWorkspaceHelp_reconcile=Ordnen Sie importierte Buchungen vorhandenen Bankbewegungen, Zahlungen oder Rechnungen zu. Wählen Sie oben ein Konto, um es im Arbeitsbereich beizubehalten.
+KreaBankWorkspaceHelp_bulkmatch=Prüfen Sie sichere Vorschläge für mehrere Buchungen, bevor Sie diese gemeinsam bestätigen.
+KreaBankWorkspaceHelp_pending=Prüfen Sie offene importierte Buchungen einschließlich übersprungener Zeilen. Öffnen Sie eine Zeile, um den Abgleich fortzusetzen.
+KreaBankWorkspaceHelp_import=Laden Sie eine Kontoauszugsdatei hoch. Der Import bereitet Buchungen für den Abgleich vor und erstellt keine Zahlungen.
+KreaBankWorkspaceHelp_feed=Prüfen Sie verbundene Konten, abgerufene Salden und den Synchronisierungsstatus.
+KreaBankWorkspaceHelp_history=Prüfen Sie abgeschlossene Abgleiche des ausgewählten Kontos. Das Unternehmensprotokoll enthält auch gemeinsame Ereignisse aller Konten.
+KreaBankCompanyAuditHelp=Unternehmensprotokoll: Ereignisse aller Konten des aktiven Unternehmens.

@@ -72,3 +72,12 @@
 - `php test/test_automatic_reconciliation_database.php` uses ONLY disposable local MariaDB on port 33317/database `kreabank_auto_test` and installed Dolibarr source (`KREABANK_DOLIBARR_ROOT` if needed); never run it against an installation database. See `doc/AUTOMATIC_RECONCILIATION.md`.
 
 - Bank matching date strings use explicit UTC parsing; do not let the PHP server timezone alter calendar-day tolerance. Runtime regression checks cover UTC, Lisbon, Zurich and New York.
+
+## Account navigation
+
+- Native bank tabs are extended with `completeTabsHead`; do not patch core bank pages.
+- `lib/kreabank_navigation.lib.php` owns account-context URLs, ownership checks and shared navigation. `account_context` is explicit per request, never session-global.
+- Keep four main tasks (reconcile, import, feed, history); batch and pending are reconciliation tools. Preserve native statement numbering and other modules' tabs.
+- Account context uses direct current-company ownership, not shared account access. List/count/scan filters must agree before pagination. The audit log is explicitly company-wide.
+- `php test/test_navigation.php` loads installed Dolibarr source without bootstrapping or opening a database. Use `KREABANK_DOLIBARR_ROOT` if source is elsewhere.
+- After deploying 1.14.4, refresh only KreaBank menu/hook/CSS registration; do not disable/re-enable the module or change scheduler settings. See `doc/NAVIGATION.md`.

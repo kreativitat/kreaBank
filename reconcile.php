@@ -67,6 +67,8 @@ $action = GETPOST('action', 'aZ09');
 $lineId = GETPOSTINT('line_id');
 $openDocumentsSearch = trim((string) GETPOST('open_doc_search', 'restricthtml'));
 $forceBatchDetect = (GETPOSTINT('force_batch_detect') > 0 ? 1 : 0);
+$navigationAccountId = max(0, GETPOSTINT('account_context'));
+$navigationAccount = kreabankNavigationAccount($navigationAccountId);
 $service = new KreaBankService($db, $user, $langs);
 $form = new Form($db);
 $canNativeWrite = ($user->hasRight('banque', 'modifier') || $user->hasRight('banque', 'consolidate'));
@@ -660,8 +662,19 @@ try {
 		$requestedLine = $service->getLineById($requestedLineId);
 	}
 
-	$pendingLines = $service->getPendingLines(200, 0);
-	$pendingLinesTotal = $service->getPendingLinesCount();
+	if (!empty($requestedLine)) {
+		if ($navigationAccountId > 0 && (int) $requestedLine['bank_account_id'] !== $navigationAccountId) {
+			$requestedLine = null;
+			$lineId = 0;
+			$requestedLineId = 0;
+		} elseif ($navigationAccountId === 0) {
+			$navigationAccountId = (int) $requestedLine['bank_account_id'];
+			$navigationAccount = kreabankNavigationAccount($navigationAccountId);
+		}
+	}
+
+	$pendingLines = $service->getPendingLines(200, 0, 'operation_date', 'ASC', array('bank_account_id' => $navigationAccountId));
+	$pendingLinesTotal = $service->getPendingLinesCount(array('bank_account_id' => $navigationAccountId));
 	if ($pendingLinesTotal <= 0) {
 		$pendingLinesTotal = count($pendingLines);
 	}
@@ -1330,7 +1343,7 @@ if ($selectedLine) {
 	}
 }
 $quickSupplierProductLineSlots = 6;
-$renderQuickEntryForm = static function ($line, $openDocSearch, $entryTypeOptions, $titleKey, $defaultEntryType, $prefillLabel, $prefillAmount, $prefillNote, $supplierLookupPrefill = '', $supplierRefPrefill = '', $supplierPredictedSocid = 0, $supplierPrediction = array(), $showSupplierInvoiceButton = false, $showTaxEntryButton = false, $showTopSpacing = false) use ($langs, $forceBatchDetect, $form, $quickSupplierProductLineSlots, $decodeHtmlEntitiesRecursive) {
+$renderQuickEntryForm = static function ($line, $openDocSearch, $entryTypeOptions, $titleKey, $defaultEntryType, $prefillLabel, $prefillAmount, $prefillNote, $supplierLookupPrefill = '', $supplierRefPrefill = '', $supplierPredictedSocid = 0, $supplierPrediction = array(), $showSupplierInvoiceButton = false, $showTaxEntryButton = false, $showTopSpacing = false) use ($navigationAccountId, $langs, $forceBatchDetect, $form, $quickSupplierProductLineSlots, $decodeHtmlEntitiesRecursive) {
 	if (empty($line) || empty($entryTypeOptions) || empty($titleKey)) {
 		return;
 	}
@@ -1357,6 +1370,7 @@ $renderQuickEntryForm = static function ($line, $openDocSearch, $entryTypeOption
 	}
 	print '<h4>' . $langs->trans((string) $titleKey) . '</h4>';
 	print '<form id="' . $formDomId . '" method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" style="margin-bottom:12px">';
+	print kreabankNavigationHiddenFields($navigationAccountId);
 	print '<input type="hidden" name="token" value="' . newToken() . '">';
 	print '<input type="hidden" name="action" value="quick_entry">';
 	print '<input type="hidden" name="line_id" value="' . $lineIdValue . '">';
@@ -1538,9 +1552,8 @@ if (!empty($quickCreateSuccessAlert['enabled']) && !empty($quickCreateSuccessAle
 	print '</div></noscript>';
 }
 
-print load_fiche_titre($langs->trans('KreaBankDualPaneTitle'), '', 'title_setup');
-$head = kreabankPrepareHead();
-print dol_get_fiche_head($head, 'reconcile', $langs->trans('KreaBankReconcile'), -1, 'bank');
+print load_fiche_titre($langs->trans('KreaBankReconcile'), '', 'bank');
+kreabankPrintWorkspaceNavigation('reconcile', $navigationAccount);
 
 print '<style>';
 print '.krea-embedded-success-alert .ok{margin:0 0 12px 0}';
@@ -1612,6 +1625,7 @@ print '<h3>' . $langs->trans('KreaBankPendingStatementLines') . ' (' . ((int) $p
 $showBulkSkip = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite && !empty($pendingLines));
 if ($showBulkSkip) {
 	print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="bulkSkipForm" style="margin:0 0 12px 0">';
+	print kreabankNavigationHiddenFields($navigationAccountId);
 	print '<input type="hidden" name="token" value="' . newToken() . '">';
 	print '<input type="hidden" name="action" value="bulk_skip">';
 	print '<input type="hidden" name="selected_line_ids_csv" id="krea_selected_line_ids_csv" value="">';
@@ -1795,7 +1809,7 @@ if (!$selectedLine) {
 	print '<div class="info">';
 	print '<strong>' . dol_escape_htmltag((string) $selectedLine['counterparty_name']) . '</strong> | ';
 	$selectedNativeLineId = !empty($selectedLine['native_bank_line_id']) ? (int) $selectedLine['native_bank_line_id'] : 0;
-	$forceBatchUrl = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile&line_id=' . (int) $selectedLine['rowid'] . '&force_batch_detect=1', 1);
+	$forceBatchUrl = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile&account_context=' . $navigationAccountId . '&line_id=' . (int) $selectedLine['rowid'] . '&force_batch_detect=1', 1);
 	if ($openDocumentsSearch !== '') {
 		$forceBatchUrl .= '&open_doc_search=' . urlencode((string) $openDocumentsSearch);
 	}
@@ -1830,6 +1844,7 @@ if (!$selectedLine) {
 	}
 
 	print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="manualReconcileForm">';
+	print kreabankNavigationHiddenFields($navigationAccountId);
 	print '<input type="hidden" name="token" value="' . newToken() . '">';
 	print '<input type="hidden" name="action" value="reconcile">';
 	print '<input type="hidden" name="line_id" value="' . ((int) $selectedLine['rowid']) . '">';

@@ -427,3 +427,17 @@ KreaBankAutoStatementLine=Imported line
 KreaBankAutoBankMovement=Existing bank movement
 KreaBankAutoScore=Match score
 KreaBankAutoError=Automatic reconciliation could not finish. Check the selected accounts, reconciliation permissions and scheduled job results.
+
+# Shared bank account workspace
+KreaBankWorkspace=KreaBank
+KreaBankAccounts=Bank accounts
+KreaBankAllAccounts=All accounts in this company
+KreaBankReviewOneByOne=Review one by one
+KreaBankStatementNumbering=Number bank statements
+KreaBankWorkspaceHelp_reconcile=Match imported bank transactions to existing movements, payments or invoices. Select an account above to keep the same account throughout the workspace.
+KreaBankWorkspaceHelp_bulkmatch=Review safe suggestions for several imported transactions before confirming them together.
+KreaBankWorkspaceHelp_pending=Find imported transactions still awaiting review, including skipped lines. Open a line to continue reconciliation.
+KreaBankWorkspaceHelp_import=Upload a bank statement file. Importing prepares transactions for reconciliation; it does not create payments.
+KreaBankWorkspaceHelp_feed=Check connected bank accounts, collected balances and synchronization status.
+KreaBankWorkspaceHelp_history=Review completed reconciliations for the selected account. The company audit log below also includes events shared by all accounts.
+KreaBankCompanyAuditHelp=Company audit log: events for all accounts in the active company.

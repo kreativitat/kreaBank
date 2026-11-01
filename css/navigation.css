@@ -1,0 +1,17 @@
+/* Copyright (C) 2026 Kreativität Works <mail@kreativitat.com> */
+.kreabank-context { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0 18px; }
+.kreabank-context form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; max-width: 100%; }
+.kreabank-context select { max-width: min(440px, 100%); }
+.kreabank-workspace-nav, .kreabank-tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.kreabank-workspace-nav { border-bottom: 1px solid var(--colortopborder, #ddd); }
+.kreabank-workspace-nav a { padding: 10px 14px; border-bottom: 3px solid transparent; }
+.kreabank-workspace-nav a.active { border-bottom-color: var(--colortopborder, #456e55); font-weight: bold; }
+.kreabank-tools a { padding: 7px 12px; border: 1px solid #bbb; border-radius: 4px; }
+.kreabank-tools a.active { background: var(--colorbacktitle1, #eef3ef); font-weight: bold; }
+.kreabank-workspace-nav a:focus-visible, .kreabank-tools a:focus-visible, .kreabank-context a:focus-visible { outline: 2px solid #1769aa; outline-offset: 2px; }
+.kreabank-workspace-help { margin: 8px 0 16px; }
+@media (max-width: 600px) {
+  .kreabank-context form { width: 100%; }
+  .kreabank-context select { width: 100%; min-width: 0; }
+  .kreabank-workspace-nav a { padding: 9px 7px; }
+}

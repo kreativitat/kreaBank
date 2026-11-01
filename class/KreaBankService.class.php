@@ -3490,11 +3490,12 @@ class KreaBankService
 	 *
 	 * @param int $limit
 	 * @param int $offset
+	 * @param int $bankAccountId Optional current-company account filter
 	 * @return array<int,array<string,mixed>>
 	 */
-	public function getRecentReconciliations($limit = 200, $offset = 0)
+	public function getRecentReconciliations($limit = 200, $offset = 0, $bankAccountId = 0)
 	{
-		return $this->native->getRecentReconciledLines((int) $limit, (int) $offset);
+		return $this->native->getRecentReconciledLines((int) $limit, (int) $offset, (int) $bankAccountId);
 	}
 
 	/**

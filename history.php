@@ -63,6 +63,8 @@ if (!$user->hasRight('banque', 'lire')) {
 }
 
 $action = GETPOST('action', 'aZ09');
+$navigationAccountId = max(0, GETPOSTINT('account_context'));
+$navigationAccount = kreabankNavigationAccount($navigationAccountId);
 $service = new KreaBankService($db, $user, $langs);
 $canNativeWrite = ($user->hasRight('banque', 'modifier') || $user->hasRight('banque', 'consolidate'));
 $nativeEntryLabel = 'LAN&Ccedil;AMENTO';
@@ -163,7 +165,7 @@ if (GETPOST('button_removefilter_x', 'alpha') !== '' || GETPOST('button_removefi
 $recent = array();
 $auditRows = array();
 try {
-	$recent = $service->getRecentReconciliations($historyPoolLimit);
+	$recent = $service->getRecentReconciliations($historyPoolLimit, 0, $navigationAccountId);
 	$auditRows = $service->getAuditHistory($auditPoolLimit);
 } catch (Exception $e) {
 	setEventMessages($e->getMessage(), null, 'errors');
@@ -573,7 +575,7 @@ if ($limit > 0 && ($auditOffset + $auditCurrentPageCount) < $auditTotalRecords) 
 	$auditPagerNum = $limit + 1;
 }
 
-$historyParam = '&mainmenu=bank&leftmenu=kreabank_history';
+$historyParam = '&mainmenu=bank&leftmenu=kreabank_history&account_context=' . $navigationAccountId;
 if ($historySearch !== '') {
 	$historyParam .= '&hist_search=' . urlencode($historySearch);
 }
@@ -619,7 +621,7 @@ if ($limit > 0 && $limit !== (int) $conf->liste_limit) {
 if ($auditPage > 0) {
 	$historyParam .= '&audit_page=' . $auditPage;
 }
-$auditParam = '&mainmenu=bank&leftmenu=kreabank_history';
+$auditParam = '&mainmenu=bank&leftmenu=kreabank_history&account_context=' . $navigationAccountId;
 if ($historySearch !== '') {
 	$auditParam .= '&hist_search=' . urlencode($historySearch);
 }
@@ -669,8 +671,7 @@ $auditParam .= '&audit_page=' . $auditPage;
 llxHeader('', $langs->trans('KreaBankHistory'), '', '', 0, 0, '', '', '', 'mod-kreabank page-history bodyforlist');
 
 print load_fiche_titre($langs->trans('KreaBankHistory'), '', 'title_setup');
-$head = kreabankPrepareHead();
-print dol_get_fiche_head($head, 'history', $langs->trans('KreaBankHistory'), -1, 'bank');
+kreabankPrintWorkspaceNavigation('history', $navigationAccount);
 
 print '<style>';
 print '.krea-history-search-tool{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;background:#f8f9fb;border:1px solid #e2e4e8;border-radius:6px;padding:10px;margin:8px 0 12px 0}';
@@ -691,6 +692,7 @@ print '</style>';
 
 print '<h3 style="margin-top:0">' . $langs->trans('KreaBankHistory') . '</h3>';
 print '<form method="GET" id="kreaHistoryFilterForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+print kreabankNavigationHiddenFields($navigationAccountId);
 print '<input type="hidden" name="mainmenu" value="bank">';
 print '<input type="hidden" name="leftmenu" value="kreabank_history">';
 print '<input type="hidden" name="page" value="0">';
@@ -719,6 +721,7 @@ print '<div class="nowraponall"><button type="submit" class="liste_titre button_
 print '</div>';
 
 print '<form method="GET" id="kreaHistoryPagerForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+print kreabankNavigationHiddenFields($navigationAccountId);
 print '<input type="hidden" name="mainmenu" value="bank">';
 print '<input type="hidden" name="leftmenu" value="kreabank_history">';
 print '<input type="hidden" name="history_page" value="' . ((int) $page) . '">';
@@ -825,7 +828,7 @@ if ($historyTotalRecords === 0) {
 		$row = $preparedRow['row'];
 		$lineId = (int) $preparedRow['line_id'];
 		$nativeLineId = (int) (isset($row['native_bank_line_id']) ? $row['native_bank_line_id'] : 0);
-		$lineUrl = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile&line_id=' . $lineId, 1);
+		$lineUrl = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile&account_context=' . $navigationAccountId . '&line_id=' . $lineId, 1);
 		$nativeLineUrl = ($nativeLineId > 0 ? dol_buildpath('/compta/bank/line.php?rowid=' . $nativeLineId, 1) : '');
 		$eventTs = (int) $preparedRow['event_ts'];
 		$eventLabel = ($eventTs > 0 ? dol_print_date($eventTs, 'dayhour') : dol_escape_htmltag((string) $preparedRow['event_date']));
@@ -953,6 +956,7 @@ if ($historyTotalRecords === 0) {
 		if (!$isReversed && $user->hasRight('kreabank', 'reconciliation', 'undo') && $canNativeWrite) {
 			$undoFormId = 'kreaUndoForm' . ((int) $lineId);
 			print '<br><form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="' . $undoFormId . '" style="margin:4px 0 0 0">';
+			print kreabankNavigationHiddenFields($navigationAccountId);
 			print '<input type="hidden" name="token" value="' . newToken() . '">';
 			print '<input type="hidden" name="mainmenu" value="bank">';
 			print '<input type="hidden" name="leftmenu" value="kreabank_history">';
@@ -989,6 +993,7 @@ print '</div>';
 
 print '<br><h3>' . $langs->trans('KreaBankAuditLog') . '</h3>';
 print '<form method="GET" id="kreaAuditFilterForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+print kreabankNavigationHiddenFields($navigationAccountId);
 print '<input type="hidden" name="mainmenu" value="bank">';
 print '<input type="hidden" name="leftmenu" value="kreabank_history">';
 print '<input type="hidden" name="audit_nav" value="1">';
@@ -1005,6 +1010,7 @@ print '<input type="hidden" name="hist_link_type" value="' . dol_escape_htmltag(
 print '<input type="hidden" name="hist_audit_type" value="' . dol_escape_htmltag($historyAuditType) . '">';
 print '</form>';
 print '<form method="GET" id="kreaAuditPagerForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+print kreabankNavigationHiddenFields($navigationAccountId);
 print '<input type="hidden" name="mainmenu" value="bank">';
 print '<input type="hidden" name="leftmenu" value="kreabank_history">';
 print '<input type="hidden" name="audit_nav" value="1">';
@@ -1023,6 +1029,7 @@ print '<input type="hidden" name="audit_search_action" value="' . dol_escape_htm
 print '<input type="hidden" name="audit_search_user" value="' . dol_escape_htmltag($auditSearchUser) . '">';
 print '<input type="hidden" name="audit_search_line" value="' . dol_escape_htmltag($auditSearchLine) . '">';
 print '<input type="hidden" name="audit_search_summary" value="' . dol_escape_htmltag($auditSearchSummary) . '">';
+print '<p class="opacitymedium">' . $langs->trans('KreaBankCompanyAuditHelp') . '</p>';
 print_barre_liste($langs->trans('KreaBankAuditLog'), $auditPage, $_SERVER['PHP_SELF'], $auditParam, '', '', '', $auditPagerNum, $auditTotalRecords, 'title_setup', 0, '', '', $limit, 0, 0, 1);
 print '</form>';
 print '<div class="div-table-responsive">';

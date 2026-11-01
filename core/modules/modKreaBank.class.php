@@ -50,7 +50,7 @@ class modKreaBank extends DolibarrModules
 		$this->descriptionlong = 'ModuleKreaBankDescLong';
 		$this->editor_name = 'Kreativität Works';
 		$this->editor_url = 'http://kreativitat.com';
-		$this->version = '1.14.3';
+		$this->version = '1.14.4';
 		$this->const_name = 'MAIN_MODULE_' . strtoupper($this->name);
 		$this->picto = 'kreaproducts@kreaproducts';
 
@@ -64,9 +64,9 @@ class modKreaBank extends DolibarrModules
 			'models' => 0,
 			'printing' => 0,
 			'theme' => 0,
-			'css' => array(),
+			'css' => array('/custom/kreabank/css/navigation.css'),
 			'js' => array(),
-			'hooks' => array('productcard'),
+			'hooks' => array('productcard', 'bankcard', 'banktransactionlist', 'bankaccountstatement', 'bankaccountdocuments', 'bankannualreport', 'banktreso', 'kreabankworkspace'),
 			'moduleforexternal' => 0,
 			'websitetemplates' => 0,
 			'captcha' => 0,
@@ -147,90 +147,43 @@ class modKreaBank extends DolibarrModules
 		$r++;
 
 		$this->menu = array();
-		$r = 0;
+		$entries = array(
+			array('reconcile', 'KreaBankWorkspace', false),
+			array('import', 'KreaBankImport', true),
+			array('feed', 'KreaBankFeeds', false),
+			array('history', 'KreaBankHistory', false),
+		);
+		foreach ($entries as $position => $entry) {
+			$page = $entry[0];
+			$perms = '$user->hasRight("banque", "lire")';
+			if ($page !== 'feed') {
+				$perms .= ' && $user->hasRight("kreabank", "reconciliation", "read")';
+			}
+			if ($entry[2]) {
+				$perms .= ' && $user->hasRight("kreabank", "reconciliation", "write") && $user->hasRight("banque", "modifier")';
+			}
+			$this->menu[] = array(
+				'fk_menu' => $page === 'reconcile' ? 'fk_mainmenu=bank' : 'fk_mainmenu=bank,fk_leftmenu=kreabank_reconcile',
+				'type' => 'left', 'titre' => $entry[1], 'mainmenu' => 'bank',
+				'leftmenu' => 'kreabank_' . $page,
+				'url' => '/custom/kreabank/' . $page . '.php?mainmenu=bank&leftmenu=kreabank_' . $page,
+				'langs' => 'kreabank@kreabank', 'position' => 1950 + $position,
+				'enabled' => 'isModEnabled("kreabank") && isModEnabled("banque")',
+				'perms' => $perms, 'target' => '', 'user' => 2,
+			);
+		}
 
-		$this->menu[$r++] = array(
+		// Keep the existing bank-feed entry available to bank readers without workspace rights.
+		$this->menu[] = array(
 			'fk_menu' => 'fk_mainmenu=bank', 'type' => 'left', 'titre' => 'KreaBankFeeds',
-			'mainmenu' => 'bank', 'leftmenu' => 'kreabank_feed', 'url' => '/custom/kreabank/feed.php',
-			'langs' => 'kreabank@kreabank', 'position' => 39, 'enabled' => '$conf->kreabank->enabled',
-			'perms' => '$user->hasRight("banque", "lire")', 'target' => '', 'user' => 2,
+			'mainmenu' => 'bank', 'leftmenu' => 'kreabank_feed_readonly',
+			'url' => '/custom/kreabank/feed.php?mainmenu=bank&leftmenu=kreabank_feed_readonly',
+			'langs' => 'kreabank@kreabank', 'position' => 1950,
+			'enabled' => 'isModEnabled("kreabank") && isModEnabled("banque")',
+			'perms' => '$user->hasRight("banque", "lire") && !$user->hasRight("kreabank", "reconciliation", "read")',
+			'target' => '', 'user' => 2,
 		);
 
-		$this->menu[$r++] = array(
-			'fk_menu' => 'fk_mainmenu=bank',
-			'type' => 'left',
-			'titre' => 'KreaBankReconcile',
-			'prefix' => img_picto('', '', 'class="fas fa-university infobox-bank_account paddingright pictofixedwidth"'),
-			'mainmenu' => 'bank',
-			'leftmenu' => 'kreabank_reconcile',
-			'url' => '/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile',
-			'langs' => 'kreabank@kreabank',
-			'position' => 1950,
-			'enabled' => 'isModEnabled("kreabank") && isModEnabled("banque")',
-			'perms' => '$user->hasRight("kreabank", "reconciliation", "read") && $user->hasRight("banque", "lire")',
-			'target' => '',
-			'user' => 2,
-		);
-
-		$this->menu[$r++] = array(
-			'fk_menu' => 'fk_mainmenu=bank,fk_leftmenu=kreabank_reconcile',
-			'type' => 'left',
-			'titre' => 'KreaBankBulkMatch',
-			'mainmenu' => 'bank',
-			'leftmenu' => 'kreabank_bulkmatch',
-			'url' => '/custom/kreabank/bulkmatch.php?mainmenu=bank&leftmenu=kreabank_bulkmatch',
-			'langs' => 'kreabank@kreabank',
-			'position' => 1952,
-			'enabled' => 'isModEnabled("kreabank") && isModEnabled("banque")',
-			'perms' => '$user->hasRight("kreabank", "reconciliation", "read") && $user->hasRight("banque", "lire")',
-			'target' => '',
-			'user' => 2,
-		);
-
-		$this->menu[$r++] = array(
-			'fk_menu' => 'fk_mainmenu=bank,fk_leftmenu=kreabank_reconcile',
-			'type' => 'left',
-			'titre' => 'KreaBankImport',
-			'mainmenu' => 'bank',
-			'leftmenu' => 'kreabank_import',
-			'url' => '/custom/kreabank/import.php?mainmenu=bank&leftmenu=kreabank_import',
-			'langs' => 'kreabank@kreabank',
-			'position' => 1951,
-			'enabled' => 'isModEnabled("kreabank") && isModEnabled("banque")',
-			'perms' => '$user->hasRight("kreabank", "reconciliation", "write") && $user->hasRight("banque", "modifier")',
-			'target' => '',
-			'user' => 2,
-		);
-
-		$this->menu[$r++] = array(
-			'fk_menu' => 'fk_mainmenu=bank,fk_leftmenu=kreabank_reconcile',
-			'type' => 'left',
-			'titre' => 'KreaBankPending',
-			'mainmenu' => 'bank',
-			'leftmenu' => 'kreabank_pending',
-			'url' => '/custom/kreabank/pending.php?mainmenu=bank&leftmenu=kreabank_pending',
-			'langs' => 'kreabank@kreabank',
-			'position' => 1953,
-			'enabled' => 'isModEnabled("kreabank") && isModEnabled("banque")',
-			'perms' => '$user->hasRight("kreabank", "reconciliation", "read") && $user->hasRight("banque", "lire")',
-			'target' => '',
-			'user' => 2,
-		);
-
-		$this->menu[$r++] = array(
-			'fk_menu' => 'fk_mainmenu=bank,fk_leftmenu=kreabank_reconcile',
-			'type' => 'left',
-			'titre' => 'KreaBankHistory',
-			'mainmenu' => 'bank',
-			'leftmenu' => 'kreabank_history',
-			'url' => '/custom/kreabank/history.php?mainmenu=bank&leftmenu=kreabank_history',
-			'langs' => 'kreabank@kreabank',
-			'position' => 1954,
-			'enabled' => 'isModEnabled("kreabank") && isModEnabled("banque")',
-			'perms' => '$user->hasRight("kreabank", "reconciliation", "read") && $user->hasRight("banque", "lire")',
-			'target' => '',
-			'user' => 2,
-		);
 	}
 
 	/**

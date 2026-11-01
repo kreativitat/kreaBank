@@ -39,6 +39,18 @@ class ActionsKreaBank extends CommonHookActions
 		$this->db = $db;
 	}
 
+	/** Extend native bank account tabs without changing Dolibarr core. */
+	public function completeTabsHead($parameters, &$object, &$action, $hookmanager)
+	{
+		if (($parameters['type'] ?? '') !== 'bank' || ($parameters['mode'] ?? '') !== 'add' || empty($object->id)) {
+			return 0;
+		}
+		require_once __DIR__ . '/../lib/kreabank.lib.php';
+		$parameters['head'] = kreabankCompleteAccountHead($parameters['head'], (int) $object->id);
+		$this->results = $parameters['head'];
+		return 1;
+	}
+
 	/**
 	 * Render module separator on native product card.
 	 *

@@ -353,3 +353,17 @@ KreaBankAuditBatch=aprobacion_lote
 KreaBankAuditFeedSync=sincronizacion_feed
 KreaBankAuditSkip=omitir
 KreaBankAuditDeleteStatement=eliminar_extracto
+
+# Shared bank account workspace
+KreaBankWorkspace=KreaBank
+KreaBankAccounts=Cuentas bancarias
+KreaBankAllAccounts=Todas las cuentas de esta empresa
+KreaBankReviewOneByOne=Revisar una por una
+KreaBankStatementNumbering=Numerar extractos
+KreaBankWorkspaceHelp_reconcile=Asocie las operaciones importadas con movimientos, pagos o facturas existentes. Seleccione una cuenta arriba para mantenerla en este espacio.
+KreaBankWorkspaceHelp_bulkmatch=Revise las sugerencias seguras de varias operaciones antes de confirmarlas juntas.
+KreaBankWorkspaceHelp_pending=Consulte las operaciones importadas pendientes de revisión, incluidas las líneas omitidas. Abra una línea para continuar la conciliación.
+KreaBankWorkspaceHelp_import=Cargue un archivo de extracto bancario. La importación prepara las operaciones para la conciliación; no crea pagos.
+KreaBankWorkspaceHelp_feed=Consulte las cuentas conectadas, los saldos recopilados y el estado de sincronización.
+KreaBankWorkspaceHelp_history=Consulte las conciliaciones terminadas de la cuenta seleccionada. El registro de la empresa incluye también eventos comunes a todas las cuentas.
+KreaBankCompanyAuditHelp=Auditoría de la empresa: eventos de todas las cuentas de la empresa activa.

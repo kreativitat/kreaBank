@@ -89,6 +89,8 @@ if (function_exists('register_shutdown_function')) {
 }
 
 $action = GETPOST('action', 'aZ09');
+$navigationAccountId = max(0, GETPOSTINT('account_context'));
+$navigationAccount = kreabankNavigationAccount($navigationAccountId);
 $service = new KreaBankService($db, $user, $langs);
 $importResult = null;
 $analysis = null;
@@ -246,8 +248,8 @@ $normalizeLineRanks = function ($rawRanks) {
 	return array_values($ranks);
 };
 
-$buildReconcileRedirectUrl = function ($lineId = 0) {
-	$url = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile', 1);
+$buildReconcileRedirectUrl = function ($lineId = 0) use (&$navigationAccountId) {
+	$url = kreabankWorkspaceUrl('reconcile', $navigationAccountId);
 	if ((int) $lineId > 0) {
 		$url .= '&line_id=' . ((int) $lineId);
 	}
@@ -269,6 +271,7 @@ if ($action === 'cancel' && !empty($wizardToken)) {
 }
 
 if ($action === 'finish_duplicate_review' && !empty($wizardToken) && !empty($currentWizard)) {
+	$navigationAccountId = (int) $currentWizard['bank_account_id'];
 	$redirectLineId = 0;
 	if (
 		!empty($currentWizard['last_import_result']) && is_array($currentWizard['last_import_result'])
@@ -567,6 +570,7 @@ if ($action === 'import_selected_duplicates' && !empty($currentWizard)) {
 				)
 			);
 			$lastImportedBankAccountId = $confirmBankAccountId;
+			$navigationAccountId = (int) $confirmBankAccountId;
 			setEventMessages($langs->trans('KreaBankImportSelectedLinesDone', '<strong>' . ((int) $importResult['imported_lines']) . '</strong>'), null, 'mesgs');
 			$redirectLineId = 0;
 			if (!empty($importResult['bank_line_ids']) && is_array($importResult['bank_line_ids'])) {
@@ -680,6 +684,8 @@ if ($action === 'confirm' && !empty($currentWizard)) {
 					)
 				);
 				$lastImportedBankAccountId = (int) $confirmBankAccountId;
+				$navigationAccountId = (int) $confirmBankAccountId;
+				$navigationAccount = kreabankNavigationAccount($navigationAccountId);
 
 				$msg = $langs->trans('KreaBankImportDone') . ' ' . $langs->trans('KreaBankImportedLines') . ': <strong>' . ((int) $importResult['imported_lines']) . '</strong>';
 				$msg .= ' | ' . $langs->trans('KreaBankDetectedDuplicates') . ': <strong>' . ((int) $importResult['duplicates']) . '</strong>';
@@ -793,6 +799,11 @@ $historyOffset = $historyLimit * $historyPage;
 $historySortField = GETPOST('sortfield', 'aZ09comma');
 $historySortOrder = strtoupper(GETPOST('sortorder', 'aZ09comma'));
 $historySearchStatementRef = trim((string) GETPOST('search_statement_ref', 'restricthtml'));
+if (!empty($currentWizard['bank_account_id'])) {
+	$navigationAccountId = (int) $currentWizard['bank_account_id'];
+	$navigationAccount = kreabankNavigationAccount($navigationAccountId);
+}
+
 $historySearchBankAccount = trim((string) GETPOST('search_bank_account', 'restricthtml'));
 $historySearchLastOpFrom = trim((string) GETPOST('search_last_operation_from', 'alphanohtml'));
 $historySearchLastOpTo = trim((string) GETPOST('search_last_operation_to', 'alphanohtml'));
@@ -884,6 +895,9 @@ $sqlHistoryFrom = ' FROM ' . $db->prefix() . 'bank as b';
 $sqlHistoryFrom .= ' INNER JOIN ' . $db->prefix() . 'bank_account as ba ON ba.rowid = b.fk_account';
 $sqlHistoryFrom .= ' LEFT JOIN ' . $db->prefix() . 'kreabank_bankmeta as m ON m.entity = ' . ((int) $conf->entity) . ' AND m.fk_bank_line = b.rowid';
 $sqlHistoryWhere = ' WHERE ba.entity IN (' . $historyBankAccountEntityList . ')';
+if ($navigationAccountId > 0) {
+	$sqlHistoryWhere .= ' AND ba.rowid = ' . $navigationAccountId;
+}
 $sqlHistoryWhere .= " AND b.num_releve IS NOT NULL AND b.num_releve <> ''";
 $sqlHistoryWhere .= " AND (m.rowid IS NOT NULL OR b.note LIKE 'KreaBank import %' OR b.note LIKE 'KreaBank staged import %')";
 if ($historySearchStatementRef !== '') {
@@ -976,6 +990,9 @@ if ($historyTotal <= 0) {
 		$sqlHistoryLegacyFrom .= ' INNER JOIN ' . $db->prefix() . 'bank_account as ba ON ba.rowid = s.bank_account_id';
 		$sqlHistoryLegacyFrom .= ' LEFT JOIN ' . $lineTableName . ' as l ON l.fk_statement = s.rowid AND l.entity = ' . ((int) $conf->entity);
 		$sqlHistoryLegacyWhere = ' WHERE s.entity = ' . ((int) $conf->entity);
+		if ($navigationAccountId > 0) {
+			$sqlHistoryLegacyWhere .= ' AND ba.rowid = ' . $navigationAccountId;
+		}
 		$sqlHistoryLegacyWhere .= ' AND ba.entity IN (' . $historyBankAccountEntityList . ')';
 		$sqlHistoryLegacyWhere .= " AND s.ref IS NOT NULL AND s.ref <> ''";
 		if ($historySearchStatementRef !== '') {
@@ -1061,10 +1078,9 @@ if ($historyTotal <= 0) {
 llxHeader('', $langs->trans('KreaBankImport'), '', '', 0, 0, '', '', '', 'mod-kreabank page-import');
 
 print load_fiche_titre($langs->trans('KreaBankImport'), '', 'title_setup');
-$head = kreabankPrepareHead();
-print dol_get_fiche_head($head, 'import', $langs->trans('KreaBankImport'), -1, 'bank');
+kreabankPrintWorkspaceNavigation('import', $navigationAccount);
 
-$selectedBankId = GETPOSTINT('bank_account_id');
+$selectedBankId = GETPOSTINT('bank_account_id') ?: $navigationAccountId;
 if (!empty($currentWizard) && isset($currentWizard['bank_account_id'])) {
 	$selectedBankId = (int) $currentWizard['bank_account_id'];
 }
@@ -1094,6 +1110,7 @@ if (!$hasActiveWizard) {
 
 if (!$hasActiveWizard) {
 	print '<form method="POST" enctype="multipart/form-data" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+	print kreabankNavigationHiddenFields($navigationAccountId);
 	print '<input type="hidden" name="token" value="' . newToken() . '">';
 	print '<input type="hidden" name="action" value="analyze">';
 
@@ -1148,6 +1165,7 @@ if (!empty($currentWizard) && !empty($analysis) && is_array($analysis)) {
 		print '<br><div class="opacitymedium">A importação deste ficheiro já foi confirmada. Escolha abaixo as ações para os possíveis duplicados.</div>';
 	} else {
 		print '<br><form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="kreabankImportConfirmForm">';
+		print kreabankNavigationHiddenFields($navigationAccountId);
 		print '<input type="hidden" name="token" value="' . newToken() . '">';
 		print '<input type="hidden" name="action" value="confirm">';
 		print '<input type="hidden" name="wizard_token" value="' . dol_escape_htmltag((string) $wizardToken) . '">';
@@ -1207,6 +1225,7 @@ if (!empty($currentWizard) && !empty($analysis) && is_array($analysis)) {
 		print '<div class="tabsAction" style="display:flex;justify-content:flex-end;gap:8px;align-items:center;flex-wrap:wrap">';
 		print '<button class="butAction" type="submit" form="kreabankImportConfirmForm">' . $langs->trans('KreaBankImportConfirmButton') . '</button>';
 		print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" style="margin:0">';
+		print kreabankNavigationHiddenFields($navigationAccountId);
 		print '<input type="hidden" name="token" value="' . newToken() . '">';
 		print '<input type="hidden" name="action" value="cancel">';
 		print '<input type="hidden" name="wizard_token" value="' . dol_escape_htmltag((string) $wizardToken) . '">';
@@ -1315,6 +1334,7 @@ if (is_array($importResult)) {
 	print '<tr class="oddeven"><td>' . $langs->trans('Ref') . '</td><td>';
 	if ($canOpenImportSummaryStatement) {
 		print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" target="_blank" style="display:inline-block;margin:0">';
+		print kreabankNavigationHiddenFields($navigationAccountId);
 		print '<input type="hidden" name="token" value="' . newToken() . '">';
 		print '<input type="hidden" name="action" value="open_native_statement">';
 		print '<input type="hidden" name="open_bank_account_id" value="' . $lastImportedBankAccountId . '">';
@@ -1348,11 +1368,13 @@ if (is_array($importResult)) {
 		if ($allowDuplicateSelection) {
 			print '<br><div class="opacitymedium">Alguns possíveis duplicados foram ignorados na confirmação. Selecione agora as linhas a importar ou conclua mantendo-as ignoradas.</div>';
 			print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="kreabankDuplicateFinishForm" style="display:none">';
+			print kreabankNavigationHiddenFields($navigationAccountId);
 			print '<input type="hidden" name="token" value="' . newToken() . '">';
 			print '<input type="hidden" name="action" value="finish_duplicate_review">';
 			print '<input type="hidden" name="wizard_token" value="' . dol_escape_htmltag((string) $wizardToken) . '">';
 			print '</form>';
 			print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="kreabankDuplicateSelectionForm">';
+			print kreabankNavigationHiddenFields($navigationAccountId);
 			print '<input type="hidden" name="token" value="' . newToken() . '">';
 			print '<input type="hidden" name="action" value="import_selected_duplicates">';
 			print '<input type="hidden" name="wizard_token" value="' . dol_escape_htmltag((string) $wizardToken) . '">';
@@ -1423,7 +1445,7 @@ if (is_array($importResult)) {
 
 $showHistorySection = (!$hasActiveWizard);
 if ($showHistorySection) {
-	$historyListParam = '&mainmenu=bank&leftmenu=kreabank_import';
+	$historyListParam = '&account_context=' . $navigationAccountId . '&mainmenu=bank&leftmenu=kreabank_import';
 	if ($historyLimit > 0) {
 		$historyListParam .= '&limit=' . $historyLimit;
 	}
@@ -1460,6 +1482,7 @@ if ($showHistorySection) {
 
 	print '<br>';
 	print '<form method="GET" id="kreaImportHistoryFilterForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+	print kreabankNavigationHiddenFields($navigationAccountId);
 	print '<input type="hidden" name="mainmenu" value="bank">';
 	print '<input type="hidden" name="leftmenu" value="kreabank_import">';
 	print '<input type="hidden" name="page" value="0">';
@@ -1468,6 +1491,7 @@ if ($showHistorySection) {
 	print '<input type="hidden" name="sortorder" value="' . dol_escape_htmltag((string) $historySortOrder) . '">';
 	print '</form>';
 	print '<form method="GET" id="kreaImportHistoryPagerForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+	print kreabankNavigationHiddenFields($navigationAccountId);
 	print '<input type="hidden" name="mainmenu" value="bank">';
 	print '<input type="hidden" name="leftmenu" value="kreabank_import">';
 	print '<input type="hidden" name="search_statement_ref" value="' . dol_escape_htmltag($historySearchStatementRef) . '">';
@@ -1543,6 +1567,7 @@ if ($showHistorySection) {
 			print '<td>';
 			if ($canOpenStatement) {
 				print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" target="_blank" style="display:inline-block;margin:0">';
+				print kreabankNavigationHiddenFields($navigationAccountId);
 				print '<input type="hidden" name="token" value="' . newToken() . '">';
 				print '<input type="hidden" name="action" value="open_native_statement">';
 				print '<input type="hidden" name="open_bank_account_id" value="' . $accountId . '">';
@@ -1565,6 +1590,7 @@ if ($showHistorySection) {
 			print '<td class="center">';
 			print '<span style="display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap">';
 			print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" style="display:inline-block;margin:0">';
+			print kreabankNavigationHiddenFields($navigationAccountId);
 			print '<input type="hidden" name="token" value="' . newToken() . '">';
 			print '<input type="hidden" name="action" value="download_statement_csv">';
 			print '<input type="hidden" name="download_bank_account_id" value="' . $accountId . '">';
@@ -1590,6 +1616,7 @@ if ($showHistorySection) {
 			print '</button>';
 			print '</form>';
 			print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" style="display:inline-block;margin:0">';
+			print kreabankNavigationHiddenFields($navigationAccountId);
 			print '<input type="hidden" name="token" value="' . newToken() . '">';
 			print '<input type="hidden" name="action" value="delete_statement">';
 			print '<input type="hidden" name="delete_bank_account_id" value="' . $accountId . '">';

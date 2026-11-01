@@ -64,6 +64,8 @@ if (!$user->hasRight('banque', 'lire')) {
 }
 
 $form = new Form($db);
+$navigationAccountId = max(0, GETPOSTINT('account_context'));
+$navigationAccount = kreabankNavigationAccount($navigationAccountId);
 $service = new KreaBankService($db, $user, $langs);
 
 $sortfield = GETPOST('sortfield', 'aZ09comma');
@@ -109,6 +111,7 @@ if (GETPOST('button_removefilter_x', 'alpha') !== '' || GETPOST('button_removefi
 }
 
 $filters = array(
+	'bank_account_id' => $navigationAccountId,
 	'search_all' => $searchAll,
 	'search_description' => $searchDescription,
 	'search_amount' => $searchAmount,
@@ -136,6 +139,7 @@ try {
 }
 
 $param = '';
+$param .= '&account_context=' . $navigationAccountId;
 $param .= '&mainmenu=bank';
 $param .= '&leftmenu=kreabank_pending';
 if ($searchAll !== '') {
@@ -163,10 +167,10 @@ if ($limit > 0 && $limit !== (int) $conf->liste_limit) {
 llxHeader('', $langs->trans('KreaBankPending'), '', '', 0, 0, '', '', '', 'mod-kreabank page-pending bodyforlist');
 
 print load_fiche_titre($langs->trans('KreaBankPending'), '', 'title_setup');
-$head = kreabankPrepareHead();
-print dol_get_fiche_head($head, 'pending', $langs->trans('KreaBankPending'), -1, 'bank');
+kreabankPrintWorkspaceNavigation('pending', $navigationAccount);
 
 print '<form method="GET" id="searchFormList" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+print kreabankNavigationHiddenFields($navigationAccountId);
 print '<input type="hidden" name="mainmenu" value="bank">';
 print '<input type="hidden" name="leftmenu" value="kreabank_pending">';
 print '<input type="hidden" name="sortfield" value="' . dol_escape_htmltag($sortfield) . '">';
@@ -218,7 +222,7 @@ if (empty($pendingLines)) {
 		$statusLabel = kreabankStatusLabel((int) $line['status'], $langs);
 		$statusClass = kreabankStatusClass((int) $line['status']);
 		$lineId = (int) $line['rowid'];
-		$reconcileUrl = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile&line_id=' . $lineId, 1);
+		$reconcileUrl = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile&account_context=' . $navigationAccountId . '&line_id=' . $lineId, 1);
 		$operationDateRaw = '';
 		if (!empty($line['operation_date'])) {
 			$operationDateRaw = (string) $line['operation_date'];

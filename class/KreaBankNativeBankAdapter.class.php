@@ -1330,9 +1330,10 @@ class KreaBankNativeBankAdapter
 	 *
 	 * @param int $limit
 	 * @param int $offset
+	 * @param int $bankAccountId Optional current-company account filter
 	 * @return array<int,array<string,mixed>>
 	 */
-	public function getRecentReconciledLines($limit = 200, $offset = 0)
+	public function getRecentReconciledLines($limit = 200, $offset = 0, $bankAccountId = 0)
 	{
 		$this->ensureMetaTable();
 
@@ -1350,6 +1351,9 @@ class KreaBankNativeBankAdapter
 		$sql .= ' INNER JOIN ' . $this->db->prefix() . 'bank_account as ba ON ba.rowid = b.fk_account';
 		$sql .= ' WHERE l.entity = ' . ((int) $this->entity);
 		$sql .= ' AND ba.entity = ' . ((int) $this->entity);
+		if ((int) $bankAccountId > 0) {
+			$sql .= ' AND ba.rowid = ' . (int) $bankAccountId;
+		}
 		$sql .= ' AND (l.status = 2 OR b.rappro = 1)';
 		$sql .= ' ORDER BY b.dateo DESC, b.rowid DESC';
 		$sql .= $this->db->plimit((int) $limit, (int) $offset);
@@ -1391,6 +1395,9 @@ class KreaBankNativeBankAdapter
 			return array();
 		}
 
+		if ((int) $bankAccountId > 0) {
+			return $this->getRecentReconciledLinesFromStaging((int) $limit, (int) $offset, (int) $bankAccountId);
+		}
 		return $this->getRecentReconciledLinesFromStaging((int) $limit, (int) $offset);
 	}
 
@@ -1399,9 +1406,10 @@ class KreaBankNativeBankAdapter
 	 *
 	 * @param int $limit
 	 * @param int $offset
+	 * @param int $bankAccountId Optional current-company account filter
 	 * @return array<int,array<string,mixed>>
 	 */
-	protected function getRecentReconciledLinesFromStaging($limit = 200, $offset = 0)
+	protected function getRecentReconciledLinesFromStaging($limit = 200, $offset = 0, $bankAccountId = 0)
 	{
 		$this->ensureStagingTables();
 		$this->ensureMetaTable();
@@ -1419,6 +1427,9 @@ class KreaBankNativeBankAdapter
 		$sql .= ' WHERE l.entity = ' . ((int) $this->entity);
 		$sql .= ' AND s.entity = ' . ((int) $this->entity);
 		$sql .= ' AND ba.entity = ' . ((int) $this->entity);
+		if ((int) $bankAccountId > 0) {
+			$sql .= ' AND ba.rowid = ' . (int) $bankAccountId;
+		}
 		$sql .= ' AND m.rowid IS NULL';
 		$sql .= ' AND (l.status = 2 OR (b.rowid IS NOT NULL AND b.rappro = 1))';
 		$sql .= ' ORDER BY COALESCE(b.dateo, l.operation_date, l.value_date) DESC, l.rowid DESC';
@@ -1465,6 +1476,10 @@ class KreaBankNativeBankAdapter
 		$sql = '';
 		if (!is_array($filters) || empty($filters)) {
 			return $sql;
+		}
+
+		if (!empty($filters['bank_account_id'])) {
+			$sql .= ' AND ba.rowid = ' . (int) $filters['bank_account_id'];
 		}
 
 		$searchAll = trim((string) (isset($filters['search_all']) ? $filters['search_all'] : ''));

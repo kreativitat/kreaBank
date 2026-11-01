@@ -62,6 +62,8 @@ if (!$user->hasRight('banque', 'lire')) {
 	accessforbidden($langs->trans('ErrorForbidden'));
 }
 
+$navigationAccountId = max(0, GETPOSTINT('account_context'));
+$navigationAccount = kreabankNavigationAccount($navigationAccountId);
 $service = new KreaBankService($db, $user, $langs);
 $canNativeWrite = ($user->hasRight('banque', 'modifier') || $user->hasRight('banque', 'consolidate'));
 $action = GETPOST('action', 'aZ09');
@@ -92,7 +94,7 @@ if ($dateTolerance <= 0) {
 $bulkScanCacheStoreKey = 'kreabank_bulkmatch_scan_state';
 $bulkScanMatcherRevision = 11;
 $bulkScanFilterScope = array(
-	'bank_account_id' => GETPOSTINT('bank_account_id'),
+	'bank_account_id' => ($navigationAccountId ?: GETPOSTINT('bank_account_id')),
 );
 $bulkScanCacheScope = ((int) $conf->entity) . '|' . ((int) $user->id) . '|' . ((int) $dateTolerance) . '|' . ((int) $bulkScanMatcherRevision) . '|' . hash('sha256', json_encode($bulkScanFilterScope));
 $bulkScanCacheTtl = (int) getDolGlobalInt('KREABANK_BULKMATCH_SCAN_CACHE_TTL');
@@ -522,17 +524,17 @@ $scanScannedCount = 0;
 $scanState = array();
 
 try {
-	$pendingTotal = (int) $service->getPendingLinesCount();
+	$pendingTotal = (int) $service->getPendingLinesCount($bulkScanFilterScope);
 	$pendingFingerprintPayload = array(
 		'pending_total' => $pendingTotal,
 		'entity' => (int) $conf->entity,
 		'filter_scope' => $bulkScanFilterScope,
 	);
 	if ($pendingTotal > 0) {
-		$firstPending = $service->getPendingLines(1, 0, 'b.rowid', 'ASC');
-		$lastPending = $service->getPendingLines(1, 0, 'b.rowid', 'DESC');
-		$headSample = $service->getPendingLines(min(10, $pendingTotal), 0, 'b.rowid', 'ASC');
-		$tailSample = $service->getPendingLines(min(10, $pendingTotal), 0, 'b.rowid', 'DESC');
+		$firstPending = $service->getPendingLines(1, 0, 'b.rowid', 'ASC', $bulkScanFilterScope);
+		$lastPending = $service->getPendingLines(1, 0, 'b.rowid', 'DESC', $bulkScanFilterScope);
+		$headSample = $service->getPendingLines(min(10, $pendingTotal), 0, 'b.rowid', 'ASC', $bulkScanFilterScope);
+		$tailSample = $service->getPendingLines(min(10, $pendingTotal), 0, 'b.rowid', 'DESC', $bulkScanFilterScope);
 		if (!empty($firstPending[0]) && is_array($firstPending[0])) {
 			$pendingFingerprintPayload['first'] = array(
 				'rowid' => (int) $firstPending[0]['rowid'],
@@ -635,7 +637,7 @@ try {
 				break;
 			}
 
-			$pendingChunk = $service->getPendingLines($scanChunk, $scanOffset, 'b.dateo', 'ASC');
+			$pendingChunk = $service->getPendingLines($scanChunk, $scanOffset, 'b.dateo', 'ASC', $bulkScanFilterScope);
 			if (empty($pendingChunk)) {
 				$scanState['done'] = true;
 				break;
@@ -785,7 +787,7 @@ try {
 	setEventMessages($e->getMessage(), null, 'errors');
 }
 
-$param = '&mainmenu=bank&leftmenu=kreabank_bulkmatch';
+$param = '&mainmenu=bank&leftmenu=kreabank_bulkmatch&account_context=' . $navigationAccountId;
 if ($limit > 0 && $limit !== (int) $conf->liste_limit) {
 	$param .= '&limit=' . $limit;
 }
@@ -793,8 +795,7 @@ if ($limit > 0 && $limit !== (int) $conf->liste_limit) {
 llxHeader('', $langs->trans('KreaBankBulkMatch'), '', '', 0, 0, '', '', '', 'mod-kreabank page-bulkmatch bodyforlist');
 
 print load_fiche_titre($langs->trans('KreaBankBulkMatchTitle'), '', 'title_setup');
-$head = kreabankPrepareHead();
-print dol_get_fiche_head($head, 'bulkmatch', $langs->trans('KreaBankBulkMatch'), -1, 'bank');
+kreabankPrintWorkspaceNavigation('bulkmatch', $navigationAccount);
 
 print '<style>';
 print '.krea-bulk-intro{margin:8px 0 14px 0;padding:10px 12px;border:1px solid #d5e0ea;background:#f8fbfe;border-radius:8px}';
@@ -847,6 +848,7 @@ if ($scanInProgress) {
 }
 
 print '<form method="GET" id="kreaBulkMatchPagerForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+print kreabankNavigationHiddenFields($navigationAccountId);
 print '<input type="hidden" name="mainmenu" value="bank">';
 print '<input type="hidden" name="leftmenu" value="kreabank_bulkmatch">';
 print_barre_liste($langs->trans('KreaBankBulkMatchWithSuggestion'), $page, $_SERVER['PHP_SELF'], $param, '', '', '', $bulkPagerNum, $matchedCount, 'title_setup', 0, '', '', $limit, 0, 0, 1);
@@ -856,6 +858,7 @@ if (empty($rows)) {
 	print '<div class="opacitymedium">' . $langs->trans('KreaBankNoStatementLines') . '</div>';
 } else {
 	print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="kreaBulkMatchForm">';
+	print kreabankNavigationHiddenFields($navigationAccountId);
 	print '<input type="hidden" name="token" value="' . newToken() . '">';
 	print '<input type="hidden" name="action" value="bulk_match_confirm">';
 	print '<input type="hidden" name="mainmenu" value="bank">';

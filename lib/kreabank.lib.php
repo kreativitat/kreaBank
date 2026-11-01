@@ -7,6 +7,8 @@
  * (at your option) any later version.
  */
 
+require_once __DIR__ . '/kreabank_navigation.lib.php';
+
 /**
  * Prepare admin pages header.
  *
@@ -55,44 +57,23 @@ function kreabankAdminPrepareHead()
  *
  * @return array<array{string,string,string}>
  */
-function kreabankPrepareHead()
+function kreabankPrepareHead($accountId = 0)
 {
-	global $langs;
-
+	global $langs, $user;
 	$langs->load('kreabank@kreabank');
-
-	$h = 0;
 	$head = array();
-
-	$head[$h][0] = dol_buildpath('/custom/kreabank/import.php', 1) . '?mainmenu=bank&leftmenu=kreabank_import';
-	$head[$h][1] = $langs->trans('KreaBankImport');
-	$head[$h][2] = 'import';
-	$h++;
-
-	$head[$h][0] = dol_buildpath('/custom/kreabank/feed.php', 1) . '?mainmenu=bank&leftmenu=kreabank_feed';
-	$head[$h][1] = $langs->trans('KreaBankFeeds');
-	$head[$h][2] = 'feed';
-	$h++;
-
-	$head[$h][0] = dol_buildpath('/custom/kreabank/reconcile.php', 1) . '?mainmenu=bank&leftmenu=kreabank_reconcile';
-	$head[$h][1] = $langs->trans('KreaBankReconcile');
-	$head[$h][2] = 'reconcile';
-	$h++;
-
-	$head[$h][0] = dol_buildpath('/custom/kreabank/bulkmatch.php', 1) . '?mainmenu=bank&leftmenu=kreabank_bulkmatch';
-	$head[$h][1] = $langs->trans('KreaBankBulkMatch');
-	$head[$h][2] = 'bulkmatch';
-	$h++;
-
-	$head[$h][0] = dol_buildpath('/custom/kreabank/pending.php', 1) . '?mainmenu=bank&leftmenu=kreabank_pending';
-	$head[$h][1] = $langs->trans('KreaBankPending');
-	$head[$h][2] = 'pending';
-	$h++;
-
-	$head[$h][0] = dol_buildpath('/custom/kreabank/history.php', 1) . '?mainmenu=bank&leftmenu=kreabank_history';
-	$head[$h][1] = $langs->trans('KreaBankHistory');
-	$head[$h][2] = 'history';
-
+	if ($user->hasRight('kreabank', 'reconciliation', 'read') && $user->hasRight('banque', 'lire')) {
+		$head[] = array(kreabankWorkspaceUrl('reconcile', $accountId), $langs->trans('KreaBankReconcile'), 'reconcile');
+	}
+	if ($user->hasRight('kreabank', 'reconciliation', 'write') && $user->hasRight('banque', 'modifier')) {
+		$head[] = array(kreabankWorkspaceUrl('import', $accountId), $langs->trans('KreaBankImport'), 'import');
+	}
+	if ($user->hasRight('banque', 'lire')) {
+		$head[] = array(kreabankWorkspaceUrl('feed', $accountId), $langs->trans('KreaBankFeeds'), 'feed');
+	}
+	if ($user->hasRight('kreabank', 'reconciliation', 'read') && $user->hasRight('banque', 'lire')) {
+		$head[] = array(kreabankWorkspaceUrl('history', $accountId), $langs->trans('KreaBankHistory'), 'history');
+	}
 	return $head;
 }
 

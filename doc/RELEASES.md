@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.14.4 — 2026-11-01
+
+- Connect native bank account tabs and KreaBank through a shared account context.
+- Group the workspace into reconciliation, import, connections and history; keep
+  batch review and pending lines inside reconciliation. Clearly label native
+  statement numbering and preserve all native account pages.
+- Apply account filters to pending lists, batch scans and reconciliation history;
+  retain context through forms and pagination. Company audit events remain
+  explicitly company-wide. No schema change. See [navigation](NAVIGATION.md).
+
 ## 1.14.3 — 2026-11-01
 
 - Normalize the company ID supplied by native scheduled jobs before checking
