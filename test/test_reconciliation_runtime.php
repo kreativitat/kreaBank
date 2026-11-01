@@ -296,6 +296,21 @@ function kreabankRunRuntimeReconciliationAssertions($rootDir)
 	$assertTrue(!isset($calendarBoundaryDetailMap['date']), 'Calendar-day distance must treat 2026-01-10 to 2026-01-14 as 4 days (outside 3-day tolerance)');
 	$assertTrue((int) $calendarBoundaryScore['score'] === 70, 'Calendar-day boundary case should keep amount evidence only when day distance exceeds tolerance');
 
+	$originalTimezone = date_default_timezone_get();
+	try {
+		foreach (array('UTC', 'Europe/Lisbon', 'Europe/Zurich', 'America/New_York') as $timezone) {
+			date_default_timezone_set($timezone);
+			$timezoneScore = $matcher->scoreLineToDocument($calendarBoundaryLine, $calendarBoundaryDocument, array(), 3);
+			$assertTrue((int) $timezoneScore['score'] === 70 && !in_array('date', $timezoneScore['details'], true), 'Bank calendar-day tolerance must be independent of server timezone: ' . $timezone);
+			$sameDayDocument = $calendarBoundaryDocument;
+			$sameDayDocument['doc_date'] = '2026-01-10 00:00:00';
+			$sameDayScore = $matcher->scoreLineToDocument($calendarBoundaryLine, $sameDayDocument, array(), 0);
+			$assertTrue(in_array('date', $sameDayScore['details'], true), 'Same calendar day must remain exact across midnight times: ' . $timezone);
+		}
+	} finally {
+		date_default_timezone_set($originalTimezone);
+	}
+
 	$safeGapSuggestions = array(
 		array(
 			'score' => 190,

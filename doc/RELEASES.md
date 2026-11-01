@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.1 — 2026-11-01
+
+- Parse bank matching dates in a fixed timezone so server timezone differences
+  cannot shorten the calendar-day tolerance at midnight.
+
 ## 1.14.0 — 2026-11-01
 
 - Add company-scoped automatic matching against existing native bank movements,

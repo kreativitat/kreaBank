@@ -117,12 +117,12 @@ class KreaBankMatcher
 			$details[] = 'amount_pending';
 		}
 
-		$lineDate = !empty($line['operation_date']) ? strtotime((string) $line['operation_date']) : false;
+		$lineDate = !empty($line['operation_date']) ? $this->parseMatchingDate((string) $line['operation_date']) : false;
 		$docDateSource = (string) (!empty($document['doc_date']) ? $document['doc_date'] : '');
 		if (in_array($docType, array('payment_linked', 'payment_supplier_linked'), true) && !empty($document['linked_bank_date'])) {
 			$docDateSource = (string) $document['linked_bank_date'];
 		}
-		$docDate = ($docDateSource !== '' ? strtotime($docDateSource) : false);
+		$docDate = ($docDateSource !== '' ? $this->parseMatchingDate($docDateSource) : false);
 		if ($lineDate && $docDate) {
 			$distanceDays = $this->calculateCalendarDayDistance((int) $lineDate, (int) $docDate);
 			if ($distanceDays <= (int) $dateTolerance) {
@@ -247,6 +247,16 @@ class KreaBankMatcher
 			'details' => $details,
 			'strategy_level' => $strategyLevel,
 		);
+	}
+
+	/** Bank date strings use a fixed parsing zone, independent of the CLI/web server timezone. */
+	protected function parseMatchingDate($value)
+	{
+		try {
+			return (new DateTimeImmutable((string) $value, new DateTimeZone('UTC')))->getTimestamp();
+		} catch (Exception $e) {
+			return false;
+		}
 	}
 
 	/**
