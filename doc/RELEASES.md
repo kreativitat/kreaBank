@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.7 — 2026-11-01
+
+- Render background status translations as plain text and hide inactive controls
+  consistently with native button styles.
+
 ## 1.14.6 — 2026-11-01
 
 - Open bulk review immediately and check suggestions in bounded background requests,

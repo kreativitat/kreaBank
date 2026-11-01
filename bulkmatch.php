@@ -682,7 +682,7 @@ try {
 			session_write_close();
 			http_response_code(409);
 			header('Content-Type: application/json');
-			echo json_encode(array('error' => $langs->trans('KreaBankBulkMatchContextChanged')));
+			echo json_encode(array('error' => $langs->transnoentities('KreaBankBulkMatchContextChanged')));
 			exit;
 		}
 	}
@@ -722,7 +722,7 @@ try {
 	if ($isScanRequest) {
 		http_response_code(500);
 		header('Content-Type: application/json');
-		echo json_encode(array('error' => $langs->trans('KreaBankBulkMatchScanFailed')));
+		echo json_encode(array('error' => $langs->transnoentities('KreaBankBulkMatchScanFailed')));
 		dol_syslog('KreaBank bulk review scan failed for company ' . (int) $conf->entity, LOG_ERR);
 		exit;
 	}
@@ -747,6 +747,7 @@ if (!$isScanRequest) {
 	print '.krea-bulk-score{display:inline-block;padding:2px 6px;border-radius:10px;font-size:11px;font-weight:700;background:#eef6ff;color:#1f4e79;border:1px solid #c3d9ef}';
 	print '.krea-bulk-summary{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px 0}';
 	print '.krea-bulk-summary .badge{font-size:12px}';
+	print '#krea-bulk-scan-resume[hidden],#krea-bulk-scan-status[hidden]{display:none}';
 	print '.krea-bulk-progress{margin:0 0 12px 0;padding:10px 12px;border:1px solid #d8e4ef;background:#f5f9fc;border-radius:8px}';
 	print '.krea-bulk-progress-bar{height:8px;background:#dbe6f2;border-radius:999px;overflow:hidden;margin:6px 0 0 0}';
 	print '.krea-bulk-progress-bar > span{display:block;height:100%;background:#2f6f9f}';
@@ -963,10 +964,10 @@ print '<div class="krea-bulk-progress" id="krea-bulk-scan-status" role="status" 
 print '<button type="button" class="button" id="krea-bulk-scan-resume" hidden>' . $langs->trans('KreaBankBulkMatchContinue') . '</button>';
 $scanClientConfig = array('url' => $_SERVER['PHP_SELF'], 'token' => currentToken(), 'page' => $page, 'limit' => $limit,
 	'account' => $navigationAccountId, 'more' => $scanInProgress, 'auto' => $scanAutoReloadEnabled,
-	'loading' => $langs->trans('KreaBankBulkMatchLoading'), 'paused' => $langs->trans('KreaBankBulkMatchReviewPaused'),
-	'failed' => $langs->trans('KreaBankBulkMatchScanFailed'), 'refresh' => $langs->trans('Refresh'));
+	'loading' => $langs->transnoentities('KreaBankBulkMatchLoading'), 'paused' => $langs->transnoentities('KreaBankBulkMatchReviewPaused'),
+	'failed' => $langs->transnoentities('KreaBankBulkMatchScanFailed'), 'refresh' => $langs->transnoentities('Refresh'));
 print '<script type="application/json" id="krea-bulk-scan-config">' . json_encode($scanClientConfig, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . '</script>';
-print '<script src="' . dol_buildpath('/kreabank/js/bulkmatch.js', 1) . '?v=1.14.6" defer></script>';
+print '<script src="' . dol_buildpath('/kreabank/js/bulkmatch.js', 1) . '?v=1.14.7" defer></script>';
 print dol_get_fiche_end();
 llxFooter();
 $db->close();
