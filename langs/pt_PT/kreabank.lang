@@ -1,4 +1,6 @@
 # Generic
+KreaBankFeedShowEligible=Mostrar contas bancárias com IBAN ou ligação
+KreaBankFeedShowOtherRecords=Mostrar outros registos bancários sem IBAN válido
 KreaBankFeedState_refresh_wait=A aguardar a atualização do banco
 KreaBankFeedState_mapping_review=Associação da conta requer revisão
 KreaBankFeedAlertEmail=Email para alertas de falha na recolha (opcional)

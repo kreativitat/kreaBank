@@ -250,7 +250,9 @@ class KreaBankFintableSync
 					$connection = $connections[$source['connection_id']] ?? null;
 					if ($preview) {
 						if (!$connection || empty($connection['healthy']) || !empty($connection['needs_reconnect'])) {
-							throw new RuntimeException('Bank authorization needs reconnecting in Fintable');
+							throw new RuntimeException($connection && empty($connection['needs_reconnect'])
+							? 'Bank/provider is temporarily unavailable; retry at the next scheduled sync'
+							: 'Bank authorization needs reconnecting in Fintable');
 						}
 						continue;
 					}
@@ -262,7 +264,9 @@ class KreaBankFintableSync
 					}
 					$mapping = $this->saveAccount($bank, $source, $connection ?: array());
 					if (!$connection || empty($connection['healthy']) || !empty($connection['needs_reconnect'])) {
-						throw new RuntimeException('Bank authorization needs reconnecting in Fintable');
+						throw new RuntimeException($connection && empty($connection['needs_reconnect'])
+							? 'Bank/provider is temporarily unavailable; retry at the next scheduled sync'
+							: 'Bank authorization needs reconnecting in Fintable');
 					}
 					if (in_array($connection['sync_status']['state'] ?? '', array('queued', 'executing', 'retrying'), true)) {
 						if ($scheduled && $run && time() - strtotime($run->started_at) < 1800) {
@@ -498,13 +502,16 @@ class KreaBankFintableSync
 			. ',status=' . $this->text($status) . ',error_code=NULL WHERE rowid=' . (int) $mapping->rowid . ' AND entity=' . (int) $mapping->entity);
 	}
 
-	public function accountStatus($entity)
+	public function accountStatus($entity, $includeUnidentified = false)
 	{
-		return $this->rows('SELECT b.rowid,b.ref,b.label,b.iban_prefix,b.currency_code,f.provider_account_id,f.balance,f.balance_available,'
+		$rows = $this->rows('SELECT b.rowid,b.ref,b.label,b.iban_prefix,b.currency_code,f.provider_account_id,f.balance,f.balance_available,'
 			. 'f.bank_updated_at,f.history_from,f.history_to,f.last_success,f.status,f.error_code FROM ' . $this->db->prefix() . 'bank_account b'
 			. ' LEFT JOIN ' . $this->db->prefix() . 'kreabank_feed_account f ON f.fk_bank_account=b.rowid AND f.entity=b.entity AND f.workspace_id='
 			. $this->text($this->setting('KREABANK_FINTABLE_WORKSPACE'))
 			. ' WHERE b.entity=' . (int) $entity . ' AND b.clos=0 AND b.courant<>2 ORDER BY b.ref');
+		return $includeUnidentified ? $rows : array_values(array_filter($rows, static function ($row) {
+			return !empty($row->provider_account_id) || KreaBankFintableMapper::iban($row->iban_prefix) !== '';
+		}));
 	}
 
 	public function lastRun()

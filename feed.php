@@ -43,6 +43,9 @@ if ($installationAdmin) {
 	print '<input type="hidden" name="token" value="' . newToken() . '"><input type="hidden" name="action" value="collect">';
 	print '<button class="butAction" type="submit">' . $langs->trans('KreaBankFeedCollectAll') . '</button></form></div>';
 }
+$showUnidentified = GETPOSTINT('show_unidentified') === 1;
+print '<p><a href="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '?mainmenu=bank&amp;leftmenu=kreabank_feed&amp;show_unidentified=' . ($showUnidentified ? '0' : '1') . '">'
+	. $langs->trans($showUnidentified ? 'KreaBankFeedShowEligible' : 'KreaBankFeedShowOtherRecords') . '</a></p>';
 print '<div class="div-table-responsive"><table class="liste centpercent">';
 print '<tr class="liste_titre">';
 foreach (array('BankAccount', 'IBAN', 'KreaBankFeedBalance', 'KreaBankFeedAvailable', 'KreaBankFeedBankUpdated', 'KreaBankFeedCollectedAt', 'KreaBankFeedHistory', 'Status') as $key) {
@@ -50,7 +53,7 @@ foreach (array('BankAccount', 'IBAN', 'KreaBankFeedBalance', 'KreaBankFeedAvaila
 }
 print '</tr>';
 try {
-	$rows = $sync->accountStatus((int) $conf->entity);
+	$rows = $sync->accountStatus((int) $conf->entity, $showUnidentified);
 	foreach ($rows as $row) {
 		$state = $row->status ?: 'unmapped';
 		print '<tr class="oddeven"><td><a href="' . DOL_URL_ROOT . '/compta/bank/card.php?id=' . (int) $row->rowid . '">'

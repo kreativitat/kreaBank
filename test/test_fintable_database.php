@@ -90,7 +90,8 @@ $allowSync = false;
 $postTimeout = false;
 $connectionState = '';
 $healthy = true;
-$transport = static function ($method, $url) use (&$sources, &$pages, &$postCount, &$allowSync, &$postTimeout, &$connectionState, &$healthy) {
+$providerOutage = false;
+$transport = static function ($method, $url) use (&$sources, &$pages, &$postCount, &$allowSync, &$postTimeout, &$connectionState, &$healthy, &$providerOutage) {
 	if ($method === 'POST') {
 		checkFeed($allowSync && parse_url($url, PHP_URL_PATH) === '/api/v2/sync', 'Only the approved included sync endpoint may write');
 		$postCount++;
@@ -100,7 +101,7 @@ $transport = static function ($method, $url) use (&$sources, &$pages, &$postCoun
 	$path = substr(parse_url($url, PHP_URL_PATH), strlen('/api/v2/'));
 	parse_str(parse_url($url, PHP_URL_QUERY), $query);
 	if ($path === 'me') { $data = array('can_sync'=>true); }
-	elseif ($path === 'connections') { $data = array(array('id'=>'conn_fixture','healthy'=>$healthy,'needs_reconnect'=>!$healthy,'last_successful_update'=>gmdate('c'),'sync_status'=>array('state'=>$connectionState)),array('id'=>'conn_ready','healthy'=>true,'needs_reconnect'=>false,'last_successful_update'=>gmdate('c'),'sync_status'=>array('state'=>'finished'))); }
+	elseif ($path === 'connections') { $data = array(array('id'=>'conn_fixture','healthy'=>$healthy,'needs_reconnect'=>!$healthy && !$providerOutage,'last_successful_update'=>gmdate('c'),'sync_status'=>array('state'=>$connectionState)),array('id'=>'conn_ready','healthy'=>true,'needs_reconnect'=>false,'last_successful_update'=>gmdate('c'),'sync_status'=>array('state'=>'finished'))); }
 	elseif ($path === 'accounts') { $data = $sources; }
 	else {
 		preg_match('~^accounts/([^/]+)/transactions$~', $path, $m);
@@ -194,6 +195,10 @@ $connectionState = '';
 $healthy = false;
 $expired = $sync->collect($user);
 checkFeed($expired['failed'] === 3 && (int)$db->query("SELECT COUNT(*) n FROM kbtest_kreabank_feed_account WHERE status='failed'")->fetch_object()->n === 3, 'Expired authorization is visible and preserves existing imports');
+$providerOutage = true;
+$outage = $sync->collect($user);
+checkFeed(strpos($outage['entities'][1]['error'],'temporarily unavailable') !== false, 'Provider outage must not instruct unnecessary bank reauthorization');
+$providerOutage = false;
 $healthy = true;
 $sync->collect($user);
 // Disabled provider accounts retain their audit history but cease to appear ready.
@@ -213,4 +218,6 @@ checkFeed($independent['status'] === 'refresh_wait' && $independent['waiting'] =
 $connectionState = '';
 $finished = $sync->collect($user,$slot);
 checkFeed($finished['status'] === 'completed' && $finished['imported'] === 0, 'Resume waiting banks without duplicating the independently imported movement');
+$db->query("INSERT INTO kbtest_bank_account (rowid,entity,ref,label,iban_prefix,currency_code) VALUES (104,1,'OTHER','Other record','','EUR')");
+checkFeed(count($sync->accountStatus(1)) === 2 && count($sync->accountStatus(1,true)) === 3 && count($sync->accountStatus(2)) === 1, 'Eligible bank view excludes unidentified records and preserves company isolation');
 print "OK: $checks checks including real MariaDB imports, rollback, retry, locking and company isolation\n";

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.13.4 — 2026-11-01
+
+- Distinguish a provider outage from expired bank authorization.
+- Show eligible bank accounts by default; keep other bank records available through a view toggle.
+
 ## 1.13.3 — 2026-11-01
 
 - Collect finished banks independently while other banks refresh, with bounded waits and per-account status.
