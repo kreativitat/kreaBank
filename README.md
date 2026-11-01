@@ -14,6 +14,7 @@ It is designed to accelerate bank operations without creating a parallel account
 - Optionally reconciles exact, unambiguous existing bank movements automatically, with previews and per-company account selection. See [automatic reconciliation](doc/AUTOMATIC_RECONCILIATION.md).
 - Persists reconciliation through native Dolibarr bank/payment links and native reconciliation status.
 - Provides pending, reconciliation, and history workspaces on top of the native bank module.
+- Configures restricted/main account pairs and optionally reconciles both transfer legs automatically. See [account pairs](doc/ACCOUNT_PAIRS.md).
 - Respects Dolibarr permissions and active `entity` scoping.
 - Collects Fintable balances and posted transactions twice daily for active companies, using encrypted credentials, exact IBAN ownership and duplicate-safe staging. See [Fintable integration](doc/FINTABLE.md).
 

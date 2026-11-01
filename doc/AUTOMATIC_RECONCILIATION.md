@@ -103,3 +103,10 @@ Dolibarr `AccountLine` and `Cronjob` implementations, synthetic companies,
 permissions, ambiguous matches, source conflicts, rollback injection, retries,
 preview mode, cursor rotation and exclusion across independent connections.
 The runtime fixture adapter supplies no production credentials or business data.
+
+## Optional paired transfers
+
+Release 1.15.0 adds a separate, disabled-by-default paired-transfer option to this
+runner. It requires two imported legs and explicit company account relationships,
+and may create a complete native transfer atomically. The existing-movement path
+above still creates no bank movement. See [account pairs](ACCOUNT_PAIRS.md).

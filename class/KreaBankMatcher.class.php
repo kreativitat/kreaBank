@@ -191,6 +191,9 @@ class KreaBankMatcher
 		$docIban = strtoupper(preg_replace('/\s+/', '', ($document['thirdparty_iban'] ?? '')));
 		if ($lineIban !== '' && $docIban !== '' && $this->isLikelyIban($lineIban) && $this->isLikelyIban($docIban) && $lineIban === $docIban) {
 			$score += 45;
+			if ($docType === 'paired_transfer' && !empty($document['paired_iban_confirmed'])) {
+				$score += 30; // Both checksum-valid IBANs identify the configured opposite accounts.
+			}
 			$details[] = 'iban';
 			$strategyLevel = max($strategyLevel, 2);
 		}

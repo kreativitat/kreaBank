@@ -479,7 +479,7 @@ class KreaBankNativeBankAdapter
 	 * @param int $lineId
 	 * @return int
 	 */
-	public function ensureNativeLineForStatementLine($lineId)
+	public function ensureNativeLineForStatementLine($lineId, $isTransfer = false)
 	{
 		$this->ensureMetaTable();
 		$this->ensureStagingTables();
@@ -510,7 +510,7 @@ class KreaBankNativeBankAdapter
 		$dateo = $this->toTimestamp((string) $line['operation_date']);
 		$datev = $this->toTimestamp((string) $line['value_date']);
 		$amount = (float) price2num((string) $line['amount'], 'MU');
-		$operationCode = $this->guessOperationCode($amount);
+		$operationCode = $isTransfer ? 'VIR' : $this->guessOperationCode($amount);
 		$label = $this->buildLabel($line);
 		$numChq = (string) (!empty($line['payment_reference']) ? $line['payment_reference'] : $line['bank_reference']);
 		$statementRef = !empty($line['statement_ref']) ? (string) $line['statement_ref'] : '';
@@ -906,6 +906,18 @@ class KreaBankNativeBankAdapter
 	 * @param int $lineId
 	 * @return array<int,array<string,mixed>>
 	 */
+	public function getNativeLineLinks($lineId)
+	{
+		$sql = 'SELECT u.* FROM ' . $this->db->prefix() . 'bank_url u JOIN ' . $this->db->prefix()
+			. 'bank b ON b.rowid=u.fk_bank JOIN ' . $this->db->prefix() . 'bank_account ba ON ba.rowid=b.fk_account'
+			. ' WHERE ba.entity=' . $this->entity . ' AND b.rowid=' . (int) $lineId;
+		$result = $this->db->query($sql);
+		if (!$result) { throw new Exception('Cannot read native bank transfer links'); }
+		$rows = array();
+		while ($row = $this->db->fetch_object($result)) { $rows[] = (array) $row; }
+		return $rows;
+	}
+
 	public function getLineLinks($lineId)
 	{
 		$lineId = (int) $lineId;

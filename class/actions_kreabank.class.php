@@ -121,7 +121,24 @@ class ActionsKreaBank extends CommonHookActions
 	/** Route the banking entry point to the company-owned account overview. */
 	public function doActions($parameters, &$object, &$action, $hookmanager)
 	{
-		global $user;
+		global $user, $conf, $langs;
+		// Native transfer hooks must enforce the relationship even for users without workspace read rights.
+		if (strpos($_SERVER['PHP_SELF'] ?? '', '/compta/bank/') !== false
+			&& basename($_SERVER['PHP_SELF']) === 'transfer.php' && $action === 'add') {
+			require_once __DIR__ . '/KreaBankAccountPairs.class.php';
+			$policy = new KreaBankAccountPairs($this->db, $conf->entity);
+			try {
+				for ($i = 1; $i < 20; $i++) {
+					$from = GETPOSTINT($i . '_account_from'); $to = GETPOSTINT($i . '_account_to');
+					if ($from > 0 && $to > 0) { $policy->assertTransfer($from, $to); }
+				}
+			} catch (Throwable $e) {
+				$langs->load('kreabank@kreabank');
+				$this->error = $langs->trans('KreaBankPairTransferDenied');
+				$action = ''; // Native transfer.php does not gate its write block on the hook result.
+				return -1;
+			}
+		}
 		if (!$this->bankingContextAllowed()) {
 			return 0;
 		}

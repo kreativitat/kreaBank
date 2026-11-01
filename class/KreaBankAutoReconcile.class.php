@@ -22,7 +22,7 @@ class KreaBankAutoReconcile
 
 	public function setting($suffix, $default = '')
 	{
-		if (!in_array($suffix, array('MODE', 'ACCOUNTS', 'CURSOR'), true)) {
+		if (!in_array($suffix, array('MODE', 'ACCOUNTS', 'CURSOR', 'PAIRS_ENABLED'), true)) {
 			throw new Exception('Invalid automatic reconciliation setting');
 		}
 		$rows = $this->rows('SELECT value FROM ' . $this->db->prefix() . 'const WHERE entity=' . $this->entity
@@ -37,9 +37,10 @@ class KreaBankAutoReconcile
 	}
 
 	/** Saving configuration also installs/updates exactly one native job for this company. */
-	public function configure($actor, $mode, $accountIds)
+	public function configure($actor, $mode, $accountIds, $pairedTransfers = false)
 	{
 		$this->assertActor($actor, true);
+		if ($pairedTransfers && !$actor->hasRight('banque', 'transfer')) { throw new Exception('Bank transfer permission is required'); }
 		if (!in_array($mode, array('off', 'preview', 'enabled'), true)) {
 			throw new Exception('Invalid automatic reconciliation mode');
 		}
@@ -59,6 +60,7 @@ class KreaBankAutoReconcile
 				$this->saveSetting('MODE', $mode);
 				$this->saveSetting('ACCOUNTS', implode(',', $ids));
 				$this->saveSetting('CURSOR', '0');
+				$this->saveSetting('PAIRS_ENABLED', $pairedTransfers ? '1' : '0');
 				$jobs = $this->rows('SELECT rowid FROM ' . $this->db->prefix() . 'cronjob WHERE entity=' . $this->entity
 					. " AND objectname='KreaBankAutoReconcile' AND methodename='run'");
 				if (count($jobs) > 1) {
@@ -69,7 +71,7 @@ class KreaBankAutoReconcile
 					throw new Exception('Cannot load automatic reconciliation job');
 				}
 				$job->entity = $this->entity;
-				$job->label = 'KreaBank automatic existing bank movement matching';
+				$job->label = 'KreaBank automatic bank reconciliation';
 				$job->jobtype = 'method';
 				$job->classesname = '/kreabank/class/KreaBankAutoReconcile.class.php';
 				$job->objectname = 'KreaBankAutoReconcile';
@@ -141,12 +143,29 @@ class KreaBankAutoReconcile
 			$rows = $this->rows($sql);
 			$result = array('status' => $preview || $mode !== 'enabled' ? 'preview' : 'completed',
 				'scanned' => 0, 'eligible' => 0, 'reconciled' => 0, 'failed' => 0, 'matches' => array(), 'errors' => array());
+			$pairedTransfers = $this->setting('PAIRS_ENABLED', '0') === '1';
+			$previewedPairs = array();
 			$started = microtime(true);
 			foreach ($rows as $row) {
 				$cursor = (int) $row->rowid;
 				$result['scanned']++;
 				try {
-					$match = $service->getAutomaticNativeSuggestion($cursor, $ids);
+					$pair = $pairedTransfers ? $service->getAutomaticTransferSuggestion($cursor, $ids) : null;
+					if ($pair) {
+						$other = (int) $pair['lines'][1]->rowid;
+						if (!isset($previewedPairs[$cursor])) {
+							$result['eligible']++;
+							$result['matches'][] = array('statement_line_id' => $cursor, 'paired_statement_line_id' => $other,
+								'bank_line_id' => (int) $pair['bank_ids'][0], 'score' => null);
+							$previewedPairs[$other] = true;
+							if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticTransferPair($cursor, $ids)) {
+								$result['reconciled'] += 2;
+							}
+						}
+						$match = null;
+					} else {
+						$match = $service->getAutomaticNativeSuggestion($cursor, $ids);
+					}
 					if ($match) {
 						$result['eligible']++;
 						$result['matches'][] = array('statement_line_id' => $cursor,

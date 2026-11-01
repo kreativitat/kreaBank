@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.15.0 — 2026-11-01
+
+- Configure company-owned restricted/main account pairs, including several
+  restricted accounts sharing one main account. Enforce the relationship in
+  KreaBank reconciliation and native internal transfers.
+- Add opt-in automatic two-sided transfer reconciliation to the existing runner.
+  Reuse native transfers or materialize both proven statement legs atomically;
+  retain strong identity, exact amount, ambiguity, permission and retry guards.
+- Pair configuration alone enables no scheduled jobs. No schema migration;
+  see [account pairs](ACCOUNT_PAIRS.md) for activation and rollback.
+
 ## 1.14.27 — 2026-11-01
 
 - Rename only the account-list submenu; retain the native Bank/Cash heading that

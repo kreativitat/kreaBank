@@ -418,7 +418,7 @@ KreaBankAutoPreviewMode=Apenas pré-visualização agendada
 KreaBankAutoEnabled=Reconciliação automática ativada
 KreaBankAutoAccounts=Contas selecionadas para reconciliação automática
 KreaBankAutoNoAccounts=Esta empresa não tem contas bancárias abertas configuradas para reconciliação.
-KreaBankAutoSafetyHelp=Exige a mesma conta, moeda e montante com sinal, uma data próxima e uma identificação forte com vantagem clara sobre os restantes candidatos. Duplicados, linhas ignoradas e conflitos na origem ficam para revisão. Não são criados pagamentos, faturas nem movimentos bancários.
+KreaBankAutoSafetyHelp=Exige a mesma conta, moeda e montante com sinal, uma data próxima e uma identificação forte com vantagem clara sobre os restantes candidatos. Duplicados, linhas ignoradas e conflitos na origem ficam para revisão. A correspondência com movimentos existentes não cria pagamentos, faturas nem movimentos bancários. A opção de transferências entre pares pode criar os dois movimentos nativos a partir de duas transações importadas verificadas.
 KreaBankAutoPreviewHelp=Guarde primeiro a seleção de contas. A pré-visualização analisa as primeiras 50 linhas pendentes com as definições guardadas e não altera dados financeiros, mesmo com a reconciliação automática ativada.
 KreaBankAutoPreview=Pré-visualizar correspondências
 KreaBankAutoSelectAccounts=Selecione contas e guarde as definições antes de executar uma pré-visualização.
@@ -512,3 +512,17 @@ KreaBankAllMovements=Todos os movimentos
 KreaBankReconciledMovements=Reconciliados
 KreaBankScoreGuide=Como avaliar as sugestões
 KreaBankAssistedGuide=Como reconciliar
+
+# Restricted bank account pairs
+KreaBankAccountPairs=Pares de contas
+KreaBankPairRestricted=Conta restrita (Caucionada)
+KreaBankPairMain=Conta principal
+KreaBankPairPurpose=Associe cada conta Caucionada à sua conta principal. As transferências e a reconciliação da conta restrita no KreaBank ficam limitadas a esse par; a conta principal mantém a sua atividade normal.
+KreaBankPairAutomaticHelp=Selecione ambas as contas e ative as transferências entre pares em Reconciliação automática. As correspondências claras reconciliam os dois lados em conjunto; as transferências incompletas ou ambíguas ficam pendentes. Guardar pares não ativa o processamento agendado.
+KreaBankPairEnable=Reconciliar automaticamente transferências entre pares de contas configurados
+KreaBankPairTransferDenied=Transferência bloqueada: verifique o par configurado, a empresa titular, o estado aberto e a moeda das contas. Uma conta restrita só pode efetuar transferências com a sua conta principal.
+KreaBankPairConfigError=Não foi possível guardar ou carregar os pares de contas. Selecione duas contas bancárias abertas, com reconciliação ativa, da mesma empresa e com a mesma moeda. Não são permitidas associações à própria conta, cadeias ou ciclos.
+KreaBankPairUnavailable=Conta indisponível nesta empresa — reveja este par
+KreaBankPairPreview=Transferência emparelhada com o movimento importado %s
+KreaBankPairCompanyCurrency=As novas transferências automáticas exigem a moeda da empresa. Transferências já registadas podem ser reutilizadas na moeda de ambas as contas.
+KreaBankPairEmpty=Ainda não existem pares de contas configurados.

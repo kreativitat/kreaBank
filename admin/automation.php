@@ -25,7 +25,7 @@ if ($action !== '') {
 	}
 	try {
 		if ($action === 'save') {
-			$automation->configure($user, GETPOST('mode', 'aZ09'), GETPOST('accounts', 'array'));
+			$automation->configure($user, GETPOST('mode', 'aZ09'), GETPOST('accounts', 'array'), GETPOSTINT('paired_transfers') === 1);
 			setEventMessages($langs->trans('SetupSaved'), null, 'mesgs');
 			header('Location: ' . dol_buildpath('/custom/kreabank/admin/automation.php', 1));
 			exit;
@@ -38,6 +38,7 @@ if ($action !== '') {
 	}
 }
 llxHeader('', $langs->trans('KreaBankAutomation'));
+print kreabankListAssets();
 print load_fiche_titre($langs->trans('KreaBankAutomation'), '', 'bank');
 print dol_get_fiche_head(kreabankAdminPrepareHead(), 'automation', $langs->trans('KreaBankSetup'), -1, 'bank');
 print '<p>' . $langs->trans('KreaBankAutoPurpose') . '</p>';
@@ -64,6 +65,8 @@ try {
 			. dol_escape_htmltag($account->ref . ' — ' . $account->label . ' (' . $account->currency_code . ')') . '</label></div>';
 	}
 	print '</fieldset><p>' . $langs->trans('KreaBankAutoSafetyHelp') . '</p>';
+	print '<p><input type="checkbox" id="paired_transfers" name="paired_transfers" value="1"' . ($automation->setting('PAIRS_ENABLED', '0') === '1' ? ' checked' : '') . '><label for="paired_transfers">' . $langs->trans('KreaBankPairEnable') . '</label></p>';
+	print '<p>' . $langs->trans('KreaBankPairAutomaticHelp') . ' ' . $langs->trans('KreaBankPairCompanyCurrency') . ' <a href="' . dol_buildpath('/custom/kreabank/admin/pairs.php', 1) . '">' . $langs->trans('KreaBankAccountPairs') . '</a></p>';
 	print '<div class="center"><button type="submit" class="button button-save">' . $langs->trans('Save') . '</button></div></form>';
 	print '<form method="post" class="center"><input type="hidden" name="token" value="' . newToken() . '"><input type="hidden" name="action" value="preview">';
 	print '<p>' . $langs->trans('KreaBankAutoPreviewHelp') . '</p><button type="submit" class="button">' . $langs->trans('KreaBankAutoPreview') . '</button></form>';
@@ -73,12 +76,16 @@ try {
 			print '<p>' . $langs->trans('KreaBankAutoSelectAccounts') . '</p>';
 		} else {
 			print '<p>' . $langs->trans('KreaBankAutoSummary', (int) $preview['scanned'], (int) $preview['eligible'], (int) $preview['failed']) . '</p>';
-			print '<div class="div-table-responsive"><table class="liste centpercent"><tr class="liste_titre"><th scope="col">' . $langs->trans('KreaBankAutoStatementLine')
+			print '<div class="div-table-responsive"><table data-kb-sort class="liste centpercent"><tr class="liste_titre"><th scope="col">' . $langs->trans('KreaBankAutoStatementLine')
 				. '</th><th scope="col">' . $langs->trans('KreaBankAutoBankMovement') . '</th><th scope="col">' . $langs->trans('KreaBankAutoScore') . '</th></tr>';
 			foreach ($preview['matches'] as $match) {
-				print '<tr class="oddeven"><td>' . (int) $match['statement_line_id'] . '</td><td><a href="'
-					. dol_buildpath('/compta/bank/line.php?rowid=' . (int) $match['bank_line_id'], 1) . '">'
-					. (int) $match['bank_line_id'] . '</a></td><td>' . (int) $match['score'] . '</td></tr>';
+				print '<tr class="oddeven"><td>' . (int) $match['statement_line_id'] . '</td><td>';
+				if (!empty($match['paired_statement_line_id'])) {
+					print $langs->trans('KreaBankPairPreview', (int) $match['paired_statement_line_id']);
+				} else {
+					print '<a href="' . dol_buildpath('/compta/bank/line.php?rowid=' . (int) $match['bank_line_id'], 1) . '">' . (int) $match['bank_line_id'] . '</a>';
+				}
+				print '</td><td>' . ($match['score'] === null ? '—' : (int) $match['score']) . '</td></tr>';
 			}
 			print '</table></div>';
 			if (!$preview['matches']) {

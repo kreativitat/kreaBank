@@ -109,3 +109,12 @@
 - Always preserve the native Dolibarr left menu and its responsive behavior. Hide only the duplicate native account tab bar within the banking workspace. Avoid explanatory banners and duplicate account navigation.
 
 - Menu permission expressions run through native `verifCond()` and its function whitelist. Use supported property/permission checks; `empty()` is not allowed on the deployed Dolibarr 24 evaluator. `php test/test_navigation_permissions.php` evaluates the descriptor conditions with installed native source and no database.
+
+## Restricted account pairs
+
+- `KreaBankAccountPairs` stores explicit current-company restricted-to-main account mappings in `KREABANK_ACCOUNT_PAIRS`; configure at `admin/pairs.php`. Allow multiple restricted accounts per main, never chains/cycles or inferred name/suffix relationships.
+- Restricted accounts accept only their own native transfer leg with a reciprocal, same-amount main-account counterpart. Apply this to suggestions, execution, quick flows and native transfer POSTs, including users without workspace read rights. Main accounts retain normal activity.
+- The existing runner's optional `PAIRS_ENABLED` flag defaults off and requires both selected endpoints and native transfer permission. Saving pairs alone must never enable jobs. MacMiniServerPro jobs remain disabled.
+- Paired execution remains in `KreaBankService`/native adapter/shared matcher. Require two mutually safe imported legs, exact opposite persisted amounts, matching currency, valid nearby dates, strong reference or mutual checksum-valid IBAN evidence, score floor 150 and gap 35. Fail closed on competing/truncated/conflicting evidence.
+- This opt-in paired path may create both native transfer legs only when neither side has a possible native movement and currency is the company currency. Reuse valid reciprocal native transfers; never duplicate one-sided/conflicting ledger evidence. The ordinary automatic-native path still creates no movements.
+- Both legs, explicit staging/native mappings and `auto_pair` audits commit atomically under account/staging/native range locks. Use explicit `VIR`; do not train patterns. Test only with `php test/test_account_pairs_database.php` on the guarded disposable port 33317 database. See `doc/ACCOUNT_PAIRS.md`.

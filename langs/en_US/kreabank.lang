@@ -410,7 +410,7 @@ KreaBankAuditSkip=skip
 KreaBankAuditDeleteStatement=delete_statement
 
 KreaBankAutomation=Automatic reconciliation
-KreaBankAutoPurpose=Automatically reconcile imported transactions against existing Dolibarr bank movements in this company. Invoice payment creation remains subject to review.
+KreaBankAutoPurpose=Automatically reconcile imported transactions against existing Dolibarr bank movements in this company. Optionally reconcile configured account-pair transfers together. Invoice payment creation remains subject to review.
 KreaBankAutoScheduleHelp=The existing Dolibarr scheduler checks every 15 minutes. Each run scans up to 50 pending lines and revisits unresolved lines on subsequent passes. Check job results under Scheduled jobs.
 KreaBankAutoMode=Mode
 KreaBankAutoOff=Disabled
@@ -418,7 +418,7 @@ KreaBankAutoPreviewMode=Scheduled preview only
 KreaBankAutoEnabled=Automatic matching enabled
 KreaBankAutoAccounts=Accounts selected for automatic matching
 KreaBankAutoNoAccounts=No open bank accounts are configured for reconciliation in this company.
-KreaBankAutoSafetyHelp=Requires the same account, currency and signed amount, a nearby booking date and a strong identity match with a clear lead over other candidates. Duplicates, skipped lines and source conflicts remain for review. No invoices, payments or bank movements are created.
+KreaBankAutoSafetyHelp=Requires the same account, currency and signed amount, a nearby booking date and a strong identity match with a clear lead over other candidates. Duplicates, skipped lines and source conflicts remain for review. Existing-movement matching creates no invoices, payments or bank movements. The separate paired-transfer option may create both native transfer legs from two proven imported transactions.
 KreaBankAutoPreviewHelp=Save the account selection first. Preview scans the first 50 pending lines using the saved settings and makes no financial changes, even when automatic matching is enabled.
 KreaBankAutoPreview=Preview matches
 KreaBankAutoSelectAccounts=Select accounts and save the settings before running a preview.
@@ -512,3 +512,17 @@ KreaBankAllMovements=All movements
 KreaBankReconciledMovements=Reconciled
 KreaBankScoreGuide=How to assess suggestions
 KreaBankAssistedGuide=How to reconcile
+
+# Restricted bank account pairs
+KreaBankAccountPairs=Account pairs
+KreaBankPairRestricted=Restricted account (Caucionada)
+KreaBankPairMain=Main account
+KreaBankPairPurpose=Link each Caucionada account to its main account. Transfers and KreaBank matching for the restricted account are limited to that pair; the main account keeps its normal activity.
+KreaBankPairAutomaticHelp=Select both accounts and enable paired transfers in Automatic reconciliation. Clear matches reconcile both sides together; incomplete or ambiguous transfers remain pending. Saving account pairs does not enable scheduled processing.
+KreaBankPairEnable=Automatically reconcile transfers between configured account pairs
+KreaBankPairTransferDenied=Transfer blocked: check the configured account pair, account ownership, open status and currency. A restricted account can transfer only with its main account.
+KreaBankPairConfigError=Account pairs could not be saved or loaded. Select two open reconciliation bank accounts in this company with the same currency. Self-links, chains and cycles are not allowed.
+KreaBankPairUnavailable=Account unavailable in this company — review this pair
+KreaBankPairPreview=Paired transfer with imported line %s
+KreaBankPairCompanyCurrency=New automatic transfers require the company currency. Existing transfers may be reused in the common account currency.
+KreaBankPairEmpty=No account pairs configured.

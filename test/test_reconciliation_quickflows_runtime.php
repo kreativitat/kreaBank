@@ -99,6 +99,7 @@ if (!function_exists('dol_syslog')) {
 if (!isset($GLOBALS['conf']) || !is_object($GLOBALS['conf'])) {
 	$GLOBALS['conf'] = new stdClass();
 }
+if (!isset($GLOBALS['conf']->entity)) { $GLOBALS['conf']->entity = 1; }
 if (!isset($GLOBALS['conf']->global) || !is_object($GLOBALS['conf']->global)) {
 	$GLOBALS['conf']->global = new stdClass();
 }
@@ -301,6 +302,8 @@ class KreaBankQuickFlowFakeDb
 
 		return true;
 	}
+
+	public function fetch_object($result) { return false; } // No configured account pairs in this synthetic fixture.
 
 	public function prefix()
 	{
@@ -562,6 +565,7 @@ function kreabankRunQuickFlowRuntimeAssertions($rootDir)
 	$supplierService->langs = $langsStub;
 	$supplierService->stubLine = array(
 		'rowid' => 88,
+		'bank_account_id' => 11,
 		'direction' => -1,
 		'amount' => -210.00,
 		'allocated_amount' => 0.0,

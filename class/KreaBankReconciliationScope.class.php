@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+require_once __DIR__ . '/KreaBankAccountPairs.class.php';
+
 /** Deterministic owner-company and account boundaries for the existing reconciliation path. */
 class KreaBankReconciliationScope
 {
@@ -64,6 +66,7 @@ class KreaBankReconciliationScope
 			$sql = 'SELECT rowid FROM ' . $p . $tables[$type] . " WHERE entity=$e AND rowid=$id";
 		}
 		$this->requireRow($sql);
+		(new KreaBankAccountPairs($this->db, $this->entity))->assertDocument($type, $id, $accountId);
 	}
 
 	private function requireRow($sql)

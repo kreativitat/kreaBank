@@ -957,6 +957,14 @@ class KreaBankService
 		if ($direction !== 0) {
 			$appendDocuments($this->getOpenNativeBankDocuments(0, $limit, $anchorDate, $intervalDays, $excludeNativeLineId, (int) $bankAccountId));
 		}
+		if ((new KreaBankAccountPairs($this->db, $this->entity))->mainAccount($bankAccountId)) {
+			return array_values(array_filter($documents, function ($document) use ($bankAccountId) {
+				try {
+					(new KreaBankAccountPairs($this->db, $this->entity))->assertDocument('native_bank', (int) $document['rowid'], $bankAccountId);
+					return true;
+				} catch (DomainException $e) { return false; }
+			}));
+		}
 		$appendDocuments($this->getOpenPaymentDocuments(0, $limit, $anchorDate, $intervalDays));
 		$appendDocuments($this->getOpenInvoiceDocuments($direction, $limit, $anchorDate, $intervalDays));
 		$appendDocuments($this->getLinkedPaymentDocuments(0, $limit, $anchorDate, $intervalDays, null, (int) $bankAccountId, $includeReconciledLinked));
@@ -1198,6 +1206,7 @@ class KreaBankService
 	 */
 	public function getLinkedPaymentDocuments($direction = 0, $limit = 120, $anchorDate = null, $intervalDays = null, $targetAmount = null, $bankAccountId = 0, $includeReconciledLinked = true)
 	{
+		if ((new KreaBankAccountPairs($this->db, $this->entity))->mainAccount((int) $bankAccountId)) { return array(); }
 		$documents = array();
 		$limit = max(10, (int) $limit);
 		$bankAccountId = (int) $bankAccountId;
@@ -1955,6 +1964,7 @@ class KreaBankService
 		}
 		$companyLinks = array();
 		try {
+			$this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'bank_account WHERE entity=' . $this->entity . ' AND rowid=' . (int) $line['bank_account_id'] . ' FOR UPDATE');
 			// Serialize scheduled and manual claims on the same staged record.
 			if (!empty($line['fk_statement'])) {
 				$this->lockReconciliationRow('kreabank_statement_line', (int) $line['rowid']);
@@ -2147,23 +2157,11 @@ class KreaBankService
 				);
 			}
 
-			$statementLabel = !empty($line['statement_ref']) ? (string) $line['statement_ref'] : 'KREABANK-' . dol_print_date(dol_now(), '%Y%m%d');
-			$resConc = $this->native->conciliateLine($nativeLineId, $statementLabel, 0);
-			if ($resConc <= 0) {
-				throw new Exception('Failed to conciliate native bank line');
-			}
-
-			if (!$this->native->markStatementLineReconciled((int) $line['rowid'], $outstanding, $nativeLineId, $isReviewedBulk ? $reviewSource : null)) {
-				throw new Exception('Failed to persist statement reconciliation');
-			}
-			if ($isAutomaticNative || $isReviewedBulk) {
-				if (!$this->logAudit('reconcile', (int) $line['rowid'], (int) $line['rowid'], array(
+			$this->finalizeNativeReconciliation($line, $nativeLineId, $outstanding, $isReviewedBulk ? $reviewSource : null,
+				($isAutomaticNative || $isReviewedBulk) ? array(
 					'strategy' => $strategy, 'is_auto' => (int) $isAuto, 'confidence_score' => $confidenceScore,
 					'links' => $links, 'native' => 1, 'native_bank_line_id' => $nativeLineId,
-				))) {
-					throw new Exception('Failed to persist reconciliation audit');
-				}
-			}
+				) : null);
 			if (!$this->db->commit()) {
 				throw new Exception('Failed to commit bank reconciliation; inspect its status before retrying');
 			}
@@ -2341,6 +2339,13 @@ class KreaBankService
 		// Never conclude uniqueness from a truncated candidate set.
 		if (count($documents) >= 501) {
 			return null;
+		}
+		$policy = new KreaBankAccountPairs($this->db, $this->entity);
+		if ($policy->mainAccount((int) $line['bank_account_id'])) {
+			$documents = array_values(array_filter($documents, function ($document) use ($policy, $line) {
+				try { $policy->assertDocument('native_bank', (int) $document['rowid'], (int) $line['bank_account_id']); return true; }
+				catch (DomainException $e) { return false; }
+			}));
 		}
 		$documents = array_values(array_filter($documents, static function ($document) use ($line, $raw) {
 			return (string) $document['currency'] === (string) $line['currency']
@@ -2541,6 +2546,7 @@ class KreaBankService
 		if (!$line) {
 			throw new Exception('Unknown statement line');
 		}
+		(new KreaBankAccountPairs($this->db, $this->entity))->assertDocument('quick_entry', 0, (int) $line['bank_account_id']);
 		if ((int) (!empty($line['status']) ? $line['status'] : 0) === 2) {
 			throw new Exception('Bank line already reconciled');
 		}
@@ -2717,6 +2723,7 @@ class KreaBankService
 		if (!$line) {
 			throw new Exception('Unknown statement line');
 		}
+		(new KreaBankAccountPairs($this->db, $this->entity))->assertDocument('quick_entry', 0, (int) $line['bank_account_id']);
 
 		$lineDirection = (int) (isset($line['direction']) ? $line['direction'] : 0);
 		if ($lineDirection === 0) {
@@ -3093,6 +3100,7 @@ class KreaBankService
 		if (!$line) {
 			throw new Exception('Unknown statement line');
 		}
+		(new KreaBankAccountPairs($this->db, $this->entity))->assertDocument('quick_entry', 0, (int) $line['bank_account_id']);
 
 		$lineDirection = (int) (isset($line['direction']) ? $line['direction'] : 0);
 		if ($lineDirection === 0) {
@@ -3262,6 +3270,196 @@ class KreaBankService
 		);
 
 		return true;
+	}
+
+	/** Shared native + staging + audit persistence; callers own the transaction and locks. */
+	protected function finalizeNativeReconciliation($line, $nativeLineId, $amount, $source = null, $audit = null)
+	{
+		$label = !empty($line['statement_ref']) ? (string) $line['statement_ref'] : 'KREABANK-' . dol_print_date(dol_now(), '%Y%m%d');
+		if ($this->native->conciliateLine($nativeLineId, $label, 0) <= 0
+			|| !$this->native->markStatementLineReconciled((int) $line['rowid'], $amount, $nativeLineId, $source)) {
+			throw new Exception('Failed to persist native and statement reconciliation');
+		}
+		if ($audit !== null && !$this->logAudit('reconcile', (int) $line['rowid'], (int) $line['rowid'], $audit)) {
+			throw new Exception('Failed to persist reconciliation audit');
+		}
+	}
+
+	/** Both imported legs must choose each other through the shared safe matcher. */
+	public function getAutomaticTransferSuggestion($lineId, $accountIds, $lock = false)
+	{
+		$this->assertTransferActor();
+		$policy = new KreaBankAccountPairs($this->db, $this->entity);
+		$source = $this->transferStatementRows(' AND l.rowid=' . (int) $lineId, $lock);
+		if (count($source) !== 1) { return null; }
+		$left = $source[0];
+		$selected = array_map('intval', $accountIds);
+		if (!in_array((int) $left->bank_account_id, $selected, true)) { return null; }
+		$right = $this->selectTransferCounterpart($left, $policy, $lock);
+		if (!$right || !in_array((int) $right->bank_account_id, $selected, true)) { return null; }
+		$reverse = $this->selectTransferCounterpart($right, $policy, $lock);
+		if (!$reverse || (int) $reverse->rowid !== (int) $left->rowid) { return null; }
+		$policy->assertAccounts((int) $left->bank_account_id, (int) $right->bank_account_id, true);
+		$native = array($this->transferNativeCandidates($left, $lock), $this->transferNativeCandidates($right, $lock));
+		// A one-sided or ambiguous ledger match must never cause a second transfer to be created.
+		if (!$native[0] && !$native[1]) {
+			global $conf;
+			if ((string) $left->currency !== (string) $conf->currency) { return null; }
+			$bankIds = array(0, 0);
+		} elseif (count($native[0]) === 1 && count($native[1]) === 1) {
+			if ((int) $native[0][0]->rappro !== 0 || (int) $native[1][0]->rappro !== 0) { return null; }
+			$bankIds = array((int) $native[0][0]->rowid, (int) $native[1][0]->rowid);
+			foreach ($bankIds as $index => $id) {
+				$links = $this->native->getNativeLineLinks($id);
+				$links = array_values(array_filter($links, static function ($link) { return $link['type'] !== 'company'; }));
+				if (count($links) !== 1 || $links[0]['type'] !== 'banktransfert' || (int) $links[0]['url_id'] !== $bankIds[1 - $index]) { return null; }
+			}
+		} else { return null; }
+		return array('lines' => array($left, $right), 'bank_ids' => $bankIds);
+	}
+
+	private function assertTransferActor()
+	{
+		global $conf;
+		if ($this->entity <= 0 || $this->entity !== (int) $conf->entity || !isModEnabled('kreabank') || !isModEnabled('banque')
+			|| empty($this->user->id) || (int) $this->user->statut !== 1 || !empty($this->user->socid)
+			|| (!empty($this->user->entity) && (int) $this->user->entity !== $this->entity)
+			|| !$this->user->hasRight('banque', 'lire') || !$this->user->hasRight('banque', 'modifier')
+			|| !$this->user->hasRight('banque', 'transfer') || !$this->user->hasRight('kreabank', 'reconciliation', 'write')) {
+			throw new Exception('Bank transfer and reconciliation permissions are required');
+		}
+		if (isModEnabled('multicompany') && !$this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'entity WHERE rowid=' . $this->entity . ' AND active=1')) {
+			throw new Exception('Paired transfers require an active company');
+		}
+	}
+
+	private function transferRows($sql)
+	{
+		$result = $this->db->query($sql);
+		if (!$result) { throw new Exception('Unable to verify paired transfer evidence'); }
+		$rows = array();
+		while ($row = $this->db->fetch_object($result)) { $rows[] = $row; }
+		return $rows;
+	}
+
+	/** Raw persisted evidence only; exclude repaired amounts, prior allocations and provider conflicts. */
+	private function transferStatementRows($where, $lock = false)
+	{
+		$p = $this->db->prefix();
+		$sql = "SELECT l.*,s.bank_account_id,ba.iban_prefix AS account_iban FROM {$p}kreabank_statement_line l"
+			. " JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
+			. " JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=l.entity"
+			. ' WHERE l.entity=' . $this->entity . ' AND l.status=0 AND l.is_duplicate=0 AND l.allocated_amount=0 AND l.amount<>0'
+			. ' AND l.fk_native_bank_line IS NULL AND ba.clos=0 AND ba.rappro=1 AND ba.courant<>2 AND l.currency=ba.currency_code'
+			. " AND (l.direction=0 OR (l.amount>0 AND l.direction=1) OR (l.amount<0 AND l.direction=-1))";
+		$sql .= $this->tableExists($p . 'kreabank_feed_transaction')
+			? " AND (s.source_type<>'fintable' OR EXISTS (SELECT ft.rowid FROM {$p}kreabank_feed_transaction ft WHERE ft.entity=l.entity AND ft.fk_statement_line=l.rowid AND ft.status='imported' AND ft.conflict_payload IS NULL))"
+			: " AND s.source_type<>'fintable'";
+		$rows = $this->transferRows($sql . $where . ' ORDER BY l.rowid' . $this->db->plimit(501) . ($lock ? ' FOR UPDATE' : ''));
+		if (count($rows) >= 501) { return array(); }
+		return array_values(array_filter($rows, function ($row) {
+			$date = (string) $row->operation_date;
+			if (!preg_match('/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D', $date, $parts) || !checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])) { return false; }
+			$mapped = $this->native->getStatementLineById((int) $row->rowid);
+			return $mapped && self::automaticDecimal($row->amount) === self::automaticDecimal($mapped['amount']);
+		}));
+	}
+
+	private function selectTransferCounterpart($line, $policy, $lock)
+	{
+		$accounts = $policy->counterparts((int) $line->bank_account_id);
+		if (!$accounts) { return null; }
+		$tolerance = max(0, min(31, (int) getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE', 3)));
+		$range = $this->resolveOpenDocumentsDateRange($line->operation_date, $tolerance);
+		$amount = self::automaticDecimal($line->amount);
+		$opposite = $amount[0] === '-' ? substr($amount, 1) : '-' . $amount;
+		$rows = $this->transferStatementRows(' AND s.bank_account_id IN (' . implode(',', $accounts) . ') AND l.amount=' . $opposite
+			. ' AND l.currency=' . $this->sqlText($line->currency) . ' AND l.operation_date>=' . $this->sqlDate($range['start'])
+			. ' AND l.operation_date<=' . $this->sqlDate($range['end']), $lock);
+		require_once __DIR__ . '/KreaBankFintableMapper.class.php';
+		$documents = array();
+		foreach ($rows as $row) {
+			// If a bank supplied an IBAN, contradictory/invalid identity must not be overridden by a reference.
+			$leftIban = KreaBankFintableMapper::iban($line->counterparty_iban);
+			$rightIban = KreaBankFintableMapper::iban($row->counterparty_iban);
+			if ((trim((string) $line->counterparty_iban) !== '' && (!$leftIban || $leftIban !== KreaBankFintableMapper::iban($row->account_iban)))
+				|| (trim((string) $row->counterparty_iban) !== '' && (!$rightIban || $rightIban !== KreaBankFintableMapper::iban($line->account_iban)))) { continue; }
+			$documents[] = array('rowid' => (int) $row->rowid, 'doc_type' => 'paired_transfer',
+				'ref' => trim((string) $row->payment_reference) !== '' ? $row->payment_reference : $row->bank_reference,
+				'amount_open' => $row->amount, 'doc_date' => $row->operation_date, 'thirdparty_name' => '',
+				'thirdparty_iban' => KreaBankFintableMapper::iban($row->account_iban), 'paired_iban_confirmed' => $leftIban && $rightIban);
+		}
+		$source = (array) $line;
+		if (trim((string) $source['payment_reference']) === '') { $source['payment_reference'] = $source['bank_reference']; }
+		$suggestions = $this->matcher->getSuggestions($source, $documents, array(), $tolerance, 0);
+		$safe = $this->getSafeSuggestion($suggestions, max(150, (int) getDolGlobalInt('KREABANK_AUTOMATCH_SAFE_SCORE', 150)));
+		if (!$safe || !in_array('date', $safe['details'], true)) { return null; }
+		$reference = (string) $safe['doc_ref'];
+		if (!in_array('iban', $safe['details'], true) && !(preg_match('/[0-9]/', $reference)
+			&& strlen(preg_replace('/[^a-z0-9]/i', '', $reference)) >= 8
+			&& preg_match('/(?<![a-z0-9])' . preg_quote($reference, '/') . '(?![a-z0-9])/i', $source['payment_reference'] . ' ' . $source['description']))) { return null; }
+		foreach ($rows as $row) { if ((int) $row->rowid === (int) $safe['doc_id']) { return $row; } }
+		return null;
+	}
+
+	private function transferNativeCandidates($line, $lock = false)
+	{
+		$p = $this->db->prefix();
+		$tolerance = max(0, min(31, (int) getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE', 3)));
+		$range = $this->resolveOpenDocumentsDateRange($line->operation_date, $tolerance);
+		// Include already reconciled/imported movements: those are conflicts, not permission to duplicate them.
+		return $this->transferRows("SELECT b.rowid,b.rappro FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account"
+			. ' WHERE ba.entity=' . $this->entity . ' AND b.fk_account=' . (int) $line->bank_account_id
+			. ' AND b.amount=' . self::automaticDecimal($line->amount) . ' AND b.dateo>=' . $this->sqlDate($range['start'])
+			. ' AND b.dateo<=' . $this->sqlDate($range['end']) . ' ORDER BY b.rowid' . $this->db->plimit(2) . ($lock ? ' FOR UPDATE' : ''));
+	}
+
+	/** Atomic two-leg execution; native financial records are created only from two proven statement legs. */
+	public function reconcileAutomaticTransferPair($lineId, $accountIds)
+	{
+		$this->assertTransferActor();
+		if (!$this->db->begin()) { throw new Exception('Cannot start paired transfer reconciliation'); }
+		try {
+			// Consistent company/account lock order serializes pair configuration, execution and repeated runners.
+			$this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'bank_account WHERE entity=' . $this->entity . ' ORDER BY rowid FOR UPDATE');
+			$match = $this->getAutomaticTransferSuggestion($lineId, $accountIds, true);
+			if (!$match) { $this->db->rollback(); return false; }
+			$stageIds = array_map(static function ($line) { return (int) $line->rowid; }, $match['lines']);
+			$sorted = $stageIds; sort($sorted, SORT_NUMERIC);
+			foreach ($sorted as $id) { $this->lockReconciliationRow('kreabank_statement_line', $id); }
+			$bankIds = $match['bank_ids']; $sorted = array_filter($bankIds); sort($sorted, SORT_NUMERIC);
+			foreach ($sorted as $id) { $this->lockReconciliationRow('bank', $id); }
+			$fresh = $this->getAutomaticTransferSuggestion($lineId, $accountIds, true);
+			if (!$fresh || $fresh != $match) { throw new Exception('Paired transfer changed; retry after reviewing its evidence'); }
+			foreach ($bankIds as $index => $id) {
+				if ($id > 0) {
+					if ((int) $this->transferNativeCandidates($match['lines'][$index])[0]->rappro !== 0) { throw new Exception('Paired transfer is already reconciled'); }
+				} else {
+					$bankIds[$index] = $this->native->ensureNativeLineForStatementLine($stageIds[$index], true);
+				}
+			}
+			if (!$match['bank_ids'][0]) {
+				foreach ($bankIds as $index => $id) {
+					if ($this->native->addLineLink($id, $bankIds[1 - $index], DOL_URL_ROOT . '/compta/bank/line.php?rowid=', '(banktransfert)', 'banktransfert') <= 0) {
+						throw new Exception('Cannot link both native transfer legs');
+					}
+				}
+			}
+			foreach ($bankIds as $index => $id) {
+				$raw = $this->transferRows('SELECT amount FROM ' . $this->db->prefix() . 'bank WHERE rowid=' . $id);
+				if (count($raw) !== 1 || self::automaticDecimal($raw[0]->amount) !== self::automaticDecimal($match['lines'][$index]->amount)) {
+					throw new Exception('Native transfer amount precision changed');
+				}
+				$line = $this->native->getStatementLineById($stageIds[$index]);
+				(new KreaBankReconciliationScope($this->db, $this->entity))->assertDocument('native_bank', $id, (int) $line['bank_account_id']);
+				$this->finalizeNativeReconciliation($line, $id, ltrim(self::automaticDecimal($match['lines'][$index]->amount), '-'), 'staged', array(
+					'strategy' => 'auto_pair', 'is_auto' => 1, 'native' => 1, 'native_bank_line_id' => $id,
+					'paired_statement_line_id' => $stageIds[1 - $index], 'paired_bank_line_id' => $bankIds[1 - $index],
+					'created_transfer' => !$match['bank_ids'][0]));
+			}
+			if (!$this->db->commit()) { throw new Exception('Cannot commit paired transfer; inspect its status before retrying'); }
+			return true;
+		} catch (Throwable $e) { $this->db->rollback(); throw $e; }
 	}
 
 	/**
@@ -7019,7 +7217,7 @@ class KreaBankService
 			return array('enabled' => false, 'start' => '', 'end' => '', 'days' => $days);
 		}
 
-		$anchorTs = strtotime($anchorDate);
+		$anchorTs = strtotime($anchorDate . ' UTC');
 		if ($anchorTs === false || $anchorTs <= 0) {
 			return array('enabled' => false, 'start' => '', 'end' => '', 'days' => $days);
 		}
@@ -7029,8 +7227,8 @@ class KreaBankService
 
 		return array(
 			'enabled' => true,
-			'start' => dol_print_date($startTs, '%Y-%m-%d'),
-			'end' => dol_print_date($endTs, '%Y-%m-%d'),
+			'start' => gmdate('Y-m-d', $startTs),
+			'end' => gmdate('Y-m-d', $endTs),
 			'days' => $days,
 		);
 	}
