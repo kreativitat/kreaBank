@@ -137,6 +137,10 @@ class ActionsKreaBank extends CommonHookActions
 	public function printCommonFooter($parameters, &$object, &$action, $hookmanager)
 	{
 		$this->resprints = '';
+		// Internal transfers keep the native form and navigation without a workspace header.
+		if (basename($_SERVER['PHP_SELF'] ?? '') === 'transfer.php') {
+			return 0;
+		}
 		if (!$this->bankingContextAllowed()) {
 			return 0;
 		}

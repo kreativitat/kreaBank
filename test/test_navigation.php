@@ -118,4 +118,8 @@ $_SERVER['PHP_SELF'] = '/compta/bank/budget.php';
 $navigationRequest = array('id' => 45);
 $queryCount = count($db->queries);
 checkNavigation($hooks->doActions(array(), $object, $action, null) === 0 && count($db->queries) === $queryCount, 'The main hook does not interpret unrelated banking-resource IDs as account IDs');
+$_SERVER['PHP_SELF'] = '/compta/bank/transfer.php';
+$hooks->resprints = 'previous hook output';
+$queryCount = count($db->queries);
+checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0 && $hooks->resprints === '' && count($db->queries) === $queryCount, 'Internal transfers do not inject a workspace header, selector or tabs');
 print "OK: $checks navigation and account-scope checks\n";

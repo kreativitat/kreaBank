@@ -1,6 +1,7 @@
 # Banking workspace
 
-KreaBank provides one banking header on module pages and native bank pages.
+KreaBank provides one banking header on module pages and native account pages.
+Internal transfers keep the native layout without the workspace header or tabs.
 Its primary destinations are Accounts, Movements, Statements, Reconciliation,
 Connections and History. The account selector contains only current-company
 accounts and preserves the current view. It sits below the banking/company heading,

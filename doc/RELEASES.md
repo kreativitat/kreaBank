@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.23 — 2026-11-01
+
+- Keep internal transfers in the native layout without the KreaBank workspace
+  header, account selector or tabs. Preserve the native left menu and transfer flow.
+
 ## 1.14.22 — 2026-11-01
 
 - Separate account-list filters from banking navigation. Group the owned-account
