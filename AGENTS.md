@@ -76,7 +76,7 @@
 
 ## Account navigation
 
-- The banking workspace replaces native bank navigation through supported hooks and scoped CSS; do not patch core bank pages. Native tabs are hidden, not extended with extra workspace tabs.
+- The banking workspace keeps the native Dolibarr left menu visible. Use supported hooks and scoped CSS; do not patch core bank pages. Native account tabs are hidden, not extended with extra workspace tabs.
 - `lib/kreabank_navigation.lib.php` owns account-context URLs, ownership checks and shared navigation. `account_context` is explicit per request, never session-global.
 - Keep one primary banking bar: accounts, movements, statements, reconciliation, connections and history. Import is an action in statements. Account options retain native details, numbering, documents, reports, transfers and cheque deposits.
 - Account context uses direct current-company ownership, not shared account access. List/count/scan filters must agree before pagination. The audit log is explicitly company-wide.
@@ -104,4 +104,4 @@
 - `php test/test_company_isolation_database.php` extends ONLY the disposable local MariaDB fixture and covers these boundaries plus the equal-amount/date invoice tie.
 
 - `accounts.php` is the company-owned banking entry point. Native account-list GETs route here for KreaBank readers. Balances use native operation dates; pending counts include imported evidence only. Never show a combined monetary total across currencies.
-- Hide the native banking sidebar and tab bar only on the banking workspace; retain global ERP navigation. Avoid explanatory banners and duplicate navigation layers.
+- Always preserve the native Dolibarr left menu and its responsive behavior. Hide only the duplicate native account tab bar within the banking workspace. Avoid explanatory banners and duplicate account navigation.

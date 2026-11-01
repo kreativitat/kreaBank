@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.14.16 — 2026-11-01
+
+- Restore the native Dolibarr left menu and its standard content layout on all
+  banking pages. Keep the simplified banking header and account controls.
+- No business-data, permission, schema or scheduler changes.
+
 ## 1.14.15 — 2026-11-01
 
 - Keep the accounts overview consistent with its selected account and native

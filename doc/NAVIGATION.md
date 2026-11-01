@@ -12,9 +12,10 @@ pending imported evidence. It never combines balances across currencies. Native
 account-list GETs route here for KreaBank readers. Readers without module rights
 retain the native banking interface.
 
-The native banking sidebar and native bank tab bar are hidden only inside this
-workspace. Global ERP navigation remains available. Account options retain native
-account details, documents, annual reports, forecasts and statement numbering;
+The native Dolibarr left menu remains visible with its standard layout and
+responsive behavior. Only the duplicate native account tab bar is hidden inside
+this workspace. Global ERP navigation remains available. Account options retain
+native account details, documents, annual reports, forecasts and statement numbering;
 transfers and cheque deposits remain available to bank writers. Native movement,
 payment and invoice lifecycle logic remains responsible for financial records.
 No core files are patched. Source evidence stays separate from the ledger.
@@ -42,6 +43,6 @@ preimages for rollback. Do not overwrite an earlier backup file.
 
 Verify accounts, account selection, native movements and details, statements,
 reconciliation views, connections and history on desktop/mobile. Check one visible
-navigation bar, absence of the old sidebar/tabs/banner, company denial, and no page
-overflow. Verification must not import, collect feeds, reconcile, undo or create
+banking bar, a visible native left menu, no duplicate account tabs/banner, company
+denial, and no page overflow. Verification must not import, collect feeds, reconcile, undo or create
 payments as test data. Run `php test/test_navigation.php` for URL/scope contracts.

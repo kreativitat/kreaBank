@@ -1,6 +1,5 @@
 /* Copyright (C) 2026 Kreativität Works <mail@kreativitat.com> */
-body.kreabank-banking #id-container > .side-nav { display:none !important; }
-body.kreabank-banking #id-right { display:block !important; box-sizing:border-box; margin-left:0 !important; padding:20px 28px; min-width:0; width:auto; }
+body.kreabank-banking #id-right { padding:20px 28px; min-width:0; }
 body.kreabank-banking #id-right > .fiche { margin:0; }
 body.kreabank-banking #id-right > .fiche > .tabBar { border-top:0; padding-top:0; }
 body.kreabank-banking.kb-native-bank #id-right .tabs { display:none !important; }
