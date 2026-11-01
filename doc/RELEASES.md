@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.14.17 — 2026-11-01
+
+- Remove the floating “More options” dropdown. Keep transfers and cheque deposits
+  in their native left-menu entries and add permission-scoped automatic settings.
+- Place selected-account tools in the native left menu, validating current-company
+  ownership before rendering the links. No financial or scheduler changes.
+
 ## 1.14.16 — 2026-11-01
 
 - Restore the native Dolibarr left menu and its standard content layout on all

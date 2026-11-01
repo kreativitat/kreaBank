@@ -39,6 +39,38 @@ class ActionsKreaBank extends CommonHookActions
 		$this->db = $db;
 	}
 
+	/** Keep contextual account tools in Dolibarr's native left menu. */
+	public function menuLeftMenuItems($parameters, &$object, &$action, $hookmanager)
+	{
+		global $user, $langs;
+		$this->results = array();
+		if (($parameters['mainmenu'] ?? '') !== 'bank' || !$user->hasRight('banque', 'lire') || !$user->hasRight('kreabank', 'reconciliation', 'read')) {
+			return 0;
+		}
+		require_once __DIR__ . '/../lib/kreabank.lib.php';
+		$path = $_SERVER['PHP_SELF'] ?? '';
+		$page = basename($path);
+		$accountId = 0;
+		if ($this->bankingContextAllowed()) {
+			$accountId = $this->nativeAccountId($page);
+		} elseif (strpos($path, '/custom/kreabank/') !== false && in_array($page, array('accounts.php', 'reconcile.php', 'bulkmatch.php', 'pending.php', 'import.php', 'statement.php', 'feed.php', 'history.php'), true)) {
+			$accountId = max(0, GETPOSTINT('account_context'));
+		}
+		if ($accountId <= 0) {
+			return 0;
+		}
+		$account = kreabankNavigationAccount($accountId);
+		$langs->loadLangs(array('banks', 'kreabank@kreabank'));
+		require_once DOL_DOCUMENT_ROOT . '/core/class/menu.class.php';
+		$tools = new Menu();
+		$tools->add('/compta/bank/card.php?id=' . $accountId . '&mainmenu=bank', dol_escape_htmltag($account->ref) . ' · ' . $langs->trans('KreaBankAccountOptions'), 0, 1, '', 'bank', 'kreabank_account_tools', 1960);
+		foreach (kreabankAccountToolEntries($accountId) as $entry) {
+			$tools->add($entry['url'], $langs->trans($entry['label']), 1, 1, '', 'bank', 'kreabank_account_tools');
+		}
+		$this->results = array_merge((array) $object, $tools->liste);
+		return 1;
+	}
+
 	/** Keep native account tabs unchanged; the workspace header owns navigation. */
 	public function completeTabsHead($parameters, &$object, &$action, $hookmanager)
 	{
@@ -104,6 +136,7 @@ class ActionsKreaBank extends CommonHookActions
 	{
 		global $user;
 		return strpos($_SERVER['PHP_SELF'] ?? '', '/compta/bank/') !== false
+			&& in_array(basename($_SERVER['PHP_SELF'] ?? ''), array('list.php', 'card.php', 'line.php', 'bankentries_list.php', 'releve.php', 'document.php', 'annuel.php', 'treso.php', 'transfer.php'), true)
 			&& $user->hasRight('banque','lire') && $user->hasRight('kreabank','reconciliation','read');
 	}
 

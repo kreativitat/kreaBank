@@ -98,4 +98,25 @@ checkNavigation(strpos($hooks->resprints, 'ba.entity=7') !== false, 'Native move
 $navigationRequest = array('kreabank_matched' => 1);
 $html = kreabankBankingHeader('movements', (object) array('id' => 45));
 checkNavigation(strpos($html, 'id=45&amp;kreabank_matched=1') !== false && strpos($html, 'KreaBankReconciledMovements') !== false, 'Movement views retain selected account and expose reconciled entries');
+checkNavigation(strpos($html, 'kb-more') === false && strpos($html, '<details') === false, 'Account tools do not return as a floating header menu');
+$accountTools = kreabankAccountToolEntries(45);
+checkNavigation(count($accountTools) === 6, 'Retain every selected-account tool');
+foreach ($accountTools as $entry) {
+	checkNavigation(strpos($entry['url'], '/compta/bank/') === 0 && (strpos($entry['url'], 'id=45') !== false || strpos($entry['url'], 'account=45') !== false), 'Native left-menu links keep the selected account and native URL convention');
+}
+try { kreabankAccountToolEntries(0); throw new RuntimeException('All-accounts tools accepted'); } catch (InvalidArgumentException $e) { $checks++; }
+$menu = array(array('url' => '/native', 'titre' => 'Native item'));
+$originalMenu = $menu;
+$_SERVER['PHP_SELF'] = '/custom/kreabank/accounts.php';
+$navigationRequest = array('account_context' => 45);
+checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'home'), $menu, $action, null) === 0 && $menu === $originalMenu, 'Unrelated native menus remain untouched');
+$user->allowed = array('banque.lire');
+checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menu, $action, null) === 0, 'Account tools require module read permission');
+$user->allowed[] = 'kreabank.reconciliation.read';
+try { $hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menu, $action, null); throw new RuntimeException('Unknown/foreign account tools accepted'); } catch (LogicException $e) { $checks++; }
+checkNavigation(strpos(end($db->queries), 'rowid = 45 AND entity = 7') !== false, 'Left-menu account tools revalidate owner company');
+$_SERVER['PHP_SELF'] = '/compta/bank/budget.php';
+$navigationRequest = array('id' => 45);
+$queryCount = count($db->queries);
+checkNavigation($hooks->doActions(array(), $object, $action, null) === 0 && count($db->queries) === $queryCount, 'The main hook does not interpret unrelated banking-resource IDs as account IDs');
 print "OK: $checks navigation and account-scope checks\n";

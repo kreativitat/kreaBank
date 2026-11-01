@@ -78,7 +78,7 @@
 
 - The banking workspace keeps the native Dolibarr left menu visible. Use supported hooks and scoped CSS; do not patch core bank pages. Native account tabs are hidden, not extended with extra workspace tabs.
 - `lib/kreabank_navigation.lib.php` owns account-context URLs, ownership checks and shared navigation. `account_context` is explicit per request, never session-global.
-- Keep one primary banking bar: accounts, movements, statements, reconciliation, connections and history. Import is an action in statements. Account options retain native details, numbering, documents, reports, transfers and cheque deposits.
+- Keep one primary banking bar: accounts, movements, statements, reconciliation, connections and history. Import is an action in statements. Keep account details, numbering, documents and reports in the native left menu. Transfers and cheque deposits use their existing native entries; automatic reconciliation has a permission-scoped left-menu entry. Do not reintroduce a floating account-tools dropdown.
 - Account context uses direct current-company ownership, not shared account access. List/count/scan filters must agree before pagination. The audit log is explicitly company-wide.
 - `php test/test_navigation.php` loads installed Dolibarr source without bootstrapping or opening a database. Use `KREABANK_DOLIBARR_ROOT` if source is elsewhere.
 - After deploying 1.14.4, refresh only KreaBank menu/hook/CSS registration; do not disable/re-enable the module or change scheduler settings. See `doc/NAVIGATION.md`.

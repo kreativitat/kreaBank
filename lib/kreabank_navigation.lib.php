@@ -65,6 +65,19 @@ function kreabankBankingUrl($page, $accountId = 0)
 	return $page === 'statement' ? kreabankStatementUrl($accountId) : kreabankWorkspaceUrl($page, $accountId);
 }
 
+/** Native left-menu routes for an account already validated by the caller. */
+function kreabankAccountToolEntries($accountId)
+{
+	if ((int) $accountId <= 0) {
+		throw new InvalidArgumentException('An owned bank account is required');
+	}
+	$entries = array();
+	foreach (array('card.php?id=' => 'KreaBankAccountDetails', 'document.php?id=' => 'Documents', 'annuel.php?id=' => 'Reports', 'treso.php?id=' => 'KreaBankForecast', 'releve.php?native_statements=1&account=' => 'KreaBankNativeStatements', 'bankentries_list.php?action=reconcile&search_conciliated=0&id=' => 'KreaBankStatementNumbering') as $route => $label) {
+		$entries[] = array('url' => '/compta/bank/' . $route . (int) $accountId . '&mainmenu=bank&leftmenu=kreabank_account_tools', 'label' => $label);
+	}
+	return $entries;
+}
+
 /** One account selector and one primary navigation bar for native and module pages. */
 function kreabankBankingHeader($page, $account = null)
 {
@@ -106,18 +119,6 @@ function kreabankBankingHeader($page, $account = null)
 		}
 		$html .= '</div>';
 	}
-	$html .= '<details class="kb-more"><summary>' . $langs->trans('KreaBankMoreOptions') . '</summary><div>';
-	foreach (($accountId > 0 ? array('card.php?id=' => 'KreaBankAccountDetails', 'document.php?id=' => 'Documents', 'annuel.php?id=' => 'Reports', 'treso.php?id=' => 'KreaBankForecast', 'releve.php?native_statements=1&account=' => 'KreaBankNativeStatements', 'bankentries_list.php?action=reconcile&search_conciliated=0&id=' => 'KreaBankStatementNumbering') : array()) as $route => $label) {
-		$html .= '<a href="' . dol_escape_htmltag(dol_buildpath('/compta/bank/' . $route . $accountId, 1)) . '">' . $langs->trans($label) . '</a>';
-	}
-	if ($user->hasRight('banque','modifier')) {
-		$html .= '<a href="' . dol_buildpath('/compta/bank/transfer.php',1) . '">' . $langs->trans('KreaBankTransfer') . '</a>';
-		$html .= '<a href="' . dol_buildpath('/compta/paiement/cheque/index.php',1) . '">' . $langs->trans('KreaBankChequeDeposits') . '</a>';
-	}
-	if (!empty($user->admin)) {
-		$html .= '<a href="' . dol_buildpath('/custom/kreabank/admin/automation.php',1) . '">' . $langs->trans('KreaBankAutomation') . '</a>';
-	}
-	$html .= '</div></details>';
 	$html .= '</header><script nonce="' . dol_escape_htmltag(function_exists('getNonce') ? getNonce() : '') . '">document.body.classList.add("kreabank-banking");</script>';
 	return $html;
 }

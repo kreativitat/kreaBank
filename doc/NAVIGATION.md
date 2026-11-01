@@ -14,14 +14,17 @@ retain the native banking interface.
 
 The native Dolibarr left menu remains visible with its standard layout and
 responsive behavior. Only the duplicate native account tab bar is hidden inside
-this workspace. Global ERP navigation remains available. Account options retain
-native account details, documents, annual reports, forecasts and statement numbering;
-transfers and cheque deposits remain available to bank writers. Native movement,
+this workspace. Global ERP navigation remains available. The left menu contains
+the selected account’s details, documents, annual reports, forecasts and statement numbering.
+Transfers and cheque deposits retain their existing native left-menu entries.
+Automatic reconciliation appears there for administrators with the required
+write permissions. There is no floating account-tools dropdown. Native movement,
 payment and invoice lifecycle logic remains responsible for financial records.
 No core files are patched. Source evidence stays separate from the ledger.
 
 `lib/kreabank_navigation.lib.php` owns navigation URLs and company ownership.
-`ActionsKreaBank` supplies native hooks, read filters and entry-point routing.
+`ActionsKreaBank` supplies native hooks, read filters, entry-point routing and
+owned-account left-menu tools through the native `menuLeftMenuItems` hook.
 `css/navigation.css` scopes presentation to the banking workspace. Empty native
 statement-list URLs open the imported statement list; explicit numbered-statement
 views remain native. The matched-movements filter and direct native card links
