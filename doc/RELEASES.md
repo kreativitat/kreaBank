@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.14.0 — 2026-11-01
+
+- Add company-scoped automatic matching against existing native bank movements,
+  with an explicit account selection, disabled default, previews and native scheduling.
+- Revalidate identity, amount, currency, date, ownership and ambiguity under locks;
+  retain duplicate, skipped and conflicting source lines for review.
+- Persist automatic reconciliation and its audit atomically, without creating
+  invoices, payments or new bank movements. See [operations](AUTOMATIC_RECONCILIATION.md).
+
 ## 1.13.4 — 2026-11-01
 
 - Distinguish a provider outage from expired bank authorization.

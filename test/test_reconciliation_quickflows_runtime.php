@@ -445,7 +445,7 @@ class KreaBankQuickFlowSupplierServiceStub extends KreaBankService
 		);
 	}
 
-	public function reconcileLine($lineId, $links, $strategy = 'manual', $isAuto = 0, $note = '', $confidenceScore = 0)
+	public function reconcileLine($lineId, $links, $strategy = 'manual', $isAuto = 0, $note = '', $confidenceScore = 0, $automaticAccounts = null)
 	{
 		$this->reconcileCalls++;
 		throw new Exception('forced reconcile failure');

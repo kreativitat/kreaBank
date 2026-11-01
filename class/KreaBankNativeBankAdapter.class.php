@@ -461,6 +461,18 @@ class KreaBankNativeBankAdapter
 		return $this->getLegacyNativeLineById($lineId);
 	}
 
+	/** Read staging explicitly: staged and native row IDs belong to separate namespaces. */
+	public function getStatementLineById($lineId)
+	{
+		return $this->getStagedLineById($lineId);
+	}
+
+	/** Read the native bank namespace explicitly. */
+	public function getBankLineById($lineId)
+	{
+		return $this->getLegacyNativeLineById($lineId);
+	}
+
 	/**
 	 * Create native bank line for one staged line if missing.
 	 *

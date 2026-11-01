@@ -26,6 +26,9 @@ function kreabankAdminPrepareHead()
 	$head[$h][2] = 'settings';
 	$h++;
 
+	$head[$h] = array(dol_buildpath('/custom/kreabank/admin/automation.php', 1), $langs->trans('KreaBankAutomation'), 'automation');
+	$h++;
+
 	$head[$h][0] = dol_buildpath('/custom/kreabank/admin/fintable.php', 1);
 	$head[$h][1] = $langs->trans('KreaBankFeeds');
 	$head[$h][2] = 'fintable';

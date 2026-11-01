@@ -1059,7 +1059,7 @@ class KreaBankService
 		$bankAccountId = (int) $bankAccountId;
 		$dateRange = $this->resolveOpenDocumentsDateRange($anchorDate, $intervalDays);
 
-		$sql = 'SELECT b.rowid as bank_line_id, b.dateo as doc_date, b.amount as amount_open, b.label as native_label, b.note as native_note,';
+		$sql = 'SELECT b.rowid as bank_line_id, b.dateo as doc_date, b.amount as amount_open, b.num_chq, b.label as native_label, b.note as native_note,';
 		$sql .= ' ba.currency_code as bank_currency,';
 		$sql .= ' m.counterparty_name, m.counterparty_iban, m.description, m.payment_reference, m.bank_reference,';
 		$sql .= " GROUP_CONCAT(DISTINCT bu.label ORDER BY bu.label SEPARATOR ' / ') as url_labels,";
@@ -1091,7 +1091,7 @@ class KreaBankService
 			$sql .= ' AND b.dateo >= ' . $this->sqlDate($dateRange['start']);
 			$sql .= ' AND b.dateo <= ' . $this->sqlDate($dateRange['end']);
 		}
-		$sql .= ' GROUP BY b.rowid, b.dateo, b.amount, b.label, b.note, ba.currency_code, m.counterparty_name, m.counterparty_iban, m.description, m.payment_reference, m.bank_reference';
+		$sql .= ' GROUP BY b.rowid, b.dateo, b.amount, b.num_chq, b.label, b.note, ba.currency_code, m.counterparty_name, m.counterparty_iban, m.description, m.payment_reference, m.bank_reference';
 		$sql .= ' ORDER BY b.dateo ASC, b.rowid ASC';
 		$sql .= $this->db->plimit($limit, 0);
 
@@ -1112,6 +1112,9 @@ class KreaBankService
 			$ref = $paymentReference;
 			if ($ref === '') {
 				$ref = $bankReference;
+			}
+			if ($ref === '') {
+				$ref = trim((string) ($obj->num_chq ?? ''));
 			}
 			if ($ref === '') {
 				$ref = $urlLabels;
@@ -1135,6 +1138,8 @@ class KreaBankService
 				'thirdparty_iban' => (string) (!empty($obj->counterparty_iban) ? $obj->counterparty_iban : ''),
 				'description' => ($description !== '' ? $description : ($nativeLabel !== '' ? $nativeLabel : $urlLabels)),
 				'bank_line_id' => $rowid,
+				'currency' => (string) $obj->bank_currency,
+				'amount_decimal' => (string) $obj->amount_open,
 				'native_label' => $nativeLabel,
 				'native_note' => (string) (!empty($obj->native_note) ? $obj->native_note : ''),
 				'url_types' => (string) (!empty($obj->url_types) ? $obj->url_types : ''),
@@ -1923,11 +1928,16 @@ class KreaBankService
 	 * @param int $isAuto
 	 * @param string $note
 	 * @param int $confidenceScore
+	 * @param int[]|null $automaticAccounts Non-null enforces unattended native-only checks
 	 * @return int
 	 */
-	public function reconcileLine($lineId, $links, $strategy = 'manual', $isAuto = 0, $note = '', $confidenceScore = 0)
+	public function reconcileLine($lineId, $links, $strategy = 'manual', $isAuto = 0, $note = '', $confidenceScore = 0, $automaticAccounts = null)
 	{
-		$line = $this->getLineById($lineId);
+		$isAutomaticNative = ($automaticAccounts !== null);
+		if ($isAutomaticNative && ($strategy !== 'auto_native' || (int) $isAuto !== 1 || count($links) !== 1 || ($links[0]['doc_type'] ?? '') !== 'native_bank')) {
+			throw new Exception('Automatic reconciliation accepts one existing native bank movement only');
+		}
+		$line = $isAutomaticNative ? $this->native->getStatementLineById($lineId) : $this->getLineById($lineId);
 		if (!$line) {
 			throw new Exception('Unknown bank line');
 		}
@@ -1992,6 +2002,29 @@ class KreaBankService
 		}
 		$companyLinks = array();
 		try {
+			// Serialize scheduled and manual claims on the same staged record.
+			if (!empty($line['fk_statement'])) {
+				$this->lockReconciliationRow('kreabank_statement_line', (int) $line['rowid']);
+			}
+			if ($selectedNativeBankLink !== null) {
+				$this->lockReconciliationRow('bank', (int) $selectedNativeBankLink['fk_doc']);
+			}
+			if (!empty($line['fk_statement'])) {
+				$currentLine = $this->native->getStatementLineById((int) $line['rowid']);
+				if (!$currentLine || (int) $currentLine['status'] === 2) {
+					throw new Exception('Statement line is already reconciled or unavailable');
+				}
+			}
+			if ($isAutomaticNative) {
+				$fresh = $this->getAutomaticNativeSuggestion((int) $lineId, (array) $automaticAccounts);
+				if (!$fresh || (int) $fresh['suggestion']['doc_id'] !== (int) $selectedNativeBankLink['fk_doc']) {
+					throw new Exception('Automatic match changed or needs manual review');
+				}
+				$line = $fresh['line'];
+				$confidenceScore = (int) $fresh['suggestion']['score'];
+				$links[0]['match_score'] = $confidenceScore;
+				$links[0]['match_reasons'] = $fresh['suggestion']['details'];
+			}
 			if ($selectedNativeBankLink !== null) {
 				$resolvedNativeBankLine = $this->resolveExistingNativeBankLineForReconciliation(
 					$line,
@@ -2145,11 +2178,27 @@ class KreaBankService
 				throw new Exception('Failed to conciliate native bank line');
 			}
 
-			$this->native->markStatementLineReconciled((int) $line['rowid'], $outstanding, $nativeLineId);
-			$this->db->commit();
-		} catch (Exception $e) {
+			if (!$this->native->markStatementLineReconciled((int) $line['rowid'], $outstanding, $nativeLineId)) {
+				throw new Exception('Failed to persist statement reconciliation');
+			}
+			if ($isAutomaticNative) {
+				if (!$this->logAudit('reconcile', (int) $line['rowid'], (int) $line['rowid'], array(
+					'strategy' => 'auto_native', 'is_auto' => 1, 'confidence_score' => $confidenceScore,
+					'links' => $links, 'native' => 1, 'native_bank_line_id' => $nativeLineId,
+				))) {
+					throw new Exception('Failed to persist reconciliation audit');
+				}
+			}
+			if (!$this->db->commit()) {
+				throw new Exception('Failed to commit bank reconciliation; inspect its status before retrying');
+			}
+		} catch (Throwable $e) {
 			$this->db->rollback();
 			throw $e;
+		}
+
+		if ($isAutomaticNative) {
+			return (int) $line['rowid'];
 		}
 
 		if ($wasSkippedBeforeReconcile && $nativeLineId > 0) {
@@ -2257,6 +2306,158 @@ class KreaBankService
 		);
 
 		return true;
+	}
+
+	/**
+	 * Preview one staged line using only existing native movements and the shared matcher.
+	 * No invoice/payment creation is reachable through this method.
+	 *
+	 * @param int $lineId Explicit staging ID
+	 * @param int[] $accountIds Company-owned accounts selected by the administrator
+	 * @return array|null
+	 */
+	public function getAutomaticNativeSuggestion($lineId, $accountIds)
+	{
+		global $conf;
+		if ($this->entity <= 0 || (int) $conf->entity !== $this->entity || !isModEnabled('kreabank') || !isModEnabled('banque')
+			|| empty($this->user->id) || (int) $this->user->statut !== 1 || !empty($this->user->socid)
+			|| (!empty($this->user->entity) && (int) $this->user->entity !== $this->entity)
+			|| !$this->user->hasRight('banque', 'lire') || !$this->user->hasRight('banque', 'modifier')
+			|| !$this->user->hasRight('kreabank', 'reconciliation', 'write')) {
+			throw new Exception('Bank reconciliation permission is required in the current company');
+		}
+		$ids = array_filter(array_map('intval', (array) $accountIds), static function ($id) { return $id > 0; });
+		if (!$ids) {
+			return null;
+		}
+		// Eligibility is checked on raw persisted amounts; file mapping repair must not select an automatic match.
+		$sql = 'SELECT l.amount FROM ' . $this->db->prefix() . 'kreabank_statement_line l'
+			. ' INNER JOIN ' . $this->db->prefix() . 'kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity'
+			. ' INNER JOIN ' . $this->db->prefix() . 'bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=l.entity'
+			. ' WHERE l.entity=' . $this->entity . ' AND l.rowid=' . (int) $lineId
+			. ' AND l.status=0 AND l.is_duplicate=0 AND l.allocated_amount=0 AND l.amount<>0'
+			. ' AND l.fk_native_bank_line IS NULL AND ba.clos=0 AND ba.rappro=1 AND ba.courant<>2'
+			. ' AND l.currency=ba.currency_code AND ba.rowid IN (' . implode(',', $ids) . ')';
+		$feedExists = $this->tableExists($this->db->prefix() . 'kreabank_feed_transaction');
+		if ($feedExists) {
+			$sql .= " AND (s.source_type<>'fintable' OR EXISTS (SELECT ft.rowid FROM " . $this->db->prefix()
+				. "kreabank_feed_transaction ft WHERE ft.entity=l.entity AND ft.fk_statement_line=l.rowid AND ft.status='imported' AND ft.conflict_payload IS NULL))";
+		} else {
+			$sql .= " AND s.source_type<>'fintable'";
+		}
+		$res = $this->db->query($sql);
+		if (!$res) {
+			throw new Exception($this->db->lasterror());
+		}
+		$raw = $this->db->fetch_object($res);
+		if (!$raw) {
+			return null;
+		}
+		$line = $this->native->getStatementLineById((int) $lineId);
+		if (!$line || self::automaticDecimal($raw->amount) !== self::automaticDecimal($line['amount'])) {
+			return null;
+		}
+		$date = (string) $line['operation_date'];
+		if (!preg_match('/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D', $date, $parts) || !checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])) {
+			return null;
+		}
+		$tolerance = max(0, min(31, (int) getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE', 3)));
+		$documents = $this->getOpenNativeBankDocuments((int) $line['direction'], 501, $date, $tolerance, 0, (int) $line['bank_account_id']);
+		// Never conclude uniqueness from a truncated candidate set.
+		if (count($documents) >= 501) {
+			return null;
+		}
+		$documents = array_values(array_filter($documents, static function ($document) use ($line, $raw) {
+			return (string) $document['currency'] === (string) $line['currency']
+				&& self::automaticDecimal($document['amount_decimal']) === self::automaticDecimal($raw->amount);
+		}));
+		$suggestions = $this->matcher->getSuggestions($line, $documents, $this->getPatterns(), $tolerance, 0);
+		$safe = $this->getSafeSuggestion($suggestions, max(150, (int) getDolGlobalInt('KREABANK_AUTOMATCH_SAFE_SCORE', 150)));
+		if (!$safe || !in_array('date', $safe['details'], true)) {
+			return null;
+		}
+		// Descriptive labels and short/prefix references remain useful manually, but cannot authorize unattended writes.
+		$details = array_flip($safe['details']);
+		$reference = (string) $safe['doc_ref'];
+		$hasExactReference = preg_match('/[0-9]/', $reference) && strlen(preg_replace('/[^a-z0-9]/i', '', $reference)) >= 8
+			&& preg_match('/(?<![a-z0-9])' . preg_quote($reference, '/') . '(?![a-z0-9])/i', $line['payment_reference'] . ' ' . $line['description']);
+		if (!isset($details['iban']) && !isset($details['pattern_iban'])
+			&& !(preg_match('/[0-9]/', $reference) && (isset($details['ref_payment']) || $hasExactReference))) {
+			return null;
+		}
+		$reverseRange = $this->resolveOpenDocumentsDateRange((string) $safe['doc_date'], $tolerance);
+		$otherSql = 'SELECT l.rowid FROM ' . $this->db->prefix() . 'kreabank_statement_line l'
+			. ' INNER JOIN ' . $this->db->prefix() . 'kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity'
+			. ' WHERE l.entity=' . $this->entity . ' AND s.bank_account_id=' . (int) $line['bank_account_id']
+			. ' AND l.rowid<>' . (int) $lineId . ' AND l.status=0 AND l.is_duplicate=0 AND l.allocated_amount=0'
+			. ' AND l.fk_native_bank_line IS NULL AND l.currency=' . $this->sqlText((string) $line['currency'])
+			. ' AND l.amount=' . self::automaticDecimal($raw->amount)
+			. ' AND l.operation_date>=' . $this->sqlDate($reverseRange['start'])
+			. ' AND l.operation_date<=' . $this->sqlDate($reverseRange['end']) . $this->db->plimit(101);
+		$otherRes = $this->db->query($otherSql);
+		if (!$otherRes) {
+			throw new Exception($this->db->lasterror());
+		}
+		if ($this->db->num_rows($otherRes) >= 101) {
+			return null;
+		}
+		$selectedDocument = array_values(array_filter($documents, static function ($doc) use ($safe) { return (int) $doc['rowid'] === (int) $safe['doc_id']; }));
+		while ($other = $this->db->fetch_object($otherRes)) {
+			$otherLine = $this->native->getStatementLineById((int) $other->rowid);
+			$otherSuggestions = $this->matcher->getSuggestions($otherLine, $selectedDocument, $this->getPatterns(), $tolerance, 0);
+			if ($this->getSafeSuggestion($otherSuggestions, max(150, (int) getDolGlobalInt('KREABANK_AUTOMATCH_SAFE_SCORE', 150)))) {
+				return null;
+			}
+		}
+		return array('line' => $line, 'suggestion' => $safe);
+	}
+
+	/** Compare persisted monetary values at the database's eight-decimal precision. */
+	private static function automaticDecimal($value)
+	{
+		if (is_float($value)) {
+			$value = number_format($value, 8, '.', '');
+		}
+		$value = (string) $value;
+		if (!preg_match('/^(-?)([0-9]+)(?:\.([0-9]{1,8}))?$/D', $value, $parts)) {
+			throw new Exception('Invalid persisted bank amount');
+		}
+		$integer = ltrim($parts[2], '0');
+		$fraction = rtrim(isset($parts[3]) ? $parts[3] : '', '0');
+		$number = ($integer === '' ? '0' : $integer) . ($fraction === '' ? '' : '.' . $fraction);
+		return ($number !== '0' ? $parts[1] : '') . $number;
+	}
+
+	/** Execute through reconcileLine; the complete eligibility check is repeated under row locks. */
+	public function reconcileAutomaticNativeLine($lineId, $accountIds)
+	{
+		$match = $this->getAutomaticNativeSuggestion($lineId, $accountIds);
+		if (!$match) {
+			return false;
+		}
+		$safe = $match['suggestion'];
+		$this->reconcileLine((int) $lineId, array(array(
+			'doc_type' => 'native_bank', 'fk_doc' => (int) $safe['doc_id'], 'doc_ref' => $safe['doc_ref'],
+			'allocated_amount' => abs((float) $match['line']['amount']), 'match_score' => (int) $safe['score'], 'match_reasons' => $safe['details'],
+		)), 'auto_native', 1, 'Automatic existing bank movement match', (int) $safe['score'], (array) $accountIds);
+		return true;
+	}
+
+	/** Lock current-company staging or native rows before any reconciliation write. */
+	protected function lockReconciliationRow($table, $id)
+	{
+		if ($table === 'bank') {
+			$sql = 'SELECT b.rowid FROM ' . $this->db->prefix() . 'bank b INNER JOIN ' . $this->db->prefix()
+				. 'bank_account ba ON ba.rowid=b.fk_account WHERE ba.entity=' . $this->entity . ' AND b.rowid=' . (int) $id;
+		} elseif ($table === 'kreabank_statement_line') {
+			$sql = 'SELECT rowid FROM ' . $this->db->prefix() . $table . ' WHERE entity=' . $this->entity . ' AND rowid=' . (int) $id;
+		} else {
+			throw new Exception('Unsupported reconciliation lock');
+		}
+		$res = $this->db->query($sql . ' FOR UPDATE');
+		if (!$res || !$this->db->fetch_object($res)) {
+			throw new Exception('Reconciliation record is unavailable in the current company');
+		}
 	}
 
 	/**
@@ -5531,7 +5732,7 @@ class KreaBankService
 	 * @param int|null $lineId
 	 * @param int|null $reconciliationId
 	 * @param array<string,mixed> $payload
-	 * @return void
+	 * @return bool
 	 */
 	protected function logAudit($type, $lineId = null, $reconciliationId = null, $payload = array())
 	{
@@ -5558,7 +5759,7 @@ class KreaBankService
 		$sql .= ', ' . $this->sqlDateTime($now);
 		$sql .= ')';
 
-		$this->db->query($sql);
+		return (bool) $this->db->query($sql);
 	}
 
 	/**
@@ -5793,7 +5994,8 @@ class KreaBankService
 			throw new Exception('Source and target bank lines must be different');
 		}
 
-		$sourceLine = $this->getLineById($sourceLineId);
+		$this->lockReconciliationRow('bank', $sourceLineId);
+		$sourceLine = $this->native->getBankLineById($sourceLineId);
 		if (!$sourceLine) {
 			throw new Exception('Source native bank line not found #' . $sourceLineId);
 		}
