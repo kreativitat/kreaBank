@@ -10,7 +10,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 let checks = 0;
 function check(condition, message) { assert.ok(condition, message); checks++; }
 function harness() {
-    const config = {url: '/custom/kreabank/bulkmatch.php', token: 'fixture', account: 101,
+    const config = {url: '/custom/kreabank/bulkmatch.php', token: 'fixture', account: 101, kind: 'cash',
         page: 0, limit: 25, more: true, auto: true, loading: 'Loading', paused: 'Paused', failed: 'Failed', refresh: 'Refresh'};
     const calls = [];
     const timers = new Map();
@@ -49,7 +49,7 @@ function harness() {
     const h = harness();
     check(h.calls.length === 1 && h.timers.size === 0, 'Only one scan starts; an unfinished request never overlaps another');
     const posted = new URLSearchParams(h.calls[0].options.body);
-    check(posted.get('action') === 'bulk_scan' && posted.get('token') === 'fixture' && posted.get('account_context') === '101', 'Background requests carry only read-only scan action, token and explicit account context');
+    check(posted.get('action') === 'bulk_scan' && posted.get('token') === 'fixture' && posted.get('account_context') === '101' && posted.get('kind') === 'cash', 'Background requests carry only read-only scan action, token and explicit account/type context');
     h.respond(0, {html: JSON.stringify([{value: '1', checked: false}]), more: true, auto: true, token: 'next'});
     await tick();
     check(h.calls.length === 1 && h.timers.size === 1, 'A subsequent batch waits for the previous response');

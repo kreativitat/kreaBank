@@ -53,11 +53,24 @@ class ActionsKreaBank extends CommonHookActions
 		if (!$this->bankingContextAllowed()) {
 			return 0;
 		}
+		require_once __DIR__ . '/../lib/kreabank.lib.php';
 		$page = basename($_SERVER['PHP_SELF'] ?? '');
 		if ($page === 'list.php') {
 			$this->resprints = ' AND b.entity=' . (int) $conf->entity;
 		} elseif ($page === 'bankentries_list.php') {
-			$this->resprints = ' AND ba.entity=' . (int) $conf->entity;
+			$this->resprints = ' AND ba.entity=' . (int) $conf->entity . kreabankAccountKindSql(kreabankNavigationKind());
+			if (GETPOSTISSET('account_context')) {
+				$accountId = max(0, GETPOSTINT('account_context'));
+				if ($accountId > 0) {
+					$this->resprints .= ' AND ba.rowid=' . $accountId;
+				}
+				if (strpos((string) $param, 'account_context=') === false) {
+					$param .= '&account_context=' . $accountId;
+				}
+			}
+			if (strpos((string) $param, '&kind=') === false) {
+				$param .= kreabankNavigationKindParam();
+			}
 			if (GETPOSTINT('kreabank_matched')) {
 				require_once __DIR__ . '/kreabankintegration.class.php';
 				$report = new KreaBankIntegration($this->db,$conf->entity);
@@ -74,8 +87,12 @@ class ActionsKreaBank extends CommonHookActions
 	public function printFieldPreListTitle($parameters, &$object, &$action, $hookmanager)
 	{
 		$this->resprints = '';
-		if (basename($_SERVER['PHP_SELF'] ?? '') === 'bankentries_list.php' && GETPOSTINT('kreabank_matched')) {
-			$this->resprints = '<input type="hidden" name="kreabank_matched" value="1">';
+		if ($this->bankingContextAllowed() && basename($_SERVER['PHP_SELF'] ?? '') === 'bankentries_list.php') {
+			require_once __DIR__ . '/../lib/kreabank.lib.php';
+			$this->resprints = kreabankNavigationHiddenFields($this->nativeAccountId('bankentries_list.php'));
+			if (GETPOSTINT('kreabank_matched')) {
+				$this->resprints .= '<input type="hidden" name="kreabank_matched" value="1">';
+			}
 		}
 		return 0;
 	}
@@ -92,6 +109,13 @@ class ActionsKreaBank extends CommonHookActions
 		if ($page === 'list.php' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && $action === '') {
 			header('Location: ' . kreabankWorkspaceUrl('accounts'));
 			exit;
+		}
+		if ($page === 'bankentries_list.php' && GETPOSTISSET('account_context')) {
+			foreach (array('account', 'id', 'search_account') as $field) {
+				if (GETPOSTINT($field) > 0 && GETPOSTINT($field) !== GETPOSTINT('account_context')) {
+					kreabankNavigationAccount(GETPOSTINT($field));
+				}
+			}
 		}
 		$accountId = $this->nativeAccountId($page);
 		if ($accountId > 0) {
@@ -119,6 +143,9 @@ class ActionsKreaBank extends CommonHookActions
 				accessforbidden();
 			}
 			return $row ? (int) $row->fk_account : 0;
+		}
+		if ($page === 'bankentries_list.php' && GETPOSTISSET('account_context')) {
+			return max(0, GETPOSTINT('account_context'));
 		}
 		$id = GETPOSTINT('account') ?: (GETPOSTINT('id') ?: GETPOSTINT('search_account'));
 		$ref = GETPOST('ref','alpha');

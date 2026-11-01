@@ -317,7 +317,7 @@ $assertContains($historySource, '$historyPoolLimit = max(300, (($page + 1) * $li
 $assertContains($historySource, '$historyPoolLimit = min(5000, $historyPoolLimit);', 'history should cap reconciliation fetch pool to bounded window for production stability', $errors);
 $assertContains($historySource, '$auditPoolLimit = max(300, (($auditPage + 1) * $limit) + 500);', 'history should size audit fetch pool from active audit page and list limit', $errors);
 $assertContains($historySource, '$auditPoolLimit = min(5000, $auditPoolLimit);', 'history should cap audit fetch pool to bounded window for production stability', $errors);
-$assertContains($historySource, '$recent = $service->getRecentReconciliations($historyPoolLimit, 0, $navigationAccountId);', 'history should fetch account-scoped reconciliations using bounded pool limit', $errors);
+$assertContains($historySource, '$recent = $service->getRecentReconciliations($historyPoolLimit, 0, $navigationAccountId, $navigationAccountKind);', 'history should fetch account-scoped reconciliations using bounded pool limit', $errors);
 $assertContains($historySource, '$auditRows = $service->getAuditHistory($auditPoolLimit);', 'history should fetch audit rows using bounded pool limit', $errors);
 $assertContains($historySource, '$isAllowedAbsoluteUrlPrefix = static function ($urlPrefix) use ($currentHttpHost)', 'history should validate absolute document URL host before rendering links', $errors);
 $assertContains($historySource, '$auditDateLabel = ($auditDateTs !== false && $auditDateTs > 0) ? dol_print_date($auditDateTs, \'dayhour\') : \'<span class="opacitymedium">-</span>\';', 'history should guard invalid audit timestamps before rendering date', $errors);

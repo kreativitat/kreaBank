@@ -14,7 +14,7 @@ function kreabankWorkspaceUrl($page, $accountId = 0)
 	}
 	return dol_buildpath('/custom/kreabank/' . $page . '.php', 1)
 		. '?mainmenu=bank&leftmenu=kreabank_' . $page
-		. ((int) $accountId > 0 ? '&account_context=' . (int) $accountId : '');
+		. ((int) $accountId > 0 ? '&account_context=' . (int) $accountId : '') . kreabankNavigationKindParam();
 }
 
 /** Resolve only an account owned by the active company; never trust Account::entity. */
@@ -50,7 +50,8 @@ function kreabankCompleteAccountHead($head, $accountId)
 /** Persist the account context through GET filters and POST actions. */
 function kreabankNavigationHiddenFields($accountId)
 {
-	return (int) $accountId > 0 ? '<input type="hidden" name="account_context" value="' . (int) $accountId . '">' : '';
+	return ((int) $accountId > 0 ? '<input type="hidden" name="account_context" value="' . (int) $accountId . '">' : '')
+		. '<input type="hidden" name="kind" value="' . kreabankNavigationKind() . '">';
 }
 
 /** Resolve a page in the single banking workspace. */
@@ -88,9 +89,66 @@ function kreabankAccountToolEntries($accountId)
 		'numbering' => array('bankentries_list.php?action=reconcile&search_conciliated=0&id=', 'KreaBankStatementNumbering'),
 	);
 	foreach ($tools as $key => $tool) {
-		$entries[] = array('key' => $key, 'url' => '/compta/bank/' . $tool[0] . (int) $accountId . '&mainmenu=bank&leftmenu=bank', 'label' => $tool[1]);
+		$entries[] = array('key' => $key, 'url' => '/compta/bank/' . $tool[0] . (int) $accountId . '&mainmenu=bank&leftmenu=bank' . kreabankNavigationKindParam(), 'label' => $tool[1]);
 	}
 	return $entries;
+}
+
+/** Request-local filter state; all types preserves existing operational list behavior. */
+function kreabankNavigationKind($default = 'all')
+{
+	$kind = GETPOST('kind', 'aZ09');
+	return in_array($kind, array('all', 'bank', 'cash', 'closed'), true) ? $kind : $default;
+}
+
+function kreabankNavigationKindParam()
+{
+	$kind = kreabankNavigationKind();
+	return $kind === 'all' ? '' : '&kind=' . $kind;
+}
+
+/** Owned IDs validate cached/requested review rows against the account-type filter. */
+function kreabankNavigationAccountIds($kind)
+{
+	global $db, $conf;
+	$result = $db->query('SELECT ba.rowid FROM ' . $db->prefix() . 'bank_account ba WHERE ba.entity=' . (int) $conf->entity . kreabankAccountKindSql($kind));
+	if (!$result) {
+		throw new RuntimeException('Unable to read account filter scope');
+	}
+	$ids = array();
+	while ($row = $db->fetch_object($result)) {
+		$ids[] = (int) $row->rowid;
+	}
+	return $ids;
+}
+
+/** One filter panel outside navigation, submitted directly to its destination page. */
+function kreabankBankingFilters($page, $accountId = 0, $kind = null)
+{
+	global $langs;
+	$kind = $kind === null ? kreabankNavigationKind() : $kind;
+	$accountPages = array('card', 'documents', 'reports', 'forecast', 'native_statements', 'numbering');
+	$isAccountTool = in_array($page, $accountPages, true) || $page === 'import';
+	$action = $isAccountTool ? dol_buildpath('/custom/kreabank/accounts.php', 1) : strtok(kreabankBankingUrl($page), '?');
+	$html = '<form class="kb-accounts-filters" method="get" action="' . dol_escape_htmltag($action) . '" role="search" aria-label="' . dol_escape_htmltag($langs->trans('Filters')) . '">';
+	$html .= '<input type="hidden" name="mainmenu" value="bank"><input type="hidden" name="leftmenu" value="bank">';
+	if ($isAccountTool) {
+		$html .= '<input type="hidden" name="view" value="' . $page . '">';
+	}
+	if ($page === 'movements' && GETPOSTINT('kreabank_matched')) {
+		$html .= '<input type="hidden" name="kreabank_matched" value="1">';
+	}
+	$html .= '<strong class="kb-filter-title">' . $langs->trans('Filters') . '</strong><div class="kb-filter-field">' . kreabankAccountFilterSelect($accountId) . '</div>';
+	if (!$isAccountTool) {
+		$html .= '<div class="kb-filter-field"><label for="kreabank-account-kind">' . $langs->trans('AccountType') . '</label><select class="flat" id="kreabank-account-kind" name="kind">';
+		foreach (array('all' => 'All', 'bank' => 'KreaBankBankAccounts', 'cash' => 'KreaBankCashAccounts', 'closed' => 'KreaBankClosedAccounts') as $value => $label) {
+			$html .= '<option value="' . $value . '"' . ($value === $kind ? ' selected' : '') . '>' . $langs->trans($label) . '</option>';
+		}
+		$html .= '</select></div>';
+	} else {
+		$html .= '<input type="hidden" name="kind" value="' . dol_escape_htmltag($kind) . '">';
+	}
+	return $html . '<button class="button" type="submit">' . $langs->trans('ToFilter') . '</button></form>';
 }
 
 /** Render the current-company account control for workspace or list filters. */
@@ -108,7 +166,7 @@ function kreabankAccountFilterSelect($accountId = 0)
 	return $html . '</select>';
 }
 
-/** One primary banking bar; the account overview owns its separate list filters. */
+/** Account management and operations have separate navigation; filters follow the header. */
 function kreabankBankingHeader($page, $account = null)
 {
 	global $db, $conf, $langs, $user, $mysoc;
@@ -118,20 +176,17 @@ function kreabankBankingHeader($page, $account = null)
 	$html = '<link rel="stylesheet" href="' . dol_escape_htmltag($css) . '"><header class="kb-header">';
 	$html .= '<div class="kb-context"><div class="kb-brand"><span class="fas fa-university" aria-hidden="true"></span><strong>' . $langs->trans('KreaBankBanking') . '</strong>';
 	$html .= '<span class="kb-company" title="' . dol_escape_htmltag($mysoc->name ?? '') . '">' . dol_escape_htmltag($mysoc->name ?? '') . '</span></div>';
-	if ($page !== 'accounts') {
-		$html .= '<form method="get" action="' . dol_escape_htmltag(dol_buildpath('/custom/kreabank/accounts.php', 1)) . '"><input type="hidden" name="view" value="' . dol_escape_htmltag($page) . '">';
-		$html .= kreabankAccountFilterSelect($accountId);
-		$html .= '<button class="button" type="submit">' . $langs->trans('Show') . '</button></form>';
-	}
 	$html .= '</div>';
 	$accountTools = $accountId > 0 ? kreabankAccountToolEntries($accountId) : array();
-	$active = in_array($page, array_column($accountTools, 'key'), true) ? 'account' : (in_array($page, array('bulkmatch', 'pending'), true) ? 'reconcile' : ($page === 'import' ? 'statement' : ($page === 'card' ? 'accounts' : $page)));
-	$html .= '<nav class="kb-primary" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankBanking')) . '">';
-	foreach (kreabankPrepareHead($accountId) as $tab) {
-		$html .= '<a' . ($active === $tab[2] ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag($tab[0]) . '">' . $tab[1] . '</a>';
+	$active = in_array($page, array('card', 'documents', 'reports', 'forecast', 'native_statements', 'numbering'), true) ? 'account' : (in_array($page, array('bulkmatch', 'pending'), true) ? 'reconcile' : ($page === 'import' ? 'statement' : $page));
+	if ($page !== 'accounts' && $active !== 'account') {
+		$html .= '<nav class="kb-primary" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankBanking')) . '">';
+		foreach (kreabankPrepareHead($accountId) as $tab) {
+			$html .= '<a' . ($active === $tab[2] ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag($tab[0]) . '">' . $tab[1] . '</a>';
+		}
+		$html .= '</nav>';
 	}
-	$html .= '</nav>';
-	if ($active === 'account') {
+	if ($active === 'account' && $accountTools) {
 		$html .= '<div class="kb-view-switch kb-account-tabs" role="navigation" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankAccountOptions')) . '">';
 		foreach ($accountTools as $entry) {
 			$html .= '<a' . ($page === $entry['key'] ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag(dol_buildpath($entry['url'], 1)) . '">' . $langs->trans($entry['label']) . '</a>';
@@ -154,7 +209,7 @@ function kreabankBankingHeader($page, $account = null)
 		$html .= '</div>';
 	}
 	$html .= '</header><script nonce="' . dol_escape_htmltag(function_exists('getNonce') ? getNonce() : '') . '">document.body.classList.add("kreabank-banking");</script>';
-	return $html;
+	return $html . ($page === 'accounts' || ($active === 'account' && !$accountId) ? '' : kreabankBankingFilters($page, $accountId));
 }
 
 function kreabankPrintWorkspaceNavigation($page, $account = null)

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.14.24 — 2026-11-01
+
+- Separate account management from the five operational banking tabs. Keep account
+  details and tools on their own pages, accessible through the accounts list.
+- Use one separate account/type filter panel on movements, statements,
+  reconciliation, connections and history; remove the old header selector.
+- Apply type filters before counting/pagination, retaining company ownership and
+  filter state across navigation, searches and bulk scans. Refresh open bulk-review
+  forms after upgrading. No schema, financial-data or scheduler migration.
+
 ## 1.14.23 — 2026-11-01
 
 - Keep internal transfers in the native layout without the KreaBank workspace

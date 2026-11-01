@@ -502,13 +502,14 @@ class KreaBankFintableSync
 			. ',status=' . $this->text($status) . ',error_code=NULL WHERE rowid=' . (int) $mapping->rowid . ' AND entity=' . (int) $mapping->entity);
 	}
 
-	public function accountStatus($entity, $includeUnidentified = false)
+	public function accountStatus($entity, $includeUnidentified = false, $accountKind = 'all')
 	{
+		require_once __DIR__ . '/../lib/kreabank_account_filter.lib.php';
 		$rows = $this->rows('SELECT b.rowid,b.ref,b.label,b.iban_prefix,b.currency_code,f.provider_account_id,f.balance,f.balance_available,'
 			. 'f.bank_updated_at,f.history_from,f.history_to,f.last_success,f.status,f.error_code FROM ' . $this->db->prefix() . 'bank_account b'
 			. ' LEFT JOIN ' . $this->db->prefix() . 'kreabank_feed_account f ON f.fk_bank_account=b.rowid AND f.entity=b.entity AND f.workspace_id='
 			. $this->text($this->setting('KREABANK_FINTABLE_WORKSPACE'))
-			. ' WHERE b.entity=' . (int) $entity . ' AND b.clos=0 AND b.courant<>2 ORDER BY b.ref');
+			. ' WHERE b.entity=' . (int) $entity . ' AND b.clos=0 AND b.courant<>2' . kreabankAccountKindSql($accountKind, 'b') . ' ORDER BY b.ref');
 		return $includeUnidentified ? $rows : array_values(array_filter($rows, static function ($row) {
 			return !empty($row->provider_account_id) || KreaBankFintableMapper::iban($row->iban_prefix) !== '';
 		}));

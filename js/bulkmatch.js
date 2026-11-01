@@ -72,7 +72,7 @@
         request = new AbortController();
         try {
             const body = new URLSearchParams({action: 'bulk_scan', token: config.token,
-                account_context: config.account, page: config.page, limit: config.limit,
+                account_context: config.account, kind: config.kind || 'all', page: config.page, limit: config.limit,
                 resume: manual ? '1' : '0'});
             const response = await fetch(endpoint, {method: 'POST', credentials: 'same-origin',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json'},

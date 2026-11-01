@@ -69,6 +69,8 @@ if (!$user->hasRight('banque', 'lire')) {
 
 $navigationAccountId = max(0, GETPOSTISSET('account_context') ? GETPOSTINT('account_context') : GETPOSTINT('bank_account_id'));
 $navigationAccount = kreabankNavigationAccount($navigationAccountId);
+$navigationAccountKind = kreabankNavigationKind();
+$navigationAccountIds = kreabankNavigationAccountIds($navigationAccountKind);
 $service = new KreaBankService($db, $user, $langs);
 $canNativeWrite = ($user->hasRight('banque', 'modifier') || $user->hasRight('banque', 'consolidate'));
 $action = GETPOST('action', 'aZ09');
@@ -101,13 +103,14 @@ $bulkScanCacheStoreKey = 'kreabank_bulkmatch_scan_state';
 $bulkScanMatcherRevision = 14;
 $bulkScanFilterScope = array(
 	'bank_account_id' => $navigationAccountId,
+	'account_kind' => $navigationAccountKind,
 );
 $bulkScanCacheScope = ((int) $conf->entity) . '|' . ((int) $user->id) . '|' . ((int) $dateTolerance) . '|' . ((int) $bulkScanMatcherRevision) . '|' . hash('sha256', json_encode($bulkScanFilterScope));
 if (empty($_SESSION['kreabank_bulk_review_secret'])) {
 	$_SESSION['kreabank_bulk_review_secret'] = bin2hex(random_bytes(32));
 }
 $bulkReviewSecret = $_SESSION['kreabank_bulk_review_secret'];
-$bulkReviewScope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId;
+$bulkReviewScope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId . '|' . $navigationAccountKind;
 $bulkScanCacheTtl = (int) getDolGlobalInt('KREABANK_BULKMATCH_SCAN_CACHE_TTL');
 if ($bulkScanCacheTtl <= 0) {
 	$bulkScanCacheTtl = 120;
@@ -517,7 +520,7 @@ if ($action === 'bulk_match_confirm') {
 
 	// Bulk confirmation can change pending/matchable lines; force cache refresh.
 	unset($_SESSION[$bulkScanCacheStoreKey]);
-	header('Location: ' . dol_buildpath('/custom/kreabank/bulkmatch.php', 1) . '?account_context=' . $navigationAccountId . '&limit=' . $limit);
+	header('Location: ' . dol_buildpath('/custom/kreabank/bulkmatch.php', 1) . '?account_context=' . $navigationAccountId . kreabankNavigationKindParam() . '&limit=' . $limit);
 	exit;
 }
 
@@ -669,9 +672,9 @@ try {
 			static function ($chunk, $scanOffset) use ($service, $bulkScanFilterScope) {
 				return $service->getPendingLines($chunk, $scanOffset, 'b.dateo', 'ASC', $bulkScanFilterScope);
 			},
-			static function ($id) use ($service, $navigationAccountId) {
+			static function ($id) use ($service, $navigationAccountId, $navigationAccountIds) {
 				$line = $service->getLineById($id);
-				return $line && (!$navigationAccountId || (int) $line['bank_account_id'] === $navigationAccountId) ? $line : null;
+				return $line && (!$navigationAccountId || (int) $line['bank_account_id'] === $navigationAccountId) && in_array((int) $line['bank_account_id'], $navigationAccountIds, true) ? $line : null;
 			}, $prepareReviewRow);
 		$scanState['reload_count'] = kreabankBulkScanNeedsWork($scanState, $page, $limit) ? $scanState['reload_count'] + 1 : 0;
 		if (!session_start()) {
@@ -731,7 +734,7 @@ try {
 	setEventMessages($e->getMessage(), null, 'errors');
 }
 
-$param = '&mainmenu=bank&leftmenu=kreabank_bulkmatch&account_context=' . $navigationAccountId;
+$param = '&mainmenu=bank&leftmenu=kreabank_bulkmatch&account_context=' . $navigationAccountId . kreabankNavigationKindParam();
 if ($limit > 0 && $limit !== (int) $conf->liste_limit) {
 	$param .= '&limit=' . $limit;
 }
@@ -973,11 +976,11 @@ print '</div>';
 print '<div class="krea-bulk-progress" id="krea-bulk-scan-status" role="status" aria-live="polite"></div>';
 print '<button type="button" class="button" id="krea-bulk-scan-resume" hidden>' . $langs->trans('KreaBankBulkMatchContinue') . '</button>';
 $scanClientConfig = array('url' => $_SERVER['PHP_SELF'], 'token' => currentToken(), 'page' => $page, 'limit' => $limit,
-	'account' => $navigationAccountId, 'more' => $scanInProgress, 'auto' => $scanAutoReloadEnabled,
+	'account' => $navigationAccountId, 'kind' => $navigationAccountKind, 'more' => $scanInProgress, 'auto' => $scanAutoReloadEnabled,
 	'loading' => $langs->transnoentities('KreaBankBulkMatchLoading'), 'paused' => $langs->transnoentities('KreaBankBulkMatchReviewPaused'),
 	'failed' => $langs->transnoentities('KreaBankBulkMatchScanFailed'), 'refresh' => $langs->transnoentities('Refresh'));
 print '<script type="application/json" id="krea-bulk-scan-config">' . json_encode($scanClientConfig, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . '</script>';
-print '<script src="' . dol_buildpath('/custom/kreabank/js/bulkmatch.js', 1) . '?v=1.14.11" defer></script>';
+print '<script src="' . dol_buildpath('/custom/kreabank/js/bulkmatch.js', 1) . '?v=1.14.24" defer></script>';
 print dol_get_fiche_end();
 llxFooter();
 $db->close();

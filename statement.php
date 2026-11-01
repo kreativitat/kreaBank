@@ -52,6 +52,7 @@ if (!isModEnabled('kreabank') || !isModEnabled('banque') || !$user->hasRight('ba
 }
 $navigationAccountId = max(0, GETPOSTINT('account_context'));
 $navigationAccount = kreabankNavigationAccount($navigationAccountId);
+$navigationAccountKind = kreabankNavigationKind();
 $reference = trim((string) GETPOST('ref', 'alphanohtml'));
 if ($reference !== '' && !$navigationAccount) {
 	accessforbidden();
@@ -59,7 +60,7 @@ if ($reference !== '' && !$navigationAccount) {
 $page = max(0, GETPOSTINT('page'));
 $limit = 50;
 $report = new KreaBankIntegration($db, $conf->entity);
-$statement = $reference !== '' ? $report->statement($navigationAccountId, $reference) : null;
+$statement = $reference !== '' ? $report->statement($navigationAccountId, $reference, $navigationAccountKind) : null;
 if ($reference !== '' && !$statement) {
 	http_response_code(404);
 	llxHeader('', $langs->trans('KreaBankImportedStatements'));
@@ -71,7 +72,7 @@ if ($statement) {
 	$source = '(' . $report->linesSql($navigationAccountId, $reference) . ') h';
 	$order = 'h.operation_date,h.line_rank,h.rowid';
 } else {
-	$source = '(' . $report->statementsSql($navigationAccountId) . ') h';
+	$source = '(' . $report->statementsSql($navigationAccountId, $navigationAccountKind) . ') h';
 	$order = 'h.imported_at DESC,h.bank_account_id,h.statement_ref';
 }
 $result = $report->query('SELECT COUNT(*) nb FROM ' . $source);

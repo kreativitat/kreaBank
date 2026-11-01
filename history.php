@@ -65,6 +65,7 @@ if (!$user->hasRight('banque', 'lire')) {
 $action = GETPOST('action', 'aZ09');
 $navigationAccountId = max(0, GETPOSTINT('account_context'));
 $navigationAccount = kreabankNavigationAccount($navigationAccountId);
+$navigationAccountKind = kreabankNavigationKind();
 $service = new KreaBankService($db, $user, $langs);
 $canNativeWrite = ($user->hasRight('banque', 'modifier') || $user->hasRight('banque', 'consolidate'));
 $nativeEntryLabel = 'LAN&Ccedil;AMENTO';
@@ -165,7 +166,7 @@ if (GETPOST('button_removefilter_x', 'alpha') !== '' || GETPOST('button_removefi
 $recent = array();
 $auditRows = array();
 try {
-	$recent = $service->getRecentReconciliations($historyPoolLimit, 0, $navigationAccountId);
+	$recent = $service->getRecentReconciliations($historyPoolLimit, 0, $navigationAccountId, $navigationAccountKind);
 	$auditRows = $service->getAuditHistory($auditPoolLimit);
 } catch (Exception $e) {
 	setEventMessages($e->getMessage(), null, 'errors');
@@ -575,7 +576,7 @@ if ($limit > 0 && ($auditOffset + $auditCurrentPageCount) < $auditTotalRecords) 
 	$auditPagerNum = $limit + 1;
 }
 
-$historyParam = '&mainmenu=bank&leftmenu=kreabank_history&account_context=' . $navigationAccountId;
+$historyParam = '&mainmenu=bank&leftmenu=kreabank_history&account_context=' . $navigationAccountId . kreabankNavigationKindParam();
 if ($historySearch !== '') {
 	$historyParam .= '&hist_search=' . urlencode($historySearch);
 }
@@ -621,7 +622,7 @@ if ($limit > 0 && $limit !== (int) $conf->liste_limit) {
 if ($auditPage > 0) {
 	$historyParam .= '&audit_page=' . $auditPage;
 }
-$auditParam = '&mainmenu=bank&leftmenu=kreabank_history&account_context=' . $navigationAccountId;
+$auditParam = '&mainmenu=bank&leftmenu=kreabank_history&account_context=' . $navigationAccountId . kreabankNavigationKindParam();
 if ($historySearch !== '') {
 	$auditParam .= '&hist_search=' . urlencode($historySearch);
 }
@@ -828,7 +829,7 @@ if ($historyTotalRecords === 0) {
 		$row = $preparedRow['row'];
 		$lineId = (int) $preparedRow['line_id'];
 		$nativeLineId = (int) (isset($row['native_bank_line_id']) ? $row['native_bank_line_id'] : 0);
-		$lineUrl = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile&account_context=' . $navigationAccountId . '&line_id=' . $lineId, 1);
+		$lineUrl = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile&account_context=' . $navigationAccountId . kreabankNavigationKindParam() . '&line_id=' . $lineId, 1);
 		$nativeLineUrl = ($nativeLineId > 0 ? dol_buildpath('/compta/bank/line.php?rowid=' . $nativeLineId, 1) : '');
 		$eventTs = (int) $preparedRow['event_ts'];
 		$eventLabel = ($eventTs > 0 ? dol_print_date($eventTs, 'dayhour') : dol_escape_htmltag((string) $preparedRow['event_date']));

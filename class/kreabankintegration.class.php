@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+require_once __DIR__ . '/../lib/kreabank_account_filter.lib.php';
+
 /** Read-only projection of imported evidence and its native ledger links. */
 class KreaBankIntegration
 {
@@ -19,11 +21,11 @@ class KreaBankIntegration
 	}
 
 	/** Both storage generations are visible together, with no native movement counted twice. */
-	public function statementsSql($accountId = 0)
+	public function statementsSql($accountId = 0, $accountKind = 'all')
 	{
 		$p = $this->db->prefix();
 		$e = $this->entity;
-		$account = (int) $accountId > 0 ? ' AND ba.rowid = ' . (int) $accountId : '';
+		$account = ((int) $accountId > 0 ? ' AND ba.rowid = ' . (int) $accountId : '') . kreabankAccountKindSql($accountKind);
 		$sql = "SELECT s.bank_account_id, ba.ref bank_account_ref, ba.label bank_account_label, s.ref statement_ref,"
 			. " MIN(l.operation_date) first_operation_date, MAX(l.operation_date) last_operation_date,"
 			. " COUNT(l.rowid) imported_lines, COALESCE(SUM(l.amount),0) amount_total, s.source_type, s.filename source_file, s.date_import imported_at,"
@@ -54,7 +56,7 @@ class KreaBankIntegration
 		$e = $this->entity;
 		$now = $this->quote($this->db->idate(dol_now()));
 		$accountFilter = (int) $accountId > 0 ? ' AND ba.rowid=' . (int) $accountId : '';
-		$filter = $kind === 'closed' ? ' AND ba.clos=1' : ' AND ba.clos=0' . ($kind === 'cash' ? ' AND ba.courant=2' : ' AND ba.courant<>2');
+		$filter = kreabankAccountKindSql($kind);
 		$sql = "SELECT ba.rowid,ba.ref,ba.label,ba.currency_code,ba.clos,COALESCE(nb.balance,0) balance,COALESCE(st.pending_count,0)+COALESCE(lg.pending_count,0) pending_count"
 			. " FROM {$p}bank_account ba LEFT JOIN (SELECT b.fk_account,SUM(b.amount) balance FROM {$p}bank b JOIN {$p}bank_account owner ON owner.rowid=b.fk_account AND owner.entity=$e WHERE b.dateo<=$now GROUP BY b.fk_account) nb ON nb.fk_account=ba.rowid"
 			. " LEFT JOIN (SELECT s.bank_account_id,COUNT(*) pending_count FROM {$p}kreabank_statement_line l JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity LEFT JOIN {$p}bank b ON b.rowid=l.fk_native_bank_line WHERE s.entity=$e AND l.status IN (0,1) AND COALESCE(b.rappro,0)=0 GROUP BY s.bank_account_id) st ON st.bank_account_id=ba.rowid"
@@ -75,9 +77,9 @@ class KreaBankIntegration
 		return $result;
 	}
 
-	public function statement($accountId, $reference)
+	public function statement($accountId, $reference, $accountKind = 'all')
 	{
-		$sql = 'SELECT h.* FROM (' . $this->statementsSql($accountId) . ') h WHERE h.statement_ref=' . $this->quote($reference);
+		$sql = 'SELECT h.* FROM (' . $this->statementsSql($accountId, $accountKind) . ') h WHERE h.statement_ref=' . $this->quote($reference);
 		$result = $this->query($sql);
 		return $this->db->fetch_object($result);
 	}
