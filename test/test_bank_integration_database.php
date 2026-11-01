@@ -55,4 +55,8 @@ $service = new KreaBankService($db, $user, $langs);
 $legacyRead = $service->ensureNativeStatementLines(101, 'ST-501');
 checkAuto($legacyRead['created_count'] === 0 && countAuto('bank') === $before, 'Legacy open helper does not materialize statements');
 rejectAuto(static function () use ($report) { $report->query('UPDATE kbauto_bank SET amount=0'); }, 'Report interface refuses mutations');
+$accountRows = $report->accounts('bank');
+$accountIds = array();
+while ($accountRow = $db->fetch_object($accountRows)) { $accountIds[] = (int) $accountRow->rowid; }
+checkAuto(in_array(101,$accountIds,true) && !in_array(202,$accountIds,true), 'Account overview shows owner-company accounts only');
 print "OK: $checks bank integration database checks\n";

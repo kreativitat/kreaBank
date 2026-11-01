@@ -8,7 +8,7 @@ require_once __DIR__ . '/kreabank_integration.lib.php';
 /** Build a workspace URL without carrying actions, line IDs or pagination across pages. */
 function kreabankWorkspaceUrl($page, $accountId = 0)
 {
-	$pages = array('reconcile', 'bulkmatch', 'pending', 'import', 'feed', 'history', 'statement');
+	$pages = array('reconcile', 'bulkmatch', 'pending', 'import', 'feed', 'history', 'statement', 'accounts');
 	if (!in_array($page, $pages, true)) {
 		throw new InvalidArgumentException('Unknown bank workspace page');
 	}
@@ -41,28 +41,10 @@ function kreabankNavigationAccount($accountId)
 	return $account;
 }
 
-/** Keep the native account tabs, with distinct names for the two reconciliation tasks. */
+/** Native tabs are replaced by the shared workspace header, not extended. */
 function kreabankCompleteAccountHead($head, $accountId)
 {
-	global $user, $langs;
-	if (!$user->hasRight('banque', 'lire')) {
-		return $head;
-	}
-	$langs->load('kreabank@kreabank');
-	$hasWorkspace = false;
-	foreach ($head as &$tab) {
-		if (in_array($tab[2], array('reconcile', 'reconcileauto'), true)) {
-			$tab[1] = $langs->trans('KreaBankStatementNumbering');
-		}
-		if ($tab[2] === 'kreabank') {
-			$hasWorkspace = true;
-		}
-	}
-	unset($tab);
-	if (!$hasWorkspace && $user->hasRight('kreabank', 'reconciliation', 'read')) {
-		array_splice($head, 2, 0, array(array(kreabankWorkspaceUrl('reconcile', $accountId), 'KreaBank', 'kreabank')));
-	}
-	return array_values($head);
+	return $head;
 }
 
 /** Persist the account context through GET filters and POST actions. */
@@ -71,48 +53,70 @@ function kreabankNavigationHiddenFields($accountId)
 	return (int) $accountId > 0 ? '<input type="hidden" name="account_context" value="' . (int) $accountId . '">' : '';
 }
 
-/** Render the shared account selector, native tabs, and the smaller KreaBank workspace. */
-function kreabankPrintWorkspaceNavigation($page, $account = null)
+/** Resolve a page in the single banking workspace. */
+function kreabankBankingUrl($page, $accountId = 0)
 {
-	global $db, $conf, $langs, $user, $hookmanager;
+	if ($page === 'movements') {
+		return kreabankNativeEntriesUrl($accountId);
+	}
+	if ($page === 'card') {
+		return (int) $accountId > 0 ? dol_buildpath('/compta/bank/card.php', 1) . '?id=' . (int) $accountId : kreabankWorkspaceUrl('accounts');
+	}
+	return $page === 'statement' ? kreabankStatementUrl($accountId) : kreabankWorkspaceUrl($page, $accountId);
+}
+
+/** One account selector and one primary navigation bar for native and module pages. */
+function kreabankBankingHeader($page, $account = null)
+{
+	global $db, $conf, $langs, $user, $mysoc;
 	$accountId = $account ? (int) $account->id : 0;
 	$langs->loadLangs(array('banks', 'kreabank@kreabank'));
-	print '<div class="kreabank-context"><a href="' . DOL_URL_ROOT . '/compta/bank/list.php?mainmenu=bank&leftmenu=bank&search_status=opened">'
-		. $langs->trans('KreaBankAccounts') . '</a>';
-	print '<form method="get" action="' . dol_escape_htmltag(kreabankWorkspaceUrl($page)) . '">';
-	print '<input type="hidden" name="mainmenu" value="bank"><input type="hidden" name="leftmenu" value="kreabank_' . $page . '">';
-	print '<label for="kreabank-account-context">' . $langs->trans('BankAccount') . '</label> ';
-	print '<select class="flat" id="kreabank-account-context" name="account_context"><option value="0">' . $langs->trans('KreaBankAllAccounts') . '</option>';
-	$result = $db->query('SELECT rowid, ref, label FROM ' . $db->prefix() . 'bank_account WHERE entity = ' . (int) $conf->entity . ' ORDER BY clos, ref, label');
+	$css = dol_buildpath('/custom/kreabank/css/navigation.css', 1) . '?v=' . (int) filemtime(__DIR__ . '/../css/navigation.css');
+	$html = '<link rel="stylesheet" href="' . dol_escape_htmltag($css) . '"><header class="kb-header">';
+	$html .= '<div class="kb-context"><div class="kb-brand"><span class="fas fa-university" aria-hidden="true"></span><strong>' . $langs->trans('KreaBankBanking') . '</strong>';
+	$html .= '<span class="kb-company" title="' . dol_escape_htmltag($mysoc->name ?? '') . '">' . dol_escape_htmltag($mysoc->name ?? '') . '</span></div>';
+	$html .= '<form method="get" action="' . dol_escape_htmltag(dol_buildpath('/custom/kreabank/accounts.php', 1)) . '"><input type="hidden" name="view" value="' . dol_escape_htmltag($page) . '">';
+	$html .= '<label for="kreabank-account-context">' . $langs->trans('BankAccount') . '</label><select class="flat" id="kreabank-account-context" name="account_context"><option value="0">' . $langs->trans('KreaBankAllAccounts') . '</option>';
+	$result = $db->query('SELECT rowid,ref,label FROM ' . $db->prefix() . 'bank_account WHERE entity=' . (int) $conf->entity . ' ORDER BY clos,ref,label');
 	if (!$result) {
-		throw new RuntimeException('Unable to list bank accounts');
+		throw new RuntimeException('Unable to read company accounts');
 	}
 	while ($row = $db->fetch_object($result)) {
-		print '<option value="' . (int) $row->rowid . '"' . ((int) $row->rowid === $accountId ? ' selected' : '') . '>'
-			. dol_escape_htmltag($row->ref . ' — ' . $row->label) . '</option>';
+		$html .= '<option value="' . (int) $row->rowid . '"' . ((int) $row->rowid === $accountId ? ' selected' : '') . '>' . dol_escape_htmltag($row->ref . ' — ' . $row->label) . '</option>';
 	}
-	print '</select> <button type="submit" class="button small">' . $langs->trans('Show') . '</button></form></div>';
-	if ($account) {
-		require_once DOL_DOCUMENT_ROOT . '/core/lib/bank.lib.php';
-		$hookmanager->initHooks(array('kreabankworkspace'));
-		$head = kreabankCompleteAccountHead(bank_prepare_head($account), $accountId);
-		print dol_get_fiche_head($head, 'kreabank', $langs->trans('BankAccount'), 1, 'bank');
-	}
-	$active = $page === 'statement' ? 'import' : (in_array($page, array('bulkmatch', 'pending'), true) ? 'reconcile' : $page);
-	print '<nav class="kreabank-workspace-nav" aria-label="KreaBank">';
+	$html .= '</select><button class="button" type="submit">' . $langs->trans('Show') . '</button></form></div>';
+	$active = in_array($page, array('bulkmatch', 'pending'), true) ? 'reconcile' : ($page === 'import' ? 'statement' : ($page === 'card' ? 'accounts' : $page));
+	$html .= '<nav class="kb-primary" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankBanking')) . '">';
 	foreach (kreabankPrepareHead($accountId) as $tab) {
-		print '<a' . ($tab[2] === $active ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag($tab[0]) . '">' . $tab[1] . '</a>';
+		$html .= '<a' . ($active === $tab[2] ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag($tab[0]) . '">' . $tab[1] . '</a>';
 	}
-	print '</nav>';
+	$html .= '</nav>';
 	if ($active === 'reconcile') {
-		print '<nav class="kreabank-tools" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankReconcile')) . '">';
-		foreach (array('reconcile' => 'KreaBankReviewOneByOne', 'bulkmatch' => 'KreaBankBulkMatch', 'pending' => 'KreaBankPending') as $tool => $label) {
-			print '<a' . ($page === $tool ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag(kreabankWorkspaceUrl($tool, $accountId)) . '">' . $langs->trans($label) . '</a>';
+		$html .= '<div class="kb-view-switch" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankReconcile')) . '">';
+		foreach (array('reconcile' => 'KreaBankReviewOneByOne', 'bulkmatch' => 'KreaBankBulkMatch', 'pending' => 'KreaBankPending') as $view => $label) {
+			$html .= '<a' . ($page === $view ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag(kreabankWorkspaceUrl($view, $accountId)) . '">' . $langs->trans($label) . '</a>';
 		}
-		print '</nav>';
+		$html .= '</div>';
 	}
-	print kreabankIntegrationPanel($accountId);
-	print '<p class="opacitymedium kreabank-workspace-help">' . $langs->trans('KreaBankWorkspaceHelp_' . $page) . '</p>';
-	// Callers already close this fiche at the end of their page.
+	$html .= '<details class="kb-more"><summary>' . $langs->trans('KreaBankMoreOptions') . '</summary><div>';
+	foreach (($accountId > 0 ? array('card.php?id=' => 'KreaBankAccountDetails', 'document.php?id=' => 'Documents', 'annuel.php?id=' => 'Reports', 'treso.php?id=' => 'KreaBankForecast', 'releve.php?native_statements=1&account=' => 'KreaBankNativeStatements', 'bankentries_list.php?action=reconcile&search_conciliated=0&id=' => 'KreaBankStatementNumbering') : array()) as $route => $label) {
+		$html .= '<a href="' . dol_escape_htmltag(dol_buildpath('/compta/bank/' . $route . $accountId, 1)) . '">' . $langs->trans($label) . '</a>';
+	}
+	if ($user->hasRight('banque','modifier')) {
+		$html .= '<a href="' . dol_buildpath('/compta/bank/transfer.php',1) . '">' . $langs->trans('Transfer') . '</a>';
+		$html .= '<a href="' . dol_buildpath('/compta/paiement/cheque/index.php',1) . '">' . $langs->trans('KreaBankChequeDeposits') . '</a>';
+	}
+	if (!empty($user->admin)) {
+		$html .= '<a href="' . dol_buildpath('/custom/kreabank/admin/automation.php',1) . '">' . $langs->trans('KreaBankAutomation') . '</a>';
+	}
+	$html .= '</div></details>';
+	$html .= '</header><script nonce="' . dol_escape_htmltag(function_exists('getNonce') ? getNonce() : '') . '">document.body.classList.add("kreabank-banking");</script>';
+	return $html;
+}
+
+function kreabankPrintWorkspaceNavigation($page, $account = null)
+{
+	print kreabankBankingHeader($page, $account);
+	// Existing page controllers close this content wrapper once.
 	print dol_get_fiche_head(array(), '', '', -1);
 }

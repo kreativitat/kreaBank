@@ -1,22 +1,52 @@
 /* Copyright (C) 2026 Kreativität Works <mail@kreativitat.com> */
-.kreabank-context { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0 18px; }
-.kreabank-context form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; max-width: 100%; }
-.kreabank-context select { max-width: min(440px, 100%); }
-.kreabank-workspace-nav, .kreabank-tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
-.kreabank-workspace-nav { border-bottom: 1px solid var(--colortopborder, #ddd); }
-.kreabank-workspace-nav a { padding: 10px 14px; border-bottom: 3px solid transparent; }
-.kreabank-workspace-nav a.active { border-bottom-color: var(--colortopborder, #456e55); font-weight: bold; }
-.kreabank-tools a { padding: 7px 12px; border: 1px solid #bbb; border-radius: 4px; }
-.kreabank-tools a.active { background: var(--colorbacktitle1, #eef3ef); font-weight: bold; }
-.kreabank-workspace-nav a:focus-visible, .kreabank-tools a:focus-visible, .kreabank-context a:focus-visible { outline: 2px solid #1769aa; outline-offset: 2px; }
-.kreabank-workspace-help { margin: 8px 0 16px; }
-@media (max-width: 600px) {
-  .kreabank-context form { width: 100%; }
-  .kreabank-context select { width: 100%; min-width: 0; }
-  .kreabank-workspace-nav a { padding: 9px 7px; }
+body.kreabank-banking #id-container > .side-nav { display:none !important; }
+body.kreabank-banking #id-right { margin-left:0 !important; padding:20px 28px; min-width:0; width:auto; }
+body.kreabank-banking.kb-native-bank #id-right .tabs { display:none !important; }
+body.kreabank-banking.kb-native-bank #id-right > .fiche > .tabs { display:none !important; }
+.kb-header { position:relative; margin:0 0 26px; color:#243649; }
+.kb-context { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; padding:4px 0 18px; }
+.kb-brand { display:flex; align-items:center; gap:10px; min-width:0; }
+.kb-brand > strong { font-size:24px; letter-spacing:-.5px; }
+.kb-brand > .fas { color:#4b7561; font-size:23px; }
+.kb-company { font-size:12px; color:#576878; max-width:38ch; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; border-left:1px solid #d5dde4; padding-left:12px; margin-left:4px; }
+.kb-context form { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:0; }
+.kb-context label { font-size:12px; color:#576878; }
+.kb-context select { min-width:260px; max-width:440px; }
+.kb-primary { display:flex; gap:6px; border-bottom:1px solid #d9e1e8; padding-bottom:10px; overflow-x:auto; }
+.kb-primary a { color:#526477; border-radius:6px; padding:10px 17px; white-space:nowrap; text-decoration:none; font-weight:600; }
+.kb-primary a:hover { background:#f0f4f7; }
+.kb-primary a.active { color:#fff; background:#355d4a; }
+.kb-header a:focus-visible,.kb-header summary:focus-visible { outline:2px solid #1769aa; outline-offset:2px; }
+.kb-view-switch { display:flex; gap:0; margin-top:18px; width:fit-content; border:1px solid #ccd7df; border-radius:6px; overflow:hidden; }
+.kb-view-switch a { font-size:12px; padding:7px 12px; color:#536779; text-decoration:none; }
+.kb-view-switch a.active { color:#244c38; background:#eaf2ed; font-weight:bold; }
+.kb-more { position:absolute; right:0; bottom:-29px; z-index:5; color:#526477; font-size:12px; }
+.kb-more summary { cursor:pointer; }
+.kb-more > div { position:absolute; right:0; margin-top:8px; background:#fff; box-shadow:0 6px 24px #0002; border:1px solid #dbe3ea; border-radius:6px; min-width:190px; padding:6px; }
+.kb-more a { display:block; padding:8px 10px; color:#34495d; }
+.kb-page-actions { display:flex; justify-content:flex-end; margin:8px 0 18px; }
+.kb-accounts-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:16px 0 22px; }
+.kb-accounts-table { border-collapse:separate; border-spacing:0; width:100%; border:1px solid #dbe3e9; border-radius:8px; overflow:hidden; background:#fff; }
+.kb-accounts-table th { background:#f4f7f9; color:#566a7b; font-weight:600; font-size:12px; text-align:left; padding:12px 16px; }
+.kb-accounts-table td { padding:16px; border-top:1px solid #e5ebef; }
+.kb-accounts-table .kb-account-name { font-weight:600; color:#273d50; }
+.kb-accounts-table small { display:block; margin-top:5px; color:#748391; }
+.kb-accounts-table td.kb-money { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.kb-account-actions { display:flex; justify-content:flex-end; gap:15px; white-space:nowrap; }
+.kb-count { display:inline-block; padding:3px 9px; border-radius:20px; background:#edf3f7; color:#38536c; font-weight:600; }
+@media(max-width:700px) {
+ body.kreabank-banking #id-right { padding:16px 12px; }
+ .kb-context { gap:12px; }
+ .kb-context form { width:100%; }
+ .kb-context label { width:100%; }
+ .kb-context select { min-width:0; flex:1; width:0; }
+ .kb-brand > strong { font-size:22px; }
+ .kb-company { max-width:24ch; }
+ .kb-primary a { padding:9px 12px; }
+ .kb-more { position:relative; bottom:auto; margin-top:14px; text-align:right; }
+ .kb-accounts-table td,.kb-accounts-table th { padding:12px; }
+ .kb-account-actions { flex-direction:column; gap:9px; }
+ .kb-accounts-toolbar { flex-wrap:wrap; }
 }
-.kreabank-integration { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; padding:14px 18px; margin:12px 0 18px; border:1px solid #cbd8df; border-left:4px solid #39748b; border-radius:5px; background:#f4f8fa; color:#263c47; }
-.kreabank-integration p { margin:6px 0; max-width:85ch; }
-.kreabank-integration nav { display:flex; flex-wrap:wrap; align-content:center; align-items:center; gap:8px 16px; }
-.kreabank-integration a:focus-visible { outline:2px solid #1769aa; outline-offset:2px; }
-.kreabank-statement-list td { vertical-align:top; }
+
+.kb-page-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin:16px 0 20px; }

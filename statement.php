@@ -81,8 +81,12 @@ if ($page * $limit >= $total) {
 }
 $result = $report->query('SELECT h.* FROM ' . $source . ' ORDER BY ' . $order . $db->plimit($limit, $page * $limit));
 llxHeader('', $langs->trans('KreaBankImportedStatements'));
-print load_fiche_titre($langs->trans('KreaBankImportedStatements'));
 kreabankPrintWorkspaceNavigation('statement', $navigationAccount);
+print '<div class="kb-page-heading"><h2>' . $langs->trans('KreaBankNavStatements') . '</h2>';
+if ($user->hasRight('kreabank', 'reconciliation', 'write') && $user->hasRight('banque', 'modifier')) {
+	print '<a class="butAction" href="' . dol_escape_htmltag(kreabankWorkspaceUrl('import', $navigationAccountId)) . '">' . $langs->trans('KreaBankImport') . '</a>';
+}
+print '</div>';
 if ($statement) {
 	print '<h2>' . dol_escape_htmltag($reference) . '</h2>';
 	print '<p>' . $langs->trans('KreaBankStatementProgress', (int) $statement->imported_lines, (int) $statement->native_lines, (int) $statement->reconciled_lines) . '</p>';

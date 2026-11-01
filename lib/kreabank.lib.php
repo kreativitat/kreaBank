@@ -63,16 +63,15 @@ function kreabankPrepareHead($accountId = 0)
 	$langs->load('kreabank@kreabank');
 	$head = array();
 	if ($user->hasRight('kreabank', 'reconciliation', 'read') && $user->hasRight('banque', 'lire')) {
-		$head[] = array(kreabankWorkspaceUrl('reconcile', $accountId), $langs->trans('KreaBankReconcile'), 'reconcile');
-	}
-	if ($user->hasRight('kreabank', 'reconciliation', 'write') && $user->hasRight('banque', 'modifier')) {
-		$head[] = array(kreabankWorkspaceUrl('import', $accountId), $langs->trans('KreaBankImport'), 'import');
+		foreach (array('accounts' => 'KreaBankAccounts', 'movements' => 'KreaBankNavMovements', 'statement' => 'KreaBankNavStatements', 'reconcile' => 'KreaBankReconcile') as $page => $label) {
+			$head[] = array(kreabankBankingUrl($page, $accountId), $langs->trans($label), $page);
+		}
 	}
 	if ($user->hasRight('banque', 'lire')) {
-		$head[] = array(kreabankWorkspaceUrl('feed', $accountId), $langs->trans('KreaBankFeeds'), 'feed');
+		$head[] = array(kreabankWorkspaceUrl('feed', $accountId), $langs->trans('KreaBankNavConnections'), 'feed');
 	}
 	if ($user->hasRight('kreabank', 'reconciliation', 'read') && $user->hasRight('banque', 'lire')) {
-		$head[] = array(kreabankWorkspaceUrl('history', $accountId), $langs->trans('KreaBankHistory'), 'history');
+		$head[] = array(kreabankWorkspaceUrl('history', $accountId), $langs->trans('KreaBankNavHistory'), 'history');
 	}
 	return $head;
 }

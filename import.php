@@ -902,8 +902,8 @@ if ($historyOffset + $historyPagerNum < $historyTotal) {
 
 llxHeader('', $langs->trans('KreaBankImport'), '', '', 0, 0, '', '', '', 'mod-kreabank page-import');
 
-print load_fiche_titre($langs->trans('KreaBankImport'), '', 'title_setup');
 kreabankPrintWorkspaceNavigation('import', $navigationAccount);
+print load_fiche_titre($langs->trans('KreaBankImport'), '', 'title_setup');
 
 $selectedBankId = GETPOSTINT('bank_account_id') ?: $navigationAccountId;
 if (!empty($currentWizard) && isset($currentWizard['bank_account_id'])) {
@@ -926,11 +926,11 @@ $isDuplicateReview = (!empty($currentWizard['phase']) && (string) $currentWizard
 $hasActiveWizard = (!empty($currentWizard) && is_array($currentWizard));
 
 if (!$hasActiveWizard) {
-	print '<div class="opacitymedium" style="font-size:2.1em;line-height:1.2;font-weight:800;color:#0d5b72;background:#edf7fb;border-left:6px solid #0d5b72;padding:10px 14px;border-radius:4px"><strong>Passo 1:</strong> ' . $langs->trans('KreaBankImportUpload') . '</div><br>';
+	print '<div class="opacitymedium" style="font-size:1em;font-weight:600;margin:14px 0"><strong>Passo 1:</strong> ' . $langs->trans('KreaBankImportUpload') . '</div><br>';
 } elseif (!$isDuplicateReview) {
-	print '<div class="opacitymedium" style="font-size:2.1em;line-height:1.2;font-weight:800;color:#0d5b72;background:#edf7fb;border-left:6px solid #0d5b72;padding:10px 14px;border-radius:4px"><strong>Passo 2:</strong> Rever importação e confirmar.</div><br>';
+	print '<div class="opacitymedium" style="font-size:1em;font-weight:600;margin:14px 0"><strong>Passo 2:</strong> Rever importação e confirmar.</div><br>';
 } else {
-	print '<div class="opacitymedium" style="font-size:2.1em;line-height:1.2;font-weight:800;color:#0d5b72;background:#edf7fb;border-left:6px solid #0d5b72;padding:10px 14px;border-radius:4px"><strong>Passo 3:</strong> Rever possíveis duplicados detetados e decidir o que importar.</div><br>';
+	print '<div class="opacitymedium" style="font-size:1em;font-weight:600;margin:14px 0"><strong>Passo 3:</strong> Rever possíveis duplicados detetados e decidir o que importar.</div><br>';
 }
 
 if (!$hasActiveWizard) {

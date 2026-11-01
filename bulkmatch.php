@@ -739,8 +739,8 @@ if ($limit > 0 && $limit !== (int) $conf->liste_limit) {
 if (!$isScanRequest) {
 	llxHeader('', $langs->trans('KreaBankBulkMatch'), '', '', 0, 0, '', '', '', 'mod-kreabank page-bulkmatch bodyforlist');
 
-	print load_fiche_titre($langs->trans('KreaBankBulkMatchTitle'), '', 'title_setup');
 	kreabankPrintWorkspaceNavigation('bulkmatch', $navigationAccount);
+	print load_fiche_titre($langs->trans('KreaBankBulkMatchTitle'), '', 'title_setup');
 
 	print '<style>';
 	print '.krea-bulk-intro{margin:8px 0 14px 0;padding:10px 12px;border:1px solid #d5e0ea;background:#f8fbfe;border-radius:8px}';
@@ -773,10 +773,6 @@ if (!$isScanRequest) {
 	print '@media (max-width: 1200px){.krea-bulk-row-panels{grid-template-columns:1fr}}';
 	print '</style>';
 
-	print '<div class="krea-bulk-intro">';
-	print '<h3 class="krea-bulk-intro-title">' . $langs->trans('KreaBankBulkMatchTitle') . '</h3>';
-	print '<p class="krea-bulk-intro-subtitle">' . $langs->trans('KreaBankBulkMatchSubtitle') . '</p>';
-	print '</div>';
 
 	print '<div id="krea-bulk-results">';
 } else {

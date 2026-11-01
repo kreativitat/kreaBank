@@ -50,7 +50,7 @@ class modKreaBank extends DolibarrModules
 		$this->descriptionlong = 'ModuleKreaBankDescLong';
 		$this->editor_name = 'Kreativität Works';
 		$this->editor_url = 'http://kreativitat.com';
-		$this->version = '1.14.12';
+		$this->version = '1.14.13';
 		$this->const_name = 'MAIN_MODULE_' . strtoupper($this->name);
 		$this->picto = 'kreaproducts@kreaproducts';
 
@@ -66,7 +66,7 @@ class modKreaBank extends DolibarrModules
 			'theme' => 0,
 			'css' => array('/custom/kreabank/css/navigation.css'),
 			'js' => array(),
-			'hooks' => array('productcard', 'bankcard', 'banktransactionlist', 'bankaccountstatement', 'bankaccountdocuments', 'bankannualreport', 'banktreso', 'kreabankworkspace'),
+			'hooks' => array('bankaccountlist', 'bankline', 'banktransfer', 'productcard', 'bankcard', 'banktransactionlist', 'bankaccountstatement', 'bankaccountdocuments', 'bankannualreport', 'banktreso', 'kreabankworkspace'),
 			'moduleforexternal' => 0,
 			'websitetemplates' => 0,
 			'captcha' => 0,
@@ -147,12 +147,7 @@ class modKreaBank extends DolibarrModules
 		$r++;
 
 		$this->menu = array();
-		$entries = array(
-			array('reconcile', 'KreaBankWorkspace', false),
-			array('import', 'KreaBankImport', true),
-			array('feed', 'KreaBankFeeds', false),
-			array('history', 'KreaBankHistory', false),
-		);
+		$entries = array(array('accounts', 'KreaBankBanking', false));
 		foreach ($entries as $position => $entry) {
 			$page = $entry[0];
 			$perms = '$user->hasRight("banque", "lire")';
@@ -163,7 +158,7 @@ class modKreaBank extends DolibarrModules
 				$perms .= ' && $user->hasRight("kreabank", "reconciliation", "write") && $user->hasRight("banque", "modifier")';
 			}
 			$this->menu[] = array(
-				'fk_menu' => $page === 'reconcile' ? 'fk_mainmenu=bank' : 'fk_mainmenu=bank,fk_leftmenu=kreabank_reconcile',
+				'fk_menu' => $page === 'accounts' ? 'fk_mainmenu=bank' : 'fk_mainmenu=bank,fk_leftmenu=kreabank_reconcile',
 				'type' => 'left', 'titre' => $entry[1], 'mainmenu' => 'bank',
 				'leftmenu' => 'kreabank_' . $page,
 				'url' => '/custom/kreabank/' . $page . '.php?mainmenu=bank&leftmenu=kreabank_' . $page,

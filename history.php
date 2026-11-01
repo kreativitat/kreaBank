@@ -670,8 +670,8 @@ $auditParam .= '&audit_page=' . $auditPage;
 
 llxHeader('', $langs->trans('KreaBankHistory'), '', '', 0, 0, '', '', '', 'mod-kreabank page-history bodyforlist');
 
-print load_fiche_titre($langs->trans('KreaBankHistory'), '', 'title_setup');
 kreabankPrintWorkspaceNavigation('history', $navigationAccount);
+print load_fiche_titre($langs->trans('KreaBankHistory'), '', 'title_setup');
 
 print '<style>';
 print '.krea-history-search-tool{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;background:#f8f9fb;border:1px solid #e2e4e8;border-radius:6px;padding:10px;margin:8px 0 12px 0}';

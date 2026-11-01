@@ -39,34 +39,33 @@ class ActionsKreaBank extends CommonHookActions
 		$this->db = $db;
 	}
 
-	/** Extend native bank account tabs without changing Dolibarr core. */
+	/** Keep native account tabs unchanged; the workspace header owns navigation. */
 	public function completeTabsHead($parameters, &$object, &$action, $hookmanager)
 	{
-		if (($parameters['type'] ?? '') !== 'bank' || ($parameters['mode'] ?? '') !== 'add' || empty($object->id)) {
-			return 0;
-		}
-		require_once __DIR__ . '/../lib/kreabank.lib.php';
-		$parameters['head'] = kreabankCompleteAccountHead($parameters['head'], (int) $object->id);
-		$this->results = $parameters['head'];
-		return 1;
+		return 0;
 	}
 
 	/** Apply the explicit matched-movements view before native pagination/counting. */
 	public function printFieldListWhere($parameters, &$object, &$action, $hookmanager)
 	{
-		global $user, $conf;
+		global $user, $conf, $param;
 		$this->resprints = '';
-		if (basename($_SERVER['PHP_SELF'] ?? '') !== 'bankentries_list.php' || !GETPOSTINT('kreabank_matched')
-			|| !$user->hasRight('banque', 'lire') || !$user->hasRight('kreabank', 'reconciliation', 'read')) {
+		if (!$this->bankingContextAllowed()) {
 			return 0;
 		}
-		require_once __DIR__ . '/kreabankintegration.class.php';
-		$report = new KreaBankIntegration($this->db, $conf->entity);
-		$this->resprints = $report->matchedWhereSql();
-		// Native links for sort/page/filter are built from this variable after the SQL hook.
-		global $param;
-		if (strpos((string) $param, 'kreabank_matched=') === false) {
-			$param .= '&kreabank_matched=1';
+		$page = basename($_SERVER['PHP_SELF'] ?? '');
+		if ($page === 'list.php') {
+			$this->resprints = ' AND b.entity=' . (int) $conf->entity;
+		} elseif ($page === 'bankentries_list.php') {
+			$this->resprints = ' AND ba.entity=' . (int) $conf->entity;
+			if (GETPOSTINT('kreabank_matched')) {
+				require_once __DIR__ . '/kreabankintegration.class.php';
+				$report = new KreaBankIntegration($this->db,$conf->entity);
+				$this->resprints .= $report->matchedWhereSql();
+				if (strpos((string) $param,'kreabank_matched=') === false) {
+					$param .= '&kreabank_matched=1';
+				}
+			}
 		}
 		return 0;
 	}
@@ -81,40 +80,77 @@ class ActionsKreaBank extends CommonHookActions
 		return 0;
 	}
 
-	/** Add the same read-only account context to native bank screens, without core patches. */
-	public function printCommonFooter($parameters, &$object, &$action, $hookmanager)
+	/** Route the banking entry point to the company-owned account overview. */
+	public function doActions($parameters, &$object, &$action, $hookmanager)
 	{
-		global $user, $db, $conf;
-		$this->resprints = '';
-		$page = basename($_SERVER['PHP_SELF'] ?? '');
-		if (!in_array($page, array('releve.php', 'bankentries_list.php', 'card.php'), true)
-			|| strpos($_SERVER['PHP_SELF'] ?? '', '/compta/bank/') === false
-			|| !$user->hasRight('banque', 'lire') || !$user->hasRight('kreabank', 'reconciliation', 'read')) {
+		global $user;
+		if (!$this->bankingContextAllowed()) {
 			return 0;
 		}
 		require_once __DIR__ . '/../lib/kreabank.lib.php';
-		$accountId = GETPOSTINT('account') ?: (GETPOSTINT('id') ?: GETPOSTINT('search_account'));
-		global $ref;
-		if (!$accountId && !empty($ref)) {
+		$page = basename($_SERVER['PHP_SELF'] ?? '');
+		if ($page === 'list.php' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && $action === '') {
+			header('Location: ' . kreabankWorkspaceUrl('accounts'));
+			exit;
+		}
+		$accountId = $this->nativeAccountId($page);
+		if ($accountId > 0) {
+			kreabankNavigationAccount($accountId);
+		}
+		return 0;
+	}
+
+	private function bankingContextAllowed()
+	{
+		global $user;
+		return strpos($_SERVER['PHP_SELF'] ?? '', '/compta/bank/') !== false
+			&& $user->hasRight('banque','lire') && $user->hasRight('kreabank','reconciliation','read');
+	}
+
+	private function nativeAccountId($page)
+	{
+		global $db, $conf;
+		if ($page === 'line.php') {
+			$id = GETPOSTINT('rowid');
+			$r = $db->query('SELECT b.fk_account FROM ' . $db->prefix() . 'bank b JOIN ' . $db->prefix() . 'bank_account ba ON ba.rowid=b.fk_account WHERE b.rowid=' . $id . ' AND ba.entity=' . (int) $conf->entity);
+			$row = $r ? $db->fetch_object($r) : null;
+			if ($id > 0 && !$row) {
+				accessforbidden();
+			}
+			return $row ? (int) $row->fk_account : 0;
+		}
+		$id = GETPOSTINT('account') ?: (GETPOSTINT('id') ?: GETPOSTINT('search_account'));
+		$ref = GETPOST('ref','alpha');
+		if (!$id && $ref !== '') {
 			$r = $db->query('SELECT rowid FROM ' . $db->prefix() . 'bank_account WHERE entity=' . (int) $conf->entity . " AND ref='" . $db->escape($ref) . "'");
 			$row = $r ? $db->fetch_object($r) : null;
-			$accountId = $row ? (int) $row->rowid : 0;
-		}
-		if ($accountId > 0) {
-			// Shared native accounts may be visible, but module evidence belongs to its owner company.
-			$r = $db->query('SELECT rowid FROM ' . $db->prefix() . 'bank_account WHERE entity=' . (int) $conf->entity . ' AND rowid=' . $accountId);
-			if (!$r || !$db->fetch_object($r)) {
-				return 0;
+			if (!$row) {
+				accessforbidden();
 			}
+			$id = (int) $row->rowid;
 		}
-		try {
-			$html = kreabankIntegrationPanel($accountId, $page === 'releve.php' ? GETPOST('num', 'alphanohtml') : '');
-		} catch (Exception $e) {
-			dol_syslog('KreaBank native integration report unavailable', LOG_ERR);
+		return $id;
+	}
+
+	/** Replace the duplicate native navigation with the same single banking header. */
+	public function printCommonFooter($parameters, &$object, &$action, $hookmanager)
+	{
+		$this->resprints = '';
+		if (!$this->bankingContextAllowed()) {
 			return 0;
 		}
+		require_once __DIR__ . '/../lib/kreabank.lib.php';
+		$page = basename($_SERVER['PHP_SELF'] ?? '');
+		$accountId = $this->nativeAccountId($page);
+		$account = kreabankNavigationAccount($accountId);
+		$view = $page === 'releve.php' ? 'statement' : (in_array($page,array('bankentries_list.php','line.php'),true) ? 'movements' : 'card');
+		$redirect = '';
+		if ($page === 'releve.php' && GETPOST('num','alphanohtml') === '' && !GETPOSTINT('native_statements')) {
+			$redirect = 'window.location.replace(' . json_encode(kreabankStatementUrl($accountId), JSON_HEX_TAG|JSON_HEX_AMP) . ');';
+		}
+		$html = kreabankBankingHeader($view,$account);
 		$this->resprints = '<div id="kreabank-native-context">' . $html . '</div><script nonce="' . dol_escape_htmltag(getNonce()) . '">'
-			. '(function(){var panel=document.getElementById("kreabank-native-context"),target=document.getElementById("id-right");if(panel&&target){target.insertBefore(panel,target.firstChild);}})();</script>';
+			. '(function(){document.body.classList.add("kb-native-bank");var panel=document.getElementById("kreabank-native-context"),target=document.getElementById("id-right");if(panel&&target){target.insertBefore(panel,target.firstChild);}' . $redirect . '})();</script>';
 		return 0;
 	}
 

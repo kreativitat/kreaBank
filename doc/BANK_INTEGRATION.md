@@ -15,13 +15,12 @@ issue, not permission to create a replacement or rewrite history. Only verified
 links count toward the verified reconciliation total. Viewing, exporting and the
 legacy `ensureNativeStatementLines()` helper perform no financial writes.
 
-The same panel appears on KreaBank pages and native bank account, movements and
-statement pages through existing registered hooks. Account balances come from
-native bank movements in the account currency, excluding future operation dates
-as the native current-balance banner does. All module evidence is restricted
-to the current owner company, including when native account sharing is enabled.
-Native numbered statements contain registered movements; unlinked imported lines
-remain accessible through **Imported statements** on that same screen.
+One shared banking header connects module views and native bank pages through
+supported hooks. The account overview shows native current balances, excluding
+future operation dates as the native current-balance banner does. Module evidence
+is restricted to its owner company, including when native sharing is enabled.
+Native numbered statements contain registered movements; imported evidence is
+available under Statements. See [navigation](NAVIGATION.md).
 
 **Movements reconciled with KreaBank** opens the native list with an explicit
 company-scoped filter using native IDs. Sorting, pagination and search retain the
@@ -29,9 +28,10 @@ filter; **All Dolibarr movements** clears it. Native posting dates are preserved
 a reconciliation performed today can refer to an older movement. Statement detail
 also links directly to the native movement card and its numbered statement.
 
-No schema migration, navigation re-registration, automation configuration change,
+No schema migration, automation configuration change,
 or historical data repair is required. Deploy the committed module files as usual,
-retain their preimages for rollback, and verify both native and module screens.
+retain their preimages for rollback, refresh hook registration as documented in
+NAVIGATION.md, and verify both native and module screens.
 Rolling back source does not require changing financial records.
 
 Validation:

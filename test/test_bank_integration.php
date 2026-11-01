@@ -5,7 +5,7 @@
  */
 // Check the labels used in statement views, including dynamically selected states.
 $keys = array();
-foreach (array('statement.php', 'lib/kreabank_integration.lib.php') as $file) {
+foreach (array('statement.php', 'lib/kreabank_integration.lib.php', 'accounts.php', 'lib/kreabank_navigation.lib.php', 'lib/kreabank.lib.php') as $file) {
 	preg_match_all("/'(KreaBank[A-Za-z0-9_]+)'/", file_get_contents(__DIR__ . '/../' . $file), $matches);
 	$keys = array_merge($keys, $matches[1]);
 }

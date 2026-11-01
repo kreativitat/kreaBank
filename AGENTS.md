@@ -76,9 +76,9 @@
 
 ## Account navigation
 
-- Native bank tabs are extended with `completeTabsHead`; do not patch core bank pages.
+- The banking workspace replaces native bank navigation through supported hooks and scoped CSS; do not patch core bank pages. Native tabs are hidden, not extended with extra workspace tabs.
 - `lib/kreabank_navigation.lib.php` owns account-context URLs, ownership checks and shared navigation. `account_context` is explicit per request, never session-global.
-- Keep four main tasks (reconcile, import, feed, history); batch and pending are reconciliation tools. Preserve native statement numbering and other modules' tabs.
+- Keep one primary banking bar: accounts, movements, statements, reconciliation, connections and history. Import is an action in statements. Account options retain native details, numbering, documents, reports, transfers and cheque deposits.
 - Account context uses direct current-company ownership, not shared account access. List/count/scan filters must agree before pagination. The audit log is explicitly company-wide.
 - `php test/test_navigation.php` loads installed Dolibarr source without bootstrapping or opening a database. Use `KREABANK_DOLIBARR_ROOT` if source is elsewhere.
 - After deploying 1.14.4, refresh only KreaBank menu/hook/CSS registration; do not disable/re-enable the module or change scheduler settings. See `doc/NAVIGATION.md`.
@@ -96,9 +96,12 @@
 
 - `KreaBankIntegration` is a read-only projection of staging evidence and native ledger links. Never materialize imported lines merely to view/export a statement. `statement.php` supports bank/module read permissions; importing retains write permissions.
 - Statements list both staging and legacy native imports without double-counting mapped native lines. Native balance always comes from native bank movements, never staging totals.
-- Native footer/list hooks provide account-aware cross-links and an optional `kreabank_matched` filter. Keep native posting dates and owned-company boundaries. Flag historical missing/amount/status/reference discrepancies for review; never guess a replacement financial record.
+- Native footer/list hooks provide the shared workspace header and an optional `kreabank_matched` filter. Keep native posting dates and owned-company boundaries. Flag historical missing/amount/status/reference discrepancies for review; never guess a replacement financial record.
 - `php test/test_bank_integration_database.php` extends the automatic reconciliation suite on its same disposable local database; see `doc/BANK_INTEGRATION.md`.
 
 - Company/account ownership is revalidated by `KreaBankReconciliationScope` for prepared sources and all execution targets, including parent invoices of payments. Entity sharing does not grant reconciliation authority.
 - Bulk review must not choose an arbitrary best candidate when competing documents are fewer than 35 points apart. Keep those lines pending; explicit manual approval of a unique weak pair remains separate from automatic safe matching.
 - `php test/test_company_isolation_database.php` extends ONLY the disposable local MariaDB fixture and covers these boundaries plus the equal-amount/date invoice tie.
+
+- `accounts.php` is the company-owned banking entry point. Native account-list GETs route here for KreaBank readers. Balances use native operation dates; pending counts include imported evidence only. Never show a combined monetary total across currencies.
+- Hide the native banking sidebar and tab bar only on the banking workspace; retain global ERP navigation. Avoid explanatory banners and duplicate navigation layers.

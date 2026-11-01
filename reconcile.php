@@ -1552,8 +1552,8 @@ if (!empty($quickCreateSuccessAlert['enabled']) && !empty($quickCreateSuccessAle
 	print '</div></noscript>';
 }
 
-print load_fiche_titre($langs->trans('KreaBankReconcile'), '', 'bank');
 kreabankPrintWorkspaceNavigation('reconcile', $navigationAccount);
+print load_fiche_titre($langs->trans('KreaBankReconcile'), '', 'bank');
 
 print '<style>';
 print '.krea-embedded-success-alert .ok{margin:0 0 12px 0}';

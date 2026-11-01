@@ -18,6 +18,7 @@ class NavigationTestUser
 class NavigationTestLangs
 {
 	public function load($file) {}
+	public function loadLangs($files) {}
 	public function trans($key) { return $key; }
 }
 class NavigationTestDb
@@ -48,18 +49,14 @@ $langs = new NavigationTestLangs();
 $conf = (object) array('entity' => 7);
 $head = array(array('/card?id=45', 'Account', 'bankname'), array('/entries?id=45', 'Movements', 'journal'), array('/entries?id=45&action=reconcile', 'Reconcile', 'reconcile'), array('/extension', 'Other module', 'external'));
 $newHead = kreabankCompleteAccountHead($head, 45);
-checkNavigation($newHead[2][2] === 'kreabank', 'Workspace follows native movements');
-checkNavigation(strpos($newHead[2][0], 'account_context=45') !== false, 'Native account link retains account');
-checkNavigation($newHead[3][1] === 'KreaBankStatementNumbering' && $newHead[3][0] === $head[2][0], 'Native numbering keeps its original action');
-checkNavigation($newHead[4] === $head[3], 'Preserve tabs from other modules');
-checkNavigation(count(kreabankCompleteAccountHead($newHead, 45)) === count($newHead), 'Repeated hooks do not duplicate tabs');
+checkNavigation($newHead === $head, 'Shared header replaces native tabs without inserting another navigation layer');
 $tabs = kreabankPrepareHead(45);
-checkNavigation(array_column($tabs, 2) === array('reconcile', 'feed', 'history'), 'Read-only users have no import tab');
+checkNavigation(array_column($tabs, 2) === array('accounts', 'movements', 'statement', 'reconcile', 'feed', 'history'), 'Readers have the same six banking destinations');
 $user->allowed[] = 'kreabank.reconciliation.write';
 $user->allowed[] = 'banque.modifier';
-checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('reconcile', 'import', 'feed', 'history'), 'Four primary tasks in the same order');
+checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('accounts', 'movements', 'statement', 'reconcile', 'feed', 'history'), 'Write actions do not add another navigation layer');
 foreach (kreabankPrepareHead(45) as $tab) {
-	checkNavigation(strpos($tab[0], 'account_context=45') !== false && strpos($tab[0], 'line_id') === false, 'Carry account without copying a stale line/action');
+	checkNavigation((strpos($tab[0], 'account_context=45') !== false || strpos($tab[0], '&id=45') !== false) && strpos($tab[0], 'line_id') === false, 'Carry account without copying a stale line/action');
 }
 $user->allowed = array('banque.lire');
 checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('feed'), 'Bank-only readers retain connections access');
@@ -87,5 +84,15 @@ $parameters = array('type' => 'product', 'mode' => 'add', 'head' => &$head);
 checkNavigation($hooks->completeTabsHead($parameters, $object, $action, null) === 0, 'Do not change unrelated object tabs');
 $user->allowed[] = 'kreabank.reconciliation.read';
 $parameters['type'] = 'bank';
-checkNavigation($hooks->completeTabsHead($parameters, $object, $action, null) === 1 && $hooks->results[2][2] === 'kreabank', 'Native hook returns the complete account head');
+checkNavigation($hooks->completeTabsHead($parameters, $object, $action, null) === 0, 'Native hook never adds a second bank tab bar');
+function dol_escape_htmltag($text) { return htmlspecialchars((string) $text, ENT_QUOTES, 'UTF-8'); }
+function GETPOSTINT($key) { return (int) ($GLOBALS['navigationRequest'][$key] ?? 0); }
+$mysoc = (object) array('name' => 'Synthetic company');
+$html = kreabankBankingHeader('accounts');
+checkNavigation(substr_count($html, '<nav ') === 1 && strpos($html, 'KreaBankLedgerExplanation') === false, 'One navigation and no explanatory banner');
+checkNavigation(strpos($html, 'name="view"') !== false && strpos($html, 'name="account_context"') !== false, 'Account changes preserve the current view');
+$_SERVER['PHP_SELF'] = '/compta/bank/bankentries_list.php';
+$navigationRequest = array('kreabank_matched' => 0);
+$hooks->printFieldListWhere(array(),$object,$action,null);
+checkNavigation(strpos($hooks->resprints, 'ba.entity=7') !== false, 'Native movements restrict owner company even when accounts are shared');
 print "OK: $checks navigation and account-scope checks\n";

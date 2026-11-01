@@ -33,8 +33,8 @@ if (GETPOST('action', 'aZ09') === 'collect') {
 	exit;
 }
 llxHeader('', $langs->trans('KreaBankFeeds'));
-print load_fiche_titre($langs->trans('KreaBankFeeds'), '', 'bank');
 kreabankPrintWorkspaceNavigation('feed', $navigationAccount);
+print load_fiche_titre($langs->trans('KreaBankFeeds'), '', 'bank');
 print '<p>' . $langs->trans('KreaBankFeedPurpose') . ' <a href="https://fintable.io" target="_blank" rel="noopener noreferrer">Fintable</a>.</p>';
 print '<p class="opacitymedium">' . $langs->trans('KreaBankFeedPdfNotice') . '</p>';
 print '<p>' . $langs->trans('KreaBankFeedSchedule') . ': <strong>' . dol_escape_htmltag($sync->setting('KREABANK_FINTABLE_TIMES', '08:45,20:45'))

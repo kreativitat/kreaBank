@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.14.13 — 2026-11-01
+
+- Replace layered bank menus with one workspace header, an owned-account selector
+  and a clean accounts overview. Hide the native banking sidebar and tabs within
+  this workspace; retain account tools in a compact options menu.
+- Remove explanatory integration banners and duplicate bulk-review headings.
+  Place import within statements and preserve native ledger/lifecycle behavior.
+- Scope native list reads to the current owner company and keep financial writes,
+  reconciliation identity checks and schedules unchanged. No schema migration.
+
 ## 1.14.12 — 2026-11-01
 
 - Leave competing bulk candidates pending instead of selecting the first equal
