@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.5 — 2026-11-01
+
+- Render the shared native tab bar without an extra content wrapper or duplicate
+  container ID. Keep legacy batch account links aligned with the account selector.
+
 ## 1.14.4 — 2026-11-01
 
 - Connect native bank account tabs and KreaBank through a shared account context.

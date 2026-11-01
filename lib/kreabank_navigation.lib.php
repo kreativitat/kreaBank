@@ -94,8 +94,7 @@ function kreabankPrintWorkspaceNavigation($page, $account = null)
 		require_once DOL_DOCUMENT_ROOT . '/core/lib/bank.lib.php';
 		$hookmanager->initHooks(array('kreabankworkspace'));
 		$head = kreabankCompleteAccountHead(bank_prepare_head($account), $accountId);
-		print dol_get_fiche_head($head, 'kreabank', $langs->trans('BankAccount'), -1, 'bank');
-		print dol_get_fiche_end();
+		print dol_get_fiche_head($head, 'kreabank', $langs->trans('BankAccount'), 1, 'bank');
 	}
 	$active = in_array($page, array('bulkmatch', 'pending'), true) ? 'reconcile' : $page;
 	print '<nav class="kreabank-workspace-nav" aria-label="KreaBank">';

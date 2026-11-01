@@ -62,7 +62,7 @@ if (!$user->hasRight('banque', 'lire')) {
 	accessforbidden($langs->trans('ErrorForbidden'));
 }
 
-$navigationAccountId = max(0, GETPOSTINT('account_context'));
+$navigationAccountId = max(0, GETPOSTISSET('account_context') ? GETPOSTINT('account_context') : GETPOSTINT('bank_account_id'));
 $navigationAccount = kreabankNavigationAccount($navigationAccountId);
 $service = new KreaBankService($db, $user, $langs);
 $canNativeWrite = ($user->hasRight('banque', 'modifier') || $user->hasRight('banque', 'consolidate'));
@@ -94,7 +94,7 @@ if ($dateTolerance <= 0) {
 $bulkScanCacheStoreKey = 'kreabank_bulkmatch_scan_state';
 $bulkScanMatcherRevision = 11;
 $bulkScanFilterScope = array(
-	'bank_account_id' => ($navigationAccountId ?: GETPOSTINT('bank_account_id')),
+	'bank_account_id' => $navigationAccountId,
 );
 $bulkScanCacheScope = ((int) $conf->entity) . '|' . ((int) $user->id) . '|' . ((int) $dateTolerance) . '|' . ((int) $bulkScanMatcherRevision) . '|' . hash('sha256', json_encode($bulkScanFilterScope));
 $bulkScanCacheTtl = (int) getDolGlobalInt('KREABANK_BULKMATCH_SCAN_CACHE_TTL');
