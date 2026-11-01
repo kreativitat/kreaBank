@@ -155,7 +155,7 @@ class KreaBankFintableSync
 			$slot = 'manual:' . gmdate('YmdHis') . ':' . bin2hex(random_bytes(8));
 		}
 		$result = array('status' => 'completed', 'imported' => 0, 'unchanged' => 0, 'conflicts' => 0, 'failed' => 0,
-			'mapped' => 0, 'unmapped' => 0, 'entities' => array());
+			'mapped' => 0, 'unmapped' => 0, 'waiting' => 0, 'entities' => array());
 		try {
 			if ($slot !== null && !$preview) {
 				$old = $this->one('SELECT * FROM ' . $this->db->prefix() . 'kreabank_feed_run WHERE slot_key=' . $this->text($slot));
@@ -195,15 +195,6 @@ class KreaBankFintableSync
 				$connections[$connection['id']] = $connection;
 			}
 			$run = $runId ? $this->one('SELECT started_at FROM ' . $this->db->prefix() . 'kreabank_feed_run WHERE rowid=' . $runId) : null;
-			foreach ($connections as $connection) {
-				if ($scheduled && $run && time() - strtotime($run->started_at) < 1800
-					&& in_array($connection['sync_status']['state'] ?? '', array('queued', 'executing', 'retrying'), true)) {
-					if ($runId) {
-						$this->query('UPDATE ' . $this->db->prefix() . 'kreabank_feed_run SET status=\'refresh_wait\',attempts=GREATEST(1,attempts-1) WHERE rowid=' . $runId);
-					}
-					return array('status' => 'refresh_wait');
-				}
-			}
 			$entities = $this->activeEntities();
 			$native = $this->nativeAccounts($entities);
 			$sources = $api->get('accounts')['data'];
@@ -274,6 +265,11 @@ class KreaBankFintableSync
 						throw new RuntimeException('Bank authorization needs reconnecting in Fintable');
 					}
 					if (in_array($connection['sync_status']['state'] ?? '', array('queued', 'executing', 'retrying'), true)) {
+						if ($scheduled && $run && time() - strtotime($run->started_at) < 1800) {
+							$result['waiting']++;
+							$this->query('UPDATE ' . $this->db->prefix() . 'kreabank_feed_account SET status=\'refresh_wait\',error_code=NULL WHERE rowid=' . (int) $mapping->rowid . ' AND entity=' . $entity);
+							continue;
+						}
 						throw new RuntimeException('Bank refresh is still running; independent accounts continue');
 					}
 					$before = $result['imported'];
@@ -294,10 +290,11 @@ class KreaBankFintableSync
 					}
 				}
 			}
-			$result['status'] = $result['failed'] ? 'partial' : 'completed';
+			$result['status'] = $result['waiting'] ? 'refresh_wait' : ($result['failed'] ? 'partial' : 'completed');
 			$result['final_attempt'] = $attempt >= 3;
 			if ($runId) {
-				$this->query('UPDATE ' . $this->db->prefix() . 'kreabank_feed_run SET status=' . $this->text($result['status']) . ',finished_at=' . $this->now() . ',result_json=' . $this->text(json_encode($result)) . ' WHERE rowid=' . $runId);
+				$this->query('UPDATE ' . $this->db->prefix() . 'kreabank_feed_run SET status=' . $this->text($result['status']) . ',finished_at=' . ($result['waiting'] ? 'NULL' : $this->now())
+					. ($result['waiting'] ? ',attempts=GREATEST(1,attempts-1)' : '') . ',result_json=' . $this->text(json_encode($result)) . ' WHERE rowid=' . $runId);
 			}
 			return $result;
 		} catch (Throwable $e) {

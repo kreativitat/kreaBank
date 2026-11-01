@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.3 — 2026-11-01
+
+- Collect finished banks independently while other banks refresh, with bounded waits and per-account status.
+
 ## 1.13.2 — 2026-11-01
 
 - Check native bank ownership directly when Account::fetch() omits its entity.

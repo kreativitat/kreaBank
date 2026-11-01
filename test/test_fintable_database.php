@@ -100,7 +100,7 @@ $transport = static function ($method, $url) use (&$sources, &$pages, &$postCoun
 	$path = substr(parse_url($url, PHP_URL_PATH), strlen('/api/v2/'));
 	parse_str(parse_url($url, PHP_URL_QUERY), $query);
 	if ($path === 'me') { $data = array('can_sync'=>true); }
-	elseif ($path === 'connections') { $data = array(array('id'=>'conn_fixture','healthy'=>$healthy,'needs_reconnect'=>!$healthy,'last_successful_update'=>gmdate('c'),'sync_status'=>array('state'=>$connectionState))); }
+	elseif ($path === 'connections') { $data = array(array('id'=>'conn_fixture','healthy'=>$healthy,'needs_reconnect'=>!$healthy,'last_successful_update'=>gmdate('c'),'sync_status'=>array('state'=>$connectionState)),array('id'=>'conn_ready','healthy'=>true,'needs_reconnect'=>false,'last_successful_update'=>gmdate('c'),'sync_status'=>array('state'=>'finished'))); }
 	elseif ($path === 'accounts') { $data = $sources; }
 	else {
 		preg_match('~^accounts/([^/]+)/transactions$~', $path, $m);
@@ -201,4 +201,16 @@ $sources[0]['enabled'] = false;
 $sync->collect($user);
 checkFeed($db->query("SELECT status FROM kbtest_kreabank_feed_account WHERE provider_account_id='acc_one'")->fetch_object()->status === 'unavailable', 'Disabled sources are marked unavailable');
 checkFeed(feedCount($db,'bank') === 0, 'Scheduled refresh never writes native accounting movements');
+// Finished banks must import even while another bank is queued.
+$sources[0]['enabled'] = true;
+$sources[1]['connection_id'] = 'conn_ready';
+$slot = '2026-11-04 08:45';
+$sync->collect($user,$slot);
+$connectionState = 'queued';
+$pages['acc_two'][0][] = fixtureTx('tx_independent','acc_two','-3.50');
+$independent = $sync->collect($user,$slot);
+checkFeed($independent['status'] === 'refresh_wait' && $independent['waiting'] === 2 && $independent['imported'] === 1 && $independent['failed'] === 0, 'Finished bank imports while another bank waits');
+$connectionState = '';
+$finished = $sync->collect($user,$slot);
+checkFeed($finished['status'] === 'completed' && $finished['imported'] === 0, 'Resume waiting banks without duplicating the independently imported movement');
 print "OK: $checks checks including real MariaDB imports, rollback, retry, locking and company isolation\n";

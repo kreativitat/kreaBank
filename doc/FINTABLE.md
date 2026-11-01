@@ -30,8 +30,8 @@ Each failed slot has at most three attempts. There is no new host cron or daemon
 Read-only access collects the data already stored in Fintable. The separate
 optional refresh setting uses only the included `POST /sync` endpoint, requires
 a Fintable write scope and waits for provider sync completion on a later scheduler
-tick. After a 30-minute wait, finished accounts continue while a busy bank is
-reported for retry. It never requests a billed realtime refresh. A POST with an unknown outcome
+tick. Finished banks collect independently while busy banks wait up to 30 minutes
+before becoming actionable failures. It never requests a billed realtime refresh. A POST with an unknown outcome
 is not repeated automatically. The displayed bank refresh time remains distinct
 from the Dolibarr collection time; bank/provider freshness is not guaranteed.
 

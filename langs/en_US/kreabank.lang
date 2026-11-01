@@ -1,4 +1,5 @@
 # Generic
+KreaBankFeedState_refresh_wait=Waiting for bank refresh
 KreaBankFeedState_mapping_review=Account mapping needs review
 KreaBankFeedAlertEmail=Collection failure alert email (optional)
 KreaBankFeedState_unavailable=Account unavailable in Fintable
