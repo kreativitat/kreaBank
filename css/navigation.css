@@ -55,3 +55,6 @@ body.kreabank-banking.kb-native-bank #id-right > .fiche > .tabs { display:none !
 
 .kb-account-tabs { max-width:100%; overflow-x:auto; }
 .kb-account-tabs a { flex:none; white-space:nowrap; }
+
+.kb-account-kinds { margin:0 0 22px; max-width:100%; overflow-x:auto; }
+.kb-account-kinds a { flex:none; white-space:nowrap; }

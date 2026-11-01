@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.26 — 2026-11-01
+
+- Replace the accounts overview filter form with compact all/bank/cash/closed
+  view links, highlighting the active type. Operational account filters stay separate.
+
 ## 1.14.25 — 2026-11-01
 
 - Rename the native banking List menu entry to Account list.

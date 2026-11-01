@@ -142,7 +142,7 @@ foreach (array('movements', 'statement', 'reconcile', 'feed', 'history') as $pag
 checkNavigation(strpos(kreabankWorkspaceUrl('pending', 45), 'kind=') === false && strpos(kreabankNativeEntriesUrl(45), 'kind=') === false && strpos(kreabankStatementUrl(45), 'kind=') === false, 'Account types do not carry into operational links');
 checkNavigation(kreabankNavigationHiddenFields(0) === '', 'Operational forms never keep a hidden account-type filter');
 $html = kreabankBankingFilters('accounts', 45, 'closed');
-checkNavigation(strpos($html, 'name="account_context"') === false && strpos($html, 'name="kind"') !== false && strpos($html, 'value="closed" selected') !== false, 'Account overview has only the account-type filter, even with stale account context');
+checkNavigation(strpos($html, '<form') === false && strpos($html, '<select') === false && substr_count($html, '<a') === 4 && preg_match('/class="active" aria-current="page" href="[^"]*kind=closed/', $html) && strpos($html, 'account_context=') === false, 'Account overview uses four compact type links, with no account selector or dropdown');
 $db->queries = array();
 $adapter->getPendingLines(10, 0, 'operation_date', 'ASC', array('bank_account_id' => 45));
 $adapter->getPendingLinesCount(array('bank_account_id' => 45));

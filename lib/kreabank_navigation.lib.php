@@ -105,6 +105,13 @@ function kreabankBankingFilters($page, $accountId = 0, $kind = null)
 {
 	global $langs;
 	$kind = $page === 'accounts' ? ($kind === null ? kreabankNavigationKind('bank') : $kind) : 'all';
+	if ($page === 'accounts') {
+		$html = '<div class="kb-view-switch kb-account-kinds" role="navigation" aria-label="' . dol_escape_htmltag($langs->trans('AccountType')) . '">';
+		foreach (array('all' => 'KreaBankAllAccountTypes', 'bank' => 'KreaBankBankAccounts', 'cash' => 'KreaBankCashAccounts', 'closed' => 'KreaBankClosedAccounts') as $value => $label) {
+			$html .= '<a' . ($value === $kind ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag(kreabankWorkspaceUrl('accounts') . '&kind=' . $value) . '">' . $langs->trans($label) . '</a>';
+		}
+		return $html . '</div>';
+	}
 	$accountPages = array('card', 'documents', 'reports', 'forecast', 'native_statements', 'numbering');
 	$isAccountTool = in_array($page, $accountPages, true) || $page === 'import';
 	$action = $isAccountTool ? dol_buildpath('/custom/kreabank/accounts.php', 1) : strtok(kreabankBankingUrl($page), '?');
@@ -117,15 +124,7 @@ function kreabankBankingFilters($page, $accountId = 0, $kind = null)
 		$html .= '<input type="hidden" name="kreabank_matched" value="1">';
 	}
 	$html .= '<strong class="kb-filter-title">' . $langs->trans('Filters') . '</strong>';
-	if ($page === 'accounts') {
-		$html .= '<div class="kb-filter-field"><label for="kreabank-account-kind">' . $langs->trans('AccountType') . '</label><select class="flat" id="kreabank-account-kind" name="kind">';
-		foreach (array('all' => 'All', 'bank' => 'KreaBankBankAccounts', 'cash' => 'KreaBankCashAccounts', 'closed' => 'KreaBankClosedAccounts') as $value => $label) {
-			$html .= '<option value="' . $value . '"' . ($value === $kind ? ' selected' : '') . '>' . $langs->trans($label) . '</option>';
-		}
-		$html .= '</select></div>';
-	} else {
-		$html .= '<div class="kb-filter-field">' . kreabankAccountFilterSelect($accountId) . '</div>';
-	}
+	$html .= '<div class="kb-filter-field">' . kreabankAccountFilterSelect($accountId) . '</div>';
 	return $html . '<button class="button" type="submit">' . $langs->trans('ToFilter') . '</button></form>';
 }
 

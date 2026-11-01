@@ -9,7 +9,8 @@ workspace header or tabs.
 
 A separate Filters panel below the operational navigation contains one bank-account
 selector, listing only current-company accounts. The standalone accounts overview
-has a separate account-type filter (all, bank, cash or closed) and no account selector.
+uses compact account-type view links (all, bank, cash or closed) and has no filter
+form or account selector.
 It defaults to bank accounts. There is no selector inside the navigation header.
 Operational filters submit directly to their own page, reset pagination and preserve
 only account context through tabs, search forms, sorting, pagination and bulk scans.
