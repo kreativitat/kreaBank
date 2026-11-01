@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.14.19 — 2026-11-01
+
+- Remove the duplicate standalone banking heading. Place automatic reconciliation
+  and the restricted feed shortcut under the existing native Bank/Cash menu.
+- Keep the banking entry point, account tools and permissions unchanged.
+
 ## 1.14.18 — 2026-11-01
 
 - Use Dolibarr’s supported menu condition syntax for automatic reconciliation

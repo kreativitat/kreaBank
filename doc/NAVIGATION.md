@@ -17,8 +17,9 @@ responsive behavior. Only the duplicate native account tab bar is hidden inside
 this workspace. Global ERP navigation remains available. The left menu contains
 the selected account’s details, documents, annual reports, forecasts and statement numbering.
 Transfers and cheque deposits retain their existing native left-menu entries.
-Automatic reconciliation appears there for administrators with the required
-write permissions. There is no floating account-tools dropdown. Native movement,
+Automatic reconciliation appears under the existing native Bank/Cash heading for
+administrators with the required write permissions. Do not add a duplicate
+standalone banking heading. There is no floating account-tools dropdown. Native movement,
 payment and invoice lifecycle logic remains responsible for financial records.
 No core files are patched. Source evidence stays separate from the ledger.
 

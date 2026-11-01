@@ -50,7 +50,7 @@ class modKreaBank extends DolibarrModules
 		$this->descriptionlong = 'ModuleKreaBankDescLong';
 		$this->editor_name = 'Kreativität Works';
 		$this->editor_url = 'http://kreativitat.com';
-		$this->version = '1.14.18';
+		$this->version = '1.14.19';
 		$this->const_name = 'MAIN_MODULE_' . strtoupper($this->name);
 		$this->picto = 'kreaproducts@kreaproducts';
 
@@ -147,29 +147,9 @@ class modKreaBank extends DolibarrModules
 		$r++;
 
 		$this->menu = array();
-		$entries = array(array('accounts', 'KreaBankBanking', false));
-		foreach ($entries as $position => $entry) {
-			$page = $entry[0];
-			$perms = '$user->hasRight("banque", "lire")';
-			if ($page !== 'feed') {
-				$perms .= ' && $user->hasRight("kreabank", "reconciliation", "read")';
-			}
-			if ($entry[2]) {
-				$perms .= ' && $user->hasRight("kreabank", "reconciliation", "write") && $user->hasRight("banque", "modifier")';
-			}
-			$this->menu[] = array(
-				'fk_menu' => $page === 'accounts' ? 'fk_mainmenu=bank' : 'fk_mainmenu=bank,fk_leftmenu=kreabank_reconcile',
-				'type' => 'left', 'titre' => $entry[1], 'mainmenu' => 'bank',
-				'leftmenu' => 'kreabank_' . $page,
-				'url' => '/custom/kreabank/' . $page . '.php?mainmenu=bank&leftmenu=kreabank_' . $page,
-				'langs' => 'kreabank@kreabank', 'position' => 1950 + $position,
-				'enabled' => 'isModEnabled("kreabank") && isModEnabled("banque")',
-				'perms' => $perms, 'target' => '', 'user' => 2,
-			);
-		}
 
 		$this->menu[] = array(
-			'fk_menu' => 'fk_mainmenu=bank,fk_leftmenu=kreabank_accounts',
+			'fk_menu' => 'fk_mainmenu=bank,fk_leftmenu=bank',
 			'type' => 'left', 'titre' => 'KreaBankAutomation', 'mainmenu' => 'bank',
 			'leftmenu' => 'kreabank_automation',
 			'url' => '/custom/kreabank/admin/automation.php?mainmenu=bank&leftmenu=kreabank_automation',
@@ -181,7 +161,7 @@ class modKreaBank extends DolibarrModules
 
 		// Keep the existing bank-feed entry available to bank readers without workspace rights.
 		$this->menu[] = array(
-			'fk_menu' => 'fk_mainmenu=bank', 'type' => 'left', 'titre' => 'KreaBankFeeds',
+			'fk_menu' => 'fk_mainmenu=bank,fk_leftmenu=bank', 'type' => 'left', 'titre' => 'KreaBankFeeds',
 			'mainmenu' => 'bank', 'leftmenu' => 'kreabank_feed_readonly',
 			'url' => '/custom/kreabank/feed.php?mainmenu=bank&leftmenu=kreabank_feed_readonly',
 			'langs' => 'kreabank@kreabank', 'position' => 1950,
