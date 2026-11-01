@@ -50,7 +50,7 @@ class modKreaBank extends DolibarrModules
 		$this->descriptionlong = 'ModuleKreaBankDescLong';
 		$this->editor_name = 'Kreativität Works';
 		$this->editor_url = 'http://kreativitat.com';
-		$this->version = '1.12.54';
+		$this->version = '1.13.0';
 		$this->const_name = 'MAIN_MODULE_' . strtoupper($this->name);
 		$this->picto = 'kreaproducts@kreaproducts';
 
@@ -148,6 +148,13 @@ class modKreaBank extends DolibarrModules
 
 		$this->menu = array();
 		$r = 0;
+
+		$this->menu[$r++] = array(
+			'fk_menu' => 'fk_mainmenu=bank', 'type' => 'left', 'titre' => 'KreaBankFeeds',
+			'mainmenu' => 'bank', 'leftmenu' => 'kreabank_feed', 'url' => '/custom/kreabank/feed.php',
+			'langs' => 'kreabank@kreabank', 'position' => 39, 'enabled' => '$conf->kreabank->enabled',
+			'perms' => '$user->hasRight("banque", "lire")', 'target' => '', 'user' => 2,
+		);
 
 		$this->menu[$r++] = array(
 			'fk_menu' => 'fk_mainmenu=bank',

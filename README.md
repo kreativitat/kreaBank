@@ -14,6 +14,7 @@ It is designed to accelerate bank operations without creating a parallel account
 - Persists reconciliation through native Dolibarr bank/payment links and native reconciliation status.
 - Provides pending, reconciliation, and history workspaces on top of the native bank module.
 - Respects Dolibarr permissions and active `entity` scoping.
+- Collects Fintable balances and posted transactions twice daily for active companies, using encrypted credentials, exact IBAN ownership and duplicate-safe staging. See [Fintable integration](doc/FINTABLE.md).
 
 ## Native-first architecture
 
@@ -78,7 +79,7 @@ If the ZIP package does not ship the `vendor/` directory, run the same `composer
 
 1. Open `/custom/kreabank/import.php`.
 2. Upload a statement file and confirm the detected mapping.
-3. KreaBank normalizes the imported data and persists the result into Dolibarr's native bank domain.
+3. KreaBank normalizes the imported data into statement staging; native bank movements are created or reused during reconciliation.
 4. Technical metadata is stored in KreaBank support tables for idempotency, profile reuse, and auditability.
 
 ### Reconciliation

@@ -1,0 +1,81 @@
+<?php
+/* Copyright (C) 2026 Kreativität Works <mail@kreativitat.com>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+$res = @include __DIR__ . '/../../main.inc.php';
+if (!$res) {
+	$res = @include __DIR__ . '/../../../main.inc.php';
+}
+if (!$res) {
+	die('Dolibarr bootstrap unavailable');
+}
+require_once __DIR__ . '/lib/kreabank.lib.php';
+require_once __DIR__ . '/class/KreaBankFintableSync.class.php';
+$langs->loadLangs(array('banks', 'kreabank@kreabank'));
+if (!isModEnabled('kreabank') || !$user->hasRight('banque', 'lire')) {
+	accessforbidden();
+}
+$sync = new KreaBankFintableSync($db);
+$installationAdmin = !empty($user->admin) && empty($user->entity) && empty($user->socid);
+if (GETPOST('action', 'aZ09') === 'collect') {
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !$installationAdmin || !kreabankIsTokenValid()) {
+		accessforbidden();
+	}
+	try {
+		$result = $sync->collect($user);
+		setEventMessages($langs->trans('KreaBankFeedCollected', (int) ($result['imported'] ?? 0), (int) ($result['failed'] ?? 0)), null, !empty($result['failed']) ? 'warnings' : 'mesgs');
+	} catch (Throwable $e) {
+		setEventMessages($e->getMessage(), null, 'errors');
+	}
+	header('Location: ' . $_SERVER['PHP_SELF']);
+	exit;
+}
+llxHeader('', $langs->trans('KreaBankFeeds'));
+print load_fiche_titre($langs->trans('KreaBankFeeds'), '', 'bank');
+print dol_get_fiche_head(kreabankPrepareHead(), 'feed', $langs->trans('ModuleKreaBankName'), -1, 'bank');
+print '<p>' . $langs->trans('KreaBankFeedPurpose') . ' <a href="https://fintable.io" target="_blank" rel="noopener noreferrer">Fintable</a>.</p>';
+print '<p class="opacitymedium">' . $langs->trans('KreaBankFeedPdfNotice') . '</p>';
+print '<p>' . $langs->trans('KreaBankFeedSchedule') . ': <strong>' . dol_escape_htmltag($sync->setting('KREABANK_FINTABLE_TIMES', '08:45,20:45'))
+	. '</strong> (' . dol_escape_htmltag($sync->setting('KREABANK_FINTABLE_TIMEZONE', 'Europe/Lisbon')) . ')</p>';
+if ($installationAdmin) {
+	print '<div class="tabsAction"><a class="butAction" href="' . dol_buildpath('/custom/kreabank/admin/fintable.php', 1) . '">' . $langs->trans('Settings') . '</a>';
+	print '<form method="post" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" style="display:inline">';
+	print '<input type="hidden" name="token" value="' . newToken() . '"><input type="hidden" name="action" value="collect">';
+	print '<button class="butAction" type="submit">' . $langs->trans('KreaBankFeedCollectAll') . '</button></form></div>';
+}
+print '<div class="div-table-responsive"><table class="liste centpercent">';
+print '<tr class="liste_titre">';
+foreach (array('BankAccount', 'IBAN', 'KreaBankFeedBalance', 'KreaBankFeedAvailable', 'KreaBankFeedBankUpdated', 'KreaBankFeedCollectedAt', 'KreaBankFeedHistory', 'Status') as $key) {
+	print '<th>' . $langs->trans($key) . '</th>';
+}
+print '</tr>';
+try {
+	$rows = $sync->accountStatus((int) $conf->entity);
+	foreach ($rows as $row) {
+		$state = $row->status ?: 'unmapped';
+		print '<tr class="oddeven"><td><a href="' . DOL_URL_ROOT . '/compta/bank/card.php?id=' . (int) $row->rowid . '">'
+			. dol_escape_htmltag($row->ref) . '</a><br><span class="opacitymedium">' . dol_escape_htmltag($row->label) . '</span></td>';
+		print '<td>' . dol_escape_htmltag($row->iban_prefix) . '</td>';
+		foreach (array('balance', 'balance_available') as $column) {
+			print '<td class="right nowrap">' . ($row->$column === null ? '—' : price($row->$column) . ' ' . dol_escape_htmltag($row->currency_code)) . '</td>';
+		}
+		print '<td>' . ($row->bank_updated_at ? dol_print_date(strtotime($row->bank_updated_at), 'dayhour') : '—') . '</td>';
+		print '<td>' . ($row->last_success ? dol_print_date($db->jdate($row->last_success), 'dayhour') : '—') . '</td>';
+		print '<td>' . dol_escape_htmltag(trim(($row->history_from ?: '') . ' — ' . ($row->history_to ?: ''), ' —')) . '</td>';
+		print '<td><span class="badge ' . ($state === 'ready' ? 'badge-status4' : 'badge-status1') . '">' . $langs->trans('KreaBankFeedState_' . $state) . '</span>';
+		if ($row->error_code) {
+			print '<br>' . dol_escape_htmltag($row->error_code);
+		}
+		print '</td></tr>';
+	}
+	if (!$rows) {
+		print '<tr><td colspan="8">' . $langs->trans('KreaBankFeedNoAccounts') . '</td></tr>';
+	}
+} catch (Throwable $e) {
+	print '<tr><td colspan="8">' . dol_escape_htmltag($e->getMessage()) . '</td></tr>';
+}
+print '</table></div>';
+print '<p class="opacitymedium">' . $langs->trans('KreaBankFeedBalanceNotice') . '</p>';
+print dol_get_fiche_end();
+llxFooter();
+$db->close();

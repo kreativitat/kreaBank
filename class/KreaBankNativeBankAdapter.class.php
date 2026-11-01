@@ -104,7 +104,7 @@ class KreaBankNativeBankAdapter
 
 		try {
 			foreach ($lines as $index => $line) {
-				$normalized = $this->normalizeImportLine($line, $statementDate, $defaultCurrency);
+				$normalized = $this->normalizeImportLine($line, $statementDate, $defaultCurrency, $format !== 'fintable');
 				if (abs((float) $normalized['amount']) < 0.00001) {
 					continue;
 				}
@@ -114,7 +114,7 @@ class KreaBankNativeBankAdapter
 				$duplicateSource = '';
 				$hashForStorage = $duplicateHash;
 				$isDuplicate = $this->hasHash($bankAccountId, $duplicateHash, $duplicateSource);
-				if (!$isDuplicate) {
+				if (!$isDuplicate && $format !== 'fintable') {
 					$legacyDuplicateHash = $this->buildLegacyIdempotencyHash($bankAccountId, $normalized);
 					if ($legacyDuplicateHash !== '' && $legacyDuplicateHash !== $duplicateHash && $this->hasHash($bankAccountId, $legacyDuplicateHash, $duplicateSource)) {
 						$isDuplicate = true;
@@ -302,7 +302,7 @@ class KreaBankNativeBankAdapter
 	{
 		$this->ensureStagingTables();
 
-		$sql = 'SELECT l.rowid, l.fk_statement, l.fk_native_bank_line, l.operation_date, l.value_date,';
+		$sql = 'SELECT l.rowid, l.line_uid, l.fk_statement, l.fk_native_bank_line, l.operation_date, l.value_date,';
 		$sql .= ' l.amount, l.currency, l.running_balance, l.counterparty_name, l.counterparty_iban,';
 		$sql .= ' l.description, l.payment_reference, l.bank_reference, l.direction, l.allocated_amount,';
 		$sql .= ' l.status, l.duplicate_hash, l.is_duplicate, l.duplicate_of,';
@@ -1238,6 +1238,10 @@ class KreaBankNativeBankAdapter
 	 */
 	public function buildIdempotencyHash($bankAccountId, $line)
 	{
+		// Bank feeds identify distinct booked movements even when date, amount and text coincide.
+		if (preg_match('/^fintable:[a-f0-9]{64}$/D', (string) ($line['line_uid'] ?? ''))) {
+			return hash('sha256', $this->entity . '|' . (int) $bankAccountId . '|' . $line['line_uid']);
+		}
 		$date = (string) (!empty($line['operation_date']) ? $line['operation_date'] : $line['value_date']);
 		$amount = price2num((string) (float) $line['amount'], 'MU');
 		$reference = kreabankNormalizeText((string) (!empty($line['payment_reference']) ? $line['payment_reference'] : ''));
@@ -1889,6 +1893,9 @@ class KreaBankNativeBankAdapter
 		if ($resFetch <= 0) {
 			throw new Exception($this->langs->trans('ErrorRecordNotFound'));
 		}
+		if ((int) $account->entity !== (int) $this->entity) {
+			throw new Exception('Bank account is outside the current entity');
+		}
 		if ((int) $account->status === Account::STATUS_CLOSED) {
 			throw new Exception($this->langs->trans('ErrorBankAccountIsClosed'));
 		}
@@ -2036,7 +2043,7 @@ class KreaBankNativeBankAdapter
 			return null;
 		}
 
-		$sql = 'SELECT l.rowid, l.fk_statement, l.fk_native_bank_line, l.operation_date, l.value_date, l.amount, l.currency, l.running_balance,';
+		$sql = 'SELECT l.rowid, l.line_uid, l.fk_statement, l.fk_native_bank_line, l.operation_date, l.value_date, l.amount, l.currency, l.running_balance,';
 		$sql .= ' l.counterparty_name, l.counterparty_iban, l.description, l.payment_reference, l.bank_reference, l.direction,';
 		$sql .= ' l.allocated_amount, l.status, l.duplicate_hash, l.is_duplicate, l.duplicate_of,';
 		$sql .= ' s.ref as statement_ref, s.source_type, s.filename as source_file, s.bank_account_id,';
@@ -2112,7 +2119,7 @@ class KreaBankNativeBankAdapter
 	 * @param string $defaultCurrency
 	 * @return array<string,mixed>
 	 */
-	protected function normalizeImportLine($line, $statementDate = null, $defaultCurrency = 'EUR')
+	protected function normalizeImportLine($line, $statementDate = null, $defaultCurrency = 'EUR', $repairMappedAmount = true)
 	{
 		$defaultCurrency = strtoupper(trim((string) $defaultCurrency));
 		if (!preg_match('/^[A-Z]{3}$/', $defaultCurrency)) {
@@ -2124,7 +2131,7 @@ class KreaBankNativeBankAdapter
 		}
 		$valueDate = (string) (!empty($line['value_date']) ? $line['value_date'] : $operationDate);
 
-		$amount = (float) price2num((string) (isset($line['amount']) ? $line['amount'] : 0), 'MU');
+		$amount = $repairMappedAmount ? (float) price2num((string) (isset($line['amount']) ? $line['amount'] : 0), 'MU') : (string) $line['amount'];
 		$currency = strtoupper(trim((string) (isset($line['currency']) ? $line['currency'] : $defaultCurrency)));
 		if (!preg_match('/^[A-Z]{3}$/', $currency)) {
 			$currency = $defaultCurrency;
@@ -2136,7 +2143,7 @@ class KreaBankNativeBankAdapter
 		$paymentReference = (string) (isset($line['payment_reference']) ? $line['payment_reference'] : '');
 		$bankReference = (string) (isset($line['bank_reference']) ? $line['bank_reference'] : '');
 
-		return $this->repairBalanceMappedAsAmount(array(
+		$normalized = array(
 			'line_uid' => (string) (isset($line['line_uid']) ? $line['line_uid'] : ''),
 			'operation_date' => $operationDate,
 			'value_date' => $valueDate,
@@ -2150,7 +2157,9 @@ class KreaBankNativeBankAdapter
 			'bank_reference' => $bankReference,
 			'direction' => isset($line['direction']) ? (int) $line['direction'] : ($amount >= 0 ? 1 : -1),
 			'operation_type' => (string) (isset($line['operation_type']) ? $line['operation_type'] : ''),
-		));
+		);
+		// A validated structured feed must never be interpreted as a mis-mapped CSV export.
+		return $repairMappedAmount ? $this->repairBalanceMappedAsAmount($normalized) : $normalized;
 	}
 
 	/**
@@ -2162,6 +2171,9 @@ class KreaBankNativeBankAdapter
 	 */
 	protected function repairBalanceMappedAsAmount($line)
 	{
+		if (is_array($line) && ($line['source_type'] ?? '') === 'fintable') {
+			return $line;
+		}
 		if (!is_array($line) || empty($line)) {
 			return $line;
 		}
@@ -2402,7 +2414,6 @@ class KreaBankNativeBankAdapter
 
 		$sql = 'SELECT rowid FROM ' . $this->db->prefix() . 'kreabank_statement';
 		$sql .= ' WHERE entity = ' . ((int) $this->entity);
-		$sql .= ' AND bank_account_id = ' . ((int) $bankAccountId);
 		$sql .= ' AND ref = ' . $this->sqlText($statementRef);
 		$sql .= $this->db->plimit(1, 0);
 		$resql = $this->db->query($sql);
@@ -2441,6 +2452,7 @@ class KreaBankNativeBankAdapter
 
 		$line = array(
 			'rowid' => (int) $obj->rowid,
+			'line_uid' => (string) ($obj->line_uid ?? ''),
 			'fk_statement' => (int) $obj->fk_statement,
 			'statement_ref' => (string) (!empty($obj->statement_ref) ? $obj->statement_ref : ''),
 			'bank_account_id' => (int) $obj->bank_account_id,

@@ -26,6 +26,11 @@ function kreabankAdminPrepareHead()
 	$head[$h][2] = 'settings';
 	$h++;
 
+	$head[$h][0] = dol_buildpath('/custom/kreabank/admin/fintable.php', 1);
+	$head[$h][1] = $langs->trans('KreaBankFeeds');
+	$head[$h][2] = 'fintable';
+	$h++;
+
 	$head[$h][0] = dol_buildpath('/custom/kreabank/admin/guide.php', 1);
 	$head[$h][1] = $langs->trans('KreaBankGuide');
 	$head[$h][2] = 'guide';
@@ -59,6 +64,11 @@ function kreabankPrepareHead()
 	$head[$h][0] = dol_buildpath('/custom/kreabank/import.php', 1) . '?mainmenu=bank&leftmenu=kreabank_import';
 	$head[$h][1] = $langs->trans('KreaBankImport');
 	$head[$h][2] = 'import';
+	$h++;
+
+	$head[$h][0] = dol_buildpath('/custom/kreabank/feed.php', 1) . '?mainmenu=bank&leftmenu=kreabank_feed';
+	$head[$h][1] = $langs->trans('KreaBankFeeds');
+	$head[$h][2] = 'feed';
 	$h++;
 
 	$head[$h][0] = dol_buildpath('/custom/kreabank/reconcile.php', 1) . '?mainmenu=bank&leftmenu=kreabank_reconcile';
