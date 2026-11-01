@@ -179,6 +179,8 @@ class KreaBankAutoReconcile
 	private function assertActor($actor, $admin = false)
 	{
 		global $conf;
+		// Native Cronjob::run_jobs replaces this property with its database value.
+		$this->entity = (int) $this->entity;
 		if ($this->entity <= 0 || $this->entity !== (int) $conf->entity || !isModEnabled('kreabank') || !isModEnabled('banque')
 			|| empty($actor->id) || (int) $actor->statut !== 1 || !empty($actor->socid)
 			|| (!empty($actor->entity) && (int) $actor->entity !== $this->entity) || ($admin && empty($actor->admin))) {

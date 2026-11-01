@@ -221,6 +221,16 @@ $db->query('DELETE FROM kbauto_bank WHERE rowid>=1000');
 $auto->configure($user, 'preview', array(101));
 $auto->configure($user, 'preview', array(101));
 checkAuto(countAuto('cronjob') === 1 && $auto->setting('MODE') === 'preview', 'Repeated setup updates one company-specific native job');
+$nativeJob = new Cronjob($db);
+$nativeJob->fetch((int) $db->query('SELECT rowid FROM kbauto_cronjob')->fetch_object()->rowid);
+// Cronjob::run_jobs assigns its fetched entity to the scheduled object unchanged.
+$auto->entity = $nativeJob->entity;
+checkAuto($auto->run() === 0 && json_decode($auto->output, true)['status'] === 'preview', 'Native scheduled entity value preserves authorized execution');
+$auto->entity = '2';
+checkAuto($auto->run() === -1, 'String-valued foreign company remains denied by scheduled execution');
+$auto->entity = '0';
+checkAuto($auto->run() === -1, 'String-valued global company remains denied by scheduled execution');
+$auto->entity = 1;
 rejectAuto(static function () use ($auto,$user) { $auto->configure($user, 'enabled', array(202)); }, 'Configuration cannot select another company account');
 rejectAuto(static function () use ($auto,$user) { $auto->configure($user, 'enabled', array()); }, 'Enabled configuration requires an explicit account selection');
 $auto->configure($user, 'off', array(101));

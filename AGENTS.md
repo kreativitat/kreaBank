@@ -65,6 +65,7 @@
 ## Automatic existing-movement matching
 
 - `KreaBankAutoReconcile` schedules bounded, company-specific runs; the only matcher/executor remains `KreaBankService` and its native adapter. Configure at `admin/automation.php`; defaults to off with no accounts selected.
+- Native `Cronjob::run_jobs()` overwrites the scheduled object's `entity` with its fetched database value, which may be a string. Normalize it before comparing company scope; never remove the ownership check.
 - `getAutomaticNativeSuggestion()` and `reconcileAutomaticNativeLine()` accept explicit staging IDs. Never resolve a native candidate through the mixed staging/native ID lookup.
 - Unattended matching requires the same signed persisted amount, currency and account, a date within tolerance, the shared safe suggestion (score floor 150 and gap 35), and a sufficiently strong reference/IBAN. Fail closed on truncated candidate sets or competing staged claims.
 - Native/staged row locks, a company runner lock and an atomic reconciliation audit protect repeated/concurrent execution. Automation creates no payment, invoice or new native movement, and does not train learned patterns.

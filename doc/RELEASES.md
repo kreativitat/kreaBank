@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.14.3 — 2026-11-01
+
+- Normalize the company ID supplied by native scheduled jobs before checking
+  reconciliation permissions. Preserve rejection of foreign and global companies.
+- Cover native fetched job IDs in the automatic reconciliation regression suite.
+  No schema change.
+
 ## 1.14.2 — 2026-11-01
 
 - Add an optional isolated Compose worker that selects only the native Fintable
