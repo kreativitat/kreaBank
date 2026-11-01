@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.18 — 2026-11-01
+
+- Use Dolibarr’s supported menu condition syntax for automatic reconciliation
+  visibility, retaining administrator, internal-user and write-permission checks.
+
 ## 1.14.17 — 2026-11-01
 
 - Remove the floating “More options” dropdown. Keep transfers and cheque deposits

@@ -105,3 +105,5 @@
 
 - `accounts.php` is the company-owned banking entry point. Native account-list GETs route here for KreaBank readers. Balances use native operation dates; pending counts include imported evidence only. Never show a combined monetary total across currencies.
 - Always preserve the native Dolibarr left menu and its responsive behavior. Hide only the duplicate native account tab bar within the banking workspace. Avoid explanatory banners and duplicate account navigation.
+
+- Menu permission expressions run through native `verifCond()` and its function whitelist. Use supported property/permission checks; `empty()` is not allowed on the deployed Dolibarr 24 evaluator. `php test/test_navigation_permissions.php` evaluates the descriptor conditions with installed native source and no database.
