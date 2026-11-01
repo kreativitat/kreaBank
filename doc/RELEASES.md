@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.14 — 2026-11-01
+
+- Use the full banking content width after hiding the native sidebar, and remove
+  the redundant native content border/spacing.
+
 ## 1.14.13 — 2026-11-01
 
 - Replace layered bank menus with one workspace header, an owned-account selector
