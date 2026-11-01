@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.27 — 2026-11-01
+
+- Rename only the account-list submenu; retain the native Bank/Cash heading that
+  uses the same route.
+
 ## 1.14.26 — 2026-11-01
 
 - Replace the accounts overview filter form with compact all/bank/cash/closed

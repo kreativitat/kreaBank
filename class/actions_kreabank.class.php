@@ -56,7 +56,7 @@ class ActionsKreaBank extends CommonHookActions
 		$langs->load('kreabank@kreabank');
 		$changed = false;
 		foreach ($menuitems as &$item) {
-			if (parse_url($item['url'] ?? '', PHP_URL_PATH) === '/compta/bank/list.php') {
+			if ((int) ($item['level'] ?? 0) === 1 && parse_url($item['url'] ?? '', PHP_URL_PATH) === '/compta/bank/list.php') {
 				$item['titre'] = $langs->trans('KreaBankAccountList');
 				$changed = true;
 			}

@@ -163,9 +163,10 @@ $navigationRequest = array('kind' => 'invalid');
 checkNavigation(kreabankNavigationKind('bank') === 'bank', 'Unknown account-overview type normalizes to its bank default');
 $navigationRequest = array();
 $menus = array(
-	array('url' => '/compta/bank/list.php?leftmenu=bank&mainmenu=bank&search_status=opened', 'titre' => 'List', 'perms' => 'unchanged'),
+	array('url' => '/compta/bank/list.php?leftmenu=bank&mainmenu=bank&search_status=opened', 'titre' => 'List', 'level' => 1, 'perms' => 'unchanged'),
 	array('url' => '/compta/bank/bankentries_list.php', 'titre' => 'Entries'),
 	array('url' => '/product/list.php', 'titre' => 'List'),
+	array('url' => '/compta/bank/list.php?leftmenu=bank&mainmenu=bank&search_status=opened', 'titre' => 'BankCash', 'level' => 0),
 );
 $originalMenus = $menus;
 checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null) === 1 && $hooks->results[0]['titre'] === 'KreaBankAccountList', 'Native account-list label is renamed through the left-menu hook');
