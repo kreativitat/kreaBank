@@ -17,7 +17,6 @@ define('NOLOGIN', 1);
 define('NOREQUIREMENU', 1);
 define('NOREQUIREHTML', 1);
 define('NOREQUIREAJAX', 1);
-define('NOREQUIRETRAN', 1);
 require $root . '/master.inc.php';
 require_once DOL_DOCUMENT_ROOT . '/user/class/user.class.php';
 require_once __DIR__ . '/../class/KreaBankFintableSync.class.php';
