@@ -93,7 +93,22 @@ function kreabankAccountToolEntries($accountId)
 	return $entries;
 }
 
-/** One account selector and one primary navigation bar for native and module pages. */
+/** Render the current-company account control for workspace or list filters. */
+function kreabankAccountFilterSelect($accountId = 0)
+{
+	global $db, $conf, $langs;
+	$html = '<label for="kreabank-account-context">' . $langs->trans('BankAccount') . '</label><select class="flat" id="kreabank-account-context" name="account_context"><option value="0">' . $langs->trans('KreaBankAllAccounts') . '</option>';
+	$result = $db->query('SELECT rowid,ref,label FROM ' . $db->prefix() . 'bank_account WHERE entity=' . (int) $conf->entity . ' ORDER BY clos,ref,label');
+	if (!$result) {
+		throw new RuntimeException('Unable to read company accounts');
+	}
+	while ($row = $db->fetch_object($result)) {
+		$html .= '<option value="' . (int) $row->rowid . '"' . ((int) $row->rowid === (int) $accountId ? ' selected' : '') . '>' . dol_escape_htmltag($row->ref . ' — ' . $row->label) . '</option>';
+	}
+	return $html . '</select>';
+}
+
+/** One primary banking bar; the account overview owns its separate list filters. */
 function kreabankBankingHeader($page, $account = null)
 {
 	global $db, $conf, $langs, $user, $mysoc;
@@ -103,16 +118,12 @@ function kreabankBankingHeader($page, $account = null)
 	$html = '<link rel="stylesheet" href="' . dol_escape_htmltag($css) . '"><header class="kb-header">';
 	$html .= '<div class="kb-context"><div class="kb-brand"><span class="fas fa-university" aria-hidden="true"></span><strong>' . $langs->trans('KreaBankBanking') . '</strong>';
 	$html .= '<span class="kb-company" title="' . dol_escape_htmltag($mysoc->name ?? '') . '">' . dol_escape_htmltag($mysoc->name ?? '') . '</span></div>';
-	$html .= '<form method="get" action="' . dol_escape_htmltag(dol_buildpath('/custom/kreabank/accounts.php', 1)) . '"><input type="hidden" name="view" value="' . dol_escape_htmltag($page) . '">';
-	$html .= '<label for="kreabank-account-context">' . $langs->trans('BankAccount') . '</label><select class="flat" id="kreabank-account-context" name="account_context"><option value="0">' . $langs->trans('KreaBankAllAccounts') . '</option>';
-	$result = $db->query('SELECT rowid,ref,label FROM ' . $db->prefix() . 'bank_account WHERE entity=' . (int) $conf->entity . ' ORDER BY clos,ref,label');
-	if (!$result) {
-		throw new RuntimeException('Unable to read company accounts');
+	if ($page !== 'accounts') {
+		$html .= '<form method="get" action="' . dol_escape_htmltag(dol_buildpath('/custom/kreabank/accounts.php', 1)) . '"><input type="hidden" name="view" value="' . dol_escape_htmltag($page) . '">';
+		$html .= kreabankAccountFilterSelect($accountId);
+		$html .= '<button class="button" type="submit">' . $langs->trans('Show') . '</button></form>';
 	}
-	while ($row = $db->fetch_object($result)) {
-		$html .= '<option value="' . (int) $row->rowid . '"' . ((int) $row->rowid === $accountId ? ' selected' : '') . '>' . dol_escape_htmltag($row->ref . ' — ' . $row->label) . '</option>';
-	}
-	$html .= '</select><button class="button" type="submit">' . $langs->trans('Show') . '</button></form></div>';
+	$html .= '</div>';
 	$accountTools = $accountId > 0 ? kreabankAccountToolEntries($accountId) : array();
 	$active = in_array($page, array_column($accountTools, 'key'), true) ? 'account' : (in_array($page, array('bulkmatch', 'pending'), true) ? 'reconcile' : ($page === 'import' ? 'statement' : ($page === 'card' ? 'accounts' : $page)));
 	$html .= '<nav class="kb-primary" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankBanking')) . '">';

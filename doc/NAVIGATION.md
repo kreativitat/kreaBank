@@ -4,7 +4,9 @@ KreaBank provides one banking header on module pages and native bank pages.
 Its primary destinations are Accounts, Movements, Statements, Reconciliation,
 Connections and History. The account selector contains only current-company
 accounts and preserves the current view. It sits below the banking/company heading,
-aligned to the left above the workspace tabs. Import is an action under Statements.
+aligned to the left above the workspace tabs on operational pages. On the account
+overview, a separate Filters form above the table groups account and account-type
+dropdowns; these filters are not navigation tabs. Import is an action under Statements.
 Reconciliation offers compact view controls for single, bulk and pending review.
 
 The bank entry point opens `accounts.php`, with bank, cash and closed-account

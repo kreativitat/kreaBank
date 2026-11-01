@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.14.22 — 2026-11-01
+
+- Separate account-list filters from banking navigation. Group the owned-account
+  selector and account-type dropdown above the table instead of tab-style filters.
+- Submit both filters together, preserving their values without an intermediate
+  view redirect. Other banking pages retain their account-context selector.
+
 ## 1.14.21 — 2026-11-01
 
 - Place the bank-account selector below the banking/company heading, aligned to

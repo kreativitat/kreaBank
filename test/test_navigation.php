@@ -90,13 +90,16 @@ function GETPOSTINT($key) { return (int) ($GLOBALS['navigationRequest'][$key] ??
 $mysoc = (object) array('name' => 'Synthetic company');
 $html = kreabankBankingHeader('accounts');
 checkNavigation(substr_count($html, '<nav ') === 1 && strpos($html, 'KreaBankLedgerExplanation') === false, 'One navigation and no explanatory banner');
-checkNavigation(strpos($html, 'name="view"') !== false && strpos($html, 'name="account_context"') !== false, 'Account changes preserve the current view');
+checkNavigation(strpos($html, '<form') === false, 'Account overview keeps list filters outside the banking navigation');
+$accountSelect = kreabankAccountFilterSelect();
+checkNavigation(strpos($accountSelect, 'name="account_context"') !== false && strpos(end($db->queries), 'WHERE entity=7 ') !== false, 'Shared account control lists only current-company accounts');
 $_SERVER['PHP_SELF'] = '/compta/bank/bankentries_list.php';
 $navigationRequest = array('kreabank_matched' => 0);
 $hooks->printFieldListWhere(array(),$object,$action,null);
 checkNavigation(strpos($hooks->resprints, 'ba.entity=7') !== false, 'Native movements restrict owner company even when accounts are shared');
 $navigationRequest = array('kreabank_matched' => 1);
 $html = kreabankBankingHeader('movements', (object) array('id' => 45));
+checkNavigation(strpos($html, 'name="view" value="movements"') !== false && strpos($html, 'name="account_context"') !== false, 'Other banking views retain the account-context form');
 checkNavigation(strpos($html, 'id=45&amp;kreabank_matched=1') !== false && strpos($html, 'KreaBankReconciledMovements') !== false, 'Movement views retain selected account and expose reconciled entries');
 checkNavigation(strpos($html, 'kb-more') === false && strpos($html, '<details') === false, 'Account tools do not return as a floating header menu');
 $accountTools = kreabankAccountToolEntries(45);
