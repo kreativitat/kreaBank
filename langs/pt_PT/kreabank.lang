@@ -469,3 +469,5 @@ KreaBankStatementProgress=%s linhas importadas · %s movimentos ligados ao Dolib
 KreaBankPostingDateExplanation=O movimento nativo mantém a data original. Reconciliá-lo hoje não cria outro movimento nem altera essa data. Reveja os avisos antes de confiar nas ligações antigas.
 KreaBankWorkspaceHelp_statement=Abra um extrato para ver cada linha importada e o movimento correspondente no Dolibarr. Consultar ou descarregar um extrato nunca cria movimentos bancários.
 KreaBankAllNativeMovements=Todos os movimentos do Dolibarr
+KreaBankReconciled=Reconciliado
+KreaBankSkipped=Ignorado

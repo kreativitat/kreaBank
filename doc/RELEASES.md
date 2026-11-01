@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.9 — 2026-11-01
+
+- Translate reconciliation states in the connected statement view and avoid
+  repeating the native matched filter in generated sort/pagination links.
+
 ## 1.14.8 — 2026-11-01
 
 - Connect imported statements, native account balances, statement reports and bank

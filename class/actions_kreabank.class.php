@@ -65,7 +65,9 @@ class ActionsKreaBank extends CommonHookActions
 		$this->resprints = $report->matchedWhereSql();
 		// Native links for sort/page/filter are built from this variable after the SQL hook.
 		global $param;
-		$param .= '&kreabank_matched=1';
+		if (strpos((string) $param, 'kreabank_matched=') === false) {
+			$param .= '&kreabank_matched=1';
+		}
 		return 0;
 	}
 

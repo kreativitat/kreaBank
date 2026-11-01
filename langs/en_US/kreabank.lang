@@ -469,3 +469,5 @@ KreaBankStatementProgress=%s imported lines · %s linked Dolibarr movements · %
 KreaBankPostingDateExplanation=The native movement keeps its original posting date. Reconciling it today does not create another movement or change that date. Review warnings before relying on older links.
 KreaBankWorkspaceHelp_statement=Open a statement to see every imported line and its corresponding Dolibarr movement. Viewing or downloading a statement never creates bank entries.
 KreaBankAllNativeMovements=All Dolibarr movements
+KreaBankReconciled=Reconciled
+KreaBankSkipped=Skipped
