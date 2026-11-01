@@ -47,7 +47,8 @@ function kreabankIntegrationPanel($accountId = 0, $reference = '')
 	$result = $report->query('SELECT COALESCE(SUM(imported_lines),0) imported_lines, COALESCE(SUM(native_lines),0) native_lines,'
 		. ' COALESCE(SUM(reconciled_lines),0) reconciled_lines, COALESCE(SUM(issue_lines),0) issue_lines FROM (' . $report->statementsSql($accountId) . ') h');
 	$row = $db->fetch_object($result);
-	$html = '<section class="kreabank-integration" aria-label="KreaBank"><div><strong>KreaBank · ' . $langs->trans('KreaBankConnectedBanking') . '</strong>';
+	$stylesheet = dol_buildpath('/custom/kreabank/css/navigation.css', 1) . '?v=' . (int) filemtime(__DIR__ . '/../css/navigation.css');
+	$html = '<link rel="stylesheet" href="' . dol_escape_htmltag($stylesheet) . '"><section class="kreabank-integration" aria-label="KreaBank"><div><strong>KreaBank · ' . $langs->trans('KreaBankConnectedBanking') . '</strong>';
 	$html .= '<p>' . $langs->trans('KreaBankLedgerExplanation') . '</p>';
 	if (basename($_SERVER['PHP_SELF'] ?? '') === 'bankentries_list.php') {
 		$html .= '<p>' . $langs->trans('KreaBankPostingDateExplanation') . '</p>';

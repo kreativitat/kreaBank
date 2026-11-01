@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.10 — 2026-11-01
+
+- Invalidate cached shared bank styles so the integration panel and links render
+  consistently on native and KreaBank pages.
+
 ## 1.14.9 — 2026-11-01
 
 - Translate reconciliation states in the connected statement view and avoid
