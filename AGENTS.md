@@ -60,6 +60,7 @@
 - Match only a unique checksum-valid IBAN to an open bank account in an active owner entity with KreaBank enabled; currencies must match. Do not infer ownership from names or suffixes.
 - Keep the API token encrypted in the native credential configuration. Never embed credentials, company records or production mapping IDs in this public repository.
 - `php test/test_fintable.php` runs pure API contract checks. `php test/test_fintable_database.php` requires disposable local MariaDB on port 33316; never point it at a real installation. See `doc/FINTABLE.md` for operational deployment and rollback.
+- `deploy/fintable/` is an optional container adapter for installations with no running general scheduler. It invokes only the exact global Fintable native job; never run it alongside an existing scheduler for that job. Preserve its SIGTERM override and graceful job shutdown when using an Apache-based image.
 
 ## Automatic existing-movement matching
 

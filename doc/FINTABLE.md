@@ -95,3 +95,39 @@ Run `php test/test_fintable.php` for pure contract checks and
 `php test/test_fintable_database.php` against the disposable local MariaDB test
 instance described by that test. Production acceptance additionally requires a
 successful collection, a duplicate-free replay and unchanged financial tables.
+
+## Isolated container installations
+
+When an isolated clone deliberately keeps its general scheduler disabled, use
+the optional [Compose overlay](../deploy/fintable/compose.example.yaml) and
+companion worker/loop files. Do not add this worker where an existing scheduler
+already runs the Fintable job. The overlay expects the installation's internal
+`test` network and an existing allowlisted HTTPS proxy. Adapt mount sources to
+the actual running application, including a separate custom-module mount when
+present. Confirm the container reads the intended files and matching hashes.
+
+The worker accepts exactly one enabled installation-level native job matching
+the Fintable class, method, module, class path and empty parameters. It passes
+only that job's identifier to Dolibarr's native CLI scheduler. The scheduler key
+stays in PHP memory; neither it nor the Fintable token belongs in command-line
+arguments, deployment files or logs. Set `FINTABLE_RUNNER_LOGIN` to an existing
+authorized global administrator; the script's compatibility default is
+`DeGema_Bot`. The collector's own company and source checks still apply.
+
+Keep the application's existing image and database environment injection. Leave
+general `DOLI_CRON` disabled and other cloned jobs disabled. Allow only Fintable
+HTTPS through the proxy. Run the worker as the application user with read-only
+source mounts, writable documents, bounded resources and logs, and no published
+ports. Override the Apache image's inherited stop signal with `SIGTERM`; the loop
+stops sleeping promptly and lets an active native job finish during the grace
+period. Its heartbeat reports runner availability, while bank/provider failures
+remain visible in KreaBank and native cron status.
+
+A secondary installation can use a read-only token and collect after the primary
+installation's refresh window, avoiding duplicate provider-refresh requests.
+This deployment adapter is compatible with the 1.13 feed engine; it does not
+enable automatic reconciliation or upgrade the application's business logic.
+Before enabling it, back up local configuration and bank identifiers, check
+unique IBAN/currency ownership, and verify a real scheduled run, a duplicate-free
+replay, graceful restart and unchanged unrelated scheduled jobs. Preserve actual
+opening entries when restoring missing bank cards; never synthesize balances.

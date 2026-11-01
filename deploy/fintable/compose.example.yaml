@@ -1,0 +1,46 @@
+# Copyright (C) 2026 Kreativität Works <mail@kreativitat.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+services:
+  fintable-collector:
+    image: ${DOLIBARR_IMAGE:?Set DOLIBARR_IMAGE}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 12m
+    stop_signal: SIGTERM
+    user: "33:33"
+    entrypoint: ["/bin/sh", "/opt/fintable/loop.sh"]
+    environment:
+      DOLI_DB_HOST: shared-mariadb
+      DOLI_DB_NAME: ${DOLI_DB_NAME}
+      DOLI_DB_USER: ${DOLI_DB_USER}
+      DOLI_DB_PASSWORD: ${DOLI_DB_PASSWORD}
+      DOLI_INSTANCE_UNIQUE_ID: ${DOLI_INSTANCE_UNIQUE_ID}
+      DOLI_URL_ROOT: ${DOLIBARR_URL_ROOT:?Set DOLIBARR_URL_ROOT}
+      DOLI_CRON: 0
+      FINTABLE_RUNNER_LOGIN: ${FINTABLE_RUNNER_LOGIN:?Set FINTABLE_RUNNER_LOGIN}
+      TZ: Europe/Lisbon
+      https_proxy: ${FINTABLE_HTTPS_PROXY:?Set FINTABLE_HTTPS_PROXY}
+      http_proxy: ${FINTABLE_HTTPS_PROXY:?Set FINTABLE_HTTPS_PROXY}
+      no_proxy: localhost,127.0.0.1,shared-mariadb,dolibarr
+    volumes:
+      - ./dolibarr/html:/var/www/html:ro
+      - ${DOLIBARR_CUSTOM_SOURCE:?Set DOLIBARR_CUSTOM_SOURCE}:/var/www/html/custom:ro
+      - ./dolibarr/documents:/var/www/documents
+      - ./dolibarr/html/custom/kreabank/deploy/fintable/worker.php:/opt/fintable/worker.php:ro
+      - ./dolibarr/html/custom/kreabank/deploy/fintable/loop.sh:/opt/fintable/loop.sh:ro
+    networks: [test]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    pids_limit: 32
+    healthcheck:
+      test: ["CMD", "php", "/opt/fintable/worker.php", "--health"]
+      interval: 60s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "2"}

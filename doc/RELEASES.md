@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.14.2 — 2026-11-01
+
+- Add an optional isolated Compose worker that selects only the native Fintable
+  job, keeps scheduler credentials in memory and stops active jobs gracefully.
+- Document read-only collection in secondary installations without enabling
+  other cloned scheduled jobs or automatic reconciliation. No schema change.
+
 ## 1.14.1 — 2026-11-01
 
 - Parse bank matching dates in a fixed timezone so server timezone differences
