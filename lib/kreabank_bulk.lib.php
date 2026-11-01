@@ -3,6 +3,50 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+/** Financial and displayed source facts bound to the user's review. */
+function kreabankBulkReviewLineFacts($line)
+{
+	$facts = array();
+	foreach (array('rowid', 'fk_statement', 'native_bank_line_id', 'bank_account_id', 'direction', 'status') as $key) {
+		$facts[$key] = (int) ($line[$key] ?? 0);
+	}
+	$facts['amount'] = number_format((float) ($line['amount'] ?? 0), 8, '.', '');
+	foreach (array('currency', 'operation_date', 'value_date', 'statement_ref', 'counterparty_name', 'counterparty_iban', 'description', 'payment_reference', 'bank_reference') as $key) {
+		$facts[$key] = (string) ($line[$key] ?? '');
+	}
+	return $facts;
+}
+
+/** Sign the exact displayed pair, its account/company/user scope and expiry. */
+function kreabankBulkReviewSignature($row, $scope, $expires, $secret)
+{
+	$suggestion = $row['suggestion'] ?? array();
+	$document = array('doc_id' => (int) ($suggestion['doc_id'] ?? 0));
+	foreach (array('doc_type', 'doc_ref', 'doc_date', 'thirdparty_name') as $key) {
+		$document[$key] = (string) ($suggestion[$key] ?? '');
+	}
+	$document['amount_open'] = number_format((float) ($suggestion['amount_open'] ?? 0), 8, '.', '');
+	$payload = json_encode(array($scope, (int) $expires, kreabankBulkReviewLineFacts($row['line'] ?? array()),
+		$document, number_format((float) ($row['allocation'] ?? 0), 8, '.', '')));
+	if ($payload === false || strlen((string) $secret) < 32) {
+		throw new RuntimeException('Cannot prepare bank reconciliation review');
+	}
+	return hash_hmac('sha256', $payload, $secret);
+}
+
+/** Manual approval must concern an unexpired, unchanged pair actually displayed to this user. */
+function kreabankBulkReviewIsValid($row, $scope, $expires, $signature, $secret, $now, $confirmed, $accountId)
+{
+	$line = $row['line'] ?? array();
+	if (!$confirmed || (int) $expires < (int) $now || (int) $expires > (int) $now + 1800
+		|| (int) ($line['status'] ?? -1) !== 0 || (float) ($row['allocation'] ?? 0) <= 0
+		|| ((int) $accountId > 0 && (int) ($line['bank_account_id'] ?? 0) !== (int) $accountId)
+		|| !is_string($signature) || !preg_match('/^[a-f0-9]{64}$/D', $signature)) {
+		return false;
+	}
+	return hash_equals(kreabankBulkReviewSignature($row, $scope, $expires, $secret), $signature);
+}
+
 /** Advance read-only review work, checking the budget between individual lines. */
 function kreabankAdvanceBulkScan($state, $pendingTotal, $chunkSize, $budgetMs, $page, $limit, $fetchPending, $loadLine, $prepare, $clock = null)
 {

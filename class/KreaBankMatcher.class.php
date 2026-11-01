@@ -153,7 +153,12 @@ class KreaBankMatcher
 		}
 
 		$lineName = kreabankNormalizeText(($line['counterparty_name'] ?? ''));
-		$docName = kreabankNormalizeText(($document['thirdparty_name'] ?? ''));
+		$docNameSource = (string) ($document['thirdparty_name'] ?? '');
+		// Native payment link labels include a display marker, not part of the payee name.
+		if ($isNativeBankDocument) {
+			$docNameSource = (string) preg_replace('/^\s*\(paiement\)\s*\/\s*/iu', '', $docNameSource);
+		}
+		$docName = kreabankNormalizeText($docNameSource);
 		if ($lineName !== '' && $docName !== '') {
 			if (strpos($lineName, $docName) !== false || strpos($docName, $lineName) !== false) {
 				$score += 35;
@@ -166,6 +171,19 @@ class KreaBankMatcher
 					$details[] = 'name_fuzzy';
 					$strategyLevel = max($strategyLevel, 2);
 				}
+			}
+		}
+		if ($lineName === '' && $docName !== '' && $isNativeBankDocument) {
+			// Bank exports often provide the payee only inside the transaction description.
+			// Require a complete multi-word name; free-text evidence never authorizes automation.
+			$nameWords = preg_split('/[^\p{L}\p{N}]+/u', $docName, -1, PREG_SPLIT_NO_EMPTY) ?: array();
+			$descriptionWords = preg_split('/[^\p{L}\p{N}]+/u', kreabankNormalizeText($line['description'] ?? ''), -1, PREG_SPLIT_NO_EMPTY) ?: array();
+			$namePhrase = implode(' ', $nameWords);
+			if (count($nameWords) >= 2 && strlen($namePhrase) >= 8
+				&& strpos(' ' . implode(' ', $descriptionWords) . ' ', ' ' . $namePhrase . ' ') !== false) {
+				$score += 25;
+				$details[] = 'name_description';
+				$strategyLevel = max($strategyLevel, 2);
 			}
 		}
 

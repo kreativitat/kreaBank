@@ -569,9 +569,10 @@ class KreaBankNativeBankAdapter
 	 * @param int $lineId
 	 * @param float $allocatedAmount
 	 * @param int $nativeLineId
+	 * @param string|null $source Explicit staged/native namespace for reviewed bulk approval
 	 * @return bool
 	 */
-	public function markStatementLineReconciled($lineId, $allocatedAmount = 0.0, $nativeLineId = 0)
+	public function markStatementLineReconciled($lineId, $allocatedAmount = 0.0, $nativeLineId = 0, $source = null)
 	{
 		$this->ensureMetaTable();
 		$this->ensureStagingTables();
@@ -582,14 +583,18 @@ class KreaBankNativeBankAdapter
 
 		$nativeLineId = (int) $nativeLineId;
 		$hasStagedRow = false;
-		$sqlStageMap = 'SELECT fk_native_bank_line';
+		$sqlStageMap = 'SELECT rowid, fk_native_bank_line';
 		$sqlStageMap .= ' FROM ' . $this->db->prefix() . 'kreabank_statement_line';
 		$sqlStageMap .= ' WHERE entity = ' . ((int) $this->entity);
-		$sqlStageMap .= ' AND rowid = ' . $lineId;
+		$sqlStageMap .= ($source === 'native' ? ' AND fk_native_bank_line = ' : ' AND rowid = ') . $lineId;
 		$sqlStageMap .= $this->db->plimit(1, 0);
 		$resStageMap = $this->db->query($sqlStageMap);
+		if (!$resStageMap) {
+			return false;
+		}
 		if ($resStageMap && ($objStageMap = $this->db->fetch_object($resStageMap))) {
 			$hasStagedRow = true;
+			$stagedLineId = (int) $objStageMap->rowid;
 			if ($nativeLineId <= 0) {
 				$nativeLineId = (int) $objStageMap->fk_native_bank_line;
 			}
@@ -598,13 +603,15 @@ class KreaBankNativeBankAdapter
 			$nativeLineId = $lineId;
 		}
 
-		$metaExpected = ($nativeLineId > 0 && $this->hasManagedNativeLine($nativeLineId));
+		// A reviewed legacy import is identified by its native ID, never a colliding staging ID.
+		$metaLineId = $source === 'native' ? $lineId : $nativeLineId;
+		$metaExpected = ($metaLineId > 0 && $this->hasManagedNativeLine($metaLineId));
 		$metaUpdated = false;
 		if ($metaExpected) {
 			$sqlMeta = 'UPDATE ' . $this->db->prefix() . 'kreabank_bankmeta';
 			$sqlMeta .= ' SET status = 2';
 			$sqlMeta .= ' WHERE entity = ' . ((int) $this->entity);
-			$sqlMeta .= ' AND fk_bank_line = ' . ((int) $nativeLineId);
+			$sqlMeta .= ' AND fk_bank_line = ' . ((int) $metaLineId);
 			if (!$this->db->query($sqlMeta)) {
 				return false;
 			}
@@ -620,7 +627,7 @@ class KreaBankNativeBankAdapter
 				$sqlStage .= ', fk_native_bank_line = ' . ((int) $nativeLineId);
 			}
 			$sqlStage .= ' WHERE entity = ' . ((int) $this->entity);
-			$sqlStage .= ' AND rowid = ' . $lineId;
+			$sqlStage .= ' AND rowid = ' . $stagedLineId;
 			if (!$this->db->query($sqlStage)) {
 				return false;
 			}

@@ -18,15 +18,19 @@ function harness() {
     const listeners = {};
     const windowEvents = {};
     const toggle = {};
-    let boxes = [{value: '1', checked: false, matches: () => true}];
+    const approval = {checked: false, matches: selector => selector === '[name="review_confirmed"]'};
+    const submit = {disabled: false};
+    let boxes = [{value: '1', checked: false, matches: selector => selector === '.krea-bulk-match-line'}];
     let html = 'original';
     const status = {setAttribute() {}, removeAttribute() {}};
     const resume = {addEventListener(name, fn) { listeners[name] = fn; }};
     const results = {addEventListener(name, fn) { events[name] = fn; },
-        querySelector() { return toggle; }, querySelectorAll() { return boxes; },
+        querySelector(selector) { return selector === '[name="review_confirmed"]' ? approval : toggle; },
+        querySelectorAll(selector) { return selector === 'button[type="submit"]' ? [submit] : boxes; },
         get innerHTML() { return html; }, set innerHTML(value) {
             html = value;
-            boxes = JSON.parse(value).map(box => ({...box, matches: () => true}));
+            boxes = JSON.parse(value).map(box => ({...box, matches: selector => selector === '.krea-bulk-match-line'}));
+            approval.checked = false;
         }};
     let reloads = 0;
     const window = {location: {href: 'https://erp.example.test/custom/kreabank/bulkmatch.php', origin: 'https://erp.example.test', reload() { reloads++; }},
@@ -36,7 +40,7 @@ function harness() {
         'krea-bulk-scan-status': status, 'krea-bulk-scan-resume': resume};
     const fetch = (url, options) => new Promise(resolve => calls.push({url, options, resolve}));
     vm.runInNewContext(source, {document: {getElementById: id => elements[id]}, window, URL, URLSearchParams, AbortController, fetch});
-    return {calls, timers, events, listeners, windowEvents, results, status, resume,
+    return {calls, timers, events, listeners, windowEvents, results, status, resume, approval, submit,
         boxes: () => boxes, reloads: () => reloads,
         respond(index, data, ok = true, status = 200) { calls[index].resolve({ok, status, json: async () => data}); },
         runTimer() { const [id, fn] = timers.entries().next().value; timers.delete(id); fn(); }};
@@ -73,5 +77,20 @@ function harness() {
     const leaving = harness();
     leaving.windowEvents.pagehide();
     check(leaving.calls[0].options.signal.aborted, 'Leaving the page cancels its outstanding browser request');
+    const reviewed = harness();
+    reviewed.approval.checked = true;
+    reviewed.events.change({target: reviewed.approval});
+    reviewed.respond(0, {html: JSON.stringify([{value: '2', checked: false}]), more: true, auto: true, token: 'next'});
+    await tick();
+    check(reviewed.approval.checked && reviewed.boxes()[0].value === '1', 'Approving the displayed pairs pauses in-flight presentation updates');
+    reviewed.boxes()[0].checked = true;
+    reviewed.events.change({target: reviewed.boxes()[0]});
+    check(!reviewed.approval.checked, 'Changing a selection requires approving the new selected set');
+    reviewed.approval.checked = true;
+    reviewed.events.submit({preventDefault() { throw new Error('First reviewed submit must proceed'); }});
+    check(reviewed.submit.disabled && reviewed.calls[0].options.signal.aborted, 'Submitting disables the button and stops background work');
+    let prevented = false;
+    reviewed.events.submit({preventDefault() { prevented = true; }});
+    check(prevented, 'A second submit is blocked while the first is pending');
     console.log(`OK: ${checks} bulk review browser behavior checks`);
 }()).catch(error => { console.error(error); process.exitCode = 1; });

@@ -7,7 +7,8 @@
 ## Architecture Decisions
 
 - 2026-07-16: Keep one reconciliation path through `KreaBankService`, `KreaBankNativeBankAdapter`, and `KreaBankMatcher`; do not introduce a second matching or execution engine.
-- 2026-07-16: Automatic safe matching requires an exact amount signal, a strong identity signal (`ref_payment`, `ref_exact`, `iban`, or `pattern_iban`), the configured score threshold, and at least a 35-point lead over the second valid candidate. Batch approval, bulk matching, and manual preselection must use `KreaBankService::getSafeSuggestion()`.
+- 2026-07-16: Automatic safe matching requires an exact amount signal, a strong identity signal (`ref_payment`, `ref_exact`, `iban`, or `pattern_iban`), the configured score threshold, and at least a 35-point lead over the second valid candidate. Automatic batch approval and bulk/manual preselection must use `KreaBankService::getSafeSuggestion()`.
+- 2026-11-01: Explicitly reviewed bulk selections use manual `bulk_manual` reconciliation, including weak suggestions approved by the user. Require CSRF, current write permissions, the review checkbox and a session-signed, unexpired exact displayed pair; recompute suggestions and reject changed pairs. Never relax unattended matching to implement manual approval.
 - 2026-07-16: Customer and supplier credit notes are excluded from normal invoice candidates. Supporting refunds requires dedicated reverse-direction document types and payment semantics; credit notes must not be treated as standard positive invoice payments.
 - 2026-07-16: The manual reconciliation controller intentionally accepts only `native_bank` checkbox and drag/drop assignments. Payments and invoices remain supported through bulk, suggestion, and quick-entry service workflows.
 
@@ -86,7 +87,9 @@
 
 - Initial bulk review GETs do not run matching. Background POSTs retain native authorization and CSRF checks; `kreabankAdvanceBulkScan()` budgets work between individual lines, not whole chunks.
 - Release the PHP session lock during read-only matching. Check session identity, generation and cursor before saving progress; never overwrite a newer company/account/page scan.
-- Cache presentation only for the displayed page. Confirmation always recomputes the existing shared safe suggestion and uses the native reconciliation service.
+- Cache presentation only for the displayed page. Confirmation recomputes suggestions, authenticates the displayed pair and uses the same native reconciliation service. Manual approval rechecks source facts under locks and persists the audit atomically; it does not train automatic patterns.
+- Keep staging/native ID namespaces explicit during reviewed lookup and persistence, including legacy import metadata. A native ID must never update an unrelated staged row with the same number.
+- `php test/test_bulk_review.php` checks review authenticity and name evidence. `php test/test_bulk_review_database.php` extends ONLY the disposable automatic-reconciliation database on port 33317; it never opens an installation database.
 - `php test/test_bulk_scan.php` and `node test/test_bulkmatch_client.cjs` exercise bounded progress and browser request behavior without business data. See `doc/BULK_REVIEW.md`.
 
 ## Connected bank views

@@ -137,7 +137,7 @@ $markReconciledBody = $extractFunctionBody($nativeSource, 'markStatementLineReco
 if ($markReconciledBody === '') {
 	$errors[] = 'Unable to parse markStatementLineReconciled body';
 } else {
-	$assertContains($markReconciledBody, '$metaExpected = ($nativeLineId > 0 && $this->hasManagedNativeLine($nativeLineId));', 'markStatementLineReconciled should determine whether meta update is required', $errors);
+	$assertContains($markReconciledBody, '$metaExpected = ($metaLineId > 0 && $this->hasManagedNativeLine($metaLineId));', 'markStatementLineReconciled should require the import metadata in the selected namespace', $errors);
 	$assertContains($markReconciledBody, 'if ($metaExpected && !$metaUpdated)', 'markStatementLineReconciled should fail when required meta update is missing', $errors);
 	$assertContains($markReconciledBody, 'if ($hasStagedRow && !$stagingUpdated)', 'markStatementLineReconciled should fail when required staging update is missing', $errors);
 }
@@ -350,7 +350,8 @@ $assertContains($bulkScanSource, "'line_id' => (int) (!empty(\$line['rowid']) ? 
 $assertContains($bulkScanSource, "'doc_type' => (string) (!empty(\$suggestion['doc_type']) ? \$suggestion['doc_type'] : '')", 'bulkmatch scan cache should persist compact document type in cache', $errors);
 $assertContains($bulkScanSource, "'doc_id' => (int) (!empty(\$suggestion['doc_id']) ? \$suggestion['doc_id'] : 0)", 'bulkmatch scan cache should persist compact document id in cache', $errors);
 $assertContains($bulkScanSource, "'score' => (int) (!empty(\$suggestion['score']) ? \$suggestion['score'] : 0)", 'bulkmatch scan cache should persist compact score in cache', $errors);
-$assertContains($bulkSource, 'KreaBankBulkMatchLowConfidenceSkipped', 'bulkmatch should warn when selected lines are skipped for low confidence', $errors);
+$assertContains($bulkSource, 'kreabankBulkReviewIsValid(', 'manual bulk confirmation must authenticate the exact displayed pair and explicit approval', $errors);
+$assertContains($bulkSource, 'KreaBankBulkMatchReviewChanged', 'bulkmatch must report changed or expired reviewed pairs instead of silently skipping them', $errors);
 $assertContains($bulkSource, '$safeSuggestion = $service->getSafeSuggestion($orderedSuggestions, $bulkMatchMinScore);', 'bulkmatch should use the shared identity, amount, and score-gap safety contract', $errors);
 if (strpos($bulkSource, "'is_bulk_safe' => (\$matchScore >= \$bulkMatchMinScore)") !== false) {
 	$errors[] = 'bulkmatch should not classify amount-and-date-only suggestions as safe by score alone';

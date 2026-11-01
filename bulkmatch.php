@@ -98,11 +98,16 @@ if ($dateTolerance <= 0) {
 	$dateTolerance = 3;
 }
 $bulkScanCacheStoreKey = 'kreabank_bulkmatch_scan_state';
-$bulkScanMatcherRevision = 12;
+$bulkScanMatcherRevision = 13;
 $bulkScanFilterScope = array(
 	'bank_account_id' => $navigationAccountId,
 );
 $bulkScanCacheScope = ((int) $conf->entity) . '|' . ((int) $user->id) . '|' . ((int) $dateTolerance) . '|' . ((int) $bulkScanMatcherRevision) . '|' . hash('sha256', json_encode($bulkScanFilterScope));
+if (empty($_SESSION['kreabank_bulk_review_secret'])) {
+	$_SESSION['kreabank_bulk_review_secret'] = bin2hex(random_bytes(32));
+}
+$bulkReviewSecret = $_SESSION['kreabank_bulk_review_secret'];
+$bulkReviewScope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId;
 $bulkScanCacheTtl = (int) getDolGlobalInt('KREABANK_BULKMATCH_SCAN_CACHE_TTL');
 if ($bulkScanCacheTtl <= 0) {
 	$bulkScanCacheTtl = 120;
@@ -414,9 +419,16 @@ $resolveSuggestionCardUrl = static function ($docType, $docId) {
 	return '';
 };
 
-if ($action === 'bulk_match_confirm' && $user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite) {
+if ($action === 'bulk_match_confirm') {
+	if (!$user->hasRight('kreabank', 'reconciliation', 'write') || !$canNativeWrite) {
+		accessforbidden();
+	}
 	$enforcePostActionWithToken();
 	$selectedLineIds = GETPOST('selected_line_ids', 'array');
+	$reviewSignatures = GETPOST('review_signatures', 'array');
+	$reviewSources = GETPOST('review_sources', 'array');
+	$reviewExpires = GETPOSTINT('review_expires');
+	$reviewConfirmed = GETPOSTINT('review_confirmed') === 1;
 	$lineIds = array();
 	if (is_array($selectedLineIds)) {
 		foreach ($selectedLineIds as $selectedLineId) {
@@ -427,42 +439,26 @@ if ($action === 'bulk_match_confirm' && $user->hasRight('kreabank', 'reconciliat
 		}
 	}
 
-	if (empty($lineIds)) {
+	if (!$reviewConfirmed || count($lineIds) > 100) {
+		setEventMessages($langs->trans('KreaBankBulkMatchReviewRequired'), null, 'warnings');
+	} elseif (empty($lineIds)) {
 		setEventMessages($langs->trans('KreaBankNoLinesSelected'), null, 'warnings');
 	} else {
 		$done = 0;
 		$noMatch = 0;
-		$lowConfidence = 0;
+		$changed = 0;
 		$failed = 0;
 		$errors = array();
-		$linesById = array();
-
 		foreach ($lineIds as $lineId) {
 			try {
-				$line = $service->getLineById((int) $lineId);
-				if (!empty($line) && is_array($line)) {
-					$linesById[(int) $lineId] = $line;
-				}
-			} catch (Exception $e) {
-				// Keep per-line resilience; detailed error is reported in reconcile attempt below.
-			}
-		}
-		$suggestionsByLine = array();
-		try {
-			$suggestionsByLine = $service->getSuggestionsForLines(array_values($linesById), 0, $dateTolerance, null, false);
-		} catch (Exception $e) {
-			// Fallback to per-line suggestion loading in the loop below.
-		}
-
-		foreach ($lineIds as $lineId) {
-			try {
-				$line = !empty($linesById[(int) $lineId]) ? $linesById[(int) $lineId] : $service->getLineById((int) $lineId);
+				$line = $service->getBulkReviewLine((int) $lineId, $reviewSources[$lineId] ?? '');
 				if (empty($line) || (int) $line['status'] !== 0) {
 					$noMatch++;
 					continue;
 				}
 
-				$suggestions = !empty($suggestionsByLine[(int) $lineId]) ? (array) $suggestionsByLine[(int) $lineId] : $service->getSuggestionsForLine((int) $lineId, 0, $dateTolerance, null, false);
+				$freshSuggestions = $service->getSuggestionsForLines(array($line), 0, $dateTolerance, null, false);
+				$suggestions = $freshSuggestions[(int) $lineId] ?? array();
 				$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestions, $dateTolerance);
 				$resolved = $resolveLineBestSuggestion($line, $suggestions);
 				$suggestion = !empty($resolved['suggestion']) ? (array) $resolved['suggestion'] : null;
@@ -471,8 +467,10 @@ if ($action === 'bulk_match_confirm' && $user->hasRight('kreabank', 'reconciliat
 					$noMatch++;
 					continue;
 				}
-				if (empty($resolved['is_bulk_safe'])) {
-					$lowConfidence++;
+				$reviewedRow = array('line' => $line, 'suggestion' => $suggestion, 'allocation' => $allocation);
+				if (!kreabankBulkReviewIsValid($reviewedRow, $bulkReviewScope, $reviewExpires,
+					$reviewSignatures[$lineId] ?? '', $bulkReviewSecret, dol_now(), $reviewConfirmed, $navigationAccountId)) {
+					$changed++;
 					continue;
 				}
 
@@ -488,10 +486,12 @@ if ($action === 'bulk_match_confirm' && $user->hasRight('kreabank', 'reconciliat
 						'match_score' => $score,
 						'match_reasons' => $details,
 					)),
-					'bulk_match',
+					'bulk_manual',
 					0,
-					'Bulk match confirmed by user',
-					$score
+					'Exact displayed pair reviewed and confirmed by user',
+					$score,
+					null,
+					$reviewedRow
 				);
 				$done++;
 			} catch (Exception $e) {
@@ -500,14 +500,12 @@ if ($action === 'bulk_match_confirm' && $user->hasRight('kreabank', 'reconciliat
 			}
 		}
 
-		if ($done > 0) {
-			setEventMessages($langs->trans('KreaBankBulkMatchDone', (string) $done, (string) count($lineIds)), null, 'mesgs');
-		}
+		setEventMessages($langs->trans('KreaBankBulkMatchDone', (string) $done, (string) count($lineIds)), null, $done > 0 ? 'mesgs' : 'warnings');
 		if ($noMatch > 0) {
 			setEventMessages($langs->trans('KreaBankBulkMatchNoMatchSkipped', (string) $noMatch), null, 'warnings');
 		}
-		if ($lowConfidence > 0) {
-			setEventMessages($langs->trans('KreaBankBulkMatchLowConfidenceSkipped', (string) $lowConfidence), null, 'warnings');
+		if ($changed > 0) {
+			setEventMessages($langs->trans('KreaBankBulkMatchReviewChanged', (string) $changed), null, 'warnings');
 		}
 		if ($failed > 0) {
 			$errorList = array_slice(array_values(array_unique($errors)), 0, 5);
@@ -517,6 +515,8 @@ if ($action === 'bulk_match_confirm' && $user->hasRight('kreabank', 'reconciliat
 
 	// Bulk confirmation can change pending/matchable lines; force cache refresh.
 	unset($_SESSION[$bulkScanCacheStoreKey]);
+	header('Location: ' . dol_buildpath('/custom/kreabank/bulkmatch.php', 1) . '?account_context=' . $navigationAccountId . '&limit=' . $limit);
+	exit;
 }
 
 $rows = array();
@@ -814,7 +814,10 @@ if (empty($rows)) {
 	print '<input type="hidden" name="leftmenu" value="kreabank_bulkmatch">';
 	print '<input type="hidden" name="page" value="' . ((int) $page) . '">';
 	print '<input type="hidden" name="limit" value="' . ((int) $limit) . '">';
-	print '<label class="krea-bulk-select-all"><input type="checkbox" id="krea_bulk_match_all" checked> ' . $langs->trans('KreaBankSelectAll') . '</label>';
+	$reviewExpires = dol_now() + 1800;
+	print '<input type="hidden" name="review_expires" value="' . $reviewExpires . '">';
+	print '<p>' . $langs->trans('KreaBankBulkMatchScoreHelp') . '</p>';
+	print '<label class="krea-bulk-select-all"><input type="checkbox" id="krea_bulk_match_all"' . ($preselectedCount === count($rows) ? ' checked' : '') . '> ' . $langs->trans('KreaBankSelectAll') . '</label>';
 	print '<div class="krea-bulk-list">';
 	$normalizeCompact = static function ($value) {
 		$value = dol_string_nospecial((string) $value);
@@ -863,6 +866,9 @@ if (empty($rows)) {
 		}
 
 		print '<div class="krea-bulk-row">';
+		$reviewSignature = kreabankBulkReviewSignature($row, $bulkReviewScope, $reviewExpires, $bulkReviewSecret);
+		print '<input type="hidden" name="review_signatures[' . $lineId . ']" value="' . $reviewSignature . '">';
+		print '<input type="hidden" name="review_sources[' . $lineId . ']" value="' . (!empty($line['fk_statement']) ? 'staged' : 'native') . '">';
 		print '<div class="krea-bulk-row-check"><input type="checkbox" class="krea-bulk-match-line" name="selected_line_ids[]" value="' . $lineId . '"' . ($isPreselected ? ' checked' : '') . '></div>';
 		print '<div class="krea-bulk-row-panels">';
 		$counterpartyValue = trim((string) (!empty($line['counterparty_name']) ? $line['counterparty_name'] : ''));
@@ -932,9 +938,14 @@ if (empty($rows)) {
 		print '</table>';
 
 		print '<table class="krea-bulk-panel">';
-		print '<tr><th colspan="2">' . $langs->trans('KreaBankMatchProbability') . '</th></tr>';
+		print '<tr><th colspan="2">' . $langs->trans('KreaBankBulkMatchEvidence') . '</th></tr>';
 		print '<tr><td class="krea-label">' . $langs->trans('KreaBankBulkMatchScore') . '</td><td><span class="krea-bulk-score">' . ((int) $suggestion['score']) . '</span>' . (!$isBulkSafe ? '<span class="krea-bulk-low-score">' . $langs->trans('KreaBankBulkMatchLowConfidence') . '</span>' : '') . '</td></tr>';
-		print '<tr><td class="krea-label">' . $langs->trans('KreaBankBulkMatchReasons') . '</td><td>' . dol_escape_htmltag(implode(', ', (array) $suggestion['details'])) . '</td></tr>';
+		$reasonLabels = array();
+		foreach ((array) $suggestion['details'] as $reason) {
+			$reasonKey = 'KreaBankMatchReason_' . $reason;
+			$reasonLabels[] = $langs->trans($reasonKey) === $reasonKey ? $reason : $langs->trans($reasonKey);
+		}
+		print '<tr><td class="krea-label">' . $langs->trans('KreaBankBulkMatchReasons') . '</td><td>' . dol_escape_htmltag(implode(', ', $reasonLabels)) . '</td></tr>';
 		print '</table>';
 
 		print '</div>';
@@ -944,6 +955,7 @@ if (empty($rows)) {
 	print '</div>';
 	if ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite) {
 		print '<div class="krea-bulk-actions">';
+		print '<label><input type="checkbox" name="review_confirmed" value="1" required> ' . $langs->trans('KreaBankBulkMatchReviewApproval') . '</label><br>';
 		print '<button type="submit" class="butAction">' . $langs->trans('KreaBankBulkMatchConfirm') . '</button>';
 		print '</div>';
 	}
@@ -967,7 +979,7 @@ $scanClientConfig = array('url' => $_SERVER['PHP_SELF'], 'token' => currentToken
 	'loading' => $langs->transnoentities('KreaBankBulkMatchLoading'), 'paused' => $langs->transnoentities('KreaBankBulkMatchReviewPaused'),
 	'failed' => $langs->transnoentities('KreaBankBulkMatchScanFailed'), 'refresh' => $langs->transnoentities('Refresh'));
 print '<script type="application/json" id="krea-bulk-scan-config">' . json_encode($scanClientConfig, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . '</script>';
-print '<script src="' . dol_buildpath('/kreabank/js/bulkmatch.js', 1) . '?v=1.14.7" defer></script>';
+print '<script src="' . dol_buildpath('/custom/kreabank/js/bulkmatch.js', 1) . '?v=1.14.11" defer></script>';
 print dol_get_fiche_end();
 llxFooter();
 $db->close();

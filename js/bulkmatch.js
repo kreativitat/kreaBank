@@ -16,6 +16,7 @@
     let timer;
     let request;
     let reloadNeeded = false;
+    let submitting = false;
 
     function pause() {
         paused = true;
@@ -41,11 +42,25 @@
             });
         } else if (event.target.matches('.krea-bulk-match-line')) {
             selections.set(event.target.value, event.target.checked);
+        } else if (event.target.matches('[name="review_confirmed"]')) {
+            pause();
+            return;
         } else return;
+        const approval = results.querySelector('[name="review_confirmed"]');
+        if (approval) approval.checked = false;
         updateToggle();
         pause();
     });
-    results.addEventListener('submit', pause);
+    results.addEventListener('submit', function (event) {
+        pause();
+        if (submitting) {
+            event.preventDefault();
+            return;
+        }
+        submitting = true;
+        if (request) request.abort();
+        results.querySelectorAll('button[type="submit"]').forEach(button => { button.disabled = true; });
+    });
 
     async function scan(manual) {
         if (running || !more || (paused && !manual)) return;

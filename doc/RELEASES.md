@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.14.11 — 2026-11-01
+
+- Reconcile explicitly reviewed bulk selections through the native service instead
+  of skipping them for automatic-confidence rules. Bind approval to the exact
+  displayed pairs, reject changed/expired reviews and show the outcome after redirect.
+- Count complete payee names found in bank descriptions and explain scores as points.
+  Preserve strict unattended matching, company/account boundaries, replay protection,
+  transaction rollback and atomic manual audits, including legacy/native ID collisions.
+- No schema or scheduler change. Refresh open bulk forms before approving. See
+  [bulk review](BULK_REVIEW.md).
+
 ## 1.14.10 — 2026-11-01
 
 - Invalidate cached shared bank styles so the integration panel and links render

@@ -781,6 +781,25 @@ class KreaBankService
 		return $this->native->getLineById((int) $lineId);
 	}
 
+	/** Read the namespace displayed in bulk review without resolving a colliding ID. */
+	public function getBulkReviewLine($lineId, $source)
+	{
+		if ($source !== 'staged' && $source !== 'native') {
+			return null;
+		}
+		$line = $source === 'staged' ? $this->native->getStatementLineById((int) $lineId) : $this->native->getBankLineById((int) $lineId);
+		if (!$line) {
+			return null;
+		}
+		$sql = 'SELECT rowid FROM ' . $this->db->prefix() . 'bank_account WHERE rowid = ' . (int) $line['bank_account_id'];
+		$sql .= ' AND entity = ' . (int) $this->entity . ' AND clos = 0 AND rappro = 1';
+		$res = $this->db->query($sql);
+		if (!$res) {
+			throw new Exception($this->db->lasterror());
+		}
+		return $this->db->fetch_object($res) ? $line : null;
+	}
+
 	/**
 	 * Delete one imported native statement.
 	 *
@@ -1833,15 +1852,34 @@ class KreaBankService
 	 * @param string $note
 	 * @param int $confidenceScore
 	 * @param int[]|null $automaticAccounts Non-null enforces unattended native-only checks
+	 * @param array|null $reviewedRow Exact pair authenticated by the bulk review controller
 	 * @return int
 	 */
-	public function reconcileLine($lineId, $links, $strategy = 'manual', $isAuto = 0, $note = '', $confidenceScore = 0, $automaticAccounts = null)
+	public function reconcileLine($lineId, $links, $strategy = 'manual', $isAuto = 0, $note = '', $confidenceScore = 0, $automaticAccounts = null, $reviewedRow = null)
 	{
+		$isReviewedBulk = $reviewedRow !== null;
+		if ($strategy === 'bulk_manual' && !$isReviewedBulk) {
+			throw new Exception('Manual bulk reconciliation requires the displayed review');
+		}
+		if ($isReviewedBulk) {
+			require_once __DIR__ . '/../lib/kreabank_bulk.lib.php';
+			if ($strategy !== 'bulk_manual' || (int) $isAuto !== 0 || $automaticAccounts !== null || count($links) !== 1
+				|| !$this->user->hasRight('kreabank', 'reconciliation', 'write')
+				|| (!$this->user->hasRight('banque', 'modifier') && !$this->user->hasRight('banque', 'consolidate'))
+				|| (int) ($reviewedRow['line']['rowid'] ?? 0) !== (int) $lineId
+				|| (string) ($reviewedRow['suggestion']['doc_type'] ?? '') !== (string) ($links[0]['doc_type'] ?? '')
+				|| (int) ($reviewedRow['suggestion']['doc_id'] ?? 0) !== (int) ($links[0]['fk_doc'] ?? 0)
+				|| abs((float) ($reviewedRow['allocation'] ?? 0) - (float) ($links[0]['allocated_amount'] ?? 0)) > 0.00000001) {
+				throw new Exception('Invalid manual bank reconciliation review');
+			}
+		}
 		$isAutomaticNative = ($automaticAccounts !== null);
 		if ($isAutomaticNative && ($strategy !== 'auto_native' || (int) $isAuto !== 1 || count($links) !== 1 || ($links[0]['doc_type'] ?? '') !== 'native_bank')) {
 			throw new Exception('Automatic reconciliation accepts one existing native bank movement only');
 		}
-		$line = $isAutomaticNative ? $this->native->getStatementLineById($lineId) : $this->getLineById($lineId);
+		$reviewSource = $isReviewedBulk && !empty($reviewedRow['line']['fk_statement']) ? 'staged' : 'native';
+		$line = $isReviewedBulk ? $this->getBulkReviewLine($lineId, $reviewSource)
+			: ($isAutomaticNative ? $this->native->getStatementLineById($lineId) : $this->getLineById($lineId));
 		if (!$line) {
 			throw new Exception('Unknown bank line');
 		}
@@ -1909,6 +1947,8 @@ class KreaBankService
 			// Serialize scheduled and manual claims on the same staged record.
 			if (!empty($line['fk_statement'])) {
 				$this->lockReconciliationRow('kreabank_statement_line', (int) $line['rowid']);
+			} elseif ($isReviewedBulk) {
+				$this->lockReconciliationRow('bank', (int) $line['rowid']);
 			}
 			if ($selectedNativeBankLink !== null) {
 				$this->lockReconciliationRow('bank', (int) $selectedNativeBankLink['fk_doc']);
@@ -1918,6 +1958,14 @@ class KreaBankService
 				if (!$currentLine || (int) $currentLine['status'] === 2) {
 					throw new Exception('Statement line is already reconciled or unavailable');
 				}
+			}
+			if ($isReviewedBulk) {
+				$currentLine = $this->getBulkReviewLine($lineId, $reviewSource);
+				if (!$currentLine || (int) $currentLine['status'] !== 0
+					|| kreabankBulkReviewLineFacts($currentLine) !== kreabankBulkReviewLineFacts($reviewedRow['line'])) {
+					throw new Exception($this->langs->trans('KreaBankBulkMatchReviewChanged', '1'));
+				}
+				$line = $currentLine;
 			}
 			if ($isAutomaticNative) {
 				$fresh = $this->getAutomaticNativeSuggestion((int) $lineId, (array) $automaticAccounts);
@@ -1949,6 +1997,14 @@ class KreaBankService
 			} else {
 				$nativeLineId = $this->resolveNativeLineIdFromStatementLine($line, true);
 				$nativeLine = $this->buildNativeLineContext($line, $nativeLineId);
+			}
+			if ($isReviewedBulk && ($selectedNativeBankLink !== null || $selectedLinkedPaymentBankLink !== null)) {
+				$selectedBankLine = $this->native->getBankLineById($nativeLineId);
+				if (!$selectedBankLine || (float) $selectedBankLine['amount'] * (float) $line['amount'] <= 0
+					|| strtoupper((string) $selectedBankLine['currency']) !== strtoupper((string) $line['currency'])
+					|| abs((float) $selectedBankLine['amount'] - (float) $line['amount']) > 0.00000001) {
+					throw new Exception('Reviewed bank movement amount, direction or currency changed');
+				}
 			}
 
 			foreach ($links as $link) {
@@ -2082,12 +2138,12 @@ class KreaBankService
 				throw new Exception('Failed to conciliate native bank line');
 			}
 
-			if (!$this->native->markStatementLineReconciled((int) $line['rowid'], $outstanding, $nativeLineId)) {
+			if (!$this->native->markStatementLineReconciled((int) $line['rowid'], $outstanding, $nativeLineId, $isReviewedBulk ? $reviewSource : null)) {
 				throw new Exception('Failed to persist statement reconciliation');
 			}
-			if ($isAutomaticNative) {
+			if ($isAutomaticNative || $isReviewedBulk) {
 				if (!$this->logAudit('reconcile', (int) $line['rowid'], (int) $line['rowid'], array(
-					'strategy' => 'auto_native', 'is_auto' => 1, 'confidence_score' => $confidenceScore,
+					'strategy' => $strategy, 'is_auto' => (int) $isAuto, 'confidence_score' => $confidenceScore,
 					'links' => $links, 'native' => 1, 'native_bank_line_id' => $nativeLineId,
 				))) {
 					throw new Exception('Failed to persist reconciliation audit');
@@ -2101,7 +2157,7 @@ class KreaBankService
 			throw $e;
 		}
 
-		if ($isAutomaticNative) {
+		if ($isAutomaticNative || $isReviewedBulk) {
 			return (int) $line['rowid'];
 		}
 
