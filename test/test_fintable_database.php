@@ -9,6 +9,7 @@ require_once __DIR__ . '/test_fintable.php';
 define('DOL_DOCUMENT_ROOT', __DIR__ . '/fixtures/fintable-dolibarr');
 define('DOL_URL_ROOT', '');
 define('MAIN_DB_PREFIX', 'kbtest_');
+function dolDecrypt($value) { return strpos($value,'dolcrypt:test:') === 0 ? substr($value,14) : $value; }
 function dol_now() { return time(); }
 function dol_print_date($time, $format) { return gmdate(strtr($format, array('%Y'=>'Y','%m'=>'m','%d'=>'d','%H'=>'H','%M'=>'i','%S'=>'s')), $time); }
 function dol_syslog($message, $level = 0) {}
@@ -165,7 +166,8 @@ $sameCompany = $sync->collect($user);
 checkFeed($sameCompany['failed'] === 0 && $sameCompany['imported'] === 1, 'Multiple bank accounts in the same company use valid distinct statement references');
 checkFeed(feedCount($db,'bank') === 0, 'Automatic collection never materializes native bank movements');
 // The scheduler requests one refresh and waits without exhausting retries.
-$db->query("INSERT INTO kbtest_const VALUES (0,'KREABANK_FINTABLE_REFRESH','1')");
+$db->query("INSERT INTO kbtest_const VALUES (0,'KREABANK_FINTABLE_REFRESH','dolcrypt:test:1')");
+checkFeed($sync->setting('KREABANK_FINTABLE_REFRESH') === '1', 'Read native encrypted non-token settings');
 $allowSync = true;
 $slot = '2026-11-02 08:45';
 checkFeed($sync->collect($user,$slot)['status'] === 'refresh_wait' && $postCount === 1, 'Request included refresh before a scheduled collection');

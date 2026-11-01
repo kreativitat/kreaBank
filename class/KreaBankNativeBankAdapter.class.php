@@ -1893,7 +1893,10 @@ class KreaBankNativeBankAdapter
 		if ($resFetch <= 0) {
 			throw new Exception($this->langs->trans('ErrorRecordNotFound'));
 		}
-		if ((int) $account->entity !== (int) $this->entity) {
+		// Account::fetch() supports shared visibility and does not populate entity on all supported versions.
+		$ownerResult = $this->db->query('SELECT entity FROM ' . $this->db->prefix() . 'bank_account WHERE rowid=' . (int) $bankAccountId);
+		$owner = $ownerResult ? $this->db->fetch_object($ownerResult) : null;
+		if (!$owner || (int) $owner->entity !== (int) $this->entity) {
 			throw new Exception('Bank account is outside the current entity');
 		}
 		if ((int) $account->status === Account::STATUS_CLOSED) {

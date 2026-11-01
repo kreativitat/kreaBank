@@ -36,7 +36,9 @@ class KreaBankFintableSync
 			throw new RuntimeException('Invalid Fintable setting');
 		}
 		$row = $this->one('SELECT value FROM ' . $this->db->prefix() . 'const WHERE entity=0 AND name=' . $this->text($name));
-		return $row ? (string) $row->value : (string) $default;
+		$value = $row ? (string) $row->value : (string) $default;
+		// Dolibarr also encrypts names containing REFRESH; retain the token ciphertext explicitly.
+		return $name !== 'KREABANK_FINTABLE_TOKEN' && strpos($value, 'dolcrypt:') === 0 ? (string) dolDecrypt($value) : $value;
 	}
 
 	/** Shared credential changes require an installation administrator, not a company administrator. */
