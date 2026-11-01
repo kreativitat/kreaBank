@@ -13,6 +13,10 @@
  * \brief      Bulk reconcile review page (line + best match).
  */
 
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'bulk_scan') {
+	define('NOTOKENRENEWAL', 1);
+}
+
 $res = 0;
 if (!$res && !empty($_SERVER['CONTEXT_DOCUMENT_ROOT'])) {
 	$res = @include $_SERVER['CONTEXT_DOCUMENT_ROOT'] . '/main.inc.php';
@@ -45,6 +49,7 @@ if (!$res) {
 }
 
 require_once __DIR__ . '/lib/kreabank.lib.php';
+require_once __DIR__ . '/lib/kreabank_bulk.lib.php';
 require_once __DIR__ . '/class/KreaBankService.class.php';
 
 $langs->loadLangs(array('errors', 'companies', 'kreabank@kreabank'));
@@ -67,6 +72,7 @@ $navigationAccount = kreabankNavigationAccount($navigationAccountId);
 $service = new KreaBankService($db, $user, $langs);
 $canNativeWrite = ($user->hasRight('banque', 'modifier') || $user->hasRight('banque', 'consolidate'));
 $action = GETPOST('action', 'aZ09');
+$isScanRequest = ($action === 'bulk_scan');
 $scanChunk = (int) getDolGlobalInt('KREABANK_BULKMATCH_SCAN_CHUNK_SIZE');
 if ($scanChunk <= 0) {
 	$scanChunk = 200;
@@ -85,14 +91,14 @@ $limit = GETPOSTINT('limit');
 if ($limit <= 0) {
 	$limit = !empty($conf->liste_limit) ? (int) $conf->liste_limit : 25;
 }
-$limit = max(1, min(1000, $limit));
+$limit = max(1, min(100, $limit));
 $offset = $page * $limit;
 $dateTolerance = getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE');
 if ($dateTolerance <= 0) {
 	$dateTolerance = 3;
 }
 $bulkScanCacheStoreKey = 'kreabank_bulkmatch_scan_state';
-$bulkScanMatcherRevision = 11;
+$bulkScanMatcherRevision = 12;
 $bulkScanFilterScope = array(
 	'bank_account_id' => $navigationAccountId,
 );
@@ -101,7 +107,6 @@ $bulkScanCacheTtl = (int) getDolGlobalInt('KREABANK_BULKMATCH_SCAN_CACHE_TTL');
 if ($bulkScanCacheTtl <= 0) {
 	$bulkScanCacheTtl = 120;
 }
-$bulkScanMaxRows = 5000;
 $bulkMatchMinScore = (int) getDolGlobalInt('KREABANK_BULKMATCH_MIN_SCORE');
 if ($bulkMatchMinScore <= 0) {
 	$bulkMatchMinScore = 100;
@@ -123,6 +128,10 @@ $enforcePostActionWithToken = static function () {
 		accessforbidden('Invalid token');
 	}
 };
+
+if ($isScanRequest) {
+	$enforcePostActionWithToken();
+}
 
 $resolveLineDirection = static function ($line) {
 	$lineDirection = (int) (!empty($line['direction']) ? $line['direction'] : 0);
@@ -623,167 +632,100 @@ try {
 		}
 	}
 
-	$requestStart = microtime(true);
-	if (empty($scanState['done'])) {
-		for (;;) {
-			$elapsedMs = (microtime(true) - $requestStart) * 1000.0;
-			if ($elapsedMs >= (float) $scanBudgetMs) {
-				break;
-			}
-
-			$scanOffset = (int) (!empty($scanState['next_offset']) ? $scanState['next_offset'] : 0);
-			if ($scanOffset >= $pendingTotal) {
-				$scanState['done'] = true;
-				break;
-			}
-
-			$pendingChunk = $service->getPendingLines($scanChunk, $scanOffset, 'b.dateo', 'ASC', $bulkScanFilterScope);
-			if (empty($pendingChunk)) {
-				$scanState['done'] = true;
-				break;
-			}
-			$suggestionsByLine = $service->getSuggestionsForLines($pendingChunk, 0, $dateTolerance, null, false);
-
-			foreach ($pendingChunk as $line) {
-				$lineId = (int) $line['rowid'];
-				$suggestions = !empty($suggestionsByLine[$lineId]) ? (array) $suggestionsByLine[$lineId] : array();
-				$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestions, $dateTolerance);
-				$resolved = $resolveLineBestSuggestion($line, $suggestions);
-				$suggestion = !empty($resolved['suggestion']) ? (array) $resolved['suggestion'] : null;
-				if (!$suggestion) {
-					continue;
-				}
-
-				$scanState['matched_rows'][] = array(
-					'line_id' => (int) (!empty($line['rowid']) ? $line['rowid'] : 0),
-					'doc_type' => (string) (!empty($suggestion['doc_type']) ? $suggestion['doc_type'] : ''),
-					'doc_id' => (int) (!empty($suggestion['doc_id']) ? $suggestion['doc_id'] : 0),
-					'score' => (int) (!empty($suggestion['score']) ? $suggestion['score'] : 0),
-					'allocation' => (float) $resolved['allocation'],
-				);
-			}
-
-			$scanState['next_offset'] = $scanOffset + count($pendingChunk);
-			if (count($scanState['matched_rows']) > $bulkScanMaxRows) {
-				$scanState['matched_rows'] = array_slice($scanState['matched_rows'], count($scanState['matched_rows']) - $bulkScanMaxRows);
-			}
-
-			if (count($pendingChunk) < $scanChunk || (int) $scanState['next_offset'] >= $pendingTotal) {
-				$scanState['done'] = true;
-				break;
-			}
-		}
+	$scanState['display_rows'] = !empty($scanState['display_rows']) && is_array($scanState['display_rows']) ? $scanState['display_rows'] : array();
+	$scanState['generation'] = !empty($scanState['generation']) ? $scanState['generation'] : bin2hex(random_bytes(16));
+	$originalGeneration = $scanState['generation'];
+	$originalOffset = (int) $scanState['next_offset'];
+	$originalReloadCount = (int) $scanState['reload_count'];
+	if (($scanState['display_page'] ?? -1) !== $page || ($scanState['display_limit'] ?? 0) !== $limit) {
+		$scanState['display_rows'] = array();
+		$scanState['reload_count'] = 0;
+		$scanState['generation'] = bin2hex(random_bytes(16));
 	}
-	if ((int) (!empty($scanState['next_offset']) ? $scanState['next_offset'] : 0) >= $pendingTotal) {
-		$scanState['done'] = true;
+	$scanState['display_page'] = $page;
+	$scanState['display_limit'] = $limit;
+	if ($isScanRequest) {
+		$sessionIdentity = array($_SESSION['dol_login'] ?? '', $_SESSION['dol_entity'] ?? 0);
+		// Matching must not block navigation, other tabs, or company switching.
+		session_write_close();
+		if (GETPOSTINT('resume') === 1) {
+			$scanState['reload_count'] = 0;
+		}
+		$prepareReviewRow = static function ($line) use ($service, $dateTolerance, $appendLinkedFallbackSuggestions, $resolveLineBestSuggestion) {
+			$lineId = (int) $line['rowid'];
+			$suggestionsByLine = $service->getSuggestionsForLines(array($line), 0, $dateTolerance, null, false);
+			$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestionsByLine[$lineId] ?? array(), $dateTolerance);
+			$resolved = $resolveLineBestSuggestion($line, $suggestions);
+			if (empty($resolved['suggestion'])) {
+				return null;
+			}
+			return array('line' => $line, 'suggestion' => $resolved['suggestion'], 'allocation' => (float) $resolved['allocation'],
+				'preselected' => !empty($resolved['is_bulk_safe']), 'is_bulk_safe' => !empty($resolved['is_bulk_safe']),
+				'score' => (int) $resolved['suggestion']['score']);
+		};
+		$scanState = kreabankAdvanceBulkScan($scanState, $pendingTotal, $scanChunk, $scanBudgetMs, $page, $limit,
+			static function ($chunk, $scanOffset) use ($service, $bulkScanFilterScope) {
+				return $service->getPendingLines($chunk, $scanOffset, 'b.dateo', 'ASC', $bulkScanFilterScope);
+			},
+			static function ($id) use ($service, $navigationAccountId) {
+				$line = $service->getLineById($id);
+				return $line && (!$navigationAccountId || (int) $line['bank_account_id'] === $navigationAccountId) ? $line : null;
+			}, $prepareReviewRow);
+		$scanState['reload_count'] = kreabankBulkScanNeedsWork($scanState, $page, $limit) ? $scanState['reload_count'] + 1 : 0;
+		if (!session_start()) {
+			throw new RuntimeException('Cannot save bulk review progress');
+		}
+		$currentState = $_SESSION[$bulkScanCacheStoreKey] ?? array();
+		if (!kreabankBulkScanCanSave($currentState,
+			array('generation' => $originalGeneration, 'next_offset' => $originalOffset, 'reload_count' => $originalReloadCount),
+			$sessionIdentity, array($_SESSION['dol_login'] ?? '', $_SESSION['dol_entity'] ?? 0))) {
+			session_write_close();
+			http_response_code(409);
+			header('Content-Type: application/json');
+			echo json_encode(array('error' => $langs->trans('KreaBankBulkMatchContextChanged')));
+			exit;
+		}
 	}
 	$scanState['scope'] = $bulkScanCacheScope;
 	$scanState['fingerprint'] = $pendingFingerprint;
 	$scanState['pending_total'] = (int) $pendingTotal;
-	if (empty($scanState['done'])) {
-		$scanState['reload_count'] = max(0, (int) (!empty($scanState['reload_count']) ? $scanState['reload_count'] : 0)) + 1;
-	} else {
-		$scanState['reload_count'] = 0;
-	}
 	$scanState['tms'] = dol_now();
 	$_SESSION[$bulkScanCacheStoreKey] = $scanState;
+	if ($isScanRequest) {
+		session_write_close();
+	}
 
-	$matchedRows = (!empty($scanState['matched_rows']) && is_array($scanState['matched_rows'])) ? $scanState['matched_rows'] : array();
-	$scanScannedCount = min($pendingTotal, (int) (!empty($scanState['next_offset']) ? $scanState['next_offset'] : 0));
-	$scanInProgress = empty($scanState['done']);
-	$scanAutoReloadCount = max(0, (int) (!empty($scanState['reload_count']) ? $scanState['reload_count'] : 0));
-	$scanAutoReloadEnabled = ($scanInProgress && $scanAutoReloadCount <= $bulkAutoReloadMax);
-	$scanProgressPct = ($pendingTotal > 0 ? (int) floor(($scanScannedCount * 100) / $pendingTotal) : 100);
-
+	$matchedRows = $scanState['matched_rows'];
 	$matchedCount = count($matchedRows);
+	$scanScannedCount = min($pendingTotal, (int) $scanState['next_offset']);
+	$scanInProgress = kreabankBulkScanNeedsWork($scanState, $page, $limit);
+	$scanAutoReloadCount = (int) $scanState['reload_count'];
+	$scanAutoReloadEnabled = ($scanInProgress && $scanAutoReloadCount < $bulkAutoReloadMax);
+	$scanProgressPct = $pendingTotal > 0 ? (int) floor($scanScannedCount * 100 / $pendingTotal) : 100;
 	if ($page > 0 && $offset >= $matchedCount) {
 		$page = 0;
 		$offset = 0;
 	}
-	$rows = array_slice($matchedRows, $offset, $limit);
-	$currentPageCount = count($rows);
-	$bulkPagerNum = $currentPageCount;
-	if ($limit > 0 && ($offset + $currentPageCount) < $matchedCount) {
-		// Dolibarr pager shows next navigation when num > limit.
+	// Presentation is bounded to this page. Confirmation always recomputes suggestions.
+	foreach (array_slice($matchedRows, $offset, $limit) as $match) {
+		$row = $scanState['display_rows'][(int) $match['line_id']] ?? null;
+		if ($row) {
+			$rows[] = $row;
+			$preselectedCount += !empty($row['preselected']) ? 1 : 0;
+		}
+	}
+	$bulkPagerNum = min($limit, max(0, $matchedCount - $offset));
+	if ($offset + $bulkPagerNum < $matchedCount) {
 		$bulkPagerNum = $limit + 1;
 	}
-	$rows = array();
-	$preselectedCount = 0;
-	$pageMatchedRows = array_slice($matchedRows, $offset, $limit);
-	if (!empty($pageMatchedRows)) {
-		$pageLinesById = array();
-		foreach ($pageMatchedRows as $matchedRow) {
-			if (!is_array($matchedRow)) {
-				continue;
-			}
-			$lineId = (int) (!empty($matchedRow['line_id']) ? $matchedRow['line_id'] : 0);
-			if ($lineId <= 0 || isset($pageLinesById[$lineId])) {
-				continue;
-			}
-			try {
-				$line = $service->getLineById($lineId);
-				if (!empty($line) && is_array($line) && (int) (!empty($line['status']) ? $line['status'] : 0) === 0) {
-					$pageLinesById[$lineId] = $line;
-				}
-			} catch (Exception $e) {
-				// Keep resilient rendering; stale line will be skipped.
-			}
-		}
-		$pageSuggestionsByLine = array();
-		if (!empty($pageLinesById)) {
-			try {
-				$pageSuggestionsByLine = $service->getSuggestionsForLines(array_values($pageLinesById), 0, $dateTolerance, null, false);
-			} catch (Exception $e) {
-				$pageSuggestionsByLine = array();
-			}
-		}
-		foreach ($pageMatchedRows as $matchedRow) {
-			if (!is_array($matchedRow)) {
-				continue;
-			}
-			$lineId = (int) (!empty($matchedRow['line_id']) ? $matchedRow['line_id'] : 0);
-			$docType = (string) (!empty($matchedRow['doc_type']) ? $matchedRow['doc_type'] : '');
-			$docId = (int) (!empty($matchedRow['doc_id']) ? $matchedRow['doc_id'] : 0);
-			$cachedScore = (int) (!empty($matchedRow['score']) ? $matchedRow['score'] : 0);
-			$cachedAllocation = (float) (!empty($matchedRow['allocation']) ? $matchedRow['allocation'] : 0.0);
-			if ($lineId <= 0 || $docType === '' || $docId <= 0 || empty($pageLinesById[$lineId])) {
-				continue;
-			}
-			$line = $pageLinesById[$lineId];
-			$suggestions = !empty($pageSuggestionsByLine[$lineId]) ? (array) $pageSuggestionsByLine[$lineId] : array();
-			$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestions, $dateTolerance);
-			$resolvedCurrent = $resolveLineBestSuggestion($line, $suggestions);
-			$suggestion = !empty($resolvedCurrent['suggestion']) ? (array) $resolvedCurrent['suggestion'] : null;
-			$allocation = !empty($resolvedCurrent['allocation']) ? (float) $resolvedCurrent['allocation'] : $cachedAllocation;
-			$isBulkSafe = !empty($resolvedCurrent['is_bulk_safe']);
-			if (!is_array($suggestion)) {
-				$isBulkSafe = false;
-				$suggestion = array(
-					'doc_type' => $docType,
-					'doc_id' => $docId,
-					'doc_ref' => '#' . $docId,
-					'doc_date' => '',
-					'thirdparty_name' => '',
-					'amount_open' => $cachedAllocation,
-					'score' => $cachedScore,
-					'details' => array(),
-				);
-			}
-			$suggestionScore = (int) (!empty($suggestion['score']) ? $suggestion['score'] : $cachedScore);
-			if ($isBulkSafe) {
-				$preselectedCount++;
-			}
-			$rows[] = array(
-				'line' => $line,
-				'suggestion' => $suggestion,
-				'allocation' => $allocation,
-				'preselected' => $isBulkSafe,
-				'is_bulk_safe' => $isBulkSafe,
-				'score' => $suggestionScore,
-			);
-		}
-	}
 } catch (Exception $e) {
+	if ($isScanRequest) {
+		http_response_code(500);
+		header('Content-Type: application/json');
+		echo json_encode(array('error' => $langs->trans('KreaBankBulkMatchScanFailed')));
+		dol_syslog('KreaBank bulk review scan failed for company ' . (int) $conf->entity, LOG_ERR);
+		exit;
+	}
 	setEventMessages($e->getMessage(), null, 'errors');
 }
 
@@ -792,45 +734,51 @@ if ($limit > 0 && $limit !== (int) $conf->liste_limit) {
 	$param .= '&limit=' . $limit;
 }
 
-llxHeader('', $langs->trans('KreaBankBulkMatch'), '', '', 0, 0, '', '', '', 'mod-kreabank page-bulkmatch bodyforlist');
+if (!$isScanRequest) {
+	llxHeader('', $langs->trans('KreaBankBulkMatch'), '', '', 0, 0, '', '', '', 'mod-kreabank page-bulkmatch bodyforlist');
 
-print load_fiche_titre($langs->trans('KreaBankBulkMatchTitle'), '', 'title_setup');
-kreabankPrintWorkspaceNavigation('bulkmatch', $navigationAccount);
+	print load_fiche_titre($langs->trans('KreaBankBulkMatchTitle'), '', 'title_setup');
+	kreabankPrintWorkspaceNavigation('bulkmatch', $navigationAccount);
 
-print '<style>';
-print '.krea-bulk-intro{margin:8px 0 14px 0;padding:10px 12px;border:1px solid #d5e0ea;background:#f8fbfe;border-radius:8px}';
-print '.krea-bulk-intro-title{margin:0;font-size:18px;font-weight:800;color:#204060}';
-print '.krea-bulk-intro-subtitle{margin:6px 0 0 0;color:#486174;font-size:13px}';
-print '.krea-bulk-score{display:inline-block;padding:2px 6px;border-radius:10px;font-size:11px;font-weight:700;background:#eef6ff;color:#1f4e79;border:1px solid #c3d9ef}';
-print '.krea-bulk-summary{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px 0}';
-print '.krea-bulk-summary .badge{font-size:12px}';
-print '.krea-bulk-progress{margin:0 0 12px 0;padding:10px 12px;border:1px solid #d8e4ef;background:#f5f9fc;border-radius:8px}';
-print '.krea-bulk-progress-bar{height:8px;background:#dbe6f2;border-radius:999px;overflow:hidden;margin:6px 0 0 0}';
-print '.krea-bulk-progress-bar > span{display:block;height:100%;background:#2f6f9f}';
-print '.krea-bulk-warning{margin:0 0 12px 0;padding:10px 12px;border:1px solid #f0d7a5;background:#fff8e8;border-radius:8px;color:#664d03}';
-print '.krea-bulk-actions{display:flex;justify-content:flex-end;margin-top:12px}';
-print '.krea-bulk-select-all{margin:0 0 8px 0;display:flex;align-items:center;gap:6px}';
-print '.krea-bulk-list{display:flex;flex-direction:column;gap:10px}';
-print '.krea-bulk-row{display:flex;gap:10px;align-items:stretch;border:1px solid #d8e1ea;border-radius:8px;background:#fff;padding:10px}';
-print '.krea-bulk-row-check{display:flex;align-items:flex-start;padding-top:6px}';
-print '.krea-bulk-row-panels{flex:1;display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,1fr) minmax(160px,.5fr);gap:10px}';
-print '.krea-bulk-panel{width:100%;border:1px solid #dbe4ec;border-radius:6px;overflow:hidden;background:#fbfdff;border-collapse:collapse}';
-print '.krea-bulk-panel th{padding:6px 8px;background:#f2f6fa;color:#2b4a63;font-size:11px;text-transform:uppercase;letter-spacing:.2px;text-align:left}';
-print '.krea-bulk-panel td{padding:6px 8px;border-top:1px solid #e7edf3;vertical-align:top}';
-print '.krea-bulk-panel .krea-label{color:#6f8090;white-space:nowrap;width:95px}';
-print '.krea-dir-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;line-height:1.35;margin-left:6px;vertical-align:middle}';
-print '.krea-dir-credit{background:#e8f7ef;color:#1e7f3f;border:1px solid #bfe6ce}';
-print '.krea-dir-debit{background:#fdeeee;color:#a02f2f;border:1px solid #f2c1c1}';
-print '.krea-payment-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;line-height:1.35;margin-left:6px;vertical-align:middle;background:#eef3ff;color:#2f4aa0;border:1px solid #c8d4ff;text-decoration:none}';
-print '.krea-payment-badge:hover{text-decoration:none;filter:brightness(.98)}';
-print '.krea-bulk-low-score{display:inline-block;padding:2px 6px;border-radius:10px;font-size:11px;font-weight:700;background:#fff3cd;color:#7a5b00;border:1px solid #f2d890;margin-left:6px}';
-print '@media (max-width: 1200px){.krea-bulk-row-panels{grid-template-columns:1fr}}';
-print '</style>';
+	print '<style>';
+	print '.krea-bulk-intro{margin:8px 0 14px 0;padding:10px 12px;border:1px solid #d5e0ea;background:#f8fbfe;border-radius:8px}';
+	print '.krea-bulk-intro-title{margin:0;font-size:18px;font-weight:800;color:#204060}';
+	print '.krea-bulk-intro-subtitle{margin:6px 0 0 0;color:#486174;font-size:13px}';
+	print '.krea-bulk-score{display:inline-block;padding:2px 6px;border-radius:10px;font-size:11px;font-weight:700;background:#eef6ff;color:#1f4e79;border:1px solid #c3d9ef}';
+	print '.krea-bulk-summary{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px 0}';
+	print '.krea-bulk-summary .badge{font-size:12px}';
+	print '.krea-bulk-progress{margin:0 0 12px 0;padding:10px 12px;border:1px solid #d8e4ef;background:#f5f9fc;border-radius:8px}';
+	print '.krea-bulk-progress-bar{height:8px;background:#dbe6f2;border-radius:999px;overflow:hidden;margin:6px 0 0 0}';
+	print '.krea-bulk-progress-bar > span{display:block;height:100%;background:#2f6f9f}';
+	print '.krea-bulk-warning{margin:0 0 12px 0;padding:10px 12px;border:1px solid #f0d7a5;background:#fff8e8;border-radius:8px;color:#664d03}';
+	print '.krea-bulk-actions{display:flex;justify-content:flex-end;margin-top:12px}';
+	print '.krea-bulk-select-all{margin:0 0 8px 0;display:flex;align-items:center;gap:6px}';
+	print '.krea-bulk-list{display:flex;flex-direction:column;gap:10px}';
+	print '.krea-bulk-row{display:flex;gap:10px;align-items:stretch;border:1px solid #d8e1ea;border-radius:8px;background:#fff;padding:10px}';
+	print '.krea-bulk-row-check{display:flex;align-items:flex-start;padding-top:6px}';
+	print '.krea-bulk-row-panels{flex:1;display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,1fr) minmax(160px,.5fr);gap:10px}';
+	print '.krea-bulk-panel{width:100%;border:1px solid #dbe4ec;border-radius:6px;overflow:hidden;background:#fbfdff;border-collapse:collapse}';
+	print '.krea-bulk-panel th{padding:6px 8px;background:#f2f6fa;color:#2b4a63;font-size:11px;text-transform:uppercase;letter-spacing:.2px;text-align:left}';
+	print '.krea-bulk-panel td{padding:6px 8px;border-top:1px solid #e7edf3;vertical-align:top}';
+	print '.krea-bulk-panel .krea-label{color:#6f8090;white-space:nowrap;width:95px}';
+	print '.krea-dir-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;line-height:1.35;margin-left:6px;vertical-align:middle}';
+	print '.krea-dir-credit{background:#e8f7ef;color:#1e7f3f;border:1px solid #bfe6ce}';
+	print '.krea-dir-debit{background:#fdeeee;color:#a02f2f;border:1px solid #f2c1c1}';
+	print '.krea-payment-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;line-height:1.35;margin-left:6px;vertical-align:middle;background:#eef3ff;color:#2f4aa0;border:1px solid #c8d4ff;text-decoration:none}';
+	print '.krea-payment-badge:hover{text-decoration:none;filter:brightness(.98)}';
+	print '.krea-bulk-low-score{display:inline-block;padding:2px 6px;border-radius:10px;font-size:11px;font-weight:700;background:#fff3cd;color:#7a5b00;border:1px solid #f2d890;margin-left:6px}';
+	print '@media (max-width: 1200px){.krea-bulk-row-panels{grid-template-columns:1fr}}';
+	print '</style>';
 
-print '<div class="krea-bulk-intro">';
-print '<h3 class="krea-bulk-intro-title">' . $langs->trans('KreaBankBulkMatchTitle') . '</h3>';
-print '<p class="krea-bulk-intro-subtitle">' . $langs->trans('KreaBankBulkMatchSubtitle') . '</p>';
-print '</div>';
+	print '<div class="krea-bulk-intro">';
+	print '<h3 class="krea-bulk-intro-title">' . $langs->trans('KreaBankBulkMatchTitle') . '</h3>';
+	print '<p class="krea-bulk-intro-subtitle">' . $langs->trans('KreaBankBulkMatchSubtitle') . '</p>';
+	print '</div>';
+
+	print '<div id="krea-bulk-results">';
+} else {
+	ob_start();
+}
 
 print '<div class="krea-bulk-summary">';
 print '<span class="badge badge-status1">' . $langs->trans('KreaBankPendingCount') . ': ' . ((int) $pendingTotal) . '</span>';
@@ -839,11 +787,11 @@ print '<span class="badge badge-status2">' . $langs->trans('KreaBankBulkMatchPre
 print '</div>';
 if ($scanInProgress) {
 	print '<div class="krea-bulk-progress">';
-	print '<strong>Bulk scan in progress:</strong> ' . ((int) $scanScannedCount) . ' / ' . ((int) $pendingTotal) . ' lines scanned (' . ((int) $scanProgressPct) . '%).';
+	print dol_escape_htmltag($langs->trans('KreaBankBulkMatchScanProgress', (string) $scanScannedCount, (string) $pendingTotal, (string) $scanProgressPct));
 	print '<div class="krea-bulk-progress-bar"><span style="width:' . ((int) $scanProgressPct) . '%"></span></div>';
 	print '</div>';
 	if (!$scanAutoReloadEnabled) {
-		print '<div class="krea-bulk-warning">' . $langs->trans('KreaBankBulkMatchRefreshPaused', (string) $scanAutoReloadCount, (string) $bulkAutoReloadMax) . ' <a class="butActionRefused" href="' . dol_escape_htmltag($_SERVER['REQUEST_URI']) . '" style="float:right">' . $langs->trans('Refresh') . '</a></div>';
+		print '<div class="krea-bulk-warning">' . $langs->trans('KreaBankBulkMatchRefreshPaused', (string) $scanAutoReloadCount, (string) $bulkAutoReloadMax) . '</div>';
 	}
 }
 
@@ -855,7 +803,7 @@ print_barre_liste($langs->trans('KreaBankBulkMatchWithSuggestion'), $page, $_SER
 print '</form>';
 
 if (empty($rows)) {
-	print '<div class="opacitymedium">' . $langs->trans('KreaBankNoStatementLines') . '</div>';
+	print '<div class="opacitymedium">' . $langs->trans($scanInProgress ? 'KreaBankBulkMatchLoading' : 'KreaBankBulkMatchNoSuggestions') . '</div>';
 } else {
 	print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="kreaBulkMatchForm">';
 	print kreabankNavigationHiddenFields($navigationAccountId);
@@ -1001,29 +949,24 @@ if (empty($rows)) {
 	print '</form>';
 }
 
-print '<script>';
-print 'var bulkToggle = document.getElementById("krea_bulk_match_all");';
-print 'var lineSelectors = document.querySelectorAll(".krea-bulk-match-line");';
-print 'if (bulkToggle && lineSelectors.length) {';
-print 'bulkToggle.addEventListener("change", function(){';
-print 'lineSelectors.forEach(function(selector){ selector.checked = bulkToggle.checked; });';
-print '});';
-print 'lineSelectors.forEach(function(selector){';
-print 'selector.addEventListener("change", function(){';
-print 'if (!selector.checked) { bulkToggle.checked = false; return; }';
-print 'var allChecked = true;';
-print 'lineSelectors.forEach(function(innerSelector){ if (!innerSelector.checked) { allChecked = false; } });';
-print 'bulkToggle.checked = allChecked;';
-print '});';
-print '});';
-print '}';
-if ($scanInProgress) {
-	if ($scanAutoReloadEnabled) {
-		print 'window.setTimeout(function(){ window.location.reload(); }, 900);';
-	}
+if ($isScanRequest) {
+	header('Content-Type: application/json');
+	header('Cache-Control: no-store');
+	echo json_encode(array('html' => ob_get_clean(), 'more' => $scanInProgress,
+		'auto' => $scanAutoReloadEnabled, 'scanned' => $scanScannedCount, 'total' => $pendingTotal,
+		'token' => currentToken()), (defined('JSON_INVALID_UTF8_SUBSTITUTE') ? JSON_INVALID_UTF8_SUBSTITUTE : 0));
+	$db->close();
+	exit;
 }
-print '</script>';
-
+print '</div>';
+print '<div class="krea-bulk-progress" id="krea-bulk-scan-status" role="status" aria-live="polite"></div>';
+print '<button type="button" class="button" id="krea-bulk-scan-resume" hidden>' . $langs->trans('KreaBankBulkMatchContinue') . '</button>';
+$scanClientConfig = array('url' => $_SERVER['PHP_SELF'], 'token' => currentToken(), 'page' => $page, 'limit' => $limit,
+	'account' => $navigationAccountId, 'more' => $scanInProgress, 'auto' => $scanAutoReloadEnabled,
+	'loading' => $langs->trans('KreaBankBulkMatchLoading'), 'paused' => $langs->trans('KreaBankBulkMatchReviewPaused'),
+	'failed' => $langs->trans('KreaBankBulkMatchScanFailed'), 'refresh' => $langs->trans('Refresh'));
+print '<script type="application/json" id="krea-bulk-scan-config">' . json_encode($scanClientConfig, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . '</script>';
+print '<script src="' . dol_buildpath('/kreabank/js/bulkmatch.js', 1) . '?v=1.14.6" defer></script>';
 print dol_get_fiche_end();
 llxFooter();
 $db->close();

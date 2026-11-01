@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.14.6 — 2026-11-01
+
+- Open bulk review immediately and check suggestions in bounded background requests,
+  with per-line budget checks and a current-page presentation cache.
+- Release the session lock during matching so navigation stays available; retain
+  selections, pause while reviewing, and reject stale concurrent results.
+- Preserve confirmation-time matching, permissions and safe-match rules. No schema
+  change or scheduler configuration change. See [bulk review](BULK_REVIEW.md).
+
 ## 1.14.5 — 2026-11-01
 
 - Render the shared native tab bar without an extra content wrapper or duplicate

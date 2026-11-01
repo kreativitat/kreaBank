@@ -69,6 +69,7 @@ try {
 	$serviceSource = $readFile($serviceFile);
 	$nativeSource = $readFile($nativeFile);
 	$bulkSource = $readFile($bulkFile);
+	$bulkScanSource = $readFile($rootDir.'/lib/kreabank_bulk.lib.php');
 	$reconcileSource = $readFile($reconcileFile);
 	$pendingSource = $readFile($pendingFile);
 	$historySource = $readFile($historyFile);
@@ -345,10 +346,10 @@ $assertContains($bulkSource, 'KREABANK_BULKMATCH_SCAN_REQUEST_BUDGET_MS', 'bulkm
 $assertContains($bulkSource, 'KREABANK_BULKMATCH_MIN_SCORE', 'bulkmatch should honor minimum score threshold setup', $errors);
 $assertContains($bulkSource, 'KREABANK_BULKMATCH_AUTO_RELOAD_MAX', 'bulkmatch should honor maximum auto-refresh attempts setup', $errors);
 $assertContains($bulkSource, '$enforcePostActionWithToken();', 'bulkmatch confirm action should enforce POST + CSRF token per action', $errors);
-$assertContains($bulkSource, "'line_id' => (int) (!empty(\$line['rowid']) ? \$line['rowid'] : 0)", 'bulkmatch scan cache should persist compact line id instead of full line payload', $errors);
-$assertContains($bulkSource, "'doc_type' => (string) (!empty(\$suggestion['doc_type']) ? \$suggestion['doc_type'] : '')", 'bulkmatch scan cache should persist compact document type in cache', $errors);
-$assertContains($bulkSource, "'doc_id' => (int) (!empty(\$suggestion['doc_id']) ? \$suggestion['doc_id'] : 0)", 'bulkmatch scan cache should persist compact document id in cache', $errors);
-$assertContains($bulkSource, "'score' => (int) (!empty(\$suggestion['score']) ? \$suggestion['score'] : 0)", 'bulkmatch scan cache should persist compact score in cache', $errors);
+$assertContains($bulkScanSource, "'line_id' => (int) (!empty(\$line['rowid']) ? \$line['rowid'] : 0)", 'bulkmatch scan cache should persist compact line id instead of full line payload', $errors);
+$assertContains($bulkScanSource, "'doc_type' => (string) (!empty(\$suggestion['doc_type']) ? \$suggestion['doc_type'] : '')", 'bulkmatch scan cache should persist compact document type in cache', $errors);
+$assertContains($bulkScanSource, "'doc_id' => (int) (!empty(\$suggestion['doc_id']) ? \$suggestion['doc_id'] : 0)", 'bulkmatch scan cache should persist compact document id in cache', $errors);
+$assertContains($bulkScanSource, "'score' => (int) (!empty(\$suggestion['score']) ? \$suggestion['score'] : 0)", 'bulkmatch scan cache should persist compact score in cache', $errors);
 $assertContains($bulkSource, 'KreaBankBulkMatchLowConfidenceSkipped', 'bulkmatch should warn when selected lines are skipped for low confidence', $errors);
 $assertContains($bulkSource, '$safeSuggestion = $service->getSafeSuggestion($orderedSuggestions, $bulkMatchMinScore);', 'bulkmatch should use the shared identity, amount, and score-gap safety contract', $errors);
 if (strpos($bulkSource, "'is_bulk_safe' => (\$matchScore >= \$bulkMatchMinScore)") !== false) {
