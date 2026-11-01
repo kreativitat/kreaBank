@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.3 — 2026-11-01
+
+- Pass the native `account` parameter in treasury links and account-filter
+  redirects, fixing `ErrorBankAccountNotFound` and the missing page layout.
+- No schema, registration or scheduler changes. Replace old `treso.php?id=…`
+  bookmarks with `treso.php?account=…`.
+
 ## 1.15.2 — 2026-11-01
 
 - Align account-table balance/action headings with their values.

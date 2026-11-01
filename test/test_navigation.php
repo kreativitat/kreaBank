@@ -108,11 +108,18 @@ $accountTools = kreabankAccountToolEntries(45);
 checkNavigation(count($accountTools) === 6, 'Retain every selected-account tool');
 foreach ($accountTools as $entry) {
 	checkNavigation(strpos($entry['url'], '/compta/bank/') === 0 && (strpos($entry['url'], 'id=45') !== false || strpos($entry['url'], 'account=45') !== false), 'Native account-tab links keep the selected account and native URL convention');
+	if ($entry['key'] === 'forecast') {
+		parse_str(parse_url($entry['url'], PHP_URL_QUERY), $forecastQuery);
+		checkNavigation(($forecastQuery['account'] ?? '') === '45' && !isset($forecastQuery['id']), 'Native treasury requires account; id alone skips account loading and the page header');
+		checkNavigation(kreabankBankingUrl('forecast', 45) === dol_buildpath($entry['url'], 1), 'Account-filter forecast redirects use the same native treasury contract');
+	}
 }
 try { kreabankAccountToolEntries(0); throw new RuntimeException('All-accounts tools accepted'); } catch (InvalidArgumentException $e) { $checks++; }
 $html = kreabankBankingHeader('documents', (object) array('id' => 45));
 checkNavigation(strpos($html, 'kb-account-tabs') !== false && preg_match('/aria-current="page"[^>]*href="[^"]*document\.php\?id=45/', $html), 'Account-tool tabs retain the selected account and mark the actual native page');
 checkNavigation(strpos($html, '/admin/automation.php') === false, 'Automatic reconciliation is absent from operational tabs');
+$html = kreabankBankingHeader('forecast', (object) array('id' => 45));
+checkNavigation(preg_match('/aria-current="page"[^>]*href="[^"]*treso\.php\?account=45&amp;/', $html) === 1 && strpos($html, 'treso.php?id=') === false, 'The rendered treasury tab passes the account parameter expected by Dolibarr');
 checkNavigation(kreabankBankingUrl('reports', 0) === kreabankWorkspaceUrl('accounts'), 'Clearing the account context returns account-specific pages to the overview');
 function complete_head_from_modules(...$arguments) {}
 checkNavigation(in_array('automation', array_column(kreabankAdminPrepareHead(), 2), true), 'Automatic reconciliation remains available in module configuration');

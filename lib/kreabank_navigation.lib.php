@@ -85,7 +85,7 @@ function kreabankAccountToolEntries($accountId)
 		'card' => array('card.php?id=', 'KreaBankAccountDetails'),
 		'documents' => array('document.php?id=', 'Documents'),
 		'reports' => array('annuel.php?id=', 'Reports'),
-		'forecast' => array('treso.php?id=', 'KreaBankForecast'),
+		'forecast' => array('treso.php?account=', 'KreaBankForecast'),
 		'native_statements' => array('releve.php?native_statements=1&account=', 'KreaBankNativeStatements'),
 		'numbering' => array('bankentries_list.php?action=reconcile&search_conciliated=0&id=', 'KreaBankStatementNumbering'),
 	);
