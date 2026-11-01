@@ -346,7 +346,7 @@ foreach ($recent as $row) {
 		$descriptionRaw,
 		(string) $eventDateRaw,
 		(string) $amount,
-		price($amount),
+		kreabankPrice($amount),
 		(string) (isset($row['currency']) ? $row['currency'] : ''),
 		(string) (!empty($auditInfo['audit_type']) ? $auditInfo['audit_type'] : ''),
 		(string) (!empty($auditInfo['login']) ? $auditInfo['login'] : ''),
@@ -459,7 +459,7 @@ $summarizeAuditPayload = static function ($audit) use ($langs) {
 		}
 		if ($linkCount > 0) {
 			$parts[] = $langs->trans('KreaBankHistoryLinksCount', (string) $linkCount);
-			$parts[] = $langs->trans('KreaBankAllocate') . ': ' . price($allocated);
+			$parts[] = $langs->trans('KreaBankAllocate') . ': ' . kreabankPrice($allocated);
 		}
 		if (!empty($linkTypes)) {
 			$parts[] = implode(', ', array_keys($linkTypes));
@@ -709,8 +709,8 @@ print '</form>';
 
 print '<div class="krea-history-kpi">';
 print '<div class="item"><div class="label">' . $langs->trans('KreaBankHistorySummaryLines') . '</div><div class="value">' . ((int) $summaryLinesCount) . '</div></div>';
-print '<div class="item"><div class="label">' . $langs->trans('KreaBankHistorySummaryCredits') . '</div><div class="value">' . price($summaryCreditTotal) . '</div></div>';
-print '<div class="item"><div class="label">' . $langs->trans('KreaBankHistorySummaryDebits') . '</div><div class="value">' . price($summaryDebitTotal) . '</div></div>';
+print '<div class="item"><div class="label">' . $langs->trans('KreaBankHistorySummaryCredits') . '</div><div class="value">' . kreabankPrice($summaryCreditTotal) . '</div></div>';
+print '<div class="item"><div class="label">' . $langs->trans('KreaBankHistorySummaryDebits') . '</div><div class="value">' . kreabankPrice($summaryDebitTotal) . '</div></div>';
 print '<div class="item"><div class="label">' . $langs->trans('KreaBankHistorySummaryLinks') . '</div><div class="value">' . ((int) $summaryLinkedDocs) . '</div></div>';
 print '</div>';
 
@@ -856,7 +856,7 @@ if ($historyTotalRecords === 0) {
 		print '<td>';
 		print '<strong>' . dol_escape_htmltag($description !== '' ? $description : ('#' . $lineId)) . '</strong>';
 		print '</td>';
-		print '<td class="right nowrap"><strong>' . price($amount) . ' ' . dol_escape_htmltag($currency) . '</strong></td>';
+		print '<td class="right nowrap"><strong>' . kreabankPrice($amount) . ' ' . dol_escape_htmltag($currency) . '</strong></td>';
 
 		print '<td>';
 		if (empty($links)) {

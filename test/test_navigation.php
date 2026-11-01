@@ -46,7 +46,7 @@ function checkNavigation($ok, $message)
 $db = new NavigationTestDb();
 $user = new NavigationTestUser();
 $langs = new NavigationTestLangs();
-$conf = (object) array('entity' => 7);
+$conf = (object) array('entity' => 7, 'global' => new stdClass());
 $head = array(array('/card?id=45', 'Account', 'bankname'), array('/entries?id=45', 'Movements', 'journal'), array('/entries?id=45&action=reconcile', 'Reconcile', 'reconcile'), array('/extension', 'Other module', 'external'));
 $newHead = kreabankCompleteAccountHead($head, 45);
 checkNavigation($newHead === $head, 'Shared header replaces native tabs without inserting another navigation layer');

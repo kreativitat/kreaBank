@@ -104,12 +104,12 @@ if ($statement) {
 		$state = kreabankIntegrationLineState($row, $reference);
 		print '<tr class="oddeven"><td>' . dol_escape_htmltag($row->operation_date) . '</td><td>' . dol_escape_htmltag($row->description)
 			. '<br><small>' . dol_escape_htmltag($row->payment_reference ?: $row->bank_reference) . '</small></td>';
-		print '<td class="right">' . price($row->amount) . ' ' . dol_escape_htmltag($row->currency) . '</td>';
+		print '<td class="right">' . kreabankPrice($row->amount) . ' ' . dol_escape_htmltag($row->currency) . '</td>';
 		print '<td' . ($state === 'KreaBankLinkNeedsReview' ? ' class="warning"' : '') . '>' . $langs->trans($state) . '</td><td>';
 		if ((int) $row->native_id > 0) {
 			print '<a href="' . dol_buildpath('/compta/bank/line.php', 1) . '?rowid=' . (int) $row->native_id . '">#' . (int) $row->native_id . '</a>';
 			if ($state === 'KreaBankLinkNeedsReview') {
-				print '<br>' . price($row->native_amount) . ' ' . dol_escape_htmltag($row->native_currency);
+				print '<br>' . kreabankPrice($row->native_amount) . ' ' . dol_escape_htmltag($row->native_currency);
 			}
 		} else {
 			print $langs->trans((int) $row->expected_native_id > 0 ? 'KreaBankNativeMissing' : 'KreaBankAwaitingReconciliation');

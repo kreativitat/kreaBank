@@ -81,7 +81,7 @@ $count=0;
 while ($row=$db->fetch_object($rows)) {
 	$count++;
 	print '<tr><td><a class="kb-account-name" href="' . dol_escape_htmltag(kreabankBankingUrl('card', $row->rowid)) . '">' . dol_escape_htmltag($row->ref) . '</a><small>' . dol_escape_htmltag($row->label) . '</small></td>';
-	print '<td>' . dol_escape_htmltag($row->currency_code) . '</td><td class="kb-money">' . price($row->balance) . '</td>';
+	print '<td>' . dol_escape_htmltag($row->currency_code) . '</td><td class="kb-money">' . kreabankPrice($row->balance) . '</td>';
 	print '<td><a class="kb-count" href="' . dol_escape_htmltag(kreabankWorkspaceUrl('reconcile',$row->rowid)) . '">' . (int) $row->pending_count . '</a></td>';
 	print '<td><div class="kb-account-actions"><a href="' . dol_escape_htmltag(kreabankNativeEntriesUrl($row->rowid)) . '">' . $langs->trans('KreaBankNavMovements') . '</a><a href="' . dol_escape_htmltag(kreabankWorkspaceUrl('reconcile',$row->rowid)) . '">' . $langs->trans('KreaBankReconcile') . '</a></div></td></tr>';
 }

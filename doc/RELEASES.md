@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.1 — 2026-11-01
+
+- Show KreaBank amounts, balances, totals and percentages with two decimal places,
+  including import previews, reconciliation and quick-entry amounts. Preserve
+  localized separators, stored evidence and calculation/matching precision.
+- Cap native bank-list displays at two decimals for the current request without
+  changing saved Dolibarr settings. No schema migration.
+
 ## 1.15.0 — 2026-11-01
 
 - Configure company-owned restricted/main account pairs, including several

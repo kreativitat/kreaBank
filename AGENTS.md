@@ -118,3 +118,14 @@
 - Paired execution remains in `KreaBankService`/native adapter/shared matcher. Require two mutually safe imported legs, exact opposite persisted amounts, matching currency, valid nearby dates, strong reference or mutual checksum-valid IBAN evidence, score floor 150 and gap 35. Fail closed on competing/truncated/conflicting evidence.
 - This opt-in paired path may create both native transfer legs only when neither side has a possible native movement and currency is the company currency. Reuse valid reciprocal native transfers; never duplicate one-sided/conflicting ledger evidence. The ordinary automatic-native path still creates no movements.
 - Both legs, explicit staging/native mappings and `auto_pair` audits commit atomically under account/staging/native range locks. Use explicit `VIR`; do not train patterns. Test only with `php test/test_account_pairs_database.php` on the guarded disposable port 33317 database. See `doc/ACCOUNT_PAIRS.md`.
+
+## Amount display
+
+- Use `kreabankPrice()` for displayed amounts, balances, totals and percentages;
+  it retains native language separators and enforces exactly two decimals.
+- Connected native bank pages cap `MAIN_MAX_DECIMALS_SHOWN` for the current request
+  only. Never change unit/total calculation precision or round persisted evidence
+  to implement a display preference. Numeric amount inputs use two decimals with
+  a dot separator; hidden reconciliation values retain their source precision.
+- `php test/test_amount_display.php` exercises installed native formatting without
+  credentials, application bootstrap or database access.

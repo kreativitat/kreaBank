@@ -1411,7 +1411,7 @@ $renderQuickEntryForm = static function ($line, $openDocSearch, $entryTypeOption
 	}
 	print '</select></td></tr>';
 	print '<tr><td>' . $langs->trans('KreaBankQuickEntryLabel') . '</td><td><input class="flat minwidth300" type="text" name="entry_label" value="' . dol_escape_htmltag((string) $prefillLabel) . '" required></td></tr>';
-	print '<tr><td>' . $langs->trans('KreaBankQuickEntryAmount') . '</td><td><input class="flat" type="number" step="0.01" min="0" name="entry_amount" value="' . price2num((string) $prefillAmount, 'MU') . '"></td></tr>';
+	print '<tr><td>' . $langs->trans('KreaBankQuickEntryAmount') . '</td><td><input class="flat" type="number" step="0.01" min="0" name="entry_amount" value="' . number_format($prefillAmountNumber, 2, '.', '') . '"></td></tr>';
 	$selectedSupplierInput = trim((string) $supplierLookupPrefill);
 	if ($selectedSupplierInput === '' && !empty($supplierPrediction['predicted_name'])) {
 		$selectedSupplierInput = $decodeHtmlEntitiesRecursive((string) $supplierPrediction['predicted_name']);
@@ -1513,8 +1513,8 @@ $renderQuickEntryForm = static function ($line, $openDocSearch, $entryTypeOption
 		print '</table>';
 		print '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
 		print '<button type="button" class="butAction krea-product-line-add">' . $langs->trans('KreaBankQuickSupplierLinesAddRow') . '</button>';
-		print '<span class="krea-muted">' . $langs->trans('KreaBankQuickSupplierLinesTarget') . ': <strong id="' . $supplierTargetTotalId . '">' . price($prefillAmountNumber) . '</strong></span>';
-		print '<span class="krea-muted">' . $langs->trans('KreaBankQuickSupplierLinesCurrent') . ': <strong id="' . $supplierCurrentTotalId . '">' . price(0) . '</strong></span>';
+		print '<span class="krea-muted">' . $langs->trans('KreaBankQuickSupplierLinesTarget') . ': <strong id="' . $supplierTargetTotalId . '">' . kreabankPrice($prefillAmountNumber) . '</strong></span>';
+		print '<span class="krea-muted">' . $langs->trans('KreaBankQuickSupplierLinesCurrent') . ': <strong id="' . $supplierCurrentTotalId . '">' . kreabankPrice(0) . '</strong></span>';
 		print '</div>';
 		print '<div id="' . $supplierFeedbackId . '" class="warning" style="margin-top:8px;display:none"></div>';
 		print '<div class="tabsAction" style="margin-top:10px">';
@@ -1743,7 +1743,7 @@ if (empty($pendingLines)) {
 			print '<span class="badge badge-status7">' . $langs->trans('KreaBankDuplicate') . '</span>';
 		}
 		if ($lineOutstanding > 0) {
-			print '<span class="krea-muted">' . $langs->trans('KreaBankAllocate') . ': ' . price($lineOutstanding) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</span>';
+			print '<span class="krea-muted">' . $langs->trans('KreaBankAllocate') . ': ' . kreabankPrice($lineOutstanding) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</span>';
 		}
 		print '</div>';
 		print '</div>';
@@ -1751,7 +1751,7 @@ if (empty($pendingLines)) {
 		if ($showBulkSkip) {
 			print '<div style="margin-bottom:6px"><input type="checkbox" name="selected_line_ids[]" value="' . ((int) $line['rowid']) . '" class="krea-bulk-line-selector"' . ($isSelected ? ' checked' : '') . '></div>';
 		}
-		print '<strong>' . price((float) $line['amount']) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong><br>';
+		print '<strong>' . kreabankPrice((float) $line['amount']) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong><br>';
 		print '<span class="krea-muted">' . dol_print_date(strtotime((string) $line['operation_date']), 'day') . '</span>';
 		print '</div>';
 		print '</div>';
@@ -1807,8 +1807,8 @@ if (!$selectedLine) {
 	if ($openDocumentsSearch !== '') {
 		$forceBatchUrl .= '&open_doc_search=' . urlencode((string) $openDocumentsSearch);
 	}
-	print $langs->trans('KreaBankAmount') . ': <strong>' . price((float) $selectedLine['amount']) . ' ' . dol_escape_htmltag((string) $selectedLine['currency']) . '</strong> | ';
-	print $langs->trans('KreaBankAllocate') . ': <strong>' . price((float) $selectedOutstanding) . ' ' . dol_escape_htmltag((string) $selectedLine['currency']) . '</strong>';
+	print $langs->trans('KreaBankAmount') . ': <strong>' . kreabankPrice((float) $selectedLine['amount']) . ' ' . dol_escape_htmltag((string) $selectedLine['currency']) . '</strong> | ';
+	print $langs->trans('KreaBankAllocate') . ': <strong>' . kreabankPrice((float) $selectedOutstanding) . ' ' . dol_escape_htmltag((string) $selectedLine['currency']) . '</strong>';
 	if ($selectedNativeLineId > 0) {
 		print ' | <a href="' . dol_buildpath('/compta/bank/line.php?rowid=' . $selectedNativeLineId, 1) . '" target="_blank" rel="noopener">' . $langs->trans('KreaBankOpenNativeLine') . '</a>';
 	}
@@ -1831,9 +1831,9 @@ if (!$selectedLine) {
 		$subsetDiffAmount = ((float) (int) $loteSubsetSuggestion['difference_cents']) / 100;
 		$subsetCurrency = dol_escape_htmltag((string) (!empty($selectedLine['currency']) ? $selectedLine['currency'] : 'EUR'));
 		if (!empty($loteSubsetSuggestion['exact'])) {
-			print '<div class="info">Sugestão automática LOTE: ' . ((int) $loteSubsetSuggestion['selected_count']) . ' pagamentos selecionados de ' . ((int) $loteSubsetSuggestion['candidate_count']) . ' candidatos, total ' . price($subsetSelectedAmount) . ' ' . $subsetCurrency . ' (alvo ' . price($subsetTargetAmount) . ' ' . $subsetCurrency . ').</div><br>';
+			print '<div class="info">Sugestão automática LOTE: ' . ((int) $loteSubsetSuggestion['selected_count']) . ' pagamentos selecionados de ' . ((int) $loteSubsetSuggestion['candidate_count']) . ' candidatos, total ' . kreabankPrice($subsetSelectedAmount) . ' ' . $subsetCurrency . ' (alvo ' . kreabankPrice($subsetTargetAmount) . ' ' . $subsetCurrency . ').</div><br>';
 		} else {
-			print '<div class="warning">Sugestão aproximada LOTE: ' . ((int) $loteSubsetSuggestion['selected_count']) . ' pagamentos, total ' . price($subsetSelectedAmount) . ' ' . $subsetCurrency . '. Diferença para o alvo: ' . price($subsetDiffAmount) . ' ' . $subsetCurrency . '.</div><br>';
+			print '<div class="warning">Sugestão aproximada LOTE: ' . ((int) $loteSubsetSuggestion['selected_count']) . ' pagamentos, total ' . kreabankPrice($subsetSelectedAmount) . ' ' . $subsetCurrency . '. Diferença para o alvo: ' . kreabankPrice($subsetDiffAmount) . ' ' . $subsetCurrency . '.</div><br>';
 		}
 	}
 
@@ -1928,7 +1928,7 @@ if (!$selectedLine) {
 			}
 			print '</div>';
 			print '<div class="krea-nowrap" style="text-align:right">';
-			print '<div><strong>' . price((float) $doc['amount_open']) . ' ' . dol_escape_htmltag((string) $selectedLine['currency']) . '</strong></div>';
+			print '<div><strong>' . kreabankPrice((float) $doc['amount_open']) . ' ' . dol_escape_htmltag((string) $selectedLine['currency']) . '</strong></div>';
 			if ($isLocked) {
 				print '<div style="margin-top:4px" class="krea-muted">' . $lockedStatusLabel . '</div>';
 			}
@@ -1983,7 +1983,7 @@ if (!$selectedLine) {
 		foreach ($lineLinks as $link) {
 			print '<tr class="oddeven">';
 			print '<td>' . dol_escape_htmltag((string) $link['doc_ref']) . ' <span class="krea-muted">(' . dol_escape_htmltag((string) $link['doc_type']) . ')</span></td>';
-			print '<td class="right">' . price((float) $link['allocated_amount']) . ' ' . dol_escape_htmltag((string) $selectedLine['currency']) . '</td>';
+			print '<td class="right">' . kreabankPrice((float) $link['allocated_amount']) . ' ' . dol_escape_htmltag((string) $selectedLine['currency']) . '</td>';
 			print '<td>' . dol_escape_htmltag((string) $link['strategy']) . ($link['is_reversed'] ? ' <span class="badge badge-status7">' . $langs->trans('KreaBankReversed') . '</span>' : '') . '</td>';
 			print '<td>' . dol_print_date(strtotime((string) $link['date_validate']), 'dayhour') . '</td>';
 			print '</tr>';

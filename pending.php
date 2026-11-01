@@ -233,12 +233,12 @@ if (empty($pendingLines)) {
 		print '<tr class="oddeven">';
 		print '<td class="nowrap">' . (($operationDateTs !== false && $operationDateTs > 0) ? dol_print_date($operationDateTs, 'day') : '<span class="opacitymedium">-</span>') . '</td>';
 		print '<td>' . dol_escape_htmltag((string) $line['description']) . '</td>';
-		print '<td class="right nowrap"><strong>' . price((float) $line['amount']) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong>';
+		print '<td class="right nowrap"><strong>' . kreabankPrice((float) $line['amount']) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong>';
 		if ((int) $line['is_duplicate'] === 1) {
 			print '<br><span class="badge badge-status7">Duplicate</span>';
 		}
 		print '</td>';
-		print '<td class="right nowrap">' . ($line['running_balance'] !== null ? price((float) $line['running_balance']) . ' ' . dol_escape_htmltag((string) $line['currency']) : '<span class="opacitymedium">-</span>') . '</td>';
+		print '<td class="right nowrap">' . ($line['running_balance'] !== null ? kreabankPrice((float) $line['running_balance']) . ' ' . dol_escape_htmltag((string) $line['currency']) : '<span class="opacitymedium">-</span>') . '</td>';
 		print '<td><span class="badge ' . $statusClass . '">' . $statusLabel . '</span></td>';
 		print '<td class="center">';
 		print '<a class="button smallpaddingimp" href="' . $reconcileUrl . '">' . $langs->trans('KreaBankReconcile') . '</a>';

@@ -892,7 +892,7 @@ if (empty($rows)) {
 		print '<tr><td class="krea-label">' . $langs->trans('KreaBankAccountOwner') . '</td><td>' . dol_escape_htmltag($mysoc->name) . '</td></tr>';
 		print '<tr><td class="krea-label">' . $langs->trans('KreaBankDate') . '</td><td class="nowrap">' . $formatDisplayDate($lineDate) . '</td></tr>';
 		print '<tr><td class="krea-label">' . $langs->trans('KreaBankCounterparty') . '</td><td><strong>' . dol_escape_htmltag($counterpartyValue) . '</strong>' . ($counterpartyExtra !== '' ? '<br><span class="opacitymedium">' . dol_escape_htmltag($counterpartyExtra) . '</span>' : '') . '</td></tr>';
-		print '<tr><td class="krea-label">' . $langs->trans('KreaBankAmount') . '</td><td class="right nowrap"><strong>' . price((float) $line['amount']) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong></td></tr>';
+		print '<tr><td class="krea-label">' . $langs->trans('KreaBankAmount') . '</td><td class="right nowrap"><strong>' . kreabankPrice((float) $line['amount']) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong></td></tr>';
 		print '</table>';
 
 		$docType = (string) (!empty($suggestion['doc_type']) ? $suggestion['doc_type'] : '');
@@ -928,9 +928,9 @@ if (empty($rows)) {
 		print '<tr><td class="krea-label">' . $langs->trans('KreaBankCounterparty') . '</td><td><strong>' . dol_escape_htmltag($docThirdparty) . '</strong></td></tr>';
 		print '<tr><td class="krea-label">' . $langs->trans('KreaBankAmount') . '</td><td class="right nowrap">';
 		if ($docUrl !== '') {
-			print '<a href="' . $docUrl . '" target="_blank" rel="noopener"><strong>' . price($docAmount) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong></a>';
+			print '<a href="' . $docUrl . '" target="_blank" rel="noopener"><strong>' . kreabankPrice($docAmount) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong></a>';
 		} else {
-			print '<strong>' . price($docAmount) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong>';
+			print '<strong>' . kreabankPrice($docAmount) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong>';
 		}
 		print '</td></tr>';
 		print '</table>';

@@ -329,7 +329,7 @@ print '<tr class="liste_titre"><th colspan="2">Batch ML validation (stratified h
 print '<tr><td class="titlefield">Classifier</td><td>' . dol_escape_htmltag((string) $batchMlValidationReport['classifier']) . '</td></tr>';
 print '<tr><td class="titlefield">Sample count</td><td>' . ((int) $batchMlValidationReport['sample_count']) . '</td></tr>';
 print '<tr><td class="titlefield">Train/Test split</td><td>' . ((int) $batchMlValidationReport['train_count']) . ' / ' . ((int) $batchMlValidationReport['test_count']) . '</td></tr>';
-print '<tr><td class="titlefield">Accuracy / Precision / Recall</td><td>' . price((float) $batchMlValidationReport['accuracy_pct'], 2) . '% / ' . price((float) $batchMlValidationReport['precision_pct'], 2) . '% / ' . price((float) $batchMlValidationReport['recall_pct'], 2) . '%</td></tr>';
+print '<tr><td class="titlefield">Accuracy / Precision / Recall</td><td>' . kreabankPrice((float) $batchMlValidationReport['accuracy_pct']) . '% / ' . kreabankPrice((float) $batchMlValidationReport['precision_pct']) . '% / ' . kreabankPrice((float) $batchMlValidationReport['recall_pct']) . '%</td></tr>';
 print '<tr><td class="titlefield">Confusion matrix (TP/FP/TN/FN)</td><td>' . ((int) $batchMlValidationReport['confusion']['tp']) . ' / ' . ((int) $batchMlValidationReport['confusion']['fp']) . ' / ' . ((int) $batchMlValidationReport['confusion']['tn']) . ' / ' . ((int) $batchMlValidationReport['confusion']['fn']) . '</td></tr>';
 print '<tr><td class="titlefield">Status</td><td>' . dol_escape_htmltag((string) $batchMlValidationReport['status']) . '</td></tr>';
 print '</table>';

@@ -10,6 +10,18 @@
 require_once __DIR__ . '/kreabank_navigation.lib.php';
 
 /**
+ * Format a displayed amount with localized separators and exactly two decimals.
+ * Keep source amounts and reconciliation calculations at their original precision.
+ *
+ * @param int|float|string|null $amount Amount to display
+ * @return string
+ */
+function kreabankPrice($amount)
+{
+	return price($amount, 0, '', 0, 2, 2);
+}
+
+/**
  * Prepare admin pages header.
  *
  * @return array<array{string,string,string}>

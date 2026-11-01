@@ -1118,12 +1118,12 @@ if (!empty($currentWizard) && !empty($analysis) && is_array($analysis)) {
 
 			print '<tr class="oddeven">';
 			print '<td>' . dol_escape_htmltag($operationDate) . '</td>';
-			print '<td>' . price($amount) . '</td>';
+			print '<td>' . kreabankPrice($amount) . '</td>';
 			print '<td>' . dol_escape_htmltag($description) . '</td>';
 			print '<td>' . dol_escape_htmltag($paymentReference) . '</td>';
 			print '<td>' . dol_escape_htmltag($counterpartyName) . '</td>';
 			print '<td>' . dol_escape_htmltag($currency) . '</td>';
-			print '<td>' . (($runningBalance !== null) ? price((float) $runningBalance) : '') . '</td>';
+			print '<td>' . (($runningBalance !== null) ? kreabankPrice((float) $runningBalance) : '') . '</td>';
 			print '</tr>';
 		}
 		print '</table>';
@@ -1231,7 +1231,7 @@ if (is_array($importResult)) {
 			}
 			print '<td>' . ($lineRank > 0 ? $lineRank : '-') . '</td>';
 			print '<td>' . dol_escape_htmltag((string) $dup['operation_date']) . '</td>';
-			print '<td class="right">' . price((float) $dup['amount']) . ' ' . dol_escape_htmltag((string) (!empty($dup['currency']) ? $dup['currency'] : 'EUR')) . '</td>';
+			print '<td class="right">' . kreabankPrice((float) $dup['amount']) . ' ' . dol_escape_htmltag((string) (!empty($dup['currency']) ? $dup['currency'] : 'EUR')) . '</td>';
 			print '<td>' . dol_escape_htmltag($ref) . '</td>';
 			print '<td>' . dol_escape_htmltag((string) (!empty($dup['description']) ? $dup['description'] : '')) . '</td>';
 			print '<td>' . dol_escape_htmltag((string) (!empty($dup['source']) ? $dup['source'] : 'unknown')) . '</td>';
@@ -1394,7 +1394,7 @@ if ($showHistorySection) {
 				print '<br><strong class="warning">' . $langs->trans('KreaBankLinkIssues', (int) $row->issue_lines) . '</strong>';
 			}
 			print '</td>';
-			print '<td class="right">' . price((float) $row->amount_total) . '</td>';
+			print '<td class="right">' . kreabankPrice((float) $row->amount_total) . '</td>';
 			print '<td>' . dol_escape_htmltag(strtoupper((string) $row->source_type)) . '</td>';
 			print '<td>' . dol_escape_htmltag((string) $row->source_file) . '</td>';
 			print '<td class="center">' . ($importedAtTs > 0 ? dol_print_date($importedAtTs, 'dayhour') : '-') . '</td>';

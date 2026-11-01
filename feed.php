@@ -66,7 +66,7 @@ try {
 			. dol_escape_htmltag($row->ref) . '</a><br><span class="opacitymedium">' . dol_escape_htmltag($row->label) . '</span></td>';
 		print '<td>' . dol_escape_htmltag($row->iban_prefix) . '</td>';
 		foreach (array('balance', 'balance_available') as $column) {
-			print '<td class="right nowrap">' . ($row->$column === null ? '—' : price($row->$column) . ' ' . dol_escape_htmltag($row->currency_code)) . '</td>';
+			print '<td class="right nowrap">' . ($row->$column === null ? '—' : kreabankPrice($row->$column) . ' ' . dol_escape_htmltag($row->currency_code)) . '</td>';
 		}
 		print '<td>' . ($row->bank_updated_at ? dol_print_date(strtotime($row->bank_updated_at), 'dayhour') : '—') . '</td>';
 		print '<td>' . ($row->last_success ? dol_print_date($db->jdate($row->last_success), 'dayhour') : '—') . '</td>';

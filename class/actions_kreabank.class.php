@@ -142,6 +142,8 @@ class ActionsKreaBank extends CommonHookActions
 		if (!$this->bankingContextAllowed()) {
 			return 0;
 		}
+		// Request-local display cap only; never change unit/total calculation precision.
+		$conf->global->MAIN_MAX_DECIMALS_SHOWN = '2';
 		require_once __DIR__ . '/../lib/kreabank.lib.php';
 		$page = basename($_SERVER['PHP_SELF'] ?? '');
 		if ($page === 'list.php' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && $action === '') {
