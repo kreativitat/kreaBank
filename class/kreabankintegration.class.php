@@ -48,10 +48,12 @@ class KreaBankIntegration
 	}
 
 	/** Current-company account overview; balances use native operation dates. */
-	public function accounts($kind = 'bank', $accountId = 0)
+	public function accounts($kind = 'bank', $accountId = 0, $sortfield = 'ref', $sortorder = 'ASC')
 	{
 		$p = $this->db->prefix();
 		$e = $this->entity;
+		$columns = array('ref' => 'ba.ref', 'currency_code' => 'ba.currency_code', 'balance' => 'balance', 'pending_count' => 'pending_count');
+		$order = ($columns[$sortfield] ?? $columns['ref']) . (strtoupper($sortorder) === 'DESC' ? ' DESC' : ' ASC') . ',ba.rowid';
 		$now = $this->quote($this->db->idate(dol_now()));
 		$accountFilter = (int) $accountId > 0 ? ' AND ba.rowid=' . (int) $accountId : '';
 		$filter = $kind === 'all' ? '' : ($kind === 'closed' ? ' AND ba.clos=1' : ' AND ba.clos=0' . ($kind === 'cash' ? ' AND ba.courant=2' : ' AND ba.courant<>2'));
@@ -59,7 +61,7 @@ class KreaBankIntegration
 			. " FROM {$p}bank_account ba LEFT JOIN (SELECT b.fk_account,SUM(b.amount) balance FROM {$p}bank b JOIN {$p}bank_account owner ON owner.rowid=b.fk_account AND owner.entity=$e WHERE b.dateo<=$now GROUP BY b.fk_account) nb ON nb.fk_account=ba.rowid"
 			. " LEFT JOIN (SELECT s.bank_account_id,COUNT(*) pending_count FROM {$p}kreabank_statement_line l JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity LEFT JOIN {$p}bank b ON b.rowid=l.fk_native_bank_line WHERE s.entity=$e AND l.status IN (0,1) AND COALESCE(b.rappro,0)=0 GROUP BY s.bank_account_id) st ON st.bank_account_id=ba.rowid"
 			. " LEFT JOIN (SELECT b.fk_account,COUNT(*) pending_count FROM {$p}kreabank_bankmeta m JOIN {$p}bank b ON b.rowid=m.fk_bank_line WHERE m.entity=$e AND m.status IN (0,1) AND b.rappro=0 AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement_line l WHERE l.entity=$e AND l.fk_native_bank_line=b.rowid) GROUP BY b.fk_account) lg ON lg.fk_account=ba.rowid"
-			. " WHERE ba.entity=$e$filter$accountFilter ORDER BY ba.ref,ba.rowid";
+			. " WHERE ba.entity=$e$filter$accountFilter ORDER BY $order";
 		return $this->query($sql);
 	}
 

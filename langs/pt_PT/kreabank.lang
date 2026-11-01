@@ -526,3 +526,5 @@ KreaBankPairUnavailable=Conta indisponível nesta empresa — reveja este par
 KreaBankPairPreview=Transferência emparelhada com o movimento importado %s
 KreaBankPairCompanyCurrency=As novas transferências automáticas exigem a moeda da empresa. Transferências já registadas podem ser reutilizadas na moeda de ambas as contas.
 KreaBankPairEmpty=Ainda não existem pares de contas configurados.
+
+KreaBankSortList=Ordenar lista

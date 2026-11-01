@@ -129,3 +129,10 @@
   a dot separator; hidden reconciliation values retain their source precision.
 - `php test/test_amount_display.php` exercises installed native formatting without
   credentials, application bootstrap or database access.
+
+## List sorting
+
+- `lib/kreabank_list.lib.php` owns allowlisted sort state and read-only sort links. Keep `kind` exclusive to the accounts overview; never carry actions, CSRF tokens or selections into sort URLs.
+- Sort SQL/complete scoped arrays before pagination. History and audit have independent sort state and a fixed 5,000-row recent window; changing the window with the page causes duplicates/skips under other orders.
+- Bulk sorting orders compact results, preserves the scan cursor/budget and binds the presentation generation to the sort order. Rehydrate only the visible page; confirmation still recomputes and authenticates the reviewed pair.
+- `data-kb-sort` is only for fully rendered tables; never apply it to paginated lists or grouped detail rows. Preserve form controls by moving rows, and use raw sort attributes for localized numbers/dates. See `doc/LISTS.md` and its pure/disposable-database checks.

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+require_once __DIR__ . '/kreabank_list.lib.php';
+
 require_once __DIR__ . '/kreabank_integration.lib.php';
 
 /** Build a workspace URL without carrying actions, line IDs or pagination across pages. */
@@ -150,7 +152,7 @@ function kreabankBankingHeader($page, $account = null)
 	$accountId = $account ? (int) $account->id : 0;
 	$langs->loadLangs(array('banks', 'kreabank@kreabank'));
 	$css = dol_buildpath('/custom/kreabank/css/navigation.css', 1) . '?v=' . (int) filemtime(__DIR__ . '/../css/navigation.css');
-	$html = '<link rel="stylesheet" href="' . dol_escape_htmltag($css) . '"><header class="kb-header">';
+	$html = kreabankListAssets() . '<link rel="stylesheet" href="' . dol_escape_htmltag($css) . '"><header class="kb-header">';
 	$html .= '<div class="kb-context"><div class="kb-brand"><span class="fas fa-university" aria-hidden="true"></span><strong>' . $langs->trans('KreaBankBanking') . '</strong>';
 	$html .= '<span class="kb-company" title="' . dol_escape_htmltag($mysoc->name ?? '') . '">' . dol_escape_htmltag($mysoc->name ?? '') . '</span></div>';
 	$html .= '</div>';

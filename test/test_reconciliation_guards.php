@@ -313,10 +313,15 @@ $assertContains($pendingSource, "GETPOST('button_removefilter_x', 'alpha')", 'pe
 $assertContains($pendingSource, '$operationDateTs = ($operationDateRaw !== \'\' ? strtotime($operationDateRaw) : false);', 'pending page should guard operation date timestamp parsing', $errors);
 $assertContains($pendingSource, "(\$operationDateTs !== false && \$operationDateTs > 0) ? dol_print_date(\$operationDateTs, 'day') : '<span class=\"opacitymedium\">-</span>'", 'pending page should render fallback dash when date is invalid', $errors);
 $assertContains($historySource, '$enforcePostActionWithToken();', 'history undo action should enforce POST + CSRF token per action', $errors);
-$assertContains($historySource, '$historyPoolLimit = max(300, (($page + 1) * $limit) + 500);', 'history should size reconciliation fetch pool from active page and list limit', $errors);
-$assertContains($historySource, '$historyPoolLimit = min(5000, $historyPoolLimit);', 'history should cap reconciliation fetch pool to bounded window for production stability', $errors);
-$assertContains($historySource, '$auditPoolLimit = max(300, (($auditPage + 1) * $limit) + 500);', 'history should size audit fetch pool from active audit page and list limit', $errors);
-$assertContains($historySource, '$auditPoolLimit = min(5000, $auditPoolLimit);', 'history should cap audit fetch pool to bounded window for production stability', $errors);
+$assertContains($historySource, '$historyPoolLimit = 5000;', 'history should keep a bounded fixed reconciliation window across sorted pages', $errors);
+$assertContains($historySource, '$auditPoolLimit = 5000;', 'history should keep a bounded fixed audit window across sorted pages', $errors);
+foreach (array('preparedRecentRows', 'preparedAuditRows') as $rowsVariable) {
+	$sortPosition = strpos($historySource, '$' . $rowsVariable . ' = kreabankListOrderRows(');
+	$slicePosition = strpos($historySource, 'array_slice($' . $rowsVariable . ',');
+	if ($sortPosition === false || $slicePosition === false || $sortPosition >= $slicePosition) {
+		$errors[] = 'History and audit must sort their complete bounded result before pagination: ' . $rowsVariable;
+	}
+}
 $assertContains($historySource, '$recent = $service->getRecentReconciliations($historyPoolLimit, 0, $navigationAccountId);', 'history should fetch account-scoped reconciliations using bounded pool limit', $errors);
 $assertContains($historySource, '$auditRows = $service->getAuditHistory($auditPoolLimit);', 'history should fetch audit rows using bounded pool limit', $errors);
 $assertContains($historySource, '$isAllowedAbsoluteUrlPrefix = static function ($urlPrefix) use ($currentHttpHost)', 'history should validate absolute document URL host before rendering links', $errors);

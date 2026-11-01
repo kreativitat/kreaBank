@@ -63,7 +63,9 @@ $accountId = 0;
 $account = null;
 $kind = kreabankNavigationKind('bank');
 $report = new KreaBankIntegration($db,$conf->entity);
-$rows = $report->accounts($kind, $accountId);
+$accountColumns = array('ref' => 'BankAccount', 'currency_code' => 'Currency', 'balance' => 'KreaBankCurrentBalance', 'pending_count' => 'KreaBankPending');
+$accountSort = kreabankListSort($accountColumns, 'ref');
+$rows = $report->accounts($kind, $accountId, $accountSort['field'], $accountSort['order']);
 llxHeader('', $langs->trans('KreaBankAccounts'));
 kreabankPrintWorkspaceNavigation('accounts',$account);
 print '<div class="kb-accounts-toolbar"><h2>' . $langs->trans('KreaBankAccounts') . '</h2>';
@@ -73,9 +75,10 @@ if ($user->hasRight('banque','configurer')) {
 print '</div>';
 print kreabankBankingFilters('accounts', $accountId, $kind);
 print '<div class="div-table-responsive"><table class="kb-accounts-table"><tr>';
-foreach (array('BankAccount','Currency','KreaBankCurrentBalance','KreaBankPending','KreaBankActions') as $label) {
-	print '<th>' . $langs->trans($label) . '</th>';
+foreach ($accountColumns as $field => $label) {
+	print kreabankListHeader($langs->trans($label), $field, $accountSort, $field === 'balance' ? 'kb-money' : '', array('kind' => $kind, 'mainmenu' => 'bank', 'leftmenu' => 'kreabank_accounts'));
 }
+print '<th scope="col" class="kb-actions-heading">' . $langs->trans('KreaBankActions') . '</th>';
 print '</tr>';
 $count=0;
 while ($row=$db->fetch_object($rows)) {

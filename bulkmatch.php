@@ -98,7 +98,9 @@ if ($dateTolerance <= 0) {
 	$dateTolerance = 3;
 }
 $bulkScanCacheStoreKey = 'kreabank_bulkmatch_scan_state';
-$bulkScanMatcherRevision = 14;
+$bulkScanMatcherRevision = 15;
+$bulkColumns = array('operation_date' => 'KreaBankDate', 'description' => 'KreaBankDescription', 'amount' => 'KreaBankAmount', 'doc_ref' => 'KreaBankDocument', 'score' => 'KreaBankAutoScore');
+$bulkSort = kreabankListSort($bulkColumns, 'operation_date');
 $bulkScanFilterScope = array(
 	'bank_account_id' => $navigationAccountId,
 );
@@ -517,7 +519,7 @@ if ($action === 'bulk_match_confirm') {
 
 	// Bulk confirmation can change pending/matchable lines; force cache refresh.
 	unset($_SESSION[$bulkScanCacheStoreKey]);
-	header('Location: ' . dol_buildpath('/custom/kreabank/bulkmatch.php', 1) . '?account_context=' . $navigationAccountId . '&limit=' . $limit);
+	header('Location: ' . dol_buildpath('/custom/kreabank/bulkmatch.php', 1) . '?account_context=' . $navigationAccountId . '&limit=' . $limit . '&sortfield=' . $bulkSort['field'] . '&sortorder=' . $bulkSort['order']);
 	exit;
 }
 
@@ -622,6 +624,11 @@ try {
 					continue;
 				}
 				$normalizedMatchedRows[] = array(
+					'scan_position' => (int) ($matchedRow['scan_position'] ?? 0),
+					'operation_date' => (string) ($matchedRow['operation_date'] ?? ''),
+					'description' => (string) ($matchedRow['description'] ?? ''),
+					'amount' => (float) ($matchedRow['amount'] ?? 0),
+					'doc_ref' => (string) ($matchedRow['doc_ref'] ?? ''),
 					'line_id' => (int) (!empty($matchedRow['line_id']) ? $matchedRow['line_id'] : 0),
 					'doc_type' => (string) (!empty($matchedRow['doc_type']) ? $matchedRow['doc_type'] : ''),
 					'doc_id' => (int) (!empty($matchedRow['doc_id']) ? $matchedRow['doc_id'] : 0),
@@ -634,18 +641,20 @@ try {
 		}
 	}
 
+	$scanState['matched_rows'] = kreabankListOrderRows($scanState['matched_rows'], $bulkSort, static function ($row, $field) { return $row[$field] ?? null; });
 	$scanState['display_rows'] = !empty($scanState['display_rows']) && is_array($scanState['display_rows']) ? $scanState['display_rows'] : array();
 	$scanState['generation'] = !empty($scanState['generation']) ? $scanState['generation'] : bin2hex(random_bytes(16));
 	$originalGeneration = $scanState['generation'];
 	$originalOffset = (int) $scanState['next_offset'];
 	$originalReloadCount = (int) $scanState['reload_count'];
-	if (($scanState['display_page'] ?? -1) !== $page || ($scanState['display_limit'] ?? 0) !== $limit) {
+	if (($scanState['display_page'] ?? -1) !== $page || ($scanState['display_limit'] ?? 0) !== $limit || ($scanState['display_sort'] ?? '') !== $bulkSort['field'] . '|' . $bulkSort['order']) {
 		$scanState['display_rows'] = array();
 		$scanState['reload_count'] = 0;
 		$scanState['generation'] = bin2hex(random_bytes(16));
 	}
 	$scanState['display_page'] = $page;
 	$scanState['display_limit'] = $limit;
+	$scanState['display_sort'] = $bulkSort['field'] . '|' . $bulkSort['order'];
 	if ($isScanRequest) {
 		$sessionIdentity = array($_SESSION['dol_login'] ?? '', $_SESSION['dol_entity'] ?? 0);
 		// Matching must not block navigation, other tabs, or company switching.
@@ -672,7 +681,7 @@ try {
 			static function ($id) use ($service, $navigationAccountId) {
 				$line = $service->getLineById($id);
 				return $line && (!$navigationAccountId || (int) $line['bank_account_id'] === $navigationAccountId) ? $line : null;
-			}, $prepareReviewRow);
+			}, $prepareReviewRow, null, $bulkSort);
 		$scanState['reload_count'] = kreabankBulkScanNeedsWork($scanState, $page, $limit) ? $scanState['reload_count'] + 1 : 0;
 		if (!session_start()) {
 			throw new RuntimeException('Cannot save bulk review progress');
@@ -731,7 +740,7 @@ try {
 	setEventMessages($e->getMessage(), null, 'errors');
 }
 
-$param = '&mainmenu=bank&leftmenu=kreabank_bulkmatch&account_context=' . $navigationAccountId;
+$param = '&mainmenu=bank&leftmenu=kreabank_bulkmatch&account_context=' . $navigationAccountId . '&sortfield=' . $bulkSort['field'] . '&sortorder=' . $bulkSort['order'];
 if ($limit > 0 && $limit !== (int) $conf->liste_limit) {
 	$param .= '&limit=' . $limit;
 }
@@ -791,8 +800,10 @@ if ($scanInProgress) {
 	}
 }
 
+print kreabankListSortLinks($bulkColumns, $bulkSort);
 print '<form method="GET" id="kreaBulkMatchPagerForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 print kreabankNavigationHiddenFields($navigationAccountId);
+print '<input type="hidden" name="sortfield" value="' . dol_escape_htmltag($bulkSort['field']) . '"><input type="hidden" name="sortorder" value="' . $bulkSort['order'] . '">';
 print '<input type="hidden" name="mainmenu" value="bank">';
 print '<input type="hidden" name="leftmenu" value="kreabank_bulkmatch">';
 print_barre_liste($langs->trans('KreaBankBulkMatchWithSuggestion'), $page, $_SERVER['PHP_SELF'], $param, '', '', '', $bulkPagerNum, $matchedCount, 'title_setup', 0, '', '', $limit, 0, 0, 1);
@@ -803,6 +814,7 @@ if (empty($rows)) {
 } else {
 	print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="kreaBulkMatchForm">';
 	print kreabankNavigationHiddenFields($navigationAccountId);
+print '<input type="hidden" name="sortfield" value="' . dol_escape_htmltag($bulkSort['field']) . '"><input type="hidden" name="sortorder" value="' . $bulkSort['order'] . '">';
 	print '<input type="hidden" name="token" value="' . newToken() . '">';
 	print '<input type="hidden" name="action" value="bulk_match_confirm">';
 	print '<input type="hidden" name="mainmenu" value="bank">';
@@ -972,7 +984,7 @@ if ($isScanRequest) {
 print '</div>';
 print '<div class="krea-bulk-progress" id="krea-bulk-scan-status" role="status" aria-live="polite"></div>';
 print '<button type="button" class="button" id="krea-bulk-scan-resume" hidden>' . $langs->trans('KreaBankBulkMatchContinue') . '</button>';
-$scanClientConfig = array('url' => $_SERVER['PHP_SELF'], 'token' => currentToken(), 'page' => $page, 'limit' => $limit,
+$scanClientConfig = array('sortfield' => $bulkSort['field'], 'sortorder' => $bulkSort['order'], 'url' => $_SERVER['PHP_SELF'], 'token' => currentToken(), 'page' => $page, 'limit' => $limit,
 	'account' => $navigationAccountId, 'more' => $scanInProgress, 'auto' => $scanAutoReloadEnabled,
 	'loading' => $langs->transnoentities('KreaBankBulkMatchLoading'), 'paused' => $langs->transnoentities('KreaBankBulkMatchReviewPaused'),
 	'failed' => $langs->transnoentities('KreaBankBulkMatchScanFailed'), 'refresh' => $langs->transnoentities('Refresh'));

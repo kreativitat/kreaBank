@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+require_once __DIR__ . '/kreabank_list.lib.php';
+
 /** Manual review may choose a unique weak suggestion, never an arbitrary tied document. */
 function kreabankBulkSuggestionIsUnambiguous($suggestions)
 {
@@ -66,11 +68,12 @@ function kreabankBulkReviewIsValid($row, $scope, $expires, $signature, $secret, 
 }
 
 /** Advance read-only review work, checking the budget between individual lines. */
-function kreabankAdvanceBulkScan($state, $pendingTotal, $chunkSize, $budgetMs, $page, $limit, $fetchPending, $loadLine, $prepare, $clock = null)
+function kreabankAdvanceBulkScan($state, $pendingTotal, $chunkSize, $budgetMs, $page, $limit, $fetchPending, $loadLine, $prepare, $clock = null, $sort = null)
 {
 	$clock = $clock ?: static function () { return microtime(true); };
 	$deadline = $clock() + $budgetMs / 1000;
 	$processed = 0;
+	if ($sort) { $state['matched_rows'] = kreabankListOrderRows($state['matched_rows'], $sort, static function ($row, $field) { return $row[$field] ?? null; }); }
 	$offset = $page * $limit;
 	$state['display_rows'] = isset($state['display_rows']) ? $state['display_rows'] : array();
 	// Hydrate a new results page incrementally instead of matching 25 cached IDs again.
@@ -106,6 +109,11 @@ function kreabankAdvanceBulkScan($state, $pendingTotal, $chunkSize, $budgetMs, $
 			if ($row) {
 				$suggestion = $row['suggestion'];
 				$state['matched_rows'][] = array(
+					'scan_position' => (int) $state['next_offset'] - 1,
+					'operation_date' => (string) ($line['operation_date'] ?? ''),
+					'description' => (string) ($line['description'] ?? ''),
+					'amount' => (float) ($line['amount'] ?? 0),
+					'doc_ref' => (string) ($suggestion['doc_ref'] ?? ''),
 					'line_id' => (int) (!empty($line['rowid']) ? $line['rowid'] : 0),
 					'doc_type' => (string) (!empty($suggestion['doc_type']) ? $suggestion['doc_type'] : ''),
 					'doc_id' => (int) (!empty($suggestion['doc_id']) ? $suggestion['doc_id'] : 0),
@@ -121,8 +129,11 @@ function kreabankAdvanceBulkScan($state, $pendingTotal, $chunkSize, $budgetMs, $
 	}
 	$state['done'] = !empty($state['done']) || (int) $state['next_offset'] >= $pendingTotal;
 	if (count($state['matched_rows']) > 5000) {
+		// Retention follows scan order, independent of the user's presentation order.
+		usort($state['matched_rows'], static function ($a, $b) { return ($a['scan_position'] ?? 0) <=> ($b['scan_position'] ?? 0); });
 		$state['matched_rows'] = array_slice($state['matched_rows'], -5000);
 	}
+	if ($sort) { $state['matched_rows'] = kreabankListOrderRows($state['matched_rows'], $sort, static function ($row, $field) { return $row[$field] ?? null; }); }
 	$visibleIds = array_column(array_slice($state['matched_rows'], $offset, $limit), 'line_id');
 	$state['display_rows'] = array_intersect_key($state['display_rows'], array_fill_keys($visibleIds, true));
 	return $state;

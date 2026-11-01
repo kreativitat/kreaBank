@@ -67,6 +67,10 @@ $navigationAccountId = max(0, GETPOSTINT('account_context'));
 $navigationAccount = kreabankNavigationAccount($navigationAccountId);
 $service = new KreaBankService($db, $user, $langs);
 $canNativeWrite = ($user->hasRight('banque', 'modifier') || $user->hasRight('banque', 'consolidate'));
+$historyColumns = array('event_ts' => 'KreaBankWhen', 'description' => 'KreaBankDescription', 'amount' => 'KreaBankAmount', 'links' => 'KreaBankLinkedDocuments', 'strategy' => 'Type', 'status' => 'KreaBankStatus');
+$auditColumns = array('datec' => 'KreaBankWhen', 'audit_type' => 'KreaBankAction', 'login' => 'KreaBankUser', 'fk_statement_line' => 'KreaBankLine', 'summary' => 'KreaBankAuditPayloadSummary');
+$historySort = kreabankListSort($historyColumns, 'event_ts', 'DESC');
+$auditSort = kreabankListSort($auditColumns, 'datec', 'DESC', 'audit_');
 $nativeEntryLabel = 'LAN&Ccedil;AMENTO';
 $undoActionLabel = 'DESFAZER';
 $requestPage = GETPOSTISSET('pageplusone') ? (GETPOSTINT('pageplusone') - 1) : GETPOSTINT('page');
@@ -92,10 +96,9 @@ if ($limit <= 0) {
 $limit = max(1, min(1000, $limit));
 $offset = $page * $limit;
 $auditOffset = $auditPage * $limit;
-$historyPoolLimit = max(300, (($page + 1) * $limit) + 500);
-$historyPoolLimit = min(5000, $historyPoolLimit);
-$auditPoolLimit = max(300, (($auditPage + 1) * $limit) + 500);
-$auditPoolLimit = min(5000, $auditPoolLimit);
+// A fixed recent window keeps sorted pages stable; never expand it when paging.
+$historyPoolLimit = 5000;
+$auditPoolLimit = 5000;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	if (!kreabankIsTokenValid()) {
@@ -383,20 +386,11 @@ foreach ($recent as $row) {
 	}
 }
 
-if (!empty($preparedRecentRows)) {
-	usort($preparedRecentRows, static function ($a, $b) {
-		$ta = (int) (isset($a['event_ts']) ? $a['event_ts'] : 0);
-		$tb = (int) (isset($b['event_ts']) ? $b['event_ts'] : 0);
-		if ($tb !== $ta) {
-			return $tb <=> $ta;
-		}
-
-		$la = (int) (isset($a['line_id']) ? $a['line_id'] : 0);
-		$lb = (int) (isset($b['line_id']) ? $b['line_id'] : 0);
-
-		return $lb <=> $la;
-	});
-}
+$preparedRecentRows = kreabankListOrderRows($preparedRecentRows, $historySort, static function ($item, $field) {
+	if ($field === 'links') { return implode(' ', array_column($item['links'], 'doc_ref')); }
+	if ($field === 'status') { return (int) ($item['row']['is_reversed'] ?? 0); }
+	return $item[$field] ?? $item['row'][$field] ?? '';
+});
 $historyTotalRecords = count($preparedRecentRows);
 if ($page > 0 && $offset >= $historyTotalRecords) {
 	$page = 0;
@@ -563,6 +557,9 @@ foreach ($auditRows as $auditRow) {
 		'summary' => $summary,
 	);
 }
+$preparedAuditRows = kreabankListOrderRows($preparedAuditRows, $auditSort, static function ($item, $field) {
+	return $field === 'summary' ? $item['summary']['summary'] : ($item['audit'][$field] ?? '');
+});
 $auditTotalRecords = count($preparedAuditRows);
 if ($auditPage > 0 && $auditOffset >= $auditTotalRecords) {
 	$auditPage = 0;
@@ -668,6 +665,9 @@ $auditParam .= '&audit_nav=1';
 $auditParam .= '&history_page=' . $page;
 $auditParam .= '&audit_page=' . $auditPage;
 
+$sortParams = '&sortfield=' . $historySort['field'] . '&sortorder=' . $historySort['order'] . '&audit_sortfield=' . $auditSort['field'] . '&audit_sortorder=' . $auditSort['order'];
+$historyParam .= $sortParams;
+$auditParam .= $sortParams;
 llxHeader('', $langs->trans('KreaBankHistory'), '', '', 0, 0, '', '', '', 'mod-kreabank page-history bodyforlist');
 
 kreabankPrintWorkspaceNavigation('history', $navigationAccount);
@@ -693,6 +693,9 @@ print '</style>';
 print '<h3 style="margin-top:0">' . $langs->trans('KreaBankHistory') . '</h3>';
 print '<form method="GET" id="kreaHistoryFilterForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 print kreabankNavigationHiddenFields($navigationAccountId);
+foreach (array('sortfield' => $historySort['field'], 'sortorder' => $historySort['order'], 'audit_sortfield' => $auditSort['field'], 'audit_sortorder' => $auditSort['order']) as $key => $value) {
+	print '<input type="hidden" name="' . $key . '" value="' . dol_escape_htmltag($value) . '">';
+}
 print '<input type="hidden" name="mainmenu" value="bank">';
 print '<input type="hidden" name="leftmenu" value="kreabank_history">';
 print '<input type="hidden" name="page" value="0">';
@@ -722,6 +725,9 @@ print '</div>';
 
 print '<form method="GET" id="kreaHistoryPagerForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 print kreabankNavigationHiddenFields($navigationAccountId);
+foreach (array('sortfield' => $historySort['field'], 'sortorder' => $historySort['order'], 'audit_sortfield' => $auditSort['field'], 'audit_sortorder' => $auditSort['order']) as $key => $value) {
+	print '<input type="hidden" name="' . $key . '" value="' . dol_escape_htmltag($value) . '">';
+}
 print '<input type="hidden" name="mainmenu" value="bank">';
 print '<input type="hidden" name="leftmenu" value="kreabank_history">';
 print '<input type="hidden" name="history_page" value="' . ((int) $page) . '">';
@@ -787,13 +793,10 @@ print '<td class="liste_titre center">&nbsp;</td>';
 print '<td class="liste_titre center maxwidthsearch"><div class="nowraponall"><button type="submit" class="liste_titre button_search reposition" name="button_search_x" value="x" form="kreaHistoryFilterForm"><span class="fas fa-search"></span></button><button type="submit" class="liste_titre button_removefilter reposition" name="button_removefilter_x" value="x" form="kreaHistoryFilterForm"><span class="fas fa-times"></span></button></div></td>';
 print '</tr>';
 print '<tr class="liste_titre">';
-print_liste_field_titre($langs->trans('KreaBankWhen'), '', '', '', '', '');
-print_liste_field_titre($langs->trans('KreaBankDescription'), '', '', '', '', '');
-print_liste_field_titre($langs->trans('KreaBankAmount'), '', '', '', '', 'class="right"');
-print_liste_field_titre($langs->trans('KreaBankLinkedDocuments'), '', '', '', '', '');
-print_liste_field_titre($langs->trans('Type'), '', '', '', '', '');
-print_liste_field_titre($langs->trans('KreaBankStatus'), '', '', '', '', '');
-print_liste_field_titre($langs->trans('Action'), '', '', '', '', 'class="center"');
+foreach ($historyColumns as $field => $label) {
+	print kreabankListHeader($langs->trans($label), $field, $historySort, $field === 'amount' ? 'right' : '', array_merge(kreabankListParameters(), array('history_page' => 0, 'audit_page' => $auditPage)));
+}
+print '<th scope="col" class="center">' . $langs->trans('Action') . '</th>';
 print '</tr>';
 
 	$renderLinkedDocument = static function ($link) {
@@ -957,6 +960,9 @@ if ($historyTotalRecords === 0) {
 			$undoFormId = 'kreaUndoForm' . ((int) $lineId);
 			print '<br><form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="' . $undoFormId . '" style="margin:4px 0 0 0">';
 			print kreabankNavigationHiddenFields($navigationAccountId);
+			foreach (array('sortfield' => $historySort['field'], 'sortorder' => $historySort['order'], 'audit_sortfield' => $auditSort['field'], 'audit_sortorder' => $auditSort['order']) as $key => $value) {
+				print '<input type="hidden" name="' . $key . '" value="' . dol_escape_htmltag($value) . '">';
+			}
 			print '<input type="hidden" name="token" value="' . newToken() . '">';
 			print '<input type="hidden" name="mainmenu" value="bank">';
 			print '<input type="hidden" name="leftmenu" value="kreabank_history">';
@@ -994,6 +1000,9 @@ print '</div>';
 print '<br><h3>' . $langs->trans('KreaBankAuditLog') . '</h3>';
 print '<form method="GET" id="kreaAuditFilterForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 print kreabankNavigationHiddenFields($navigationAccountId);
+foreach (array('sortfield' => $historySort['field'], 'sortorder' => $historySort['order'], 'audit_sortfield' => $auditSort['field'], 'audit_sortorder' => $auditSort['order']) as $key => $value) {
+	print '<input type="hidden" name="' . $key . '" value="' . dol_escape_htmltag($value) . '">';
+}
 print '<input type="hidden" name="mainmenu" value="bank">';
 print '<input type="hidden" name="leftmenu" value="kreabank_history">';
 print '<input type="hidden" name="audit_nav" value="1">';
@@ -1011,6 +1020,9 @@ print '<input type="hidden" name="hist_audit_type" value="' . dol_escape_htmltag
 print '</form>';
 print '<form method="GET" id="kreaAuditPagerForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 print kreabankNavigationHiddenFields($navigationAccountId);
+foreach (array('sortfield' => $historySort['field'], 'sortorder' => $historySort['order'], 'audit_sortfield' => $auditSort['field'], 'audit_sortorder' => $auditSort['order']) as $key => $value) {
+	print '<input type="hidden" name="' . $key . '" value="' . dol_escape_htmltag($value) . '">';
+}
 print '<input type="hidden" name="mainmenu" value="bank">';
 print '<input type="hidden" name="leftmenu" value="kreabank_history">';
 print '<input type="hidden" name="audit_nav" value="1">';
@@ -1042,11 +1054,9 @@ print '<td class="liste_titre"><input class="flat width75" type="text" name="aud
 print '<td class="liste_titre"><div style="display:flex;gap:6px;align-items:center"><input class="flat width100" type="text" name="audit_search_summary" value="' . dol_escape_htmltag($auditSearchSummary) . '" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankAuditPayloadSummary')) . '" form="kreaAuditFilterForm"><div class="nowraponall"><button type="submit" class="liste_titre button_search reposition" name="button_search_x" value="x" form="kreaAuditFilterForm"><span class="fas fa-search"></span></button><button type="submit" class="liste_titre button_removefilter reposition" name="button_removefilter_x" value="x" form="kreaAuditFilterForm"><span class="fas fa-times"></span></button></div></div></td>';
 print '</tr>';
 print '<tr class="liste_titre">';
-print_liste_field_titre($langs->trans('KreaBankWhen'), '', '', '', '', '');
-print_liste_field_titre($langs->trans('KreaBankAction'), '', '', '', '', '');
-print_liste_field_titre($langs->trans('KreaBankUser'), '', '', '', '', '');
-print_liste_field_titre($langs->trans('KreaBankLine'), '', '', '', '', '');
-print_liste_field_titre($langs->trans('KreaBankAuditPayloadSummary'), '', '', '', '', '');
+foreach ($auditColumns as $field => $label) {
+	print kreabankListHeader($langs->trans($label), $field, $auditSort, '', array_merge(kreabankListParameters(), array('history_page' => $page, 'audit_page' => 0)));
+}
 print '</tr>';
 
 if ($auditTotalRecords === 0) {

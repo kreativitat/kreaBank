@@ -526,3 +526,5 @@ KreaBankPairUnavailable=Account unavailable in this company — review this pair
 KreaBankPairPreview=Paired transfer with imported line %s
 KreaBankPairCompanyCurrency=New automatic transfers require the company currency. Existing transfers may be reused in the common account currency.
 KreaBankPairEmpty=No account pairs configured.
+
+KreaBankSortList=Sort list

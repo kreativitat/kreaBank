@@ -38,6 +38,7 @@ if ($action !== '') {
 	}
 }
 llxHeader('', $langs->trans('KreaBankAutomation'));
+print kreabankListAssets();
 print load_fiche_titre($langs->trans('KreaBankAutomation'), '', 'bank');
 print dol_get_fiche_head(kreabankAdminPrepareHead(), 'automation', $langs->trans('KreaBankSetup'), -1, 'bank');
 print '<p>' . $langs->trans('KreaBankAutoPurpose') . '</p>';
@@ -75,7 +76,7 @@ try {
 			print '<p>' . $langs->trans('KreaBankAutoSelectAccounts') . '</p>';
 		} else {
 			print '<p>' . $langs->trans('KreaBankAutoSummary', (int) $preview['scanned'], (int) $preview['eligible'], (int) $preview['failed']) . '</p>';
-			print '<div class="div-table-responsive"><table class="liste centpercent"><tr class="liste_titre"><th scope="col">' . $langs->trans('KreaBankAutoStatementLine')
+			print '<div class="div-table-responsive"><table data-kb-sort class="liste centpercent"><tr class="liste_titre"><th scope="col">' . $langs->trans('KreaBankAutoStatementLine')
 				. '</th><th scope="col">' . $langs->trans('KreaBankAutoBankMovement') . '</th><th scope="col">' . $langs->trans('KreaBankAutoScore') . '</th></tr>';
 			foreach ($preview['matches'] as $match) {
 				print '<tr class="oddeven"><td>' . (int) $match['statement_line_id'] . '</td><td>';

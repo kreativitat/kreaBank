@@ -69,6 +69,10 @@ $openDocumentsSearch = trim((string) GETPOST('open_doc_search', 'restricthtml'))
 $forceBatchDetect = (GETPOSTINT('force_batch_detect') > 0 ? 1 : 0);
 $navigationAccountId = max(0, GETPOSTINT('account_context'));
 $navigationAccount = kreabankNavigationAccount($navigationAccountId);
+$pendingColumns = array('b.dateo' => 'KreaBankDate', 'm.description' => 'KreaBankDescription', 'b.amount' => 'KreaBankAmount');
+$pendingSort = kreabankListSort($pendingColumns, 'b.dateo');
+$documentColumns = array('suggestion' => 'KreaBankBulkMatchSuggested', 'ref' => 'Ref', 'doc_date' => 'KreaBankDate', 'thirdparty_name' => 'KreaBankCounterparty', 'amount_open' => 'KreaBankAmount');
+$documentSort = kreabankListSort($documentColumns, 'suggestion', 'DESC', 'doc_');
 $service = new KreaBankService($db, $user, $langs);
 $form = new Form($db);
 $canNativeWrite = ($user->hasRight('banque', 'modifier') || $user->hasRight('banque', 'consolidate'));
@@ -673,7 +677,7 @@ try {
 		}
 	}
 
-	$pendingLines = $service->getPendingLines(200, 0, 'operation_date', 'ASC', array('bank_account_id' => $navigationAccountId));
+	$pendingLines = $service->getPendingLines(200, 0, $pendingSort['field'], $pendingSort['order'], array('bank_account_id' => $navigationAccountId));
 	$pendingLinesTotal = $service->getPendingLinesCount(array('bank_account_id' => $navigationAccountId));
 	if ($pendingLinesTotal <= 0) {
 		$pendingLinesTotal = count($pendingLines);
@@ -1616,6 +1620,8 @@ print '<div class="krea-recon-layout">';
 
 print '<div class="krea-left">';
 print '<h3>' . $langs->trans('KreaBankPendingStatementLines') . ' (' . ((int) $pendingLinesTotal) . ')</h3>';
+$reconciliationSortParams = array_merge(kreabankListParameters(), array('account_context' => $navigationAccountId, 'line_id' => $lineId));
+print kreabankListSortLinks($pendingColumns, $pendingSort, $reconciliationSortParams);
 $showBulkSkip = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite && !empty($pendingLines));
 if ($showBulkSkip) {
 	print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="bulkSkipForm" style="margin:0 0 12px 0">';
@@ -1847,6 +1853,11 @@ if (!$selectedLine) {
 		print '<input type="hidden" name="force_batch_detect" value="1">';
 	}
 
+	print kreabankListSortLinks($documentColumns, $documentSort, $reconciliationSortParams);
+	$documents = kreabankListOrderRows($documents, $documentSort, static function ($doc, $field) use ($suggestionByKey) {
+		if ($field === 'suggestion') { return (int) ($suggestionByKey[$doc['doc_type'] . '__' . $doc['rowid']]['score'] ?? 0); }
+		return $doc[$field] ?? '';
+	});
 	if (empty($documents)) {
 		print '<div class="opacitymedium">' . $langs->trans('KreaBankNoOpenDocuments') . '</div>';
 	} else {
@@ -1978,14 +1989,14 @@ if (!$selectedLine) {
 
 	if (!empty($lineLinks)) {
 		print '<br><h4>' . $langs->trans('KreaBankHistory') . '</h4>';
-		print '<table class="noborder centpercent">';
+		print '<table data-kb-sort class="noborder centpercent">';
 		print '<tr class="liste_titre"><th>' . $langs->trans('KreaBankDocument') . '</th><th class="right">' . $langs->trans('KreaBankAllocate') . '</th><th>' . $langs->trans('Type') . '</th><th>' . $langs->trans('KreaBankWhen') . '</th></tr>';
 		foreach ($lineLinks as $link) {
 			print '<tr class="oddeven">';
 			print '<td>' . dol_escape_htmltag((string) $link['doc_ref']) . ' <span class="krea-muted">(' . dol_escape_htmltag((string) $link['doc_type']) . ')</span></td>';
-			print '<td class="right">' . kreabankPrice((float) $link['allocated_amount']) . ' ' . dol_escape_htmltag((string) $selectedLine['currency']) . '</td>';
+			print '<td class="right" data-kb-sort-value="' . dol_escape_htmltag((string) $link['allocated_amount']) . '">' . kreabankPrice((float) $link['allocated_amount']) . ' ' . dol_escape_htmltag((string) $selectedLine['currency']) . '</td>';
 			print '<td>' . dol_escape_htmltag((string) $link['strategy']) . ($link['is_reversed'] ? ' <span class="badge badge-status7">' . $langs->trans('KreaBankReversed') . '</span>' : '') . '</td>';
-			print '<td>' . dol_print_date(strtotime((string) $link['date_validate']), 'dayhour') . '</td>';
+			print '<td data-kb-sort-value="' . dol_escape_htmltag((string) $link['date_validate']) . '">' . dol_print_date(strtotime((string) $link['date_validate']), 'dayhour') . '</td>';
 			print '</tr>';
 		}
 		print '</table>';

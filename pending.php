@@ -68,8 +68,9 @@ $navigationAccountId = max(0, GETPOSTINT('account_context'));
 $navigationAccount = kreabankNavigationAccount($navigationAccountId);
 $service = new KreaBankService($db, $user, $langs);
 
-$sortfield = GETPOST('sortfield', 'aZ09comma');
-$sortorder = strtoupper(GETPOST('sortorder', 'aZ09comma'));
+$pendingSort = kreabankListSort(array('b.dateo' => true, 'm.description' => true, 'b.amount' => true, 'm.running_balance' => true, 'b.rappro' => true), 'b.dateo');
+$sortfield = $pendingSort['field'];
+$sortorder = $pendingSort['order'];
 $page = GETPOSTISSET('pageplusone') ? (GETPOSTINT('pageplusone') - 1) : GETPOSTINT('page');
 if ($page < 0) {
 	$page = 0;

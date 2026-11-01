@@ -1067,7 +1067,7 @@ if (!empty($currentWizard) && !empty($analysis) && is_array($analysis)) {
 			$maxColumns = max($maxColumns, is_array($row) ? count($row) : 0);
 		}
 
-		print '<br><table class="noborder centpercent">';
+		print '<br><table data-kb-sort class="noborder centpercent">';
 		print '<tr class="liste_titre"><th colspan="' . ($maxColumns + 1) . '">' . $langs->trans('KreaBankImportPreviewRaw') . '</th></tr>';
 		print '<tr class="liste_titre"><th>#</th>';
 		for ($c = 0; $c < $maxColumns; $c++) {
@@ -1093,7 +1093,7 @@ if (!empty($currentWizard) && !empty($analysis) && is_array($analysis)) {
 	}
 
 	if (!$isDuplicateReview && !empty($sampleLines)) {
-		print '<br><table class="noborder centpercent">';
+		print '<br><table data-kb-sort class="noborder centpercent">';
 		print '<tr class="liste_titre"><th colspan="7">' . $langs->trans('KreaBankImportPreviewParsed') . '</th></tr>';
 		print '<tr class="liste_titre">';
 		print '<th>' . $langs->trans('KreaBankDate') . '</th>';
@@ -1118,12 +1118,12 @@ if (!empty($currentWizard) && !empty($analysis) && is_array($analysis)) {
 
 			print '<tr class="oddeven">';
 			print '<td>' . dol_escape_htmltag($operationDate) . '</td>';
-			print '<td>' . kreabankPrice($amount) . '</td>';
+			print '<td data-kb-sort-value="' . dol_escape_htmltag((string) $amount) . '">' . kreabankPrice($amount) . '</td>';
 			print '<td>' . dol_escape_htmltag($description) . '</td>';
 			print '<td>' . dol_escape_htmltag($paymentReference) . '</td>';
 			print '<td>' . dol_escape_htmltag($counterpartyName) . '</td>';
 			print '<td>' . dol_escape_htmltag($currency) . '</td>';
-			print '<td>' . (($runningBalance !== null) ? kreabankPrice((float) $runningBalance) : '') . '</td>';
+			print '<td data-kb-sort-value="' . dol_escape_htmltag((string) $runningBalance) . '">' . (($runningBalance !== null) ? kreabankPrice((float) $runningBalance) : '') . '</td>';
 			print '</tr>';
 		}
 		print '</table>';
@@ -1195,7 +1195,7 @@ if (is_array($importResult)) {
 			print '<input type="hidden" name="action" value="import_selected_duplicates">';
 			print '<input type="hidden" name="wizard_token" value="' . dol_escape_htmltag((string) $wizardToken) . '">';
 		}
-		print '<br><table class="noborder centpercent">';
+		print '<br><table data-kb-sort class="noborder centpercent">';
 		print '<tr class="liste_titre"><th colspan="' . ($allowDuplicateSelection ? 8 : 7) . '">Possíveis duplicados</th></tr>';
 		print '<tr class="liste_titre">';
 		if ($allowDuplicateSelection) {
@@ -1231,7 +1231,7 @@ if (is_array($importResult)) {
 			}
 			print '<td>' . ($lineRank > 0 ? $lineRank : '-') . '</td>';
 			print '<td>' . dol_escape_htmltag((string) $dup['operation_date']) . '</td>';
-			print '<td class="right">' . kreabankPrice((float) $dup['amount']) . ' ' . dol_escape_htmltag((string) (!empty($dup['currency']) ? $dup['currency'] : 'EUR')) . '</td>';
+			print '<td class="right" data-kb-sort-value="' . dol_escape_htmltag((string) $dup['amount']) . '">' . kreabankPrice((float) $dup['amount']) . ' ' . dol_escape_htmltag((string) (!empty($dup['currency']) ? $dup['currency'] : 'EUR')) . '</td>';
 			print '<td>' . dol_escape_htmltag($ref) . '</td>';
 			print '<td>' . dol_escape_htmltag((string) (!empty($dup['description']) ? $dup['description'] : '')) . '</td>';
 			print '<td>' . dol_escape_htmltag((string) (!empty($dup['source']) ? $dup['source'] : 'unknown')) . '</td>';

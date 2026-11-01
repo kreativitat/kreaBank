@@ -31,7 +31,7 @@ body.kreabank-banking.kb-native-bank #id-right > .fiche > .tabs { display:none !
 .kb-accounts-table td { padding:16px; border-top:1px solid #e5ebef; }
 .kb-accounts-table .kb-account-name { font-weight:600; color:#273d50; }
 .kb-accounts-table small { display:block; margin-top:5px; color:#748391; }
-.kb-accounts-table td.kb-money { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.kb-accounts-table .kb-money,.kb-accounts-table .kb-actions-heading { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .kb-account-actions { display:flex; justify-content:flex-end; gap:15px; white-space:nowrap; }
 .kb-count { display:inline-block; padding:3px 9px; border-radius:20px; background:#edf3f7; color:#38536c; font-weight:600; }
 @media(max-width:700px) {

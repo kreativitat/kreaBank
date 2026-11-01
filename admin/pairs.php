@@ -31,6 +31,7 @@ if ($action !== '') {
 	}
 }
 llxHeader('', $langs->trans('KreaBankAccountPairs'));
+print kreabankListAssets();
 print load_fiche_titre($langs->trans('KreaBankAccountPairs'), '', 'bank');
 print dol_get_fiche_head(kreabankAdminPrepareHead(), 'pairs', $langs->trans('KreaBankSetup'), -1, 'bank');
 print '<p>' . $langs->trans('KreaBankPairPurpose') . '</p>';
@@ -43,7 +44,7 @@ try {
 		if (!isset($accounts[$id])) { return $langs->trans('KreaBankPairUnavailable'); }
 		return $accounts[$id]->ref . ' — ' . $accounts[$id]->label . ' (' . $accounts[$id]->currency_code . ')';
 	};
-	print '<div class="div-table-responsive"><table class="liste centpercent"><tr class="liste_titre">';
+	print '<div class="div-table-responsive"><table data-kb-sort data-kb-sort-skip="2" class="liste centpercent"><tr class="liste_titre">';
 	foreach (array('KreaBankPairRestricted', 'KreaBankPairMain', 'KreaBankActions') as $key) { print '<th scope="col">' . $langs->trans($key) . '</th>'; }
 	print '</tr>';
 	foreach ($map as $restricted => $main) {

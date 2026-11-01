@@ -69,11 +69,16 @@ if ($reference !== '' && !$statement) {
 }
 if ($statement) {
 	$source = '(' . $report->linesSql($navigationAccountId, $reference) . ') h';
-	$order = 'h.operation_date,h.line_rank,h.rowid';
+	$columns = array('operation_date' => 'KreaBankDate', 'description' => 'KreaBankDescription', 'amount' => 'KreaBankAmount', 'status' => 'Status', 'native_id' => 'KreaBankNativeMovements');
+	$sort = kreabankListSort($columns, 'operation_date');
+	$tieOrder = ',h.line_rank,h.rowid';
 } else {
 	$source = '(' . $report->statementsSql($navigationAccountId) . ') h';
-	$order = 'h.imported_at DESC,h.bank_account_id,h.statement_ref';
+	$columns = array('statement_ref' => 'Ref', 'bank_account_ref' => 'BankAccount', 'imported_at' => 'KreaBankWhen', 'imported_lines' => 'KreaBankImportedLines', 'native_lines' => 'KreaBankNativeMovements', 'reconciled_lines' => 'KreaBankReconciled');
+	$sort = kreabankListSort($columns, 'imported_at', 'DESC');
+	$tieOrder = ',h.bank_account_id,h.statement_ref';
 }
+$order = 'h.' . $sort['field'] . ' ' . $sort['order'] . $tieOrder;
 $result = $report->query('SELECT COUNT(*) nb FROM ' . $source);
 $total = (int) $db->fetch_object($result)->nb;
 if ($page * $limit >= $total) {
@@ -96,8 +101,8 @@ if ($statement) {
 		print '<a class="button" href="' . dol_escape_htmltag(dol_buildpath('/compta/bank/releve.php', 1) . '?account=' . $navigationAccountId . '&num=' . rawurlencode($reference)) . '">' . $langs->trans('KreaBankNativeStatements') . '</a></p>';
 	}
 	print '<div class="div-table-responsive"><table class="liste centpercent kreabank-statement-list"><tr class="liste_titre">';
-	foreach (array('KreaBankDate', 'KreaBankDescription', 'KreaBankAmount', 'Status', 'KreaBankNativeMovements') as $key) {
-		print '<th>' . $langs->trans($key) . '</th>';
+	foreach ($columns as $field => $key) {
+		print kreabankListHeader($langs->trans($key), $field, $sort, $field === 'amount' ? 'right' : '');
 	}
 	print '</tr>';
 	while ($row = $db->fetch_object($result)) {
@@ -118,8 +123,8 @@ if ($statement) {
 	}
 } else {
 	print '<div class="div-table-responsive"><table class="liste centpercent kreabank-statement-list"><tr class="liste_titre">';
-	foreach (array('Ref', 'BankAccount', 'KreaBankWhen', 'KreaBankImportedLines', 'KreaBankNativeMovements', 'KreaBankReconciled') as $key) {
-		print '<th>' . $langs->trans($key) . '</th>';
+	foreach ($columns as $field => $key) {
+		print kreabankListHeader($langs->trans($key), $field, $sort, $field === 'amount' ? 'right' : '');
 	}
 	print '</tr>';
 	while ($row = $db->fetch_object($result)) {
@@ -132,10 +137,10 @@ if ($statement) {
 	}
 }
 if ($total === 0) {
-	print '<tr><td colspan="6">' . $langs->trans('KreaBankImportHistoryEmpty') . '</td></tr>';
+	print '<tr><td colspan="' . count($columns) . '">' . $langs->trans('KreaBankImportHistoryEmpty') . '</td></tr>';
 }
 print '</table></div><nav class="kreabank-tools" aria-label="' . dol_escape_htmltag($langs->trans('Page')) . '">';
-$base = kreabankStatementUrl($navigationAccountId, $reference);
+$base = kreabankStatementUrl($navigationAccountId, $reference) . '&sortfield=' . rawurlencode($sort['field']) . '&sortorder=' . $sort['order'];
 if ($page > 0) {
 	print '<a href="' . dol_escape_htmltag($base . '&page=' . ($page - 1)) . '">' . $langs->trans('Previous') . '</a>';
 }

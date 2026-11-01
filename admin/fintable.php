@@ -37,6 +37,7 @@ if ($action !== '') {
 	exit;
 }
 llxHeader('', $langs->trans('KreaBankFeeds'));
+print kreabankListAssets();
 print load_fiche_titre($langs->trans('KreaBankFeeds'), '', 'bank');
 print dol_get_fiche_head(kreabankAdminPrepareHead(), 'fintable', $langs->trans('KreaBankSetup'), -1, 'bank');
 print '<p>' . $langs->trans('KreaBankFeedAdminPurpose') . ' <a href="https://fintable.io" target="_blank" rel="noopener noreferrer">Fintable</a>.</p>';
@@ -68,7 +69,7 @@ try {
 		}
 	}
 	$entities = $sync->activeEntities();
-	print '<div class="div-table-responsive"><table class="liste centpercent"><tr class="liste_titre"><th>' . $langs->trans('Company') . '</th><th>' . $langs->trans('KreaBankFeedMappedAccounts') . '</th><th>' . $langs->trans('KreaBankFeedCollectedAt') . '</th></tr>';
+	print '<div class="div-table-responsive"><table data-kb-sort class="liste centpercent"><tr class="liste_titre"><th>' . $langs->trans('Company') . '</th><th>' . $langs->trans('KreaBankFeedMappedAccounts') . '</th><th>' . $langs->trans('KreaBankFeedCollectedAt') . '</th></tr>';
 	foreach ($entities as $entity => $label) {
 		$accounts = $sync->accountStatus($entity);
 		$mapped = 0;
@@ -77,7 +78,7 @@ try {
 			$mapped += empty($account->provider_account_id) ? 0 : 1;
 			$latest = max($latest, (string) $account->last_success);
 		}
-		print '<tr class="oddeven"><td>' . dol_escape_htmltag($label) . '</td><td>' . $mapped . ' / ' . count($accounts) . '</td><td>'
+		print '<tr class="oddeven"><td>' . dol_escape_htmltag($label) . '</td><td data-kb-sort-value="' . $mapped . '">' . $mapped . ' / ' . count($accounts) . '</td><td data-kb-sort-value="' . dol_escape_htmltag($latest) . '">'
 			. ($latest ? dol_print_date($db->jdate($latest), 'dayhour') : '—') . '</td></tr>';
 	}
 	print '</table></div>';

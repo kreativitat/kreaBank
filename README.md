@@ -132,6 +132,7 @@ The script includes:
 
 ## Additional documentation
 
+- [List sorting and validation](doc/LISTS.md)
 - Native assistant architecture note (Portuguese): `doc/KREABANK_NATIVE_ASSISTANT.md`
 
 ## License

@@ -73,6 +73,7 @@
         try {
             const body = new URLSearchParams({action: 'bulk_scan', token: config.token,
                 account_context: config.account, page: config.page, limit: config.limit,
+                sortfield: config.sortfield || 'operation_date', sortorder: config.sortorder || 'ASC',
                 resume: manual ? '1' : '0'});
             const response = await fetch(endpoint, {method: 'POST', credentials: 'same-origin',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json'},

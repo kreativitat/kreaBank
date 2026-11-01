@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.15.2 — 2026-11-01
+
+- Align account-table balance/action headings with their values.
+- Add ascending/descending sorting across operational lists, reconciliation cards,
+  bulk review, import previews and administration data tables. Preserve filters,
+  company/account scope, signed review pairs and bounded background scanning.
+- Keep history/audit ordering independent and their recent window fixed across
+  pages. No schema or scheduler migration; see [list sorting](LISTS.md).
+
 ## 1.15.1 — 2026-11-01
 
 - Show KreaBank amounts, balances, totals and percentages with two decimal places,
