@@ -1,25 +1,26 @@
 # Banking workspace
 
 Operational banking pages share five tabs: Movements, Statements, Reconciliation,
-Connections and History. Account management is separate: the native left-menu List
+Connections and History. Account management is separate: the native left-menu Account list
 opens the accounts overview, and account names open their details and tool tabs.
 The accounts overview and account-tool pages do not display the operational tabs.
-Internal transfers keep the native layout without a workspace header or tabs.
+Internal transfers and new-account creation keep the native layout without a
+workspace header or tabs.
 
-A separate Filters panel below the operational navigation contains current-company
-account and account-type dropdowns. The accounts overview uses the same panel above
-its table. There is no account selector inside the banking header. Filters submit
-directly to their page, reset pagination, and persist through tabs, search forms,
-sorting, pagination and bulk-scan requests. Operational pages default to all types;
-the accounts overview retains its bank/cash/closed default. Both offer an explicit
-all-types option. Type predicates supplement current-company ownership before row
-limits and counts. Closed accounts remain ineligible for reconciliation; connections
-retain the feed's open-bank-account eligibility. The audit log remains explicitly
-company-wide, separate from filtered reconciliation history.
+A separate Filters panel below the operational navigation contains one bank-account
+selector, listing only current-company accounts. The standalone accounts overview
+has a separate account-type filter (all, bank, cash or closed) and no account selector.
+It defaults to bank accounts. There is no selector inside the navigation header.
+Operational filters submit directly to their own page, reset pagination and preserve
+only account context through tabs, search forms, sorting, pagination and bulk scans.
+Account types belong only to the accounts overview; old operational `kind` parameters
+are ignored and removed from generated links/forms. The overview ignores stale
+`account_context` parameters, since it no longer has an individual-account filter.
+Closed-account reconciliation and feed eligibility remain unchanged. The audit log
+remains explicitly company-wide, separate from account-filtered reconciliation history.
 
 Import is an action under Statements. Reconciliation offers compact view controls
-for single, bulk and pending review. Refresh open bulk-review forms after 1.14.24;
-approval signatures and scan caches now include the account-type filter.
+for single, bulk and pending review. Internal transfers keep the native layout.
 
 The bank entry point opens `accounts.php`, with bank, cash and closed-account
 views. It shows each account's native current balance in its own currency and
@@ -40,8 +41,8 @@ payment and invoice lifecycle logic remains responsible for financial records.
 No core files are patched. Source evidence stays separate from the ledger.
 
 `lib/kreabank_navigation.lib.php` owns navigation URLs, shared filter forms and
-company ownership. `lib/kreabank_account_filter.lib.php` owns pure account-type SQL
-predicates; readers must still enforce company ownership independently.
+company ownership. `KreaBankIntegration::accounts()` owns account-type filtering
+for the standalone overview; operational readers use selected-account scope.
 `ActionsKreaBank` supplies native hooks, read filters and entry-point routing.
 The shared header renders the selected account’s tools as tabs.
 `css/navigation.css` scopes presentation to the banking workspace. Empty native
@@ -50,7 +51,8 @@ views remain native. The matched-movements filter and direct native card links
 remain supported. Native list queries require current owner-company membership,
 even when multicompany account sharing is enabled.
 
-After deploying hook/menu changes, run the native registration helper without
+After deploying hook/menu changes (including the 1.14.25 `leftblock` registration
+for the account-list label), run the native registration helper without
 re-enabling the module or changing jobs:
 
 ```sh

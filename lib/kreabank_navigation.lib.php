@@ -14,7 +14,7 @@ function kreabankWorkspaceUrl($page, $accountId = 0)
 	}
 	return dol_buildpath('/custom/kreabank/' . $page . '.php', 1)
 		. '?mainmenu=bank&leftmenu=kreabank_' . $page
-		. ((int) $accountId > 0 ? '&account_context=' . (int) $accountId : '') . kreabankNavigationKindParam();
+		. ((int) $accountId > 0 ? '&account_context=' . (int) $accountId : '');
 }
 
 /** Resolve only an account owned by the active company; never trust Account::entity. */
@@ -50,8 +50,7 @@ function kreabankCompleteAccountHead($head, $accountId)
 /** Persist the account context through GET filters and POST actions. */
 function kreabankNavigationHiddenFields($accountId)
 {
-	return ((int) $accountId > 0 ? '<input type="hidden" name="account_context" value="' . (int) $accountId . '">' : '')
-		. '<input type="hidden" name="kind" value="' . kreabankNavigationKind() . '">';
+	return (int) $accountId > 0 ? '<input type="hidden" name="account_context" value="' . (int) $accountId . '">' : '';
 }
 
 /** Resolve a page in the single banking workspace. */
@@ -89,44 +88,23 @@ function kreabankAccountToolEntries($accountId)
 		'numbering' => array('bankentries_list.php?action=reconcile&search_conciliated=0&id=', 'KreaBankStatementNumbering'),
 	);
 	foreach ($tools as $key => $tool) {
-		$entries[] = array('key' => $key, 'url' => '/compta/bank/' . $tool[0] . (int) $accountId . '&mainmenu=bank&leftmenu=bank' . kreabankNavigationKindParam(), 'label' => $tool[1]);
+		$entries[] = array('key' => $key, 'url' => '/compta/bank/' . $tool[0] . (int) $accountId . '&mainmenu=bank&leftmenu=bank', 'label' => $tool[1]);
 	}
 	return $entries;
 }
 
-/** Request-local filter state; all types preserves existing operational list behavior. */
+/** Account-type state belongs only to the standalone accounts overview. */
 function kreabankNavigationKind($default = 'all')
 {
 	$kind = GETPOST('kind', 'aZ09');
 	return in_array($kind, array('all', 'bank', 'cash', 'closed'), true) ? $kind : $default;
 }
 
-function kreabankNavigationKindParam()
-{
-	$kind = kreabankNavigationKind();
-	return $kind === 'all' ? '' : '&kind=' . $kind;
-}
-
-/** Owned IDs validate cached/requested review rows against the account-type filter. */
-function kreabankNavigationAccountIds($kind)
-{
-	global $db, $conf;
-	$result = $db->query('SELECT ba.rowid FROM ' . $db->prefix() . 'bank_account ba WHERE ba.entity=' . (int) $conf->entity . kreabankAccountKindSql($kind));
-	if (!$result) {
-		throw new RuntimeException('Unable to read account filter scope');
-	}
-	$ids = array();
-	while ($row = $db->fetch_object($result)) {
-		$ids[] = (int) $row->rowid;
-	}
-	return $ids;
-}
-
 /** One filter panel outside navigation, submitted directly to its destination page. */
 function kreabankBankingFilters($page, $accountId = 0, $kind = null)
 {
 	global $langs;
-	$kind = $kind === null ? kreabankNavigationKind() : $kind;
+	$kind = $page === 'accounts' ? ($kind === null ? kreabankNavigationKind('bank') : $kind) : 'all';
 	$accountPages = array('card', 'documents', 'reports', 'forecast', 'native_statements', 'numbering');
 	$isAccountTool = in_array($page, $accountPages, true) || $page === 'import';
 	$action = $isAccountTool ? dol_buildpath('/custom/kreabank/accounts.php', 1) : strtok(kreabankBankingUrl($page), '?');
@@ -138,15 +116,15 @@ function kreabankBankingFilters($page, $accountId = 0, $kind = null)
 	if ($page === 'movements' && GETPOSTINT('kreabank_matched')) {
 		$html .= '<input type="hidden" name="kreabank_matched" value="1">';
 	}
-	$html .= '<strong class="kb-filter-title">' . $langs->trans('Filters') . '</strong><div class="kb-filter-field">' . kreabankAccountFilterSelect($accountId) . '</div>';
-	if (!$isAccountTool) {
+	$html .= '<strong class="kb-filter-title">' . $langs->trans('Filters') . '</strong>';
+	if ($page === 'accounts') {
 		$html .= '<div class="kb-filter-field"><label for="kreabank-account-kind">' . $langs->trans('AccountType') . '</label><select class="flat" id="kreabank-account-kind" name="kind">';
 		foreach (array('all' => 'All', 'bank' => 'KreaBankBankAccounts', 'cash' => 'KreaBankCashAccounts', 'closed' => 'KreaBankClosedAccounts') as $value => $label) {
 			$html .= '<option value="' . $value . '"' . ($value === $kind ? ' selected' : '') . '>' . $langs->trans($label) . '</option>';
 		}
 		$html .= '</select></div>';
 	} else {
-		$html .= '<input type="hidden" name="kind" value="' . dol_escape_htmltag($kind) . '">';
+		$html .= '<div class="kb-filter-field">' . kreabankAccountFilterSelect($accountId) . '</div>';
 	}
 	return $html . '<button class="button" type="submit">' . $langs->trans('ToFilter') . '</button></form>';
 }

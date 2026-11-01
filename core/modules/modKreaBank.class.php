@@ -50,7 +50,7 @@ class modKreaBank extends DolibarrModules
 		$this->descriptionlong = 'ModuleKreaBankDescLong';
 		$this->editor_name = 'Kreativität Works';
 		$this->editor_url = 'http://kreativitat.com';
-		$this->version = '1.14.24';
+		$this->version = '1.14.25';
 		$this->const_name = 'MAIN_MODULE_' . strtoupper($this->name);
 		$this->picto = 'kreaproducts@kreaproducts';
 
@@ -66,7 +66,7 @@ class modKreaBank extends DolibarrModules
 			'theme' => 0,
 			'css' => array('/custom/kreabank/css/navigation.css'),
 			'js' => array(),
-			'hooks' => array('bankaccountlist', 'bankline', 'banktransfer', 'productcard', 'bankcard', 'banktransactionlist', 'bankaccountstatement', 'bankaccountdocuments', 'bankannualreport', 'banktreso', 'kreabankworkspace'),
+			'hooks' => array('leftblock', 'bankaccountlist', 'bankline', 'banktransfer', 'productcard', 'bankcard', 'banktransactionlist', 'bankaccountstatement', 'bankaccountdocuments', 'bankannualreport', 'banktreso', 'kreabankworkspace'),
 			'moduleforexternal' => 0,
 			'websitetemplates' => 0,
 			'captcha' => 0,

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.14.25 — 2026-11-01
+
+- Rename the native banking List menu entry to Account list.
+- Keep new-account creation in the native layout without a workspace header,
+  account selector or operational tabs.
+
+- Show only the bank-account filter on operational pages and only the account-type
+  filter on the standalone accounts overview. Remove hidden account/type context
+  that cannot be changed through those controls.
+- Stop carrying account types into operational links and queries; old `kind=closed`
+  URLs no longer hide operational data. Preserve current-company account ownership.
+
 ## 1.14.24 — 2026-11-01
 
 - Separate account management from the five operational banking tabs. Keep account

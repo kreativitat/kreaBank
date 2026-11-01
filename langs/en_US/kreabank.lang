@@ -504,6 +504,7 @@ KreaBankCurrentBalance=Current balance
 KreaBankMoreOptions=More options
 KreaBankChequeDeposits=Cheque deposits
 KreaBankNavAccounts=Accounts
+KreaBankAccountList=Account list
 KreaBankActions=Actions
 KreaBankTransfer=Internal transfer
 KreaBankAllMovements=All movements

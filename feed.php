@@ -17,7 +17,6 @@ if (!isModEnabled('kreabank') || !$user->hasRight('banque', 'lire')) {
 }
 $navigationAccountId = max(0, GETPOSTINT('account_context'));
 $navigationAccount = kreabankNavigationAccount($navigationAccountId);
-$navigationAccountKind = kreabankNavigationKind();
 $sync = new KreaBankFintableSync($db);
 $installationAdmin = !empty($user->admin) && empty($user->entity) && empty($user->socid);
 if (GETPOST('action', 'aZ09') === 'collect') {
@@ -48,7 +47,7 @@ if ($installationAdmin) {
 	print '<button class="butAction" type="submit">' . $langs->trans('KreaBankFeedCollectAll') . '</button></form></div>';
 }
 $showUnidentified = GETPOSTINT('show_unidentified') === 1;
-print '<p><a href="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '?mainmenu=bank&amp;leftmenu=kreabank_feed&amp;account_context=' . $navigationAccountId . dol_escape_htmltag(kreabankNavigationKindParam()) . '&amp;show_unidentified=' . ($showUnidentified ? '0' : '1') . '">'
+print '<p><a href="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '?mainmenu=bank&amp;leftmenu=kreabank_feed&amp;account_context=' . $navigationAccountId . '&amp;show_unidentified=' . ($showUnidentified ? '0' : '1') . '">'
 	. $langs->trans($showUnidentified ? 'KreaBankFeedShowEligible' : 'KreaBankFeedShowOtherRecords') . '</a></p>';
 print '<div class="div-table-responsive"><table class="liste centpercent">';
 print '<tr class="liste_titre">';
@@ -57,7 +56,7 @@ foreach (array('BankAccount', 'IBAN', 'KreaBankFeedBalance', 'KreaBankFeedAvaila
 }
 print '</tr>';
 try {
-	$rows = $sync->accountStatus((int) $conf->entity, $showUnidentified, $navigationAccountKind);
+	$rows = $sync->accountStatus((int) $conf->entity, $showUnidentified);
 	if ($navigationAccountId > 0) {
 		$rows = array_values(array_filter($rows, static function ($row) use ($navigationAccountId) { return (int) $row->rowid === $navigationAccountId; }));
 	}

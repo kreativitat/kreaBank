@@ -69,8 +69,6 @@ $openDocumentsSearch = trim((string) GETPOST('open_doc_search', 'restricthtml'))
 $forceBatchDetect = (GETPOSTINT('force_batch_detect') > 0 ? 1 : 0);
 $navigationAccountId = max(0, GETPOSTINT('account_context'));
 $navigationAccount = kreabankNavigationAccount($navigationAccountId);
-$navigationAccountKind = kreabankNavigationKind();
-$navigationAccountIds = kreabankNavigationAccountIds($navigationAccountKind);
 $service = new KreaBankService($db, $user, $langs);
 $form = new Form($db);
 $canNativeWrite = ($user->hasRight('banque', 'modifier') || $user->hasRight('banque', 'consolidate'));
@@ -665,7 +663,7 @@ try {
 	}
 
 	if (!empty($requestedLine)) {
-		if (($navigationAccountId > 0 && (int) $requestedLine['bank_account_id'] !== $navigationAccountId) || !in_array((int) $requestedLine['bank_account_id'], $navigationAccountIds, true)) {
+		if ($navigationAccountId > 0 && (int) $requestedLine['bank_account_id'] !== $navigationAccountId) {
 			$requestedLine = null;
 			$lineId = 0;
 			$requestedLineId = 0;
@@ -675,8 +673,8 @@ try {
 		}
 	}
 
-	$pendingLines = $service->getPendingLines(200, 0, 'operation_date', 'ASC', array('bank_account_id' => $navigationAccountId, 'account_kind' => $navigationAccountKind));
-	$pendingLinesTotal = $service->getPendingLinesCount(array('bank_account_id' => $navigationAccountId, 'account_kind' => $navigationAccountKind));
+	$pendingLines = $service->getPendingLines(200, 0, 'operation_date', 'ASC', array('bank_account_id' => $navigationAccountId));
+	$pendingLinesTotal = $service->getPendingLinesCount(array('bank_account_id' => $navigationAccountId));
 	if ($pendingLinesTotal <= 0) {
 		$pendingLinesTotal = count($pendingLines);
 	}
@@ -1805,7 +1803,7 @@ if (!$selectedLine) {
 	print '<div class="info">';
 	print '<strong>' . dol_escape_htmltag((string) $selectedLine['counterparty_name']) . '</strong> | ';
 	$selectedNativeLineId = !empty($selectedLine['native_bank_line_id']) ? (int) $selectedLine['native_bank_line_id'] : 0;
-	$forceBatchUrl = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile&account_context=' . $navigationAccountId . kreabankNavigationKindParam() . '&line_id=' . (int) $selectedLine['rowid'] . '&force_batch_detect=1', 1);
+	$forceBatchUrl = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile&account_context=' . $navigationAccountId . '&line_id=' . (int) $selectedLine['rowid'] . '&force_batch_detect=1', 1);
 	if ($openDocumentsSearch !== '') {
 		$forceBatchUrl .= '&open_doc_search=' . urlencode((string) $openDocumentsSearch);
 	}

@@ -51,14 +51,17 @@ if (!isModEnabled('kreabank') || !isModEnabled('banque') || !$user->hasRight('ba
 	accessforbidden();
 }
 $accountId = max(0,GETPOSTINT('account_context'));
-$account = kreabankNavigationAccount($accountId);
 $view = GETPOST('view','aZ09');
 $allowedViews = array('accounts','movements','statement','reconcile','bulkmatch','pending','import','feed','history','card','documents','reports','forecast','native_statements','numbering');
 if ($view !== '' && in_array($view,$allowedViews,true)) {
+	$accountId = $view === 'accounts' ? 0 : $accountId;
+	kreabankNavigationAccount($accountId);
 	header('Location: ' . kreabankBankingUrl($view,$accountId));
 	exit;
 }
-$kind = kreabankNavigationKind($account ? ((int) $account->clos === 1 ? 'closed' : ((int) $account->type === 2 ? 'cash' : 'bank')) : 'bank');
+$accountId = 0;
+$account = null;
+$kind = kreabankNavigationKind('bank');
 $report = new KreaBankIntegration($db,$conf->entity);
 $rows = $report->accounts($kind, $accountId);
 llxHeader('', $langs->trans('KreaBankAccounts'));

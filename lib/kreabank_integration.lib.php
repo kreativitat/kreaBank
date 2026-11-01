@@ -8,7 +8,7 @@ function kreabankStatementUrl($accountId = 0, $reference = '')
 {
 	return dol_buildpath('/custom/kreabank/statement.php', 1) . '?mainmenu=bank&leftmenu=kreabank_import'
 		. ((int) $accountId > 0 ? '&account_context=' . (int) $accountId : '')
-		. ($reference !== '' ? '&ref=' . rawurlencode($reference) : '') . (function_exists('kreabankNavigationKindParam') ? kreabankNavigationKindParam() : '');
+		. ($reference !== '' ? '&ref=' . rawurlencode($reference) : '');
 }
 
 function kreabankNativeEntriesUrl($accountId = 0, $matched = false, $reference = '')
@@ -16,7 +16,7 @@ function kreabankNativeEntriesUrl($accountId = 0, $matched = false, $reference =
 	return dol_buildpath('/compta/bank/bankentries_list.php', 1) . '?mainmenu=bank'
 		. ((int) $accountId > 0 ? '&id=' . (int) $accountId : '')
 		. ($matched ? '&kreabank_matched=1' : '')
-		. ($reference !== '' ? '&search_num_releve=' . rawurlencode($reference) : '') . (function_exists('kreabankNavigationKindParam') ? kreabankNavigationKindParam() : '');
+		. ($reference !== '' ? '&search_num_releve=' . rawurlencode($reference) : '');
 }
 
 /** Only a verified native match is presented as reconciled. */

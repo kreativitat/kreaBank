@@ -45,6 +45,30 @@ class ActionsKreaBank extends CommonHookActions
 		return 0;
 	}
 
+	/** Rename the native account-list entry without changing its URL or permissions. */
+	public function menuLeftMenuItems($parameters, &$menuitems, &$action, $hookmanager)
+	{
+		global $langs, $user;
+		$this->results = array();
+		if (($parameters['mainmenu'] ?? '') !== 'bank' || !is_array($menuitems) || !$user->hasRight('banque', 'lire')) {
+			return 0;
+		}
+		$langs->load('kreabank@kreabank');
+		$changed = false;
+		foreach ($menuitems as &$item) {
+			if (parse_url($item['url'] ?? '', PHP_URL_PATH) === '/compta/bank/list.php') {
+				$item['titre'] = $langs->trans('KreaBankAccountList');
+				$changed = true;
+			}
+		}
+		unset($item);
+		if (!$changed) {
+			return 0;
+		}
+		$this->results = $menuitems;
+		return 1;
+	}
+
 	/** Apply the explicit matched-movements view before native pagination/counting. */
 	public function printFieldListWhere($parameters, &$object, &$action, $hookmanager)
 	{
@@ -58,7 +82,7 @@ class ActionsKreaBank extends CommonHookActions
 		if ($page === 'list.php') {
 			$this->resprints = ' AND b.entity=' . (int) $conf->entity;
 		} elseif ($page === 'bankentries_list.php') {
-			$this->resprints = ' AND ba.entity=' . (int) $conf->entity . kreabankAccountKindSql(kreabankNavigationKind());
+			$this->resprints = ' AND ba.entity=' . (int) $conf->entity;
 			if (GETPOSTISSET('account_context')) {
 				$accountId = max(0, GETPOSTINT('account_context'));
 				if ($accountId > 0) {
@@ -67,9 +91,6 @@ class ActionsKreaBank extends CommonHookActions
 				if (strpos((string) $param, 'account_context=') === false) {
 					$param .= '&account_context=' . $accountId;
 				}
-			}
-			if (strpos((string) $param, '&kind=') === false) {
-				$param .= kreabankNavigationKindParam();
 			}
 			if (GETPOSTINT('kreabank_matched')) {
 				require_once __DIR__ . '/kreabankintegration.class.php';
@@ -164,8 +185,9 @@ class ActionsKreaBank extends CommonHookActions
 	public function printCommonFooter($parameters, &$object, &$action, $hookmanager)
 	{
 		$this->resprints = '';
-		// Internal transfers keep the native form and navigation without a workspace header.
-		if (basename($_SERVER['PHP_SELF'] ?? '') === 'transfer.php') {
+		// Standalone native creation and transfer forms do not use workspace navigation.
+		$page = basename($_SERVER['PHP_SELF'] ?? '');
+		if ($page === 'transfer.php' || ($page === 'card.php' && ($action === 'create' || GETPOST('action', 'aZ09') === 'create'))) {
 			return 0;
 		}
 		if (!$this->bankingContextAllowed()) {
