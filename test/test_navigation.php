@@ -51,12 +51,12 @@ $head = array(array('/card?id=45', 'Account', 'bankname'), array('/entries?id=45
 $newHead = kreabankCompleteAccountHead($head, 45);
 checkNavigation($newHead === $head, 'Shared header replaces native tabs without inserting another navigation layer');
 $tabs = kreabankPrepareHead(45);
-checkNavigation(array_column($tabs, 2) === array('accounts', 'movements', 'statement', 'reconcile', 'feed', 'history'), 'Readers have the same six banking destinations');
+checkNavigation(array_column($tabs, 2) === array('accounts', 'movements', 'statement', 'reconcile', 'feed', 'history', 'account'), 'Readers have the banking destinations and selected-account tools');
 $user->allowed[] = 'kreabank.reconciliation.write';
 $user->allowed[] = 'banque.modifier';
-checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('accounts', 'movements', 'statement', 'reconcile', 'feed', 'history'), 'Write actions do not add another navigation layer');
+checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('accounts', 'movements', 'statement', 'reconcile', 'feed', 'history', 'account'), 'Write actions do not add another navigation layer');
 foreach (kreabankPrepareHead(45) as $tab) {
-	checkNavigation((strpos($tab[0], 'account_context=45') !== false || strpos($tab[0], '&id=45') !== false) && strpos($tab[0], 'line_id') === false, 'Carry account without copying a stale line/action');
+	checkNavigation((strpos($tab[0], 'account_context=45') !== false || preg_match('/[?&]id=45(?:&|$)/', $tab[0])) && strpos($tab[0], 'line_id') === false, 'Carry account without copying a stale line/action');
 }
 $user->allowed = array('banque.lire');
 checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('feed'), 'Bank-only readers retain connections access');
@@ -102,19 +102,15 @@ checkNavigation(strpos($html, 'kb-more') === false && strpos($html, '<details') 
 $accountTools = kreabankAccountToolEntries(45);
 checkNavigation(count($accountTools) === 6, 'Retain every selected-account tool');
 foreach ($accountTools as $entry) {
-	checkNavigation(strpos($entry['url'], '/compta/bank/') === 0 && (strpos($entry['url'], 'id=45') !== false || strpos($entry['url'], 'account=45') !== false), 'Native left-menu links keep the selected account and native URL convention');
+	checkNavigation(strpos($entry['url'], '/compta/bank/') === 0 && (strpos($entry['url'], 'id=45') !== false || strpos($entry['url'], 'account=45') !== false), 'Native account-tab links keep the selected account and native URL convention');
 }
 try { kreabankAccountToolEntries(0); throw new RuntimeException('All-accounts tools accepted'); } catch (InvalidArgumentException $e) { $checks++; }
-$menu = array(array('url' => '/native', 'titre' => 'Native item'));
-$originalMenu = $menu;
-$_SERVER['PHP_SELF'] = '/custom/kreabank/accounts.php';
-$navigationRequest = array('account_context' => 45);
-checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'home'), $menu, $action, null) === 0 && $menu === $originalMenu, 'Unrelated native menus remain untouched');
-$user->allowed = array('banque.lire');
-checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menu, $action, null) === 0, 'Account tools require module read permission');
-$user->allowed[] = 'kreabank.reconciliation.read';
-try { $hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menu, $action, null); throw new RuntimeException('Unknown/foreign account tools accepted'); } catch (LogicException $e) { $checks++; }
-checkNavigation(strpos(end($db->queries), 'rowid = 45 AND entity = 7') !== false, 'Left-menu account tools revalidate owner company');
+$html = kreabankBankingHeader('documents', (object) array('id' => 45));
+checkNavigation(strpos($html, 'kb-account-tabs') !== false && preg_match('/aria-current="page"[^>]*href="[^"]*document\.php\?id=45/', $html), 'Account-tool tabs retain the selected account and mark the actual native page');
+checkNavigation(strpos($html, '/admin/automation.php') === false, 'Automatic reconciliation is absent from operational tabs');
+checkNavigation(kreabankBankingUrl('reports', 0) === kreabankWorkspaceUrl('accounts'), 'Clearing the account context returns account-specific pages to the overview');
+function complete_head_from_modules(...$arguments) {}
+checkNavigation(in_array('automation', array_column(kreabankAdminPrepareHead(), 2), true), 'Automatic reconciliation remains available in module configuration');
 $_SERVER['PHP_SELF'] = '/compta/bank/budget.php';
 $navigationRequest = array('id' => 45);
 $queryCount = count($db->queries);

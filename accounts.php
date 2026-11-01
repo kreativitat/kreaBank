@@ -53,7 +53,7 @@ if (!isModEnabled('kreabank') || !isModEnabled('banque') || !$user->hasRight('ba
 $accountId = max(0,GETPOSTINT('account_context'));
 $account = kreabankNavigationAccount($accountId);
 $view = GETPOST('view','aZ09');
-$allowedViews = array('accounts','movements','statement','reconcile','bulkmatch','pending','import','feed','history','card');
+$allowedViews = array('accounts','movements','statement','reconcile','bulkmatch','pending','import','feed','history','card','documents','reports','forecast','native_statements','numbering');
 if ($view !== '' && in_array($view,$allowedViews,true)) {
 	header('Location: ' . kreabankBankingUrl($view,$accountId));
 	exit;

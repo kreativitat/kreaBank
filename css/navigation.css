@@ -50,3 +50,6 @@ body.kreabank-banking.kb-native-bank #id-right > .fiche > .tabs { display:none !
 .kb-help { margin:12px 0; color:#526477; font-size:12px; }
 .kb-help summary { cursor:pointer; }
 .kb-help p { max-width:95ch; line-height:1.5; }
+
+.kb-account-tabs { max-width:100%; overflow-x:auto; }
+.kb-account-tabs a { flex:none; white-space:nowrap; }

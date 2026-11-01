@@ -39,38 +39,6 @@ class ActionsKreaBank extends CommonHookActions
 		$this->db = $db;
 	}
 
-	/** Keep contextual account tools in Dolibarr's native left menu. */
-	public function menuLeftMenuItems($parameters, &$object, &$action, $hookmanager)
-	{
-		global $user, $langs;
-		$this->results = array();
-		if (($parameters['mainmenu'] ?? '') !== 'bank' || !$user->hasRight('banque', 'lire') || !$user->hasRight('kreabank', 'reconciliation', 'read')) {
-			return 0;
-		}
-		require_once __DIR__ . '/../lib/kreabank.lib.php';
-		$path = $_SERVER['PHP_SELF'] ?? '';
-		$page = basename($path);
-		$accountId = 0;
-		if ($this->bankingContextAllowed()) {
-			$accountId = $this->nativeAccountId($page);
-		} elseif (strpos($path, '/custom/kreabank/') !== false && in_array($page, array('accounts.php', 'reconcile.php', 'bulkmatch.php', 'pending.php', 'import.php', 'statement.php', 'feed.php', 'history.php'), true)) {
-			$accountId = max(0, GETPOSTINT('account_context'));
-		}
-		if ($accountId <= 0) {
-			return 0;
-		}
-		$account = kreabankNavigationAccount($accountId);
-		$langs->loadLangs(array('banks', 'kreabank@kreabank'));
-		require_once DOL_DOCUMENT_ROOT . '/core/class/menu.class.php';
-		$tools = new Menu();
-		$tools->add('/compta/bank/card.php?id=' . $accountId . '&mainmenu=bank', dol_escape_htmltag($account->ref) . ' · ' . $langs->trans('KreaBankAccountOptions'), 0, 1, '', 'bank', 'kreabank_account_tools', 1960);
-		foreach (kreabankAccountToolEntries($accountId) as $entry) {
-			$tools->add($entry['url'], $langs->trans($entry['label']), 1, 1, '', 'bank', 'kreabank_account_tools');
-		}
-		$this->results = array_merge((array) $object, $tools->liste);
-		return 1;
-	}
-
 	/** Keep native account tabs unchanged; the workspace header owns navigation. */
 	public function completeTabsHead($parameters, &$object, &$action, $hookmanager)
 	{
@@ -176,7 +144,13 @@ class ActionsKreaBank extends CommonHookActions
 		$page = basename($_SERVER['PHP_SELF'] ?? '');
 		$accountId = $this->nativeAccountId($page);
 		$account = kreabankNavigationAccount($accountId);
-		$view = $page === 'releve.php' ? 'statement' : (in_array($page,array('bankentries_list.php','line.php'),true) ? 'movements' : 'card');
+		$views = array('card.php' => 'card', 'document.php' => 'documents', 'annuel.php' => 'reports', 'treso.php' => 'forecast', 'line.php' => 'movements');
+		$view = $views[$page] ?? 'accounts';
+		if ($page === 'bankentries_list.php') {
+			$view = GETPOST('action', 'aZ09') === 'reconcile' ? 'numbering' : 'movements';
+		} elseif ($page === 'releve.php') {
+			$view = GETPOSTINT('native_statements') || GETPOST('num', 'alphanohtml') !== '' ? 'native_statements' : 'statement';
+		}
 		$redirect = '';
 		if ($page === 'releve.php' && GETPOST('num','alphanohtml') === '' && !GETPOSTINT('native_statements')) {
 			$redirect = 'window.location.replace(' . json_encode(kreabankStatementUrl($accountId), JSON_HEX_TAG|JSON_HEX_AMP) . ');';

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.14.20 — 2026-11-01
+
+- Keep automatic reconciliation accessible only through module configuration;
+  remove its operational left-menu shortcut.
+- Move selected-account tools into account-options tabs and remove their left-menu
+  section. Preserve native bank navigation and company/account ownership checks.
+
 ## 1.14.19 — 2026-11-01
 
 - Remove the duplicate standalone banking heading. Place automatic reconciliation

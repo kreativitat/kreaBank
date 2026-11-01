@@ -59,21 +59,36 @@ function kreabankBankingUrl($page, $accountId = 0)
 	if ($page === 'movements') {
 		return kreabankNativeEntriesUrl($accountId);
 	}
-	if ($page === 'card') {
-		return (int) $accountId > 0 ? dol_buildpath('/compta/bank/card.php', 1) . '?id=' . (int) $accountId : kreabankWorkspaceUrl('accounts');
+	if (in_array($page, array('card', 'documents', 'reports', 'forecast', 'native_statements', 'numbering'), true)) {
+		if ((int) $accountId <= 0) {
+			return kreabankWorkspaceUrl('accounts');
+		}
+		foreach (kreabankAccountToolEntries($accountId) as $entry) {
+			if ($entry['key'] === $page) {
+				return dol_buildpath($entry['url'], 1);
+			}
+		}
 	}
 	return $page === 'statement' ? kreabankStatementUrl($accountId) : kreabankWorkspaceUrl($page, $accountId);
 }
 
-/** Native left-menu routes for an account already validated by the caller. */
+/** Native account-tab routes for an account already validated by the caller. */
 function kreabankAccountToolEntries($accountId)
 {
 	if ((int) $accountId <= 0) {
 		throw new InvalidArgumentException('An owned bank account is required');
 	}
 	$entries = array();
-	foreach (array('card.php?id=' => 'KreaBankAccountDetails', 'document.php?id=' => 'Documents', 'annuel.php?id=' => 'Reports', 'treso.php?id=' => 'KreaBankForecast', 'releve.php?native_statements=1&account=' => 'KreaBankNativeStatements', 'bankentries_list.php?action=reconcile&search_conciliated=0&id=' => 'KreaBankStatementNumbering') as $route => $label) {
-		$entries[] = array('url' => '/compta/bank/' . $route . (int) $accountId . '&mainmenu=bank&leftmenu=kreabank_account_tools', 'label' => $label);
+	$tools = array(
+		'card' => array('card.php?id=', 'KreaBankAccountDetails'),
+		'documents' => array('document.php?id=', 'Documents'),
+		'reports' => array('annuel.php?id=', 'Reports'),
+		'forecast' => array('treso.php?id=', 'KreaBankForecast'),
+		'native_statements' => array('releve.php?native_statements=1&account=', 'KreaBankNativeStatements'),
+		'numbering' => array('bankentries_list.php?action=reconcile&search_conciliated=0&id=', 'KreaBankStatementNumbering'),
+	);
+	foreach ($tools as $key => $tool) {
+		$entries[] = array('key' => $key, 'url' => '/compta/bank/' . $tool[0] . (int) $accountId . '&mainmenu=bank&leftmenu=bank', 'label' => $tool[1]);
 	}
 	return $entries;
 }
@@ -98,12 +113,20 @@ function kreabankBankingHeader($page, $account = null)
 		$html .= '<option value="' . (int) $row->rowid . '"' . ((int) $row->rowid === $accountId ? ' selected' : '') . '>' . dol_escape_htmltag($row->ref . ' — ' . $row->label) . '</option>';
 	}
 	$html .= '</select><button class="button" type="submit">' . $langs->trans('Show') . '</button></form></div>';
-	$active = in_array($page, array('bulkmatch', 'pending'), true) ? 'reconcile' : ($page === 'import' ? 'statement' : ($page === 'card' ? 'accounts' : $page));
+	$accountTools = $accountId > 0 ? kreabankAccountToolEntries($accountId) : array();
+	$active = in_array($page, array_column($accountTools, 'key'), true) ? 'account' : (in_array($page, array('bulkmatch', 'pending'), true) ? 'reconcile' : ($page === 'import' ? 'statement' : ($page === 'card' ? 'accounts' : $page)));
 	$html .= '<nav class="kb-primary" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankBanking')) . '">';
 	foreach (kreabankPrepareHead($accountId) as $tab) {
 		$html .= '<a' . ($active === $tab[2] ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag($tab[0]) . '">' . $tab[1] . '</a>';
 	}
 	$html .= '</nav>';
+	if ($active === 'account') {
+		$html .= '<div class="kb-view-switch kb-account-tabs" role="navigation" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankAccountOptions')) . '">';
+		foreach ($accountTools as $entry) {
+			$html .= '<a' . ($page === $entry['key'] ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag(dol_buildpath($entry['url'], 1)) . '">' . $langs->trans($entry['label']) . '</a>';
+		}
+		$html .= '</div>';
+	}
 	if ($active === 'reconcile') {
 		$html .= '<div class="kb-view-switch" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankReconcile')) . '">';
 		foreach (array('reconcile' => 'KreaBankReviewOneByOne', 'bulkmatch' => 'KreaBankBulkMatch', 'pending' => 'KreaBankPending') as $view => $label) {

@@ -10,13 +10,15 @@ require_once __DIR__ . '/../core/modules/modKreaBank.class.php';
 $conf = (object) array('entity' => 1, 'global' => new stdClass());
 $module = new modKreaBank(null);
 $menus = array_values(array_filter($module->menu, static function ($item) { return $item['leftmenu'] === 'kreabank_automation'; }));
-if (count($menus) !== 1) { throw new RuntimeException('One automatic-reconciliation left-menu entry is required'); }
+if ($menus) { throw new RuntimeException('Automatic reconciliation must not have a left-menu shortcut'); }
+$menus = array_values(array_filter($module->menu, static function ($item) { return $item['leftmenu'] === 'kreabank_feed_readonly'; }));
+if (count($menus) !== 1) { throw new RuntimeException('Bank-only readers retain the feed shortcut'); }
 $perms = $menus[0]['perms'];
 class NavigationPermissionUser
 {
 	public $admin = 1;
 	public $socid = 0;
-	public $allowed = array('banque.modifier', 'kreabank.reconciliation.write');
+	public $allowed = array('banque.lire');
 	public function hasRight(...$path) { return in_array(implode('.', $path), $this->allowed, true); }
 }
 $user = new NavigationPermissionUser();
@@ -24,20 +26,14 @@ $checks = 0;
 function checkMenuPermission($expected)
 {
 	global $perms, $checks;
-	if (verifCond($perms) !== $expected) { throw new RuntimeException('Native menu permission evaluation differs from the page authorization'); }
+	if (verifCond($perms) !== $expected) { throw new RuntimeException('Native feed shortcut must be restricted to bank-only readers'); }
 	$checks++;
 }
 checkMenuPermission(true);
-$user->admin = 0;
-checkMenuPermission(false);
-$user->admin = 1;
-$user->socid = 45;
-checkMenuPermission(false);
-$user->socid = 0;
-$user->allowed = array('kreabank.reconciliation.write');
-checkMenuPermission(false);
-$user->allowed = array('banque.modifier');
+$user->allowed[] = 'kreabank.reconciliation.read';
 checkMenuPermission(false);
 $user->allowed = array();
+checkMenuPermission(false);
+$user->allowed = array('kreabank.reconciliation.read');
 checkMenuPermission(false);
 print "OK: $checks native menu authorization checks\n";

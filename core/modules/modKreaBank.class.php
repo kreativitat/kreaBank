@@ -50,7 +50,7 @@ class modKreaBank extends DolibarrModules
 		$this->descriptionlong = 'ModuleKreaBankDescLong';
 		$this->editor_name = 'Kreativität Works';
 		$this->editor_url = 'http://kreativitat.com';
-		$this->version = '1.14.19';
+		$this->version = '1.14.20';
 		$this->const_name = 'MAIN_MODULE_' . strtoupper($this->name);
 		$this->picto = 'kreaproducts@kreaproducts';
 
@@ -66,7 +66,7 @@ class modKreaBank extends DolibarrModules
 			'theme' => 0,
 			'css' => array('/custom/kreabank/css/navigation.css'),
 			'js' => array(),
-			'hooks' => array('main', 'bankaccountlist', 'bankline', 'banktransfer', 'productcard', 'bankcard', 'banktransactionlist', 'bankaccountstatement', 'bankaccountdocuments', 'bankannualreport', 'banktreso', 'kreabankworkspace'),
+			'hooks' => array('bankaccountlist', 'bankline', 'banktransfer', 'productcard', 'bankcard', 'banktransactionlist', 'bankaccountstatement', 'bankaccountdocuments', 'bankannualreport', 'banktreso', 'kreabankworkspace'),
 			'moduleforexternal' => 0,
 			'websitetemplates' => 0,
 			'captcha' => 0,
@@ -147,17 +147,6 @@ class modKreaBank extends DolibarrModules
 		$r++;
 
 		$this->menu = array();
-
-		$this->menu[] = array(
-			'fk_menu' => 'fk_mainmenu=bank,fk_leftmenu=bank',
-			'type' => 'left', 'titre' => 'KreaBankAutomation', 'mainmenu' => 'bank',
-			'leftmenu' => 'kreabank_automation',
-			'url' => '/custom/kreabank/admin/automation.php?mainmenu=bank&leftmenu=kreabank_automation',
-			'langs' => 'kreabank@kreabank', 'position' => 1951,
-			'enabled' => 'isModEnabled("kreabank") && isModEnabled("banque")',
-			'perms' => '$user->admin && !$user->socid && $user->hasRight("banque", "modifier") && $user->hasRight("kreabank", "reconciliation", "write")',
-			'target' => '', 'user' => 2,
-		);
 
 		// Keep the existing bank-feed entry available to bank readers without workspace rights.
 		$this->menu[] = array(
