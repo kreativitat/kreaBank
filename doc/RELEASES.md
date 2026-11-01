@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.21 — 2026-11-01
+
+- Place the bank-account selector below the banking/company heading, aligned to
+  the left above the workspace tabs.
+
 ## 1.14.20 — 2026-11-01
 
 - Keep automatic reconciliation accessible only through module configuration;

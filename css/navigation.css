@@ -5,7 +5,7 @@ body.kreabank-banking #id-right > .fiche > .tabBar { border-top:0; padding-top:0
 body.kreabank-banking.kb-native-bank #id-right .tabs { display:none !important; }
 body.kreabank-banking.kb-native-bank #id-right > .fiche > .tabs { display:none !important; }
 .kb-header { position:relative; margin:0 0 26px; color:#243649; }
-.kb-context { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; padding:4px 0 18px; }
+.kb-context { display:flex; flex-direction:column; align-items:flex-start; gap:12px; padding:4px 0 18px; }
 .kb-brand { display:flex; align-items:center; gap:10px; min-width:0; }
 .kb-brand > strong { font-size:24px; letter-spacing:-.5px; }
 .kb-brand > .fas { color:#4b7561; font-size:23px; }
