@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+require_once __DIR__ . '/kreabank_integration.lib.php';
+
 /** Build a workspace URL without carrying actions, line IDs or pagination across pages. */
 function kreabankWorkspaceUrl($page, $accountId = 0)
 {
-	$pages = array('reconcile', 'bulkmatch', 'pending', 'import', 'feed', 'history');
+	$pages = array('reconcile', 'bulkmatch', 'pending', 'import', 'feed', 'history', 'statement');
 	if (!in_array($page, $pages, true)) {
 		throw new InvalidArgumentException('Unknown bank workspace page');
 	}
@@ -96,7 +98,7 @@ function kreabankPrintWorkspaceNavigation($page, $account = null)
 		$head = kreabankCompleteAccountHead(bank_prepare_head($account), $accountId);
 		print dol_get_fiche_head($head, 'kreabank', $langs->trans('BankAccount'), 1, 'bank');
 	}
-	$active = in_array($page, array('bulkmatch', 'pending'), true) ? 'reconcile' : $page;
+	$active = $page === 'statement' ? 'import' : (in_array($page, array('bulkmatch', 'pending'), true) ? 'reconcile' : $page);
 	print '<nav class="kreabank-workspace-nav" aria-label="KreaBank">';
 	foreach (kreabankPrepareHead($accountId) as $tab) {
 		print '<a' . ($tab[2] === $active ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag($tab[0]) . '">' . $tab[1] . '</a>';
@@ -109,6 +111,7 @@ function kreabankPrintWorkspaceNavigation($page, $account = null)
 		}
 		print '</nav>';
 	}
+	print kreabankIntegrationPanel($accountId);
 	print '<p class="opacitymedium kreabank-workspace-help">' . $langs->trans('KreaBankWorkspaceHelp_' . $page) . '</p>';
 	// Callers already close this fiche at the end of their page.
 	print dol_get_fiche_head(array(), '', '', -1);

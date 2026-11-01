@@ -47,6 +47,7 @@ if (!$res) {
 require_once DOL_DOCUMENT_ROOT . '/core/lib/files.lib.php';
 require_once __DIR__ . '/lib/kreabank.lib.php';
 require_once __DIR__ . '/class/KreaBankService.class.php';
+require_once __DIR__ . '/class/kreabankintegration.class.php';
 
 /** @var DoliDB $db */
 /** @var User $user */
@@ -92,6 +93,7 @@ $action = GETPOST('action', 'aZ09');
 $navigationAccountId = max(0, GETPOSTINT('account_context'));
 $navigationAccount = kreabankNavigationAccount($navigationAccountId);
 $service = new KreaBankService($db, $user, $langs);
+$integration = new KreaBankIntegration($db, $conf->entity);
 $importResult = null;
 $analysis = null;
 $lastImportedBankAccountId = 0;
@@ -310,8 +312,11 @@ if ($action === 'open_native_statement') {
 			throw new Exception($langs->trans('KreaBankInvalidInput'));
 		}
 
-		$service->ensureNativeStatementLines($openBankAccountId, $openStatementRef);
-		$nativeStatementUrl = dol_buildpath('/compta/bank/releve.php?num=' . rawurlencode($openStatementRef) . '&account=' . $openBankAccountId, 1);
+		$statement = $integration->statement($openBankAccountId, $openStatementRef);
+		if (!$statement) {
+			throw new Exception($langs->trans('KreaBankImportDeleteNotFound'));
+		}
+		$nativeStatementUrl = kreabankStatementUrl($openBankAccountId, $openStatementRef);
 		header('Location: ' . $nativeStatementUrl);
 		exit;
 	} catch (Exception $e) {
@@ -328,34 +333,7 @@ if ($action === 'download_statement_csv') {
 		if ($downloadBankAccountId <= 0 || $downloadStatementRef === '') {
 			throw new Exception($langs->trans('KreaBankInvalidInput'));
 		}
-		$bankAccountEntityList = getEntity('bank_account');
-		if ($bankAccountEntityList === '' || $bankAccountEntityList === null) {
-			$bankAccountEntityList = (string) ((int) $conf->entity);
-		}
-		// Compatibility path: legacy staged statements are materialized into native rows on demand.
-		$service->ensureNativeStatementLines($downloadBankAccountId, $downloadStatementRef);
-
-		$sqlLines = 'SELECT b.rowid,';
-		$sqlLines .= ' COALESCE(m.operation_date, b.dateo) as operation_date,';
-		$sqlLines .= ' COALESCE(m.value_date, b.datev) as value_date,';
-		$sqlLines .= ' CASE';
-		$sqlLines .= ' WHEN m.direction < 0 THEN -ABS(COALESCE(m.amount, b.amount))';
-		$sqlLines .= ' WHEN m.direction > 0 THEN ABS(COALESCE(m.amount, b.amount))';
-		$sqlLines .= ' ELSE COALESCE(m.amount, b.amount)';
-		$sqlLines .= ' END as amount,';
-		$sqlLines .= " COALESCE(m.currency, ba.currency_code, 'EUR') as currency,";
-		$sqlLines .= ' m.running_balance, m.payment_reference, m.bank_reference,';
-		$sqlLines .= ' m.counterparty_name, m.counterparty_iban, COALESCE(m.description, b.label) as description,';
-		$sqlLines .= ' CASE WHEN (m.status = 2 OR b.rappro = 1) THEN 2 ELSE COALESCE(m.status, 0) END as status,';
-		$sqlLines .= ' 0 as is_duplicate';
-		$sqlLines .= ' FROM ' . $db->prefix() . 'bank as b';
-		$sqlLines .= ' INNER JOIN ' . $db->prefix() . 'bank_account as ba ON ba.rowid = b.fk_account';
-		$sqlLines .= ' LEFT JOIN ' . $db->prefix() . 'kreabank_bankmeta as m ON m.entity = ' . ((int) $conf->entity) . ' AND m.fk_bank_line = b.rowid';
-		$sqlLines .= ' WHERE ba.entity IN (' . $bankAccountEntityList . ')';
-		$sqlLines .= ' AND b.fk_account = ' . ((int) $downloadBankAccountId);
-		$sqlLines .= " AND b.num_releve = '" . $db->escape($downloadStatementRef) . "'";
-		$sqlLines .= " AND (m.rowid IS NOT NULL OR b.note LIKE 'KreaBank import %' OR b.note LIKE 'KreaBank staged import %')";
-		$sqlLines .= ' ORDER BY COALESCE(m.operation_date, b.dateo) ASC, b.rowid ASC';
+		$sqlLines = $integration->linesSql($downloadBankAccountId, $downloadStatementRef) . ' ORDER BY operation_date, line_rank, rowid';
 		$resLines = $db->query($sqlLines);
 		if (!$resLines) {
 			throw new Exception($db->lasterror());
@@ -881,198 +859,45 @@ $historyAmountTotalFilter = $parseNumericFilter($historySearchAmountTotal, false
 $historyRows = array();
 $historyTotal = 0;
 $historyPagerNum = 0;
-$historySignedAmountSql = 'CASE';
-$historySignedAmountSql .= ' WHEN m.direction < 0 THEN -ABS(COALESCE(m.amount, b.amount))';
-$historySignedAmountSql .= ' WHEN m.direction > 0 THEN ABS(COALESCE(m.amount, b.amount))';
-$historySignedAmountSql .= ' ELSE COALESCE(m.amount, b.amount)';
-$historySignedAmountSql .= ' END';
-$historyBankAccountEntityList = getEntity('bank_account');
-if ($historyBankAccountEntityList === '' || $historyBankAccountEntityList === null) {
-	$historyBankAccountEntityList = (string) ((int) $conf->entity);
-}
-
-$sqlHistoryFrom = ' FROM ' . $db->prefix() . 'bank as b';
-$sqlHistoryFrom .= ' INNER JOIN ' . $db->prefix() . 'bank_account as ba ON ba.rowid = b.fk_account';
-$sqlHistoryFrom .= ' LEFT JOIN ' . $db->prefix() . 'kreabank_bankmeta as m ON m.entity = ' . ((int) $conf->entity) . ' AND m.fk_bank_line = b.rowid';
-$sqlHistoryWhere = ' WHERE ba.entity IN (' . $historyBankAccountEntityList . ')';
-if ($navigationAccountId > 0) {
-	$sqlHistoryWhere .= ' AND ba.rowid = ' . $navigationAccountId;
-}
-$sqlHistoryWhere .= " AND b.num_releve IS NOT NULL AND b.num_releve <> ''";
-$sqlHistoryWhere .= " AND (m.rowid IS NOT NULL OR b.note LIKE 'KreaBank import %' OR b.note LIKE 'KreaBank staged import %')";
-if ($historySearchStatementRef !== '') {
-	$sqlHistoryWhere .= " AND b.num_releve LIKE '%" . $db->escape($historySearchStatementRef) . "%'";
+$sqlHistoryFrom = ' FROM (' . $integration->statementsSql($navigationAccountId) . ') h';
+$sqlHistoryWhere = ' WHERE 1=1';
+foreach (array('statement_ref' => $historySearchStatementRef, 'source_type' => $historySearchSourceType, 'source_file' => $historySearchSourceFile) as $field => $value) {
+	if ($value !== '') {
+		$sqlHistoryWhere .= " AND h." . $field . " LIKE '%" . $db->escape($value) . "%'";
+	}
 }
 if ($historySearchBankAccount !== '') {
-	$escapedBankSearch = $db->escape($historySearchBankAccount);
-	$sqlHistoryWhere .= " AND (ba.label LIKE '%" . $escapedBankSearch . "%' OR ba.ref LIKE '%" . $escapedBankSearch . "%')";
+	$value = $db->escape($historySearchBankAccount);
+	$sqlHistoryWhere .= " AND (h.bank_account_label LIKE '%" . $value . "%' OR h.bank_account_ref LIKE '%" . $value . "%')";
 }
-if ($historySearchSourceType !== '') {
-	$sqlHistoryWhere .= " AND m.source_type LIKE '%" . $db->escape($historySearchSourceType) . "%'";
+foreach (array(
+	array('last_operation_date', '>=', $historyLastOpFromSql), array('last_operation_date', '<=', $historyLastOpToSql),
+	array('imported_at', '>=', $historyImportedAtFromSql), array('imported_at', '<=', $historyImportedAtToSql),
+) as $filter) {
+	if ($filter[2] !== '') {
+		$sqlHistoryWhere .= " AND h." . $filter[0] . ' ' . $filter[1] . " '" . $db->escape($filter[2] . ($filter[0] === 'imported_at' ? ($filter[1] === '<=' ? ' 23:59:59' : ' 00:00:00') : '')) . "'";
+	}
 }
-if ($historySearchSourceFile !== '') {
-	$sqlHistoryWhere .= " AND m.source_file LIKE '%" . $db->escape($historySearchSourceFile) . "%'";
+foreach (array('imported_lines' => $historyImportedLinesFilter, 'amount_total' => $historyAmountTotalFilter) as $field => $filter) {
+	if (is_array($filter)) {
+		$sqlHistoryWhere .= ' AND h.' . $field . ' ' . $filter['op'] . ' ' . (float) $filter['value'];
+	}
 }
-if ($historyImportedAtFromSql !== '') {
-	$sqlHistoryWhere .= " AND m.datec >= '" . $db->escape($historyImportedAtFromSql) . " 00:00:00'";
-}
-if ($historyImportedAtToSql !== '') {
-	$sqlHistoryWhere .= " AND m.datec <= '" . $db->escape($historyImportedAtToSql) . " 23:59:59'";
-}
-$sqlHistoryGroupBy = ' GROUP BY b.fk_account, ba.ref, ba.label, b.num_releve';
-$sqlHistoryHaving = ' HAVING 1=1';
-if ($historyLastOpFromSql !== '') {
-	$sqlHistoryHaving .= " AND MAX(COALESCE(m.operation_date, b.dateo)) >= '" . $db->escape($historyLastOpFromSql) . "'";
-}
-if ($historyLastOpToSql !== '') {
-	$sqlHistoryHaving .= " AND MAX(COALESCE(m.operation_date, b.dateo)) <= '" . $db->escape($historyLastOpToSql) . "'";
-}
-if (is_array($historyImportedLinesFilter)) {
-	$sqlHistoryHaving .= ' AND COUNT(b.rowid) ' . $historyImportedLinesFilter['op'] . ' ' . ((int) $historyImportedLinesFilter['value']);
-}
-if (is_array($historyAmountTotalFilter)) {
-	$sqlHistoryHaving .= ' AND COALESCE(SUM(' . $historySignedAmountSql . '), 0) ' . $historyAmountTotalFilter['op'] . ' ' . ((float) $historyAmountTotalFilter['value']);
-}
-
-$sqlHistoryCount = 'SELECT COUNT(*) as nb FROM (';
-$sqlHistoryCount .= 'SELECT b.num_releve';
-$sqlHistoryCount .= $sqlHistoryFrom;
-$sqlHistoryCount .= $sqlHistoryWhere;
-$sqlHistoryCount .= $sqlHistoryGroupBy;
-$sqlHistoryCount .= $sqlHistoryHaving;
-$sqlHistoryCount .= ') as t';
-$resHistoryCount = $db->query($sqlHistoryCount);
-if ($resHistoryCount && ($objCount = $db->fetch_object($resHistoryCount))) {
-	$historyTotal = (int) $objCount->nb;
-}
-if ($historyPage > 0 && $historyOffset >= $historyTotal) {
+$resHistoryCount = $integration->query('SELECT COUNT(*) nb' . $sqlHistoryFrom . $sqlHistoryWhere);
+$historyTotal = (int) $db->fetch_object($resHistoryCount)->nb;
+if ($historyOffset >= $historyTotal) {
 	$historyPage = 0;
 	$historyOffset = 0;
 }
-
-$sqlHistoryBase = 'SELECT b.fk_account as bank_account_id, ba.ref as bank_account_ref, ba.label as bank_account_label,';
-$sqlHistoryBase .= ' b.num_releve as statement_ref,';
-$sqlHistoryBase .= ' MIN(COALESCE(m.operation_date, b.dateo)) as first_operation_date,';
-$sqlHistoryBase .= ' MAX(COALESCE(m.operation_date, b.dateo)) as last_operation_date,';
-$sqlHistoryBase .= ' COUNT(b.rowid) as imported_lines, COALESCE(SUM(' . $historySignedAmountSql . '), 0) as amount_total,';
-$sqlHistoryBase .= ' COALESCE(MAX(m.source_type), "") as source_type, COALESCE(MAX(m.source_file), "") as source_file,';
-$sqlHistoryBase .= ' MAX(m.datec) as imported_at';
-$sqlHistoryBase .= $sqlHistoryFrom;
-$sqlHistoryBase .= $sqlHistoryWhere;
-$sqlHistoryBase .= $sqlHistoryGroupBy;
-$sqlHistoryBase .= $sqlHistoryHaving;
-
-$sqlHistory = 'SELECT h.* FROM (' . $sqlHistoryBase . ') as h';
-$sqlHistory .= ' ORDER BY ' . $historySortableFields[$historySortField] . ' ' . $historySortOrder;
-$sqlHistory .= $db->plimit($historyLimit, $historyOffset);
-$resHistory = $db->query($sqlHistory);
-if ($resHistory) {
-	while ($objHistory = $db->fetch_object($resHistory)) {
-		$historyRows[] = $objHistory;
-	}
+$resHistory = $integration->query('SELECT h.*' . $sqlHistoryFrom . $sqlHistoryWhere
+	. ' ORDER BY ' . $historySortableFields[$historySortField] . ' ' . $historySortOrder . ', h.bank_account_id, h.statement_ref'
+	. $db->plimit($historyLimit, $historyOffset));
+while ($objHistory = $db->fetch_object($resHistory)) {
+	$historyRows[] = $objHistory;
 }
-$historyCurrentPageCount = count($historyRows);
-$historyPagerNum = $historyCurrentPageCount;
-if ($historyLimit > 0 && ($historyOffset + $historyCurrentPageCount) < $historyTotal) {
+$historyPagerNum = count($historyRows);
+if ($historyOffset + $historyPagerNum < $historyTotal) {
 	$historyPagerNum = $historyLimit + 1;
-}
-
-if ($historyTotal <= 0) {
-	// Backward compatibility (1.11.x): load import history from staged statement tables when native/meta history is empty.
-	$statementTableName = $db->prefix() . 'kreabank_statement';
-	$lineTableName = $db->prefix() . 'kreabank_statement_line';
-	$resStatementTable = $db->query("SHOW TABLES LIKE '" . $db->escape($statementTableName) . "'");
-	$resLineTable = $db->query("SHOW TABLES LIKE '" . $db->escape($lineTableName) . "'");
-	$hasStatementTables = ($resStatementTable && $db->num_rows($resStatementTable) > 0 && $resLineTable && $db->num_rows($resLineTable) > 0);
-
-	if ($hasStatementTables) {
-		$sqlHistoryLegacyFrom = ' FROM ' . $statementTableName . ' as s';
-		$sqlHistoryLegacyFrom .= ' INNER JOIN ' . $db->prefix() . 'bank_account as ba ON ba.rowid = s.bank_account_id';
-		$sqlHistoryLegacyFrom .= ' LEFT JOIN ' . $lineTableName . ' as l ON l.fk_statement = s.rowid AND l.entity = ' . ((int) $conf->entity);
-		$sqlHistoryLegacyWhere = ' WHERE s.entity = ' . ((int) $conf->entity);
-		if ($navigationAccountId > 0) {
-			$sqlHistoryLegacyWhere .= ' AND ba.rowid = ' . $navigationAccountId;
-		}
-		$sqlHistoryLegacyWhere .= ' AND ba.entity IN (' . $historyBankAccountEntityList . ')';
-		$sqlHistoryLegacyWhere .= " AND s.ref IS NOT NULL AND s.ref <> ''";
-		if ($historySearchStatementRef !== '') {
-			$sqlHistoryLegacyWhere .= " AND s.ref LIKE '%" . $db->escape($historySearchStatementRef) . "%'";
-		}
-		if ($historySearchBankAccount !== '') {
-			$escapedBankSearch = $db->escape($historySearchBankAccount);
-			$sqlHistoryLegacyWhere .= " AND (ba.label LIKE '%" . $escapedBankSearch . "%' OR ba.ref LIKE '%" . $escapedBankSearch . "%')";
-		}
-		if ($historySearchSourceType !== '') {
-			$sqlHistoryLegacyWhere .= " AND s.source_type LIKE '%" . $db->escape($historySearchSourceType) . "%'";
-		}
-		if ($historySearchSourceFile !== '') {
-			$sqlHistoryLegacyWhere .= " AND s.filename LIKE '%" . $db->escape($historySearchSourceFile) . "%'";
-		}
-		if ($historyImportedAtFromSql !== '') {
-			$sqlHistoryLegacyWhere .= " AND s.date_import >= '" . $db->escape($historyImportedAtFromSql) . " 00:00:00'";
-		}
-		if ($historyImportedAtToSql !== '') {
-			$sqlHistoryLegacyWhere .= " AND s.date_import <= '" . $db->escape($historyImportedAtToSql) . " 23:59:59'";
-		}
-
-		$sqlHistoryLegacyGroupBy = ' GROUP BY s.rowid, s.bank_account_id, ba.ref, ba.label, s.ref, s.source_type, s.filename, s.date_import';
-		$sqlHistoryLegacyHaving = ' HAVING 1=1';
-		if ($historyLastOpFromSql !== '') {
-			$sqlHistoryLegacyHaving .= " AND MAX(l.operation_date) >= '" . $db->escape($historyLastOpFromSql) . "'";
-		}
-		if ($historyLastOpToSql !== '') {
-			$sqlHistoryLegacyHaving .= " AND MAX(l.operation_date) <= '" . $db->escape($historyLastOpToSql) . "'";
-		}
-		if (is_array($historyImportedLinesFilter)) {
-			$sqlHistoryLegacyHaving .= ' AND COUNT(l.rowid) ' . $historyImportedLinesFilter['op'] . ' ' . ((int) $historyImportedLinesFilter['value']);
-		}
-		if (is_array($historyAmountTotalFilter)) {
-			$sqlHistoryLegacyHaving .= ' AND COALESCE(SUM(l.amount), 0) ' . $historyAmountTotalFilter['op'] . ' ' . ((float) $historyAmountTotalFilter['value']);
-		}
-
-		$sqlHistoryLegacyCount = 'SELECT COUNT(*) as nb FROM (';
-		$sqlHistoryLegacyCount .= 'SELECT s.rowid';
-		$sqlHistoryLegacyCount .= $sqlHistoryLegacyFrom;
-		$sqlHistoryLegacyCount .= $sqlHistoryLegacyWhere;
-		$sqlHistoryLegacyCount .= $sqlHistoryLegacyGroupBy;
-		$sqlHistoryLegacyCount .= $sqlHistoryLegacyHaving;
-		$sqlHistoryLegacyCount .= ') as t';
-		$resHistoryLegacyCount = $db->query($sqlHistoryLegacyCount);
-		$historyTotal = 0;
-		if ($resHistoryLegacyCount && ($objHistoryLegacyCount = $db->fetch_object($resHistoryLegacyCount))) {
-			$historyTotal = (int) $objHistoryLegacyCount->nb;
-		}
-		if ($historyPage > 0 && $historyOffset >= $historyTotal) {
-			$historyPage = 0;
-			$historyOffset = 0;
-		}
-
-		$historyRows = array();
-		$sqlHistoryLegacyBase = 'SELECT s.bank_account_id as bank_account_id, ba.ref as bank_account_ref, ba.label as bank_account_label,';
-		$sqlHistoryLegacyBase .= ' s.ref as statement_ref, MIN(l.operation_date) as first_operation_date, MAX(l.operation_date) as last_operation_date,';
-		$sqlHistoryLegacyBase .= ' COUNT(l.rowid) as imported_lines, COALESCE(SUM(l.amount), 0) as amount_total,';
-		$sqlHistoryLegacyBase .= ' s.source_type as source_type, s.filename as source_file, s.date_import as imported_at';
-		$sqlHistoryLegacyBase .= $sqlHistoryLegacyFrom;
-		$sqlHistoryLegacyBase .= $sqlHistoryLegacyWhere;
-		$sqlHistoryLegacyBase .= $sqlHistoryLegacyGroupBy;
-		$sqlHistoryLegacyBase .= $sqlHistoryLegacyHaving;
-
-		$sqlHistoryLegacy = 'SELECT h.* FROM (' . $sqlHistoryLegacyBase . ') as h';
-		$sqlHistoryLegacy .= ' ORDER BY ' . $historySortableFields[$historySortField] . ' ' . $historySortOrder;
-		$sqlHistoryLegacy .= $db->plimit($historyLimit, $historyOffset);
-		$resHistoryLegacy = $db->query($sqlHistoryLegacy);
-		if ($resHistoryLegacy) {
-			while ($objHistoryLegacy = $db->fetch_object($resHistoryLegacy)) {
-				$historyRows[] = $objHistoryLegacy;
-			}
-		}
-
-		$historyCurrentPageCount = count($historyRows);
-		$historyPagerNum = $historyCurrentPageCount;
-		if ($historyLimit > 0 && ($historyOffset + $historyCurrentPageCount) < $historyTotal) {
-			$historyPagerNum = $historyLimit + 1;
-		}
-	}
 }
 
 llxHeader('', $langs->trans('KreaBankImport'), '', '', 0, 0, '', '', '', 'mod-kreabank page-import');
@@ -1333,16 +1158,7 @@ if (is_array($importResult)) {
 	print '<tr class="liste_titre"><th colspan="2">' . $langs->trans('KreaBankImportDone') . '</th></tr>';
 	print '<tr class="oddeven"><td>' . $langs->trans('Ref') . '</td><td>';
 	if ($canOpenImportSummaryStatement) {
-		print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" target="_blank" style="display:inline-block;margin:0">';
-		print kreabankNavigationHiddenFields($navigationAccountId);
-		print '<input type="hidden" name="token" value="' . newToken() . '">';
-		print '<input type="hidden" name="action" value="open_native_statement">';
-		print '<input type="hidden" name="open_bank_account_id" value="' . $lastImportedBankAccountId . '">';
-		print '<input type="hidden" name="open_statement_ref" value="' . dol_escape_htmltag($importSummaryStatementRef) . '">';
-		print '<input type="hidden" name="mainmenu" value="bank">';
-		print '<input type="hidden" name="leftmenu" value="kreabank_import">';
-		print '<button type="submit" class="noborderimp" style="padding:0;margin:0;color:#1f4e99;text-decoration:underline;cursor:pointer">' . dol_escape_htmltag($importSummaryStatementRef) . '</button>';
-		print '</form>';
+		print '<a href="' . dol_escape_htmltag(kreabankStatementUrl($lastImportedBankAccountId, $importSummaryStatementRef)) . '">' . dol_escape_htmltag($importSummaryStatementRef) . '</a>';
 	} else {
 		print dol_escape_htmltag($importSummaryStatementRef);
 	}
@@ -1566,23 +1382,18 @@ if ($showHistorySection) {
 			print '<tr class="oddeven">';
 			print '<td>';
 			if ($canOpenStatement) {
-				print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" target="_blank" style="display:inline-block;margin:0">';
-				print kreabankNavigationHiddenFields($navigationAccountId);
-				print '<input type="hidden" name="token" value="' . newToken() . '">';
-				print '<input type="hidden" name="action" value="open_native_statement">';
-				print '<input type="hidden" name="open_bank_account_id" value="' . $accountId . '">';
-				print '<input type="hidden" name="open_statement_ref" value="' . dol_escape_htmltag($statementRef) . '">';
-				print '<input type="hidden" name="mainmenu" value="bank">';
-				print '<input type="hidden" name="leftmenu" value="kreabank_import">';
-				print '<button type="submit" class="noborderimp" style="padding:0;margin:0;color:#1f4e99;text-decoration:underline;cursor:pointer">' . dol_escape_htmltag($statementRef) . '</button>';
-				print '</form>';
+				print '<a href="' . dol_escape_htmltag(kreabankStatementUrl($accountId, $statementRef)) . '">' . dol_escape_htmltag($statementRef) . '</a>';
 			} else {
 				print dol_escape_htmltag($statementRef);
 			}
 			print '</td>';
 			print '<td><a target="_blank" rel="noopener" href="' . $accountUrl . '">' . dol_escape_htmltag(trim((string) $row->bank_account_label . ' ' . (string) $row->bank_account_ref)) . '</a></td>';
 			print '<td class="center">' . ($lastOpDateTs > 0 ? dol_print_date($lastOpDateTs, 'day') : '-') . '</td>';
-			print '<td class="right">' . ((int) $row->imported_lines) . '</td>';
+			print '<td class="right">' . ((int) $row->imported_lines) . '<br><small>' . $langs->trans('KreaBankNativeLinkedCount', (int) $row->native_lines, (int) $row->reconciled_lines) . '</small>';
+			if ((int) $row->issue_lines > 0) {
+				print '<br><strong class="warning">' . $langs->trans('KreaBankLinkIssues', (int) $row->issue_lines) . '</strong>';
+			}
+			print '</td>';
 			print '<td class="right">' . price((float) $row->amount_total) . '</td>';
 			print '<td>' . dol_escape_htmltag(strtoupper((string) $row->source_type)) . '</td>';
 			print '<td>' . dol_escape_htmltag((string) $row->source_file) . '</td>';

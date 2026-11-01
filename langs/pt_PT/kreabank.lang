@@ -449,3 +449,23 @@ KreaBankBulkMatchScanFailed=Não foi possível carregar as correspondências. Te
 KreaBankBulkMatchContextChanged=A empresa, a conta ou as linhas pendentes mudaram. Atualize esta página para continuar.
 KreaBankBulkMatchScanProgress=A analisar correspondências: %s / %s linhas (%s%%).
 KreaBankBulkMatchNoSuggestions=Não foram encontradas sugestões de correspondência.
+
+# Connected bank statements and ledger
+KreaBankConnectedBanking=Extratos e movimentos bancários
+KreaBankLedgerExplanation=As importações são os dados do extrato bancário. Só os movimentos registados no Dolibarr alteram o saldo da conta. A reconciliação liga os dois, reutilizando um movimento existente sempre que possível.
+KreaBankIntegrationCounts=%s linhas importadas · %s movimentos nativos ligados · %s reconciliações verificadas
+KreaBankNativeBalance=Saldo da conta no Dolibarr
+KreaBankImportedStatements=Extratos importados
+KreaBankNativeMovements=Movimentos do Dolibarr
+KreaBankMatchedMovements=Movimentos reconciliados com o KreaBank
+KreaBankNativeStatements=Extratos numerados do Dolibarr
+KreaBankNativeLinkedCount=%s nativos · %s reconciliados
+KreaBankLinkIssues=%s ligações precisam de revisão
+KreaBankLinkNeedsReview=Ligação a rever
+KreaBankNativeRegistered=Registado no Dolibarr
+KreaBankNativeMissing=O movimento ligado não existe nesta conta
+KreaBankAwaitingReconciliation=Aguarda reconciliação
+KreaBankStatementProgress=%s linhas importadas · %s movimentos ligados ao Dolibarr · %s reconciliações verificadas
+KreaBankPostingDateExplanation=O movimento nativo mantém a data original. Reconciliá-lo hoje não cria outro movimento nem altera essa data. Reveja os avisos antes de confiar nas ligações antigas.
+KreaBankWorkspaceHelp_statement=Abra um extrato para ver cada linha importada e o movimento correspondente no Dolibarr. Consultar ou descarregar um extrato nunca cria movimentos bancários.
+KreaBankAllNativeMovements=Todos os movimentos do Dolibarr

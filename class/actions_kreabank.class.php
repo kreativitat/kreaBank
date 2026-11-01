@@ -51,6 +51,71 @@ class ActionsKreaBank extends CommonHookActions
 		return 1;
 	}
 
+	/** Apply the explicit matched-movements view before native pagination/counting. */
+	public function printFieldListWhere($parameters, &$object, &$action, $hookmanager)
+	{
+		global $user, $conf;
+		$this->resprints = '';
+		if (basename($_SERVER['PHP_SELF'] ?? '') !== 'bankentries_list.php' || !GETPOSTINT('kreabank_matched')
+			|| !$user->hasRight('banque', 'lire') || !$user->hasRight('kreabank', 'reconciliation', 'read')) {
+			return 0;
+		}
+		require_once __DIR__ . '/kreabankintegration.class.php';
+		$report = new KreaBankIntegration($this->db, $conf->entity);
+		$this->resprints = $report->matchedWhereSql();
+		// Native links for sort/page/filter are built from this variable after the SQL hook.
+		global $param;
+		$param .= '&kreabank_matched=1';
+		return 0;
+	}
+
+	/** Preserve the optional native-list filter when submitting the search form. */
+	public function printFieldPreListTitle($parameters, &$object, &$action, $hookmanager)
+	{
+		$this->resprints = '';
+		if (basename($_SERVER['PHP_SELF'] ?? '') === 'bankentries_list.php' && GETPOSTINT('kreabank_matched')) {
+			$this->resprints = '<input type="hidden" name="kreabank_matched" value="1">';
+		}
+		return 0;
+	}
+
+	/** Add the same read-only account context to native bank screens, without core patches. */
+	public function printCommonFooter($parameters, &$object, &$action, $hookmanager)
+	{
+		global $user, $db, $conf;
+		$this->resprints = '';
+		$page = basename($_SERVER['PHP_SELF'] ?? '');
+		if (!in_array($page, array('releve.php', 'bankentries_list.php', 'card.php'), true)
+			|| strpos($_SERVER['PHP_SELF'] ?? '', '/compta/bank/') === false
+			|| !$user->hasRight('banque', 'lire') || !$user->hasRight('kreabank', 'reconciliation', 'read')) {
+			return 0;
+		}
+		require_once __DIR__ . '/../lib/kreabank.lib.php';
+		$accountId = GETPOSTINT('account') ?: (GETPOSTINT('id') ?: GETPOSTINT('search_account'));
+		global $ref;
+		if (!$accountId && !empty($ref)) {
+			$r = $db->query('SELECT rowid FROM ' . $db->prefix() . 'bank_account WHERE entity=' . (int) $conf->entity . " AND ref='" . $db->escape($ref) . "'");
+			$row = $r ? $db->fetch_object($r) : null;
+			$accountId = $row ? (int) $row->rowid : 0;
+		}
+		if ($accountId > 0) {
+			// Shared native accounts may be visible, but module evidence belongs to its owner company.
+			$r = $db->query('SELECT rowid FROM ' . $db->prefix() . 'bank_account WHERE entity=' . (int) $conf->entity . ' AND rowid=' . $accountId);
+			if (!$r || !$db->fetch_object($r)) {
+				return 0;
+			}
+		}
+		try {
+			$html = kreabankIntegrationPanel($accountId, $page === 'releve.php' ? GETPOST('num', 'alphanohtml') : '');
+		} catch (Exception $e) {
+			dol_syslog('KreaBank native integration report unavailable', LOG_ERR);
+			return 0;
+		}
+		$this->resprints = '<div id="kreabank-native-context">' . $html . '</div><script nonce="' . dol_escape_htmltag(getNonce()) . '">'
+			. '(function(){var panel=document.getElementById("kreabank-native-context"),target=document.getElementById("id-right");if(panel&&target){target.insertBefore(panel,target.firstChild);}})();</script>';
+		return 0;
+	}
+
 	/**
 	 * Render module separator on native product card.
 	 *

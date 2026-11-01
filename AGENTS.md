@@ -88,3 +88,10 @@
 - Release the PHP session lock during read-only matching. Check session identity, generation and cursor before saving progress; never overwrite a newer company/account/page scan.
 - Cache presentation only for the displayed page. Confirmation always recomputes the existing shared safe suggestion and uses the native reconciliation service.
 - `php test/test_bulk_scan.php` and `node test/test_bulkmatch_client.cjs` exercise bounded progress and browser request behavior without business data. See `doc/BULK_REVIEW.md`.
+
+## Connected bank views
+
+- `KreaBankIntegration` is a read-only projection of staging evidence and native ledger links. Never materialize imported lines merely to view/export a statement. `statement.php` supports bank/module read permissions; importing retains write permissions.
+- Statements list both staging and legacy native imports without double-counting mapped native lines. Native balance always comes from native bank movements, never staging totals.
+- Native footer/list hooks provide account-aware cross-links and an optional `kreabank_matched` filter. Keep native posting dates and owned-company boundaries. Flag historical missing/amount/status/reference discrepancies for review; never guess a replacement financial record.
+- `php test/test_bank_integration_database.php` extends the automatic reconciliation suite on its same disposable local database; see `doc/BANK_INTEGRATION.md`.

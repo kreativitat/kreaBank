@@ -449,3 +449,23 @@ KreaBankBulkMatchScanFailed=Could not load suggestions. Retry, or refresh the pa
 KreaBankBulkMatchContextChanged=The company, account or pending queue changed. Refresh this page to continue.
 KreaBankBulkMatchScanProgress=Checking suggestions: %s / %s lines (%s%%).
 KreaBankBulkMatchNoSuggestions=No matching suggestions found.
+
+# Connected bank statements and ledger
+KreaBankConnectedBanking=Statements and bank movements
+KreaBankLedgerExplanation=Imports are bank statement evidence. Only registered Dolibarr movements affect the account balance. Reconciliation connects the two, reusing an existing movement whenever possible.
+KreaBankIntegrationCounts=%s imported lines · %s linked native movements · %s verified reconciliations
+KreaBankNativeBalance=Dolibarr account balance
+KreaBankImportedStatements=Imported statements
+KreaBankNativeMovements=Dolibarr movements
+KreaBankMatchedMovements=Movements reconciled with KreaBank
+KreaBankNativeStatements=Dolibarr numbered statements
+KreaBankNativeLinkedCount=%s native · %s reconciled
+KreaBankLinkIssues=%s links need review
+KreaBankLinkNeedsReview=Link needs review
+KreaBankNativeRegistered=Registered in Dolibarr
+KreaBankNativeMissing=Linked movement is missing from this account
+KreaBankAwaitingReconciliation=Awaiting reconciliation
+KreaBankStatementProgress=%s imported lines · %s linked Dolibarr movements · %s verified reconciliations
+KreaBankPostingDateExplanation=The native movement keeps its original posting date. Reconciling it today does not create another movement or change that date. Review warnings before relying on older links.
+KreaBankWorkspaceHelp_statement=Open a statement to see every imported line and its corresponding Dolibarr movement. Viewing or downloading a statement never creates bank entries.
+KreaBankAllNativeMovements=All Dolibarr movements

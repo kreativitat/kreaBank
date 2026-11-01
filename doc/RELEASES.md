@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.14.8 — 2026-11-01
+
+- Connect imported statements, native account balances, statement reports and bank
+  movements with one read-only view and account-aware links on both workspaces.
+- Show staged and legacy imports together; expose missing, mismatched and
+  unconfirmed native links instead of presenting them as verified matches.
+- Opening or exporting a statement no longer creates native bank movements.
+- Add an optional KreaBank reconciliation filter to the native movements list,
+  preserving native posting dates and company ownership. No schema, scheduler
+  or business-data migration. See [bank integration](BANK_INTEGRATION.md).
+
 ## 1.14.7 — 2026-11-01
 
 - Render background status translations as plain text and hide inactive controls

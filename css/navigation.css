@@ -15,3 +15,8 @@
   .kreabank-context select { width: 100%; min-width: 0; }
   .kreabank-workspace-nav a { padding: 9px 7px; }
 }
+.kreabank-integration { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; padding:14px 18px; margin:12px 0 18px; border:1px solid #cbd8df; border-left:4px solid #39748b; border-radius:5px; background:#f4f8fa; color:#263c47; }
+.kreabank-integration p { margin:6px 0; max-width:85ch; }
+.kreabank-integration nav { display:flex; flex-wrap:wrap; align-content:center; align-items:center; gap:8px 16px; }
+.kreabank-integration a:focus-visible { outline:2px solid #1769aa; outline-offset:2px; }
+.kreabank-statement-list td { vertical-align:top; }

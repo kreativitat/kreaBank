@@ -832,7 +832,7 @@ class KreaBankService
 	}
 
 	/**
-	 * Ensure one imported statement has native bank lines available for native statement view.
+	 * Read existing statement links without creating native movements (legacy API).
 	 *
 	 * @param int $bankAccountId
 	 * @param string $statementRef
@@ -840,110 +840,14 @@ class KreaBankService
 	 */
 	public function ensureNativeStatementLines($bankAccountId, $statementRef)
 	{
-		$bankAccountId = (int) $bankAccountId;
-		$statementRef = trim((string) $statementRef);
-		if ($bankAccountId <= 0 || $statementRef === '') {
-			throw new Exception($this->langs->trans('KreaBankInvalidInput'));
-		}
-		$bankAccountEntityList = getEntity('bank_account');
-		if ($bankAccountEntityList === '' || $bankAccountEntityList === null) {
-			$bankAccountEntityList = (string) ((int) $this->entity);
-		}
-
-		$sqlNative = 'SELECT COUNT(b.rowid) as nb';
-		$sqlNative .= ' FROM ' . $this->db->prefix() . 'bank as b';
-		$sqlNative .= ' INNER JOIN ' . $this->db->prefix() . 'bank_account as ba ON ba.rowid = b.fk_account';
-		$sqlNative .= ' WHERE ba.entity IN (' . $bankAccountEntityList . ')';
-		$sqlNative .= ' AND b.fk_account = ' . $bankAccountId;
-		$sqlNative .= ' AND b.num_releve = ' . $this->sqlText($statementRef);
-		$resNative = $this->db->query($sqlNative);
-		if (!$resNative) {
-			throw new Exception($this->db->lasterror());
-		}
-		$objNative = $this->db->fetch_object($resNative);
-		$nativeCount = (!empty($objNative->nb) ? (int) $objNative->nb : 0);
-		if ($nativeCount > 0) {
-			return array(
-				'statement_id' => 0,
-				'line_count' => $nativeCount,
-				'created_count' => 0,
-				'existing_count' => $nativeCount,
-			);
-		}
-
-		$statementTable = $this->db->prefix() . 'kreabank_statement';
-		$lineTable = $this->db->prefix() . 'kreabank_statement_line';
-		if (!$this->tableExists($statementTable) || !$this->tableExists($lineTable)) {
+		require_once __DIR__ . '/kreabankintegration.class.php';
+		$report = new KreaBankIntegration($this->db, $this->entity);
+		$statement = $report->statement((int) $bankAccountId, (string) $statementRef);
+		if (!$statement) {
 			throw new Exception($this->langs->trans('KreaBankImportDeleteNotFound'));
 		}
-
-		$sqlStatement = 'SELECT s.rowid';
-		$sqlStatement .= ' FROM ' . $statementTable . ' as s';
-		$sqlStatement .= ' WHERE s.entity = ' . ((int) $this->entity);
-		$sqlStatement .= ' AND s.bank_account_id = ' . $bankAccountId;
-		$sqlStatement .= ' AND s.ref = ' . $this->sqlText($statementRef);
-		$sqlStatement .= $this->db->plimit(1, 0);
-		$resStatement = $this->db->query($sqlStatement);
-		if (!$resStatement) {
-			throw new Exception($this->db->lasterror());
-		}
-		$objStatement = $this->db->fetch_object($resStatement);
-		if (empty($objStatement->rowid)) {
-			throw new Exception($this->langs->trans('KreaBankImportDeleteNotFound'));
-		}
-		$statementId = (int) $objStatement->rowid;
-
-		$sqlLines = 'SELECT l.rowid, l.fk_native_bank_line';
-		$sqlLines .= ' FROM ' . $lineTable . ' as l';
-		$sqlLines .= ' WHERE l.entity = ' . ((int) $this->entity);
-		$sqlLines .= ' AND l.fk_statement = ' . $statementId;
-		$sqlLines .= ' ORDER BY l.line_rank ASC, l.rowid ASC';
-		$resLines = $this->db->query($sqlLines);
-		if (!$resLines) {
-			throw new Exception($this->db->lasterror());
-		}
-
-		$lineRows = array();
-		while ($objLine = $this->db->fetch_object($resLines)) {
-			$lineRows[] = array(
-				'line_id' => (int) $objLine->rowid,
-				'native_id' => (int) $objLine->fk_native_bank_line,
-			);
-		}
-
-		$lineCount = 0;
-		$createdCount = 0;
-		$existingCount = 0;
-		if (!$this->db->begin()) {
-			throw new Exception('Failed to start database transaction');
-		}
-		try {
-			foreach ($lineRows as $lineRow) {
-				$lineId = (int) $lineRow['line_id'];
-				if ($lineId <= 0) {
-					continue;
-				}
-				$lineCount++;
-				$beforeNativeId = (int) $lineRow['native_id'];
-				$resolvedNativeId = (int) $this->native->ensureNativeLineForStatementLine($lineId);
-				if ($beforeNativeId > 0 && $beforeNativeId === $resolvedNativeId) {
-					$existingCount++;
-				} else {
-					$createdCount++;
-				}
-			}
-			$this->db->commit();
-		} catch (Exception $e) {
-			$this->db->rollback();
-			throw $e;
-		}
-
-		return array(
-			'statement_id' => $statementId,
-			'line_count' => $lineCount,
-			'created_count' => $createdCount,
-			'existing_count' => $existingCount,
-		);
+		return array('statement_id' => 0, 'line_count' => (int) $statement->imported_lines,
+			'created_count' => 0, 'existing_count' => (int) $statement->native_lines);
 	}
 
 	/**
