@@ -49,6 +49,23 @@ class KreaBankNativeBankAdapter
 		$this->entity = (int) $entity;
 	}
 
+	/** Native payment dictionary sharing is independent of bank-account ownership. */
+	public static function activePaymentModes($db, $lock = false)
+	{
+		$entities = preg_split('/\s*,\s*/', trim((string) getEntity('c_paiement')));
+		if (!$entities || array_filter($entities, static function ($id) { return !ctype_digit($id); })) {
+			throw new Exception('Invalid native payment dictionary scope');
+		}
+		$result = $db->query('SELECT DISTINCT code,libelle FROM ' . $db->prefix() . 'c_paiement WHERE active=1 AND entity IN ('
+			. implode(',', array_map('intval', $entities)) . ') ORDER BY code' . ($lock ? ' FOR UPDATE' : ''));
+		if (!$result) { throw new Exception('Unable to load native payment modes'); }
+		$modes = array();
+		while ($row = $db->fetch_object($result)) {
+			if (preg_match('/^[a-z0-9_]{1,6}$/iD', (string) $row->code)) { $modes[(string) $row->code] = (string) $row->libelle; }
+		}
+		return $modes;
+	}
+
 	/**
 	 * Ensure all native-assistant storage objects exist.
 	 *
@@ -478,10 +495,11 @@ class KreaBankNativeBankAdapter
 	 *
 	 * @param int $lineId
 	 * @param bool $isTransfer Use the explicit native transfer operation code
-	 * @param bool $cardReceipt Use CB for a validated positive TPA receipt
+	 * @param bool $cardReceipt Use the selected native mode for a validated positive TPA receipt
+	 * @param string $receiptOperationCode Explicit active native payment code for TPA receipts
 	 * @return int
 	 */
-	public function ensureNativeLineForStatementLine($lineId, $isTransfer = false, $cardReceipt = false)
+	public function ensureNativeLineForStatementLine($lineId, $isTransfer = false, $cardReceipt = false, $receiptOperationCode = '')
 	{
 		$this->ensureMetaTable();
 		$this->ensureStagingTables();
@@ -513,7 +531,10 @@ class KreaBankNativeBankAdapter
 		$datev = $this->toTimestamp((string) ($cardReceipt && empty($line['value_date']) ? $line['operation_date'] : $line['value_date']));
 		$amount = (float) price2num((string) $line['amount'], 'MU');
 		if ($cardReceipt && ($isTransfer || $amount <= 0)) { throw new Exception('Card receipts require a positive non-transfer movement'); }
-		$operationCode = $cardReceipt ? 'CB' : ($isTransfer ? 'VIR' : $this->guessOperationCode($amount));
+		if ($cardReceipt && !array_key_exists((string) $receiptOperationCode, self::activePaymentModes($this->db, true))) {
+			throw new Exception('Select an active native payment mode for card receipts');
+		}
+		$operationCode = $cardReceipt ? (string) $receiptOperationCode : ($isTransfer ? 'VIR' : $this->guessOperationCode($amount));
 		$label = $this->buildLabel($line);
 		$numChq = (string) (!empty($line['payment_reference']) ? $line['payment_reference'] : $line['bank_reference']);
 		$statementRef = !empty($line['statement_ref']) ? (string) $line['statement_ref'] : '';

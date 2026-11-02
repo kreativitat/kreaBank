@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.15.6 — 2026-11-02
+
+- Require an explicit active native payment mode for automatic TPA receipts.
+  Revalidate dictionary scope and availability before creating the bank line;
+  missing or disabled modes fail closed. No schema migration or new scheduler.
+
 ## 1.15.5 — 2026-11-02
 
 - Preserve printed terminal identifiers, including leading zeroes, and scope

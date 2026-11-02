@@ -3,13 +3,16 @@
 Available in 1.15.4 under **KreaBank setup → Automatic reconciliation**. Enable
 **Automatically create and reconcile card-terminal settlement receipts (TPA)**
 for each intended company, with its existing selected accounts and automation
-mode. The option defaults off and uses the existing bounded company runner;
+mode. From 1.15.6, select an active native payment mode for TPA receipts;
+missing, inactive or out-of-scope modes stop receipt creation. Native dictionary
+sharing applies to payment modes, while bank accounts remain company-owned.
+The option defaults off and uses the existing bounded company runner;
 no additional job or host scheduler is installed. Test installations retain
 their disabled jobs.
 
 The existing safe matcher gets the first opportunity to reuse a proven native
 movement. With TPA receipts enabled, an otherwise unmatched positive settlement
-can create one native bank receipt with card operation code `CB`, using
+can create one native bank receipt with the selected native payment mode, using
 `Account::addline()` and `AccountLine::update_conciliation()`. Its original amount,
 booking/value dates, description and import metadata are retained. This is a bank
 receipt for card sales already settled by the terminal: it creates no sales
@@ -39,7 +42,7 @@ creation. Truncated searches fail closed. These conservative checks can leave
 legitimate equal-value receipts pending; they must not be bypassed by lowering
 matching thresholds.
 
-Preview shows **Create card-terminal receipt (CB)** without creating anything or
+Preview shows **Create card-terminal receipt** without creating anything or
 advancing the cursor. Execution revalidates settings and source facts under
 company-account, staging and native range locks. Native receipt, source mapping,
 reconciliation flags and `auto_tpa` audit commit atomically. Failures roll back;

@@ -2409,10 +2409,12 @@ class KreaBankService
 		$p = $this->db->prefix();
 		$settings = array();
 		foreach ($this->transferRows("SELECT name,value FROM {$p}const WHERE entity=" . $this->entity
-			. " AND name IN ('KREABANK_AUTO_NATIVE_TPA_ENABLED','KREABANK_AUTO_NATIVE_ACCOUNTS')" . ($lock ? ' FOR UPDATE' : '')) as $setting) {
+			. " AND name IN ('KREABANK_AUTO_NATIVE_TPA_ENABLED','KREABANK_AUTO_NATIVE_ACCOUNTS','KREABANK_AUTO_NATIVE_TPA_PAYMENT_MODE')" . ($lock ? ' FOR UPDATE' : '')) as $setting) {
 			$settings[$setting->name] = $setting->value;
 		}
 		if (($settings['KREABANK_AUTO_NATIVE_TPA_ENABLED'] ?? '') !== '1') { return null; }
+		$paymentMode = (string) ($settings['KREABANK_AUTO_NATIVE_TPA_PAYMENT_MODE'] ?? '');
+		if (!array_key_exists($paymentMode, KreaBankNativeBankAdapter::activePaymentModes($this->db, $lock))) { return null; }
 		$selected = array_intersect(array_map('intval', (array) $accountIds), array_map('intval', explode(',', $settings['KREABANK_AUTO_NATIVE_ACCOUNTS'] ?? '')));
 		$rows = $this->transferStatementRows(' AND l.rowid=' . (int) $lineId, $lock);
 		if (count($rows) !== 1) { return null; }
@@ -2458,7 +2460,7 @@ class KreaBankService
 			. ' AND datep>=' . $this->sqlDate($near['start']) . ' AND datep<' . $this->sqlDate(gmdate('Y-m-d', strtotime($near['end'] . ' UTC') + 86400))
 			. $this->db->plimit(1) . ($lock ? ' FOR UPDATE' : ''));
 		if ($payments) { return null; }
-		return array('line' => $this->native->getStatementLineById((int) $lineId), 'identity' => $identity);
+		return array('line' => $this->native->getStatementLineById((int) $lineId), 'identity' => $identity, 'payment_mode' => $paymentMode);
 	}
 
 	/** Materialize one proven TPA credit through the native adapter; all evidence and audit commit together. */
@@ -2476,14 +2478,14 @@ class KreaBankService
 			if (!$match) { $this->db->rollback(); return false; }
 			$line = $match['line'];
 			(new KreaBankReconciliationScope($this->db, $this->entity))->assertLine($line);
-			$nativeId = $this->native->ensureNativeLineForStatementLine((int) $lineId, false, true);
-			$persisted = $this->transferRows('SELECT amount FROM ' . $this->db->prefix() . 'bank WHERE rowid=' . $nativeId . ' FOR UPDATE');
-			if (count($persisted) !== 1 || self::automaticDecimal($persisted[0]->amount) !== self::automaticDecimal($line['amount'])) {
+			$nativeId = $this->native->ensureNativeLineForStatementLine((int) $lineId, false, true, $match['payment_mode']);
+			$persisted = $this->transferRows('SELECT amount,fk_type FROM ' . $this->db->prefix() . 'bank WHERE rowid=' . $nativeId . ' FOR UPDATE');
+			if (count($persisted) !== 1 || (string) $persisted[0]->fk_type !== $match['payment_mode'] || self::automaticDecimal($persisted[0]->amount) !== self::automaticDecimal($line['amount'])) {
 				throw new Exception('Native card receipt amount differs from source evidence');
 			}
 			$this->finalizeNativeReconciliation($line, $nativeId, $line['amount'], 'staged', array(
 				'strategy' => 'auto_tpa', 'is_auto' => 1, 'native' => 1, 'native_bank_line_id' => $nativeId,
-				'terminal_settlement' => $match['identity'], 'operation_code' => 'CB',
+				'terminal_settlement' => $match['identity'], 'operation_code' => $match['payment_mode'],
 			));
 			if (!$this->db->commit()) { throw new Exception('Card-terminal receipt commit was not confirmed; inspect before retrying'); }
 			return true;

@@ -6,6 +6,10 @@
  */
 require __DIR__ . '/test_account_pairs_database.php';
 $initialChecks = $checks;
+$sql = preg_replace('/--[^\n]*/', '', file_get_contents(DOL_DOCUMENT_ROOT . '/install/mysql/tables/llx_c_paiement.sql'));
+foreach (explode(';', str_replace('llx_', MAIN_DB_PREFIX, $sql)) as $statement) { if (trim($statement) !== '') { $db->query($statement); } }
+$db->query("INSERT INTO kbauto_c_paiement(id,entity,code,libelle,type,active) VALUES(1,1,'CB','Card',2,1),(2,1,'MB','Multibanco',2,1),(3,2,'OTHER','Other company mode',2,1),(4,1,'CDB','Inactive card',2,0)");
+
 function tpaFixture($id, $amount = '781.23', $account = 101, $entity = 1, $source = 'csv', $description = null) {
  global $db;
  stageAuto($id, $amount, '', $account, $entity, $source);
@@ -19,7 +23,8 @@ dolibarr_set_const($db,'KREABANK_AUTO_NATIVE_PAIRS_ENABLED','0','chaine',0,'',1)
 tpaFixture(60001);
 checkAuto($service->getAutomaticTpaSuggestion(60001,array(101)) === null, 'TPA receipt creation defaults off');
 $jobCount=countAuto('cronjob');
-$auto->configure($user,'enabled',array(101,102,103),false,true);
+rejectAuto(static function () use($auto,$user) { $auto->configure($user,'enabled',array(101,102,103),false,true); },'TPA enablement requires an explicitly selected active native payment mode');
+$auto->configure($user,'enabled',array(101,102,103),false,true,'CB');
 checkAuto($auto->setting('TPA_ENABLED')==='1' && countAuto('cronjob')===$jobCount,'Opt-in uses the existing company job without another scheduler');
 checkAuto($service->getAutomaticTpaSuggestion(60001,array(101)) !== null, 'Recognized full settlement identity is eligible after explicit opt-in');
 checkAuto($service->getAutomaticTpaSuggestion(60001,array(102)) === null, 'Call account allowlist is enforced');
@@ -141,4 +146,23 @@ checkAuto($service->getAutomaticTpaSuggestion(60019,array(101))===null,'Truncate
 $db->query('DELETE FROM kbauto_bank WHERE rowid BETWEEN 70000 AND 71000');
 for($i=0;$i<1001;$i++) { tpaFixture(70000+$i,'0.01',101,1,'csv','FECHO TPA 9876543210 PERIODO N '.($i+1)); }
 checkAuto($service->getAutomaticTpaSuggestion(60019,array(101))===null,'Truncated imported identity search never assumes uniqueness');
+// A configured native payment code replaces the former unconditional CB operation.
+$db->query('DELETE FROM kbauto_kreabank_statement_line WHERE rowid BETWEEN 70000 AND 71000');
+tpaFixture(60030,'802.23');
+$db->query("UPDATE kbauto_c_paiement SET active=0 WHERE code='CB' AND entity=1");
+checkAuto($service->getAutomaticTpaSuggestion(60030,array(101))===null,'A disabled configured payment code prevents unattended receipt creation');
+rejectAuto(static function () use($auto,$user) { $auto->configure($user,'enabled',array(101),false,true,'OTHER'); },'Another company payment dictionary cannot authorize a receipt mode');
+rejectAuto(static function () use($auto,$user) { $auto->configure($user,'enabled',array(101),false,true,'CDB'); },'An inactive native mode cannot be selected');
+$auto->configure($user,'enabled',array(101,102,103),false,true,'MB');
+checkAuto($service->getAutomaticTpaSuggestion(60030,array(101))['payment_mode']==='MB','Preview resolves the explicitly selected Multibanco mode');
+checkAuto($service->reconcileAutomaticTpaReceipt(60030,array(101)),'Selected Multibanco mode creates the receipt through the same native adapter');
+$mapped=$service->getBulkReviewLine(60030,'staged');$bank=$db->query('SELECT fk_type FROM kbauto_bank WHERE rowid='.(int)$mapped['native_bank_line_id'])->fetch_object();
+$audit=json_decode($db->query('SELECT payload_json FROM kbauto_kreabank_recon_audit ORDER BY rowid DESC LIMIT 1')->fetch_object()->payload_json,true);
+checkAuto($bank->fk_type==='MB' && $audit['operation_code']==='MB','Native receipt and audit use the selected code rather than hardcoded CB');
+// Losing dictionary availability after a preview cannot fall back to any other code.
+tpaFixture(60031,'803.23');
+$db->query("UPDATE kbauto_c_paiement SET active=0 WHERE code='MB' AND entity=1");
+$before=countAuto('bank');checkAuto(!$service->reconcileAutomaticTpaReceipt(60031,array(101)) && countAuto('bank')===$before,'Payment mode loss after preview fails closed without a fallback');
+$auto->configure($user,'off',array(101),false,false,'MB');
+checkAuto($auto->setting('MODE')==='off','An inactive former payment mode does not prevent disabling automation');
 echo 'OK: '.($checks-$initialChecks)." TPA receipt database checks\n";

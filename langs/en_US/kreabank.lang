@@ -530,5 +530,7 @@ KreaBankPairEmpty=No account pairs configured.
 KreaBankSortList=Sort list
 
 KreaBankTpaEnable=Automatically create and reconcile card-terminal settlement receipts (TPA)
-KreaBankTpaHelp=For recognized positive FECHO TPA settlements in selected company-owned accounts, reuse a proven existing match or create a native card receipt (CB). Conflicting ledger entries or settlement identities remain pending. This records the bank receipt only; it creates no sales invoice or invoice payment.
-KreaBankTpaNewReceipt=Create card-terminal receipt (CB)
+KreaBankTpaHelp=For recognized positive FECHO TPA settlements in selected company-owned accounts, reuse a proven existing match or create a native card receipt using the selected payment mode. Conflicting ledger entries or settlement identities remain pending. This records the bank receipt only; it creates no sales invoice or invoice payment.
+KreaBankTpaNewReceipt=Create card-terminal receipt
+
+KreaBankTpaPaymentMode=Payment mode for TPA receipts (required)

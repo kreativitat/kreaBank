@@ -22,7 +22,7 @@ class KreaBankAutoReconcile
 
 	public function setting($suffix, $default = '')
 	{
-		if (!in_array($suffix, array('MODE', 'ACCOUNTS', 'CURSOR', 'PAIRS_ENABLED', 'TPA_ENABLED'), true)) {
+		if (!in_array($suffix, array('MODE', 'ACCOUNTS', 'CURSOR', 'PAIRS_ENABLED', 'TPA_ENABLED', 'TPA_PAYMENT_MODE'), true)) {
 			throw new Exception('Invalid automatic reconciliation setting');
 		}
 		$rows = $this->rows('SELECT value FROM ' . $this->db->prefix() . 'const WHERE entity=' . $this->entity
@@ -37,9 +37,13 @@ class KreaBankAutoReconcile
 	}
 
 	/** Saving configuration also installs/updates exactly one native job for this company. */
-	public function configure($actor, $mode, $accountIds, $pairedTransfers = false, $tpaReceipts = false)
+	public function configure($actor, $mode, $accountIds, $pairedTransfers = false, $tpaReceipts = false, $tpaPaymentMode = null)
 	{
 		$this->assertActor($actor, true);
+		$tpaPaymentMode = $tpaPaymentMode === null ? $this->setting('TPA_PAYMENT_MODE') : (string) $tpaPaymentMode;
+		if ($tpaReceipts && !array_key_exists($tpaPaymentMode, KreaBankNativeBankAdapter::activePaymentModes($this->db))) {
+			throw new Exception('Select an active native payment mode for TPA receipts');
+		}
 		if ($pairedTransfers && !$actor->hasRight('banque', 'transfer')) { throw new Exception('Bank transfer permission is required'); }
 		if (!in_array($mode, array('off', 'preview', 'enabled'), true)) {
 			throw new Exception('Invalid automatic reconciliation mode');
@@ -62,6 +66,7 @@ class KreaBankAutoReconcile
 				$this->saveSetting('CURSOR', '0');
 				$this->saveSetting('PAIRS_ENABLED', $pairedTransfers ? '1' : '0');
 				$this->saveSetting('TPA_ENABLED', $tpaReceipts ? '1' : '0');
+				$this->saveSetting('TPA_PAYMENT_MODE', $tpaPaymentMode);
 				$jobs = $this->rows('SELECT rowid FROM ' . $this->db->prefix() . 'cronjob WHERE entity=' . $this->entity
 					. " AND objectname='KreaBankAutoReconcile' AND methodename='run'");
 				if (count($jobs) > 1) {

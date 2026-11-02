@@ -25,7 +25,7 @@ if ($action !== '') {
 	}
 	try {
 		if ($action === 'save') {
-			$automation->configure($user, GETPOST('mode', 'aZ09'), GETPOST('accounts', 'array'), GETPOSTINT('paired_transfers') === 1, GETPOSTINT('tpa_receipts') === 1);
+			$automation->configure($user, GETPOST('mode', 'aZ09'), GETPOST('accounts', 'array'), GETPOSTINT('paired_transfers') === 1, GETPOSTINT('tpa_receipts') === 1, GETPOST('tpa_payment_mode', 'aZ09'));
 			setEventMessages($langs->trans('SetupSaved'), null, 'mesgs');
 			header('Location: ' . dol_buildpath('/custom/kreabank/admin/automation.php', 1));
 			exit;
@@ -69,6 +69,14 @@ try {
 	print '<p>' . $langs->trans('KreaBankPairAutomaticHelp') . ' ' . $langs->trans('KreaBankPairCompanyCurrency') . ' <a href="' . dol_buildpath('/custom/kreabank/admin/pairs.php', 1) . '">' . $langs->trans('KreaBankAccountPairs') . '</a></p>';
 	print '<p><input type="checkbox" id="tpa_receipts" name="tpa_receipts" value="1"' . ($automation->setting('TPA_ENABLED', '0') === '1' ? ' checked' : '') . '><label for="tpa_receipts">' . $langs->trans('KreaBankTpaEnable') . '</label></p>';
 	print '<p>' . $langs->trans('KreaBankTpaHelp') . '</p>';
+	$tpaMode = $automation->setting('TPA_PAYMENT_MODE');
+	print '<p><label for="tpa_payment_mode">' . $langs->trans('KreaBankTpaPaymentMode') . '</label><br><select class="flat" id="tpa_payment_mode" name="tpa_payment_mode">';
+	print '<option value="">' . $langs->trans('Select') . '</option>';
+	foreach (KreaBankNativeBankAdapter::activePaymentModes($db) as $code => $label) {
+		print '<option value="' . dol_escape_htmltag($code) . '"' . ($tpaMode === $code ? ' selected' : '') . '>' . dol_escape_htmltag($label . ' (' . $code . ')') . '</option>';
+	}
+	print '</select></p>';
+
 	print '<div class="center"><button type="submit" class="button button-save">' . $langs->trans('Save') . '</button></div></form>';
 	print '<form method="post" class="center"><input type="hidden" name="token" value="' . newToken() . '"><input type="hidden" name="action" value="preview">';
 	print '<p>' . $langs->trans('KreaBankAutoPreviewHelp') . '</p><button type="submit" class="button">' . $langs->trans('KreaBankAutoPreview') . '</button></form>';
