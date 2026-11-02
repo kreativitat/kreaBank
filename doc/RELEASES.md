@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.4 — 2026-11-02
+
+- Add opt-in automatic TPA settlement receipts to the existing company runner.
+  Recognize complete FECHO TPA closure identities, reuse safe existing matches,
+  and create native card receipts (CB) only without competing ledger/import evidence.
+- Preserve company/account restrictions, preview mode and atomic audit/rollback.
+  No schema migration or additional scheduler; see [TPA receipts](TPA_RECEIPTS.md).
+
 ## 1.15.3 — 2026-11-01
 
 - Pass the native `account` parameter in treasury links and account-filter

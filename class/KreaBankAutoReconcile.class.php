@@ -22,7 +22,7 @@ class KreaBankAutoReconcile
 
 	public function setting($suffix, $default = '')
 	{
-		if (!in_array($suffix, array('MODE', 'ACCOUNTS', 'CURSOR', 'PAIRS_ENABLED'), true)) {
+		if (!in_array($suffix, array('MODE', 'ACCOUNTS', 'CURSOR', 'PAIRS_ENABLED', 'TPA_ENABLED'), true)) {
 			throw new Exception('Invalid automatic reconciliation setting');
 		}
 		$rows = $this->rows('SELECT value FROM ' . $this->db->prefix() . 'const WHERE entity=' . $this->entity
@@ -37,7 +37,7 @@ class KreaBankAutoReconcile
 	}
 
 	/** Saving configuration also installs/updates exactly one native job for this company. */
-	public function configure($actor, $mode, $accountIds, $pairedTransfers = false)
+	public function configure($actor, $mode, $accountIds, $pairedTransfers = false, $tpaReceipts = false)
 	{
 		$this->assertActor($actor, true);
 		if ($pairedTransfers && !$actor->hasRight('banque', 'transfer')) { throw new Exception('Bank transfer permission is required'); }
@@ -61,6 +61,7 @@ class KreaBankAutoReconcile
 				$this->saveSetting('ACCOUNTS', implode(',', $ids));
 				$this->saveSetting('CURSOR', '0');
 				$this->saveSetting('PAIRS_ENABLED', $pairedTransfers ? '1' : '0');
+				$this->saveSetting('TPA_ENABLED', $tpaReceipts ? '1' : '0');
 				$jobs = $this->rows('SELECT rowid FROM ' . $this->db->prefix() . 'cronjob WHERE entity=' . $this->entity
 					. " AND objectname='KreaBankAutoReconcile' AND methodename='run'");
 				if (count($jobs) > 1) {
@@ -144,6 +145,7 @@ class KreaBankAutoReconcile
 			$result = array('status' => $preview || $mode !== 'enabled' ? 'preview' : 'completed',
 				'scanned' => 0, 'eligible' => 0, 'reconciled' => 0, 'failed' => 0, 'matches' => array(), 'errors' => array());
 			$pairedTransfers = $this->setting('PAIRS_ENABLED', '0') === '1';
+			$tpaReceipts = $this->setting('TPA_ENABLED', '0') === '1';
 			$previewedPairs = array();
 			$started = microtime(true);
 			foreach ($rows as $row) {
@@ -172,6 +174,14 @@ class KreaBankAutoReconcile
 							'bank_line_id' => (int) $match['suggestion']['doc_id'], 'score' => (int) $match['suggestion']['score']);
 						if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticNativeLine($cursor, $ids)) {
 							$result['reconciled']++;
+						}
+					}
+					if (!$pair && !$match && $tpaReceipts) {
+						$tpa = $service->getAutomaticTpaSuggestion($cursor, $ids);
+						if ($tpa) {
+							$result['eligible']++;
+							$result['matches'][] = array('statement_line_id' => $cursor, 'bank_line_id' => 0, 'score' => null, 'tpa_receipt' => true);
+							if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticTpaReceipt($cursor, $ids)) { $result['reconciled']++; }
 						}
 					}
 				} catch (Throwable $e) {

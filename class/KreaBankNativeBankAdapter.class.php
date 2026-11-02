@@ -477,9 +477,11 @@ class KreaBankNativeBankAdapter
 	 * Create native bank line for one staged line if missing.
 	 *
 	 * @param int $lineId
+	 * @param bool $isTransfer Use the explicit native transfer operation code
+	 * @param bool $cardReceipt Use CB for a validated positive TPA receipt
 	 * @return int
 	 */
-	public function ensureNativeLineForStatementLine($lineId, $isTransfer = false)
+	public function ensureNativeLineForStatementLine($lineId, $isTransfer = false, $cardReceipt = false)
 	{
 		$this->ensureMetaTable();
 		$this->ensureStagingTables();
@@ -508,9 +510,10 @@ class KreaBankNativeBankAdapter
 
 		$account = $this->assertBankAccountIsOpen((int) $line['bank_account_id']);
 		$dateo = $this->toTimestamp((string) $line['operation_date']);
-		$datev = $this->toTimestamp((string) $line['value_date']);
+		$datev = $this->toTimestamp((string) ($cardReceipt && empty($line['value_date']) ? $line['operation_date'] : $line['value_date']));
 		$amount = (float) price2num((string) $line['amount'], 'MU');
-		$operationCode = $isTransfer ? 'VIR' : $this->guessOperationCode($amount);
+		if ($cardReceipt && ($isTransfer || $amount <= 0)) { throw new Exception('Card receipts require a positive non-transfer movement'); }
+		$operationCode = $cardReceipt ? 'CB' : ($isTransfer ? 'VIR' : $this->guessOperationCode($amount));
 		$label = $this->buildLabel($line);
 		$numChq = (string) (!empty($line['payment_reference']) ? $line['payment_reference'] : $line['bank_reference']);
 		$statementRef = !empty($line['statement_ref']) ? (string) $line['statement_ref'] : '';

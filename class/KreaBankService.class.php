@@ -2291,14 +2291,7 @@ class KreaBankService
 	 */
 	public function getAutomaticNativeSuggestion($lineId, $accountIds)
 	{
-		global $conf;
-		if ($this->entity <= 0 || (int) $conf->entity !== $this->entity || !isModEnabled('kreabank') || !isModEnabled('banque')
-			|| empty($this->user->id) || (int) $this->user->statut !== 1 || !empty($this->user->socid)
-			|| (!empty($this->user->entity) && (int) $this->user->entity !== $this->entity)
-			|| !$this->user->hasRight('banque', 'lire') || !$this->user->hasRight('banque', 'modifier')
-			|| !$this->user->hasRight('kreabank', 'reconciliation', 'write')) {
-			throw new Exception('Bank reconciliation permission is required in the current company');
-		}
+		$this->assertAutomaticActor();
 		$ids = array_filter(array_map('intval', (array) $accountIds), static function ($id) { return $id > 0; });
 		if (!$ids) {
 			return null;
@@ -2390,6 +2383,115 @@ class KreaBankService
 			}
 		}
 		return array('line' => $line, 'suggestion' => $safe);
+	}
+
+	/** Shared unattended actor boundary; a company change invalidates the service. */
+	private function assertAutomaticActor()
+	{
+		global $conf;
+		if ($this->entity <= 0 || (int) $conf->entity !== $this->entity || !isModEnabled('kreabank') || !isModEnabled('banque')
+			|| empty($this->user->id) || (int) $this->user->statut !== 1 || !empty($this->user->socid)
+			|| (!empty($this->user->entity) && (int) $this->user->entity !== $this->entity)
+			|| !$this->user->hasRight('banque', 'lire') || !$this->user->hasRight('banque', 'modifier')
+			|| !$this->user->hasRight('kreabank', 'reconciliation', 'write')) {
+			throw new Exception('Bank reconciliation permission is required in the current company');
+		}
+		if (isModEnabled('multicompany') && !$this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'entity WHERE rowid=' . $this->entity . ' AND active=1')) {
+			throw new Exception('Automatic reconciliation requires an active company');
+		}
+	}
+
+	/** Read-only TPA classification. An existing or conflicting financial record always needs matching/review. */
+	public function getAutomaticTpaSuggestion($lineId, $accountIds, $lock = false)
+	{
+		global $conf;
+		$this->assertAutomaticActor();
+		$p = $this->db->prefix();
+		$settings = array();
+		foreach ($this->transferRows("SELECT name,value FROM {$p}const WHERE entity=" . $this->entity
+			. " AND name IN ('KREABANK_AUTO_NATIVE_TPA_ENABLED','KREABANK_AUTO_NATIVE_ACCOUNTS')" . ($lock ? ' FOR UPDATE' : '')) as $setting) {
+			$settings[$setting->name] = $setting->value;
+		}
+		if (($settings['KREABANK_AUTO_NATIVE_TPA_ENABLED'] ?? '') !== '1') { return null; }
+		$selected = array_intersect(array_map('intval', (array) $accountIds), array_map('intval', explode(',', $settings['KREABANK_AUTO_NATIVE_ACCOUNTS'] ?? '')));
+		$rows = $this->transferStatementRows(' AND l.rowid=' . (int) $lineId, $lock);
+		if (count($rows) !== 1) { return null; }
+		$raw = $rows[0];
+		if (!in_array((int) $raw->bank_account_id, $selected, true) || self::automaticDecimal($raw->amount)[0] === '-'
+			|| (string) $raw->currency !== (string) $conf->currency) { return null; }
+		if (!empty($raw->value_date) && (!preg_match('/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D', $raw->value_date, $parts)
+			|| !checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1]))) { return null; }
+		$identity = KreaBankMatcher::tpaSettlementIdentity($raw->description);
+		if ($identity === '' || (new KreaBankAccountPairs($this->db, $this->entity))->mainAccount((int) $raw->bank_account_id)) { return null; }
+		// Card settlement IDs can repeat eventually; inspect a full month on either side, including completed/skipped evidence.
+		$range = $this->resolveOpenDocumentsDateRange($raw->operation_date, 31);
+		$account = (int) $raw->bank_account_id;
+		$others = $this->transferRows("SELECT l.rowid,l.description FROM {$p}kreabank_statement_line l"
+			. " JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
+			. ' WHERE l.entity=' . $this->entity . ' AND s.bank_account_id=' . $account . ' AND l.rowid<>' . (int) $lineId
+			. " AND l.description LIKE '%TPA%' AND l.operation_date>=" . $this->sqlDate($range['start'])
+			. ' AND l.operation_date<=' . $this->sqlDate($range['end']) . ' ORDER BY l.rowid' . $this->db->plimit(1001) . ($lock ? ' FOR UPDATE' : ''));
+		if (count($others) >= 1001) { return null; }
+		foreach ($others as $other) {
+			if (KreaBankMatcher::tpaSettlementIdentity($other->description) === $identity) { return null; }
+		}
+		$tolerance = max(0, min(31, (int) getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE', 3)));
+		$near = $this->resolveOpenDocumentsDateRange($raw->operation_date, $tolerance);
+		// Include reconciled and imported native rows: neither authorizes a duplicate receipt.
+		$native = $this->transferRows("SELECT b.rowid,b.amount,b.dateo,b.label,b.num_chq,m.description FROM {$p}bank b"
+			. " JOIN {$p}bank_account ba ON ba.rowid=b.fk_account"
+			. " LEFT JOIN {$p}kreabank_bankmeta m ON m.fk_bank_line=b.rowid AND m.entity=ba.entity"
+			. ' WHERE ba.entity=' . $this->entity . ' AND b.fk_account=' . $account
+			. ' AND b.dateo>=' . $this->sqlDate($range['start']) . ' AND b.dateo<' . $this->sqlDate(gmdate('Y-m-d', strtotime($range['end'] . ' UTC') + 86400))
+			. ' ORDER BY b.rowid' . $this->db->plimit(1001) . ($lock ? ' FOR UPDATE' : ''));
+		if (count($native) >= 1001) { return null; }
+		foreach ($native as $candidate) {
+			if (self::automaticDecimal($candidate->amount) === self::automaticDecimal($raw->amount)
+				&& substr($candidate->dateo, 0, 10) >= $near['start'] && substr($candidate->dateo, 0, 10) <= $near['end']) { return null; }
+			foreach (array($candidate->label, $candidate->num_chq, $candidate->description) as $text) {
+				$text = preg_replace('/^.*?\b(?=FECHO TPA )/iu', '', (string) $text);
+				if (KreaBankMatcher::tpaSettlementIdentity($text) === $identity) { return null; }
+			}
+		}
+		// An unbanked customer payment may already represent the receipt; leave its allocation for review.
+		$payments = $this->transferRows("SELECT rowid FROM {$p}paiement WHERE entity=" . $this->entity
+			. ' AND (fk_bank IS NULL OR fk_bank=0) AND amount=' . self::automaticDecimal($raw->amount)
+			. ' AND datep>=' . $this->sqlDate($near['start']) . ' AND datep<' . $this->sqlDate(gmdate('Y-m-d', strtotime($near['end'] . ' UTC') + 86400))
+			. $this->db->plimit(1) . ($lock ? ' FOR UPDATE' : ''));
+		if ($payments) { return null; }
+		return array('line' => $this->native->getStatementLineById((int) $lineId), 'identity' => $identity);
+	}
+
+	/** Materialize one proven TPA credit through the native adapter; all evidence and audit commit together. */
+	public function reconcileAutomaticTpaReceipt($lineId, $accountIds)
+	{
+		$this->assertAutomaticActor();
+		if (!$this->db->begin()) { throw new Exception('Cannot start card-terminal receipt reconciliation'); }
+		try {
+			// Same account-lock order as paired transfers; range locks also serialize native/staging claims.
+			$this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'bank_account WHERE entity=' . $this->entity . ' ORDER BY rowid FOR UPDATE');
+			$mode = $this->transferRows('SELECT value FROM ' . $this->db->prefix() . 'const WHERE entity=' . $this->entity
+				. " AND name='KREABANK_AUTO_NATIVE_MODE' FOR UPDATE");
+			if (!$mode || $mode[0]->value !== 'enabled') { $this->db->rollback(); return false; }
+			$match = $this->getAutomaticTpaSuggestion($lineId, $accountIds, true);
+			if (!$match) { $this->db->rollback(); return false; }
+			$line = $match['line'];
+			(new KreaBankReconciliationScope($this->db, $this->entity))->assertLine($line);
+			$nativeId = $this->native->ensureNativeLineForStatementLine((int) $lineId, false, true);
+			$persisted = $this->transferRows('SELECT amount FROM ' . $this->db->prefix() . 'bank WHERE rowid=' . $nativeId . ' FOR UPDATE');
+			if (count($persisted) !== 1 || self::automaticDecimal($persisted[0]->amount) !== self::automaticDecimal($line['amount'])) {
+				throw new Exception('Native card receipt amount differs from source evidence');
+			}
+			$this->finalizeNativeReconciliation($line, $nativeId, $line['amount'], 'staged', array(
+				'strategy' => 'auto_tpa', 'is_auto' => 1, 'native' => 1, 'native_bank_line_id' => $nativeId,
+				'terminal_settlement' => $match['identity'], 'operation_code' => 'CB',
+			));
+			if (!$this->db->commit()) { throw new Exception('Card-terminal receipt commit was not confirmed; inspect before retrying'); }
+			return true;
+		} catch (Throwable $e) {
+			$this->db->rollback();
+			throw $e;
+		}
 	}
 
 	/** Compare persisted monetary values at the database's eight-decimal precision. */

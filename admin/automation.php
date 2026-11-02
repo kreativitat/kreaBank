@@ -25,7 +25,7 @@ if ($action !== '') {
 	}
 	try {
 		if ($action === 'save') {
-			$automation->configure($user, GETPOST('mode', 'aZ09'), GETPOST('accounts', 'array'), GETPOSTINT('paired_transfers') === 1);
+			$automation->configure($user, GETPOST('mode', 'aZ09'), GETPOST('accounts', 'array'), GETPOSTINT('paired_transfers') === 1, GETPOSTINT('tpa_receipts') === 1);
 			setEventMessages($langs->trans('SetupSaved'), null, 'mesgs');
 			header('Location: ' . dol_buildpath('/custom/kreabank/admin/automation.php', 1));
 			exit;
@@ -67,6 +67,8 @@ try {
 	print '</fieldset><p>' . $langs->trans('KreaBankAutoSafetyHelp') . '</p>';
 	print '<p><input type="checkbox" id="paired_transfers" name="paired_transfers" value="1"' . ($automation->setting('PAIRS_ENABLED', '0') === '1' ? ' checked' : '') . '><label for="paired_transfers">' . $langs->trans('KreaBankPairEnable') . '</label></p>';
 	print '<p>' . $langs->trans('KreaBankPairAutomaticHelp') . ' ' . $langs->trans('KreaBankPairCompanyCurrency') . ' <a href="' . dol_buildpath('/custom/kreabank/admin/pairs.php', 1) . '">' . $langs->trans('KreaBankAccountPairs') . '</a></p>';
+	print '<p><input type="checkbox" id="tpa_receipts" name="tpa_receipts" value="1"' . ($automation->setting('TPA_ENABLED', '0') === '1' ? ' checked' : '') . '><label for="tpa_receipts">' . $langs->trans('KreaBankTpaEnable') . '</label></p>';
+	print '<p>' . $langs->trans('KreaBankTpaHelp') . '</p>';
 	print '<div class="center"><button type="submit" class="button button-save">' . $langs->trans('Save') . '</button></div></form>';
 	print '<form method="post" class="center"><input type="hidden" name="token" value="' . newToken() . '"><input type="hidden" name="action" value="preview">';
 	print '<p>' . $langs->trans('KreaBankAutoPreviewHelp') . '</p><button type="submit" class="button">' . $langs->trans('KreaBankAutoPreview') . '</button></form>';
@@ -80,7 +82,9 @@ try {
 				. '</th><th scope="col">' . $langs->trans('KreaBankAutoBankMovement') . '</th><th scope="col">' . $langs->trans('KreaBankAutoScore') . '</th></tr>';
 			foreach ($preview['matches'] as $match) {
 				print '<tr class="oddeven"><td>' . (int) $match['statement_line_id'] . '</td><td>';
-				if (!empty($match['paired_statement_line_id'])) {
+				if (!empty($match['tpa_receipt'])) {
+					print $langs->trans('KreaBankTpaNewReceipt');
+				} elseif (!empty($match['paired_statement_line_id'])) {
 					print $langs->trans('KreaBankPairPreview', (int) $match['paired_statement_line_id']);
 				} else {
 					print '<a href="' . dol_buildpath('/compta/bank/line.php?rowid=' . (int) $match['bank_line_id'], 1) . '">' . (int) $match['bank_line_id'] . '</a>';

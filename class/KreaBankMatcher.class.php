@@ -20,6 +20,18 @@ class KreaBankMatcher
 	 */
 	const STRONG_REFERENCE_MIN_LENGTH = 8;
 
+	/** Recognize complete terminal/settlement identities, never the generic word TPA alone. */
+	public static function tpaSettlementIdentity($description)
+	{
+		$text = trim((string) preg_replace('/\s+/u', ' ', (string) $description));
+		if (preg_match('/\b(?:ESTORNO|DEVOLU[CÇ][AÃ]O|COMISS[AÃ]O|CANCELAMENTO|REFUND|CHARGEBACK)\b/iu', $text)) { return ''; }
+		if (!preg_match('/^FECHO TPA (?:([0-9]{5,12})\/([0-9]{5,12})\/([0-9]{1,6})|([0-9]{5,12}) PER[IÍ]ODO N[.º°]? ?([0-9]{1,6}))(?= |$)/iu', $text, $match)) {
+			return '';
+		}
+		$parts = !empty($match[1]) ? array_slice($match, 1, 3) : array_slice($match, 4, 2);
+		return implode('/', array_map(static function ($part) { return ltrim($part, '0') ?: '0'; }, $parts));
+	}
+
 	/**
 	 * Score one line against candidate documents.
 	 *

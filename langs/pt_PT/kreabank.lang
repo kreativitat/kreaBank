@@ -410,7 +410,7 @@ KreaBankAuditSkip=saltar
 KreaBankAuditDeleteStatement=apagar_extrato
 
 KreaBankAutomation=Reconciliação automática
-KreaBankAutoPurpose=Reconcilia automaticamente os movimentos importados com movimentos bancários já existentes no Dolibarr desta empresa. A criação de pagamentos de faturas continua sujeita a revisão.
+KreaBankAutoPurpose=Concilia automaticamente movimentos importados com movimentos bancários existentes. As opções adicionais permitem tratar transferências entre pares de contas e recebimentos de TPA. Os pagamentos de faturas exigem revisão.
 KreaBankAutoScheduleHelp=O agendador existente do Dolibarr verifica a cada 15 minutos. Cada execução analisa até 50 linhas pendentes e volta a analisar as linhas por resolver nas passagens seguintes. Consulte os resultados nas tarefas agendadas.
 KreaBankAutoMode=Modo
 KreaBankAutoOff=Desativado
@@ -528,3 +528,7 @@ KreaBankPairCompanyCurrency=As novas transferências automáticas exigem a moeda
 KreaBankPairEmpty=Ainda não existem pares de contas configurados.
 
 KreaBankSortList=Ordenar lista
+
+KreaBankTpaEnable=Criar e conciliar automaticamente recebimentos de terminais de pagamento (TPA)
+KreaBankTpaHelp=Para fechos TPA positivos reconhecidos nas contas selecionadas da empresa, reutiliza uma correspondência comprovada ou cria um recebimento bancário por cartão (CB). Movimentos ou identificadores de fecho em conflito ficam pendentes. Regista apenas o recebimento bancário; não cria faturas nem pagamentos de faturas.
+KreaBankTpaNewReceipt=Criar recebimento de TPA (CB)

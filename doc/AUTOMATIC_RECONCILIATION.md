@@ -3,7 +3,7 @@
 KreaBank 1.14 can reconcile pending imported statement lines with movements that
 already exist in the native Dolibarr bank account. It uses the same matcher,
 service and native `AccountLine::update_conciliation()` lifecycle as manual
-reconciliation. It never creates an invoice, payment, quick entry or bank movement.
+reconciliation. The existing-movement path never creates an invoice, payment, quick entry or bank movement.
 Invoice payment creation remains a reviewed operation.
 
 ## Setup and operation
@@ -110,3 +110,10 @@ Release 1.15.0 adds a separate, disabled-by-default paired-transfer option to th
 runner. It requires two imported legs and explicit company account relationships,
 and may create a complete native transfer atomically. The existing-movement path
 above still creates no bank movement. See [account pairs](ACCOUNT_PAIRS.md).
+
+## Optional TPA receipts
+
+Release 1.15.4 adds an independent opt-in TPA settlement receipt option to this
+runner. It may create a native card receipt only from a recognized positive
+settlement with no conflicting financial evidence. Existing matching rules are
+unchanged. See [TPA receipts](TPA_RECEIPTS.md).

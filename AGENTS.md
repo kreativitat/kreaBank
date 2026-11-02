@@ -136,3 +136,10 @@
 - Sort SQL/complete scoped arrays before pagination. History and audit have independent sort state and a fixed 5,000-row recent window; changing the window with the page causes duplicates/skips under other orders.
 - Bulk sorting orders compact results, preserves the scan cursor/budget and binds the presentation generation to the sort order. Rehydrate only the visible page; confirmation still recomputes and authenticates the reviewed pair.
 - `data-kb-sort` is only for fully rendered tables; never apply it to paginated lists or grouped detail rows. Preserve form controls by moving rows, and use raw sort attributes for localized numbers/dates. See `doc/LISTS.md` and its pure/disposable-database checks.
+
+## TPA settlement receipts
+
+- The existing automatic runner has an opt-in company `TPA_ENABLED` flag, default off. Recognize complete FECHO TPA terminal/period or merchant/terminal/batch identities through `KreaBankMatcher::tpaSettlementIdentity()`. The word TPA alone never authorizes a receipt.
+- `KreaBankService` checks persisted positive company-currency evidence, current owner account selection, duplicates, feed conflicts, restricted accounts, possible native entries and unbanked customer payments before creating a native `CB` receipt through the shared adapter. This creates no sales invoice or invoice payment.
+- Account/staging/native range locks and the shared finalizer commit receipt, source mapping and `auto_tpa` audit together; no pattern training. Preserve original evidence. Existing safe native matching remains unchanged.
+- `php test/test_tpa_receipts.php` is pure. `php test/test_tpa_receipts_database.php` extends ONLY the guarded disposable port 33317 fixture. See `doc/TPA_RECEIPTS.md`; test-installation jobs remain disabled.

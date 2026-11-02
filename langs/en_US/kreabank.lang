@@ -410,7 +410,7 @@ KreaBankAuditSkip=skip
 KreaBankAuditDeleteStatement=delete_statement
 
 KreaBankAutomation=Automatic reconciliation
-KreaBankAutoPurpose=Automatically reconcile imported transactions against existing Dolibarr bank movements in this company. Optionally reconcile configured account-pair transfers together. Invoice payment creation remains subject to review.
+KreaBankAutoPurpose=Automatically reconcile imported transactions with existing bank movements. Optional settings also handle configured account-pair transfers and card-terminal settlement receipts. Invoice payments require review.
 KreaBankAutoScheduleHelp=The existing Dolibarr scheduler checks every 15 minutes. Each run scans up to 50 pending lines and revisits unresolved lines on subsequent passes. Check job results under Scheduled jobs.
 KreaBankAutoMode=Mode
 KreaBankAutoOff=Disabled
@@ -528,3 +528,7 @@ KreaBankPairCompanyCurrency=New automatic transfers require the company currency
 KreaBankPairEmpty=No account pairs configured.
 
 KreaBankSortList=Sort list
+
+KreaBankTpaEnable=Automatically create and reconcile card-terminal settlement receipts (TPA)
+KreaBankTpaHelp=For recognized positive FECHO TPA settlements in selected company-owned accounts, reuse a proven existing match or create a native card receipt (CB). Conflicting ledger entries or settlement identities remain pending. This records the bank receipt only; it creates no sales invoice or invoice payment.
+KreaBankTpaNewReceipt=Create card-terminal receipt (CB)
