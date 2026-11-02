@@ -19,7 +19,8 @@ document. Do not use it to record sales revenue a second time.
 Recognized descriptions start with `FECHO TPA` and contain a complete terminal
 and period (`1234567890 PERIODO N 123`) or merchant/terminal/batch identity
 (`1234567/1234567890/123`). Trailing location text is allowed. Leading zeroes in
-identity components are normalized. The generic word TPA, fees, refunds,
+printed terminal and settlement identifiers are preserved; they can distinguish
+independent settlement streams. The generic word TPA, fees, refunds,
 chargebacks and negative movements do not qualify.
 
 Creation requires an unallocated, pending, nonduplicate staging row in a selected,
@@ -28,10 +29,11 @@ persisted amount. Restricted transfer-only accounts and Fintable source conflict
 remain excluded. Invalid dates and file-mapping repairs remain ineligible.
 
 For the same account, any other imported settlement with the same complete
-identity within 31 days on either side blocks creation, including completed,
-skipped and conflicting rows. Native ledger checks include reconciled/imported
-movements: a matching settlement identity in that window or an equal signed
-amount within the configured date tolerance requires existing matching or review.
+printed identity on the same booking day blocks creation, including completed,
+skipped and conflicting rows. Counters can legitimately recur on later dates.
+Native ledger checks include reconciled/imported movements: a matching settlement
+identity or an equal signed amount within the configured date tolerance requires
+existing matching or review.
 An unbanked customer payment of the same amount within that tolerance also blocks
 creation. Truncated searches fail closed. These conservative checks can leave
 legitimate equal-value receipts pending; they must not be bypassed by lowering

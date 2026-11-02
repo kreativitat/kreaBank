@@ -139,7 +139,7 @@
 
 ## TPA settlement receipts
 
-- The existing automatic runner has an opt-in company `TPA_ENABLED` flag, default off. Recognize complete FECHO TPA terminal/period or merchant/terminal/batch identities through `KreaBankMatcher::tpaSettlementIdentity()`. The word TPA alone never authorizes a receipt.
+- The existing automatic runner has an opt-in company `TPA_ENABLED` flag, default off. Recognize complete FECHO TPA terminal/period or merchant/terminal/batch identities through `KreaBankMatcher::tpaSettlementIdentity()`. The word TPA alone never authorizes a receipt. Preserve printed leading zeroes (distinct settlement streams) and scope staged duplicate identities to the booking day; counters can recur on later dates.
 - `KreaBankService` checks persisted positive company-currency evidence, current owner account selection, duplicates, feed conflicts, restricted accounts, possible native entries and unbanked customer payments before creating a native `CB` receipt through the shared adapter. This creates no sales invoice or invoice payment.
 - Account/staging/native range locks and the shared finalizer commit receipt, source mapping and `auto_tpa` audit together; no pattern training. Preserve original evidence. Existing safe native matching remains unchanged.
 - `php test/test_tpa_receipts.php` is pure. `php test/test_tpa_receipts_database.php` extends ONLY the guarded disposable port 33317 fixture. See `doc/TPA_RECEIPTS.md`; test-installation jobs remain disabled.

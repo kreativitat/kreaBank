@@ -52,19 +52,19 @@ checkAuto($native->fk_type==='CB' && $native->amount==='781.23000000' && $native
  'Native card operation, original amount/date, account and reconciliation flags are correct');
 $audit=json_decode($db->query('SELECT payload_json FROM kbauto_kreabank_recon_audit ORDER BY rowid DESC LIMIT 1')->fetch_object()->payload_json,true);
 checkAuto($audit['strategy']==='auto_tpa' && $audit['is_auto']===1 && $audit['native_bank_line_id']===$nativeId
- && $audit['terminal_settlement']==='12345678/1', 'Atomic audit records the source settlement identity and native receipt');
+ && $audit['terminal_settlement']==='0012345678/1', 'Atomic audit records the source settlement identity and native receipt');
 $bankCount=countAuto('bank');
 checkAuto(!$service->reconcileAutomaticTpaReceipt(60001,array(101)) && countAuto('bank')===$bankCount, 'Retry cannot create a second completed receipt');
-tpaFixture(60002,'781.24',101,1,'csv','FECHO TPA 012345678 PERIODO N 001');
-checkAuto($service->getAutomaticTpaSuggestion(60002,array(101))===null, 'Completed settlement identity blocks a different amount or leading-zero variant');
+tpaFixture(60002,'781.24',101,1,'csv','FECHO TPA 0012345678 PERIODO N 1');
+checkAuto($service->getAutomaticTpaSuggestion(60002,array(101))===null, 'Completed same-day settlement identity blocks a conflicting amount');
 tpaFixture(60003,'782.23'); bankAuto(66003,'782.23','',101);
 checkAuto($service->getAutomaticTpaSuggestion(60003,array(101))===null, 'Possible existing equal-amount ledger entry blocks creation');
 $db->query('UPDATE kbauto_bank SET rappro=1 WHERE rowid=66003');
 checkAuto($service->getAutomaticTpaSuggestion(60003,array(101))===null, 'Already reconciled possible movement also blocks duplication');
 $db->query('UPDATE kbauto_bank SET amount=0.01 WHERE rowid=66003');
-$db->query("UPDATE kbauto_bank SET label='FECHO TPA 12345678 PERIODO N 3',dateo='2026-10-10' WHERE rowid=66003");
-checkAuto($service->getAutomaticTpaSuggestion(60003,array(101))===null, 'Same native settlement identity outside ordinary date tolerance blocks creation');
-tpaFixture(60004,'783.23'); tpaFixture(60005,'783.24',101,1,'csv','FECHO TPA 12345678 PERIODO N 4');
+$db->query("UPDATE kbauto_bank SET label='FECHO TPA 0012345678 PERIODO N 3',dateo='2026-11-01' WHERE rowid=66003");
+checkAuto($service->getAutomaticTpaSuggestion(60003,array(101))===null, 'Same native settlement identity within date tolerance blocks conflicting amounts');
+tpaFixture(60004,'783.23'); tpaFixture(60005,'783.24',101,1,'csv','FECHO TPA 0012345678 PERIODO N 4');
 checkAuto($service->getAutomaticTpaSuggestion(60004,array(101))===null && $service->getAutomaticTpaSuggestion(60005,array(101))===null,
  'Competing staged identities with conflicting amounts both remain pending');
 tpaFixture(60006,'-784.23');
@@ -108,6 +108,17 @@ tpaFixture(60015,'793.23'); bankAuto(66015,'793.23','FECHO TPA 0012345678 PERIOD
 checkAuto($service->getAutomaticNativeSuggestion(60015,array(101))!==null && $service->getAutomaticTpaSuggestion(60015,array(101))===null,
  'A proven existing native movement remains eligible through the unchanged safe matcher');
 checkAuto($service->reconcileAutomaticNativeLine(60015,array(101)), 'Existing movement is reused instead of creating a receipt');
+// Bank terminal counters repeat and leading zeroes distinguish independent settlement streams.
+tpaFixture(60020,'798.23',101,1,'csv','FECHO TPA 0012345678 PERIODO N 1');
+$db->query("UPDATE kbauto_kreabank_statement_line SET operation_date='2026-11-20',value_date='2026-11-20' WHERE rowid=60020");
+checkAuto($service->getAutomaticTpaSuggestion(60020,array(101))!==null,'Repeated terminal counter on a later booking day is a distinct settlement');
+tpaFixture(60021,'799.23',101,1,'csv','FECHO TPA 012345678 PERIODO N 1');
+checkAuto($service->getAutomaticTpaSuggestion(60021,array(101))!==null,'Printed terminal leading zeroes distinguish independent settlement streams');
+tpaFixture(60022,'800.23',101,1,'csv','FECHO TPA 0123456/0001234567/007 SHOP');
+tpaFixture(60023,'801.23',101,1,'csv','FECHO TPA 0123456/0001234567/007 CITY');
+$db->query("UPDATE kbauto_kreabank_statement_line SET operation_date='2026-11-20',value_date='2026-11-20' WHERE rowid=60023");
+checkAuto($service->getAutomaticTpaSuggestion(60022,array(101))!==null && $service->getAutomaticTpaSuggestion(60023,array(101))!==null,
+ 'Merchant-terminal-batch counters may recur across booking dates without being duplicate evidence');
 // Recheck mutable source flags and company-currency policy through the actual service.
 tpaFixture(60016,'794.23');
 foreach (array('is_duplicate=1','allocated_amount=1','status=3','direction=-1','fk_native_bank_line=999999') as $change) {

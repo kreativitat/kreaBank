@@ -29,7 +29,7 @@ class KreaBankMatcher
 			return '';
 		}
 		$parts = !empty($match[1]) ? array_slice($match, 1, 3) : array_slice($match, 4, 2);
-		return implode('/', array_map(static function ($part) { return ltrim($part, '0') ?: '0'; }, $parts));
+		return implode('/', $parts);
 	}
 
 	/**

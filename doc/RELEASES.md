@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.5 — 2026-11-02
+
+- Preserve printed terminal identifiers, including leading zeroes, and scope
+  duplicate TPA closure checks to their booking day. Bank settlement streams
+  can legitimately reuse counters on later dates. Retain native-ledger conflicts,
+  source-identity checks and atomic receipt creation. No schema migration.
+
 ## 1.15.4 — 2026-11-02
 
 - Add opt-in automatic TPA settlement receipts to the existing company runner.

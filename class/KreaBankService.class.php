@@ -2423,20 +2423,19 @@ class KreaBankService
 			|| !checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1]))) { return null; }
 		$identity = KreaBankMatcher::tpaSettlementIdentity($raw->description);
 		if ($identity === '' || (new KreaBankAccountPairs($this->db, $this->entity))->mainAccount((int) $raw->bank_account_id)) { return null; }
-		// Card settlement IDs can repeat eventually; inspect a full month on either side, including completed/skipped evidence.
-		$range = $this->resolveOpenDocumentsDateRange($raw->operation_date, 31);
+		// Terminal counters repeat across settlement streams/dates; preserve their printed identity and booking day.
+		$tolerance = max(0, min(31, (int) getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE', 3)));
+		$range = $this->resolveOpenDocumentsDateRange($raw->operation_date, $tolerance);
 		$account = (int) $raw->bank_account_id;
 		$others = $this->transferRows("SELECT l.rowid,l.description FROM {$p}kreabank_statement_line l"
 			. " JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
 			. ' WHERE l.entity=' . $this->entity . ' AND s.bank_account_id=' . $account . ' AND l.rowid<>' . (int) $lineId
-			. " AND l.description LIKE '%TPA%' AND l.operation_date>=" . $this->sqlDate($range['start'])
-			. ' AND l.operation_date<=' . $this->sqlDate($range['end']) . ' ORDER BY l.rowid' . $this->db->plimit(1001) . ($lock ? ' FOR UPDATE' : ''));
+			. " AND l.description LIKE '%TPA%' AND l.operation_date=" . $this->sqlDate($raw->operation_date) . ' ORDER BY l.rowid' . $this->db->plimit(1001) . ($lock ? ' FOR UPDATE' : ''));
 		if (count($others) >= 1001) { return null; }
 		foreach ($others as $other) {
 			if (KreaBankMatcher::tpaSettlementIdentity($other->description) === $identity) { return null; }
 		}
-		$tolerance = max(0, min(31, (int) getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE', 3)));
-		$near = $this->resolveOpenDocumentsDateRange($raw->operation_date, $tolerance);
+		$near = $range;
 		// Include reconciled and imported native rows: neither authorizes a duplicate receipt.
 		$native = $this->transferRows("SELECT b.rowid,b.amount,b.dateo,b.label,b.num_chq,m.description FROM {$p}bank b"
 			. " JOIN {$p}bank_account ba ON ba.rowid=b.fk_account"
