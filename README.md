@@ -16,6 +16,8 @@ It is designed to accelerate bank operations without creating a parallel account
 - Provides pending, reconciliation, and history workspaces on top of the native bank module.
 - Configures restricted/main account pairs and optionally reconciles both transfer legs automatically. See [account pairs](doc/ACCOUNT_PAIRS.md).
 - Respects Dolibarr permissions and active `entity` scoping.
+- Exposes bounded, read-only banking evidence through the native REST API for
+  KreaMCP clients. See [REST integration](doc/API.md).
 - Collects Fintable balances and posted transactions twice daily for active companies, using encrypted credentials, exact IBAN ownership and duplicate-safe staging. See [Fintable integration](doc/FINTABLE.md).
 
 ## Native-first architecture

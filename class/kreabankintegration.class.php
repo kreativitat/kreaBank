@@ -29,26 +29,26 @@ class KreaBankIntegration
 			. " COUNT(l.rowid) imported_lines, COALESCE(SUM(l.amount),0) amount_total, s.source_type, s.filename source_file, s.date_import imported_at,"
 			. " SUM(CASE WHEN b.rowid IS NOT NULL THEN 1 ELSE 0 END) native_lines,"
 			. " SUM(CASE WHEN l.status=2 AND b.rappro=1 AND ABS(b.amount-l.amount)<=0.01 AND b.num_releve=s.ref AND l.currency=ba.currency_code THEN 1 ELSE 0 END) reconciled_lines,"
-			. " SUM(CASE WHEN l.status=2 AND (b.rowid IS NULL OR b.rappro<>1 OR ABS(b.amount-l.amount)>0.01 OR COALESCE(b.num_releve,'')<>s.ref OR l.currency<>ba.currency_code) THEN 1 ELSE 0 END) issue_lines"
+			. " SUM(CASE WHEN l.status=2 AND (b.rowid IS NULL OR b.rappro<>1 OR ABS(b.amount-l.amount)>0.01 OR COALESCE(b.num_releve,'')<>s.ref OR l.currency<>ba.currency_code) THEN 1 ELSE 0 END) issue_lines,s.currency"
 			. " FROM {$p}kreabank_statement s JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=$e"
 			. " LEFT JOIN {$p}kreabank_statement_line l ON l.fk_statement=s.rowid AND l.entity=s.entity"
 			. " LEFT JOIN {$p}bank b ON b.rowid=l.fk_native_bank_line AND b.fk_account=ba.rowid"
-			. " WHERE s.entity=$e$account GROUP BY s.rowid,s.bank_account_id,ba.ref,ba.label,s.ref,s.source_type,s.filename,s.date_import";
+			. " WHERE s.entity=$e$account GROUP BY s.rowid,s.bank_account_id,ba.ref,ba.label,s.ref,s.source_type,s.filename,s.date_import,s.currency";
 		$sql .= " UNION ALL SELECT b.fk_account,ba.ref,ba.label,b.num_releve,MIN(COALESCE(m.operation_date,b.dateo)),MAX(COALESCE(m.operation_date,b.dateo)),"
 			. " COUNT(b.rowid),SUM(b.amount),COALESCE(MAX(m.source_type),''),COALESCE(MAX(m.source_file),''),MAX(m.datec),COUNT(b.rowid),"
-			. " SUM(CASE WHEN b.rappro=1 THEN 1 ELSE 0 END),SUM(CASE WHEN m.status=2 AND b.rappro<>1 THEN 1 ELSE 0 END)"
+			. " SUM(CASE WHEN b.rappro=1 THEN 1 ELSE 0 END),SUM(CASE WHEN m.status=2 AND b.rappro<>1 THEN 1 ELSE 0 END),ba.currency_code"
 			. " FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account AND ba.entity=$e"
 			. " LEFT JOIN {$p}kreabank_bankmeta m ON m.fk_bank_line=b.rowid AND m.entity=$e"
 			. " WHERE COALESCE(b.num_releve,'')<>''$account"
 			. " AND (m.rowid IS NOT NULL OR b.note LIKE 'KreaBank import %' OR b.note LIKE 'KreaBank staged import %')"
 			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement s WHERE s.entity=$e AND s.bank_account_id=ba.rowid AND s.ref=b.num_releve)"
 			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement_line l WHERE l.entity=$e AND l.fk_native_bank_line=b.rowid)"
-			. " GROUP BY b.fk_account,ba.ref,ba.label,b.num_releve";
+			. " GROUP BY b.fk_account,ba.ref,ba.label,b.num_releve,ba.currency_code";
 		return $sql;
 	}
 
 	/** Current-company account overview; balances use native operation dates. */
-	public function accounts($kind = 'bank', $accountId = 0, $sortfield = 'ref', $sortorder = 'ASC')
+	public function accounts($kind = 'bank', $accountId = 0, $sortfield = 'ref', $sortorder = 'ASC', $limit = 0, $offset = 0)
 	{
 		$p = $this->db->prefix();
 		$e = $this->entity;
@@ -62,6 +62,9 @@ class KreaBankIntegration
 			. " LEFT JOIN (SELECT s.bank_account_id,COUNT(*) pending_count FROM {$p}kreabank_statement_line l JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity LEFT JOIN {$p}bank b ON b.rowid=l.fk_native_bank_line WHERE s.entity=$e AND l.status IN (0,1) AND COALESCE(b.rappro,0)=0 GROUP BY s.bank_account_id) st ON st.bank_account_id=ba.rowid"
 			. " LEFT JOIN (SELECT b.fk_account,COUNT(*) pending_count FROM {$p}kreabank_bankmeta m JOIN {$p}bank b ON b.rowid=m.fk_bank_line WHERE m.entity=$e AND m.status IN (0,1) AND b.rappro=0 AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement_line l WHERE l.entity=$e AND l.fk_native_bank_line=b.rowid) GROUP BY b.fk_account) lg ON lg.fk_account=ba.rowid"
 			. " WHERE ba.entity=$e$filter$accountFilter ORDER BY $order";
+		if ((int) $limit > 0) {
+			$sql .= $this->db->plimit((int) $limit, max(0, (int) $offset));
+		}
 		return $this->query($sql);
 	}
 
@@ -92,12 +95,12 @@ class KreaBankIntegration
 		$a = (int) $accountId;
 		$r = $this->quote($reference);
 		return "SELECT l.rowid,l.line_rank,l.operation_date,l.value_date,l.amount,l.currency,l.running_balance,l.payment_reference,l.bank_reference,l.counterparty_name,l.counterparty_iban,l.description,l.status,l.is_duplicate,"
-			. " b.rowid native_id,b.amount native_amount,b.rappro,b.num_releve,l.fk_native_bank_line expected_native_id,ba.currency_code native_currency"
+			. " b.rowid native_id,b.amount native_amount,b.rappro,b.num_releve,l.fk_native_bank_line expected_native_id,ba.currency_code native_currency,'staging' source_storage"
 			. " FROM {$p}kreabank_statement s JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=$e"
 			. " JOIN {$p}kreabank_statement_line l ON l.fk_statement=s.rowid AND l.entity=s.entity"
 			. " LEFT JOIN {$p}bank b ON b.rowid=l.fk_native_bank_line AND b.fk_account=ba.rowid"
 			. " WHERE s.entity=$e AND ba.rowid=$a AND s.ref=$r"
-			. " UNION ALL SELECT b.rowid,b.rowid,COALESCE(m.operation_date,b.dateo),COALESCE(m.value_date,b.datev),b.amount,ba.currency_code,m.running_balance,m.payment_reference,m.bank_reference,m.counterparty_name,m.counterparty_iban,COALESCE(m.description,b.label),COALESCE(m.status,0),0,b.rowid,b.amount,b.rappro,b.num_releve,b.rowid,ba.currency_code"
+			. " UNION ALL SELECT b.rowid,b.rowid,COALESCE(m.operation_date,b.dateo),COALESCE(m.value_date,b.datev),b.amount,ba.currency_code,m.running_balance,m.payment_reference,m.bank_reference,m.counterparty_name,m.counterparty_iban,COALESCE(m.description,b.label),COALESCE(m.status,0),0,b.rowid,b.amount,b.rappro,b.num_releve,b.rowid,ba.currency_code,'legacy_native'"
 			. " FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account AND ba.entity=$e"
 			. " LEFT JOIN {$p}kreabank_bankmeta m ON m.fk_bank_line=b.rowid AND m.entity=$e"
 			. " WHERE ba.rowid=$a AND b.num_releve=$r"

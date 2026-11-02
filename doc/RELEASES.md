@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.16.0 — 2026-11-02
+
+- Add authenticated, current-company REST reads for accounts, statements, original
+  imported lines and audit metadata, supporting KreaMCP without a parallel ledger.
+- Preserve decimal amounts, explicit currencies, staging/native ID namespaces,
+  link discrepancy states and bounded SQL pagination. Both native bank and
+  KreaBank read permissions are required; external users are denied.
+- No schema migration, financial writes, feed synchronization or scheduler changes.
+  See [REST integration](API.md) for deployment order and regression checks.
+
 ## 1.15.6 — 2026-11-02
 
 - Require an explicit active native payment mode for automatic TPA receipts.

@@ -23,6 +23,7 @@
 
 ## Integration Points
 
+- The read-only `KreaBankApi` in `class/api_kreabank.class.php` uses `/kreabankapi` and the shared `KreaBankIntegration` projection. Require both native bank and KreaBank read rights, deny external users, enforce direct current-company account ownership and bound SQL pages to 1–500. Never construct `KreaBankService` for reads: its initialization/helpers can create tables. See [REST integration](doc/API.md); `php test/test_api_database.php` uses only the disposable port 33317 fixture and checks installed Restler routes.
 - 2026-07-16: Existing-invoice reconciliation creates native `Paiement` or `PaiementFourn` objects, requests Dolibarr native paid-invoice lifecycle handling with `closepaidinvoices=1`, and attaches the payment to the selected native bank line with `update_fk_bank()`.
 
 ## Multicompany Notes
