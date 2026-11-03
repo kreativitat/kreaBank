@@ -98,10 +98,16 @@ numbering remains a separate, clearly labelled account tool. See
 
 ### Reconciliation
 
-1. Open `/custom/kreabank/reconcile.php`.
-2. Review the proposed matches for invoices or payments.
-3. Confirm reconciliation.
-4. Reconciled state remains visible in the native Dolibarr bank pages under `/compta/bank/...`.
+1. Open `/custom/kreabank/reconcile.php` and select a pending statement line.
+2. Choose **Match an existing entry**, select existing bank movements and review
+   the selected total and remaining difference before reconciling.
+3. If a record must be created, choose **Create a new entry and reconcile**.
+   Bank entry, tax payment and supplier invoice choices explain the records and
+   immediate reconciliation they perform. Invoice creation includes a product-line
+   review before final confirmation.
+4. Reconciled state remains visible in native Dolibarr bank pages.
+
+See [reconciliation workspace and validation](doc/RECONCILIATION_UI.md).
 
 ### History and pending review
 

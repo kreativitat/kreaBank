@@ -10,7 +10,7 @@
 /**
  * \file       kreabank/reconcile.php
  * \ingroup    kreabank
- * \brief      Dual-pane reconciliation workspace.
+ * \brief      Selected-line reconciliation workspace.
  */
 
 $res = 0;
@@ -78,6 +78,8 @@ $form = new Form($db);
 $canNativeWrite = ($user->hasRight('banque', 'modifier') || $user->hasRight('banque', 'consolidate'));
 $canQuickSupplierInvoice = (isModEnabled('supplier_invoice') && $user->hasRight('fournisseur', 'facture', 'lire') && $user->hasRight('fournisseur', 'facture', 'creer'));
 $canQuickTaxEntry = (isModEnabled('tax') && $user->hasRight('tax', 'charges', 'lire') && $user->hasRight('tax', 'charges', 'creer'));
+$quickEntryFailed = false;
+$quickEntryFormState = array();
 $quickCreateSuccessAlert = array(
 	'enabled' => 0,
 	'message' => '',
@@ -446,6 +448,12 @@ if ($action === 'quick_entry' && $user->hasRight('kreabank', 'reconciliation', '
 				setEventMessages($langs->trans('KreaBankQuickEntryDone'), null, 'mesgs');
 			}
 		} catch (Exception $e) {
+			$quickEntryFailed = true;
+			$quickEntryFormState = array(
+				'choice' => $submitAction, 'label' => $label, 'amount' => $amount, 'note' => $note,
+				'supplier_id' => $supplierSocid, 'supplier_lookup' => $supplierLookup,
+				'supplier_ref' => $supplierRef, 'lines' => $invoiceProductLines,
+			);
 			$errorMessage = (string) $e->getMessage();
 			if ($errorMessage === 'Unable to resolve supplier from VAT/name lookup or ML prediction.') {
 				$errorMessage = $langs->trans('ErrorFieldRequired', $langs->transnoentitiesnoconv('KreaBankQuickSupplierInvoiceSupplier'));
@@ -1347,18 +1355,14 @@ if ($selectedLine) {
 	}
 }
 $quickSupplierProductLineSlots = 6;
-$renderQuickEntryForm = static function ($line, $openDocSearch, $entryTypeOptions, $titleKey, $defaultEntryType, $prefillLabel, $prefillAmount, $prefillNote, $supplierLookupPrefill = '', $supplierRefPrefill = '', $supplierPredictedSocid = 0, $supplierPrediction = array(), $showSupplierInvoiceButton = false, $showTaxEntryButton = false, $showTopSpacing = false) use ($navigationAccountId, $langs, $forceBatchDetect, $form, $quickSupplierProductLineSlots, $decodeHtmlEntitiesRecursive) {
-	if (empty($line) || empty($entryTypeOptions) || empty($titleKey)) {
+$renderQuickEntryForm = static function ($line, $openDocSearch, $prefillLabel, $prefillAmount, $prefillNote, $supplierLookupPrefill = '', $supplierRefPrefill = '', $supplierPredictedSocid = 0, $supplierPrediction = array(), $showSupplierInvoiceButton = false, $showTaxEntryButton = false) use ($navigationAccountId, $langs, $forceBatchDetect, $form, $quickSupplierProductLineSlots, $decodeHtmlEntitiesRecursive, $quickEntryFormState) {
+	if (empty($line)) {
 		return;
 	}
 
 	$lineIdValue = !empty($line['rowid']) ? (int) $line['rowid'] : 0;
 	if ($lineIdValue <= 0) {
 		return;
-	}
-
-	if ($showTopSpacing) {
-		print '<br>';
 	}
 
 	$formDomId = 'krea_quick_entry_form_' . $lineIdValue;
@@ -1368,12 +1372,19 @@ $renderQuickEntryForm = static function ($line, $openDocSearch, $entryTypeOption
 	$supplierFeedbackId = 'krea_supplier_invoice_feedback_' . $lineIdValue;
 	$supplierConfirmId = 'krea_supplier_invoice_confirm_' . $lineIdValue;
 	$supplierJsonInputId = 'krea_supplier_invoice_lines_json_' . $lineIdValue;
+	if ($quickEntryFormState) {
+		$prefillLabel = $quickEntryFormState['label'];
+		$prefillAmount = $quickEntryFormState['amount'];
+		$prefillNote = $quickEntryFormState['note'];
+		$supplierLookupPrefill = $quickEntryFormState['supplier_lookup'];
+		$supplierRefPrefill = $quickEntryFormState['supplier_ref'];
+		$supplierPredictedSocid = $quickEntryFormState['supplier_id'];
+	}
 	$prefillAmountNumber = (float) price2num((string) $prefillAmount, 'MU');
 	if ($prefillAmountNumber <= 0) {
 		$prefillAmountNumber = 0.0;
 	}
-	print '<h4>' . $langs->trans((string) $titleKey) . '</h4>';
-	print '<form id="' . $formDomId . '" method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" style="margin-bottom:12px">';
+	print '<form id="' . $formDomId . '" method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" data-locale="' . dol_escape_htmltag(str_replace('_', '-', $langs->defaultlang)) . '" data-initial-lines="' . dol_escape_htmltag(json_encode($quickEntryFormState['lines'] ?? array())) . '">';
 	print kreabankNavigationHiddenFields($navigationAccountId);
 	print '<input type="hidden" name="token" value="' . newToken() . '">';
 	print '<input type="hidden" name="action" value="quick_entry">';
@@ -1388,70 +1399,39 @@ $renderQuickEntryForm = static function ($line, $openDocSearch, $entryTypeOption
 	if ((int) $supplierPredictedSocid > 0) {
 		print '<input type="hidden" name="entry_supplier_predicted_socid" value="' . ((int) $supplierPredictedSocid) . '">';
 	}
-	if (!empty($supplierPrediction['enabled'])) {
-		$predictedName = !empty($supplierPrediction['predicted_name']) ? (string) $supplierPrediction['predicted_name'] : '';
-		$predictedName = $decodeHtmlEntitiesRecursive($predictedName);
-		$predictionPct = !empty($supplierPrediction['probability_pct']) ? (int) $supplierPrediction['probability_pct'] : 0;
-		$predictionThreshold = !empty($supplierPrediction['threshold_pct']) ? (int) $supplierPrediction['threshold_pct'] : 0;
-		if ($predictedName !== '') {
-			print '<div class="' . (!empty($supplierPrediction['is_confident']) ? 'info' : 'warning') . '" style="margin-bottom:8px;">';
-			print $langs->trans('KreaBankSupplierMlPrediction', dol_escape_htmltag($predictedName), (string) $predictionPct, (string) $predictionThreshold);
-			print '</div>';
-		} elseif (!empty($showSupplierInvoiceButton)) {
-			print '<div class="warning" style="margin-bottom:8px;">' . $langs->trans('KreaBankSupplierMlNoPrediction') . '</div>';
-		}
+	print '<fieldset class="kb-create-choices"><legend>' . $langs->trans('KreaBankWorkspaceCreateChoice') . '</legend>';
+	$choices = array('payment_entry' => 'Bank');
+	if ($showTaxEntryButton) { $choices['tax_entry'] = 'Tax'; }
+	if ($showSupplierInvoiceButton) { $choices['supplier_invoice'] = 'Invoice'; }
+	foreach ($choices as $choice => $label) {
+		print '<label class="kb-create-choice"><input type="radio" name="creation_choice" value="' . $choice . '"' . ($choice === ($quickEntryFormState['choice'] ?? 'payment_entry') ? ' checked' : '') . '><span><strong>' . $langs->trans('KreaBankWorkspaceChoice' . $label) . '</strong><small>' . $langs->trans('KreaBankWorkspaceConsequence' . $label) . '</small></span></label>';
 	}
-	print '<table class="nobordernopadding centpercent">';
-	print '<tr><td>' . $langs->trans('KreaBankQuickEntryType') . '</td><td><select class="flat" name="entry_type">';
-	foreach ((array) $entryTypeOptions as $entryTypeOption) {
-		$entryTypeValue = isset($entryTypeOption['value']) ? (string) $entryTypeOption['value'] : '';
-		$entryTypeLabelKey = isset($entryTypeOption['label_key']) ? (string) $entryTypeOption['label_key'] : '';
-		if ($entryTypeValue === '' || $entryTypeLabelKey === '') {
-			continue;
-		}
-
-		$isSelected = ($entryTypeValue === (string) $defaultEntryType);
-		print '<option value="' . dol_escape_htmltag($entryTypeValue) . '"' . ($isSelected ? ' selected' : '') . '>' . $langs->trans($entryTypeLabelKey) . '</option>';
-	}
-	print '</select></td></tr>';
-	print '<tr><td>' . $langs->trans('KreaBankQuickEntryLabel') . '</td><td><input class="flat minwidth300" type="text" name="entry_label" value="' . dol_escape_htmltag((string) $prefillLabel) . '" required></td></tr>';
-	print '<tr><td>' . $langs->trans('KreaBankQuickEntryAmount') . '</td><td><input class="flat" type="number" step="0.01" min="0" name="entry_amount" value="' . number_format($prefillAmountNumber, 2, '.', '') . '"></td></tr>';
+	print '</fieldset>';
+	print '<input type="hidden" name="entry_type" value="payment">';
+	print '<div class="kb-entry-fields">';
+	print '<div class="kb-field kb-field-wide"><label for="kb-entry-label">' . $langs->trans('KreaBankQuickEntryLabel') . '</label><input id="kb-entry-label" type="text" name="entry_label" value="' . dol_escape_htmltag((string) $prefillLabel) . '" required maxlength="190"></div>';
+	print '<div class="kb-field"><label for="kb-entry-amount">' . $langs->trans('KreaBankQuickEntryAmount') . ' (' . dol_escape_htmltag($line['currency']) . ')</label><input id="kb-entry-amount" type="number" step="0.01" min="0.01" name="entry_amount" value="' . number_format($prefillAmountNumber, 2, '.', '') . '" required inputmode="decimal"></div>';
 	$selectedSupplierInput = trim((string) $supplierLookupPrefill);
-	if ($selectedSupplierInput === '' && !empty($supplierPrediction['predicted_name'])) {
-		$selectedSupplierInput = $decodeHtmlEntitiesRecursive((string) $supplierPrediction['predicted_name']);
-	}
+	if ($selectedSupplierInput === '' && !empty($supplierPrediction['predicted_name'])) { $selectedSupplierInput = $decodeHtmlEntitiesRecursive($supplierPrediction['predicted_name']); }
 	$selectedSupplierId = ((int) $supplierPredictedSocid > 0 ? (int) $supplierPredictedSocid : '');
-	print '<tr><td>' . $langs->trans('KreaBankQuickSupplierInvoiceSupplier') . '</td><td>' . $form->select_company(
-		$selectedSupplierId,
-		'entry_supplier_socid',
-		'(s.fournisseur:>:0)',
-		'KreaBankQuickSupplierLookupPlaceholder',
-		0,
-		0,
-		array(),
-		0,
-		'minwidth300',
-		'',
-		$selectedSupplierInput,
-		1
-	) . '</td></tr>';
-	print '<tr><td>' . $langs->trans('KreaBankQuickSupplierInvoiceRefSupplier') . '</td><td><input class="flat minwidth300" type="text" name="entry_ref_supplier" value="' . dol_escape_htmltag((string) $supplierRefPrefill) . '"></td></tr>';
-	print '<tr><td>' . $langs->trans('KreaBankReason') . '</td><td><textarea class="flat" name="entry_note" rows="2" style="width:100%">' . dol_escape_htmltag((string) $prefillNote, 0, 1) . '</textarea></td></tr>';
-	print '</table>';
-	print '<div class="tabsAction">';
-	print '<button class="butAction" type="submit" name="entry_submit_action" value="payment_entry">' . $langs->trans('KreaBankQuickActionPayment') . '</button>';
-	if (!empty($showTaxEntryButton)) {
-		print '<button class="butAction" type="submit" name="entry_submit_action" value="tax_entry">' . $langs->trans('KreaBankQuickActionTax') . '</button>';
+	print '<div class="kb-field" data-kb-supplier-field><label for="entry_supplier_socid">' . $langs->trans('KreaBankQuickSupplierInvoiceSupplier') . '</label>';
+	print $form->select_company($selectedSupplierId, 'entry_supplier_socid', '(s.fournisseur:>:0)', 'KreaBankQuickSupplierLookupPlaceholder', 0, 0, array(), 0, 'minwidth300', '', $selectedSupplierInput, 1);
+	if (!empty($supplierPrediction['is_confident']) && !empty($supplierPrediction['predicted_name'])) {
+		print '<small>' . $langs->trans('KreaBankSupplierMlPrediction', dol_escape_htmltag($decodeHtmlEntitiesRecursive($supplierPrediction['predicted_name'])), (int) $supplierPrediction['probability_pct'], (int) $supplierPrediction['threshold_pct']) . '</small>';
 	}
-	if (!empty($showSupplierInvoiceButton)) {
+	print '<small data-kb-supplier-feedback role="alert" hidden></small></div>';
+	print '<div class="kb-field kb-field-wide" data-kb-invoice-field><label for="kb-entry-ref">' . $langs->trans('KreaBankQuickSupplierInvoiceRefSupplier') . '</label><input id="kb-entry-ref" type="text" name="entry_ref_supplier" value="' . dol_escape_htmltag((string) $supplierRefPrefill) . '"></div>';
+	print '<div class="kb-field kb-field-wide"><label for="kb-entry-note">' . $langs->trans('KreaBankReason') . '</label><textarea id="kb-entry-note" name="entry_note" rows="2">' . dol_escape_htmltag((string) $prefillNote, 0, 1) . '</textarea></div></div>';
+	print '<div class="kb-create-actions">';
+	print '<button class="button kb-primary-action" data-kb-create-action="payment_entry" type="submit" name="entry_submit_action" value="payment_entry">' . $langs->trans('KreaBankWorkspaceCreateBank') . '</button>';
+	if ($showTaxEntryButton) { print '<button class="button kb-primary-action" data-kb-create-action="tax_entry" type="submit" name="entry_submit_action" value="tax_entry">' . $langs->trans('KreaBankWorkspaceCreateTax') . '</button>'; }
+	if ($showSupplierInvoiceButton) {
 		$supplierRequiredMsg = $langs->transnoentitiesnoconv('ErrorFieldRequired', $langs->transnoentitiesnoconv('KreaBankQuickSupplierInvoiceSupplier'));
-		print '<button class="butAction" type="button" data-krea-supplier-modal-open="' . $supplierModalId . '" data-krea-form-id="' . $formDomId . '" data-krea-msg-supplier="' . dol_escape_htmltag($supplierRequiredMsg) . '">' . $langs->trans('KreaBankQuickActionInvoice') . '</button>';
+		print '<button class="button kb-primary-action" data-kb-create-action="supplier_invoice" type="button" data-krea-supplier-modal-open="' . $supplierModalId . '" data-krea-form-id="' . $formDomId . '" data-krea-msg-supplier="' . dol_escape_htmltag($supplierRequiredMsg) . '">' . $langs->trans('KreaBankWorkspaceReviewInvoice') . '</button>';
 	}
-	print '<button class="butAction" type="submit" name="entry_submit_action" value="skip_line" formnovalidate>' . $langs->trans('KreaBankQuickActionPending') . '</button>';
 	print '</div>';
-	print '<div class="krea-muted" style="margin-top:6px">' . $langs->trans('KreaBankQuickActionsHelp') . '</div>';
 	if (!empty($showSupplierInvoiceButton)) {
-		print '<div id="' . $supplierModalId . '" class="krea-modal-overlay krea-supplier-lines-modal"';
+		print '<div id="' . $supplierModalId . '" class="krea-modal-overlay krea-supplier-lines-modal" role="dialog" aria-modal="true" aria-labelledby="' . $supplierModalId . '_title" tabindex="-1"';
 		print ' data-target-total="' . price2num((string) $prefillAmountNumber, 'MU') . '"';
 		print ' data-target-total-id="' . $supplierTargetTotalId . '"';
 		print ' data-current-total-id="' . $supplierCurrentTotalId . '"';
@@ -1466,8 +1446,8 @@ $renderQuickEntryForm = static function ($line, $openDocSearch, $entryTypeOption
 		print ' style="display:none;">';
 		print '<div class="krea-modal-dialog">';
 		print '<div class="krea-modal-header">';
-		print '<div class="krea-modal-title">' . $langs->trans('KreaBankQuickSupplierLinesTitle') . '</div>';
-		print '<button type="button" class="butAction krea-modal-close" data-krea-modal-close="' . $supplierModalId . '">x</button>';
+		print '<div class="krea-modal-title" id="' . $supplierModalId . '_title">' . $langs->trans('KreaBankQuickSupplierLinesTitle') . '</div>';
+		print '<button type="button" aria-label="' . dol_escape_htmltag($langs->trans('Close')) . '" class="butAction krea-modal-close" data-krea-modal-close="' . $supplierModalId . '">x</button>';
 		print '</div>';
 		print '<div class="krea-muted" style="margin-bottom:8px">' . $langs->trans('KreaBankQuickSupplierLinesHelp') . '</div>';
 		print '<table class="nobordernopadding centpercent krea-product-line-table">';
@@ -1487,7 +1467,7 @@ $renderQuickEntryForm = static function ($line, $openDocSearch, $entryTypeOption
 			$amountDefault = ($lineSlot === 0 ? number_format((float) $prefillAmountNumber, 2, '.', '') : '');
 			$deleteIcon = img_picto($langs->transnoentitiesnoconv('Delete'), 'delete', 'class="krea-delete-icon"');
 			print '<tr class="' . $rowClass . '" data-krea-product-row="' . $lineSlot . '">';
-			print '<td>' . $form->select_produits(
+			print '<td><label class="kb-sr-only" for="entry_product_line_product_' . $lineSlot . '">' . $langs->trans('Product') . '</label>' . $form->select_produits(
 				0,
 				'entry_product_line_product_' . $lineSlot,
 				'',
@@ -1508,9 +1488,9 @@ $renderQuickEntryForm = static function ($line, $openDocSearch, $entryTypeOption
 				1,
 				1
 			) . '</td>';
-			print '<td><input class="flat minwidth200 krea-product-line-label" type="text" name="entry_product_line_label_' . $lineSlot . '" value="" readonly></td>';
-			print '<td class="center"><input class="flat right krea-product-line-qty" type="number" step="0.000001" min="0" name="entry_product_line_qty_' . $lineSlot . '" value="' . $qtyDefault . '"></td>';
-			print '<td class="right"><input class="flat right krea-product-line-amount" type="number" step="0.01" min="0" name="entry_product_line_amount_' . $lineSlot . '" value="' . $amountDefault . '" inputmode="decimal"></td>';
+			print '<td><input class="flat minwidth200 krea-product-line-label" type="text" aria-label="' . dol_escape_htmltag($langs->trans('Description')) . '" name="entry_product_line_label_' . $lineSlot . '" value="" readonly></td>';
+			print '<td class="center" data-label="' . dol_escape_htmltag($langs->trans('Qty')) . '"><input class="flat right krea-product-line-qty" type="number" step="0.000001" min="0" aria-label="' . dol_escape_htmltag($langs->trans('Qty')) . '" name="entry_product_line_qty_' . $lineSlot . '" value="' . $qtyDefault . '"></td>';
+			print '<td class="right" data-label="' . dol_escape_htmltag($langs->trans('Amount')) . '"><input class="flat right krea-product-line-amount" type="number" step="0.01" min="0" aria-label="' . dol_escape_htmltag($langs->trans('Amount')) . '" name="entry_product_line_amount_' . $lineSlot . '" value="' . $amountDefault . '" inputmode="decimal"></td>';
 			print '<td class="center"><button type="button" class="butAction krea-product-line-remove" data-krea-product-remove="' . $lineSlot . '" title="' . dol_escape_htmltag($langs->transnoentitiesnoconv('Delete')) . '" aria-label="' . dol_escape_htmltag($langs->transnoentitiesnoconv('Delete')) . '"' . ($lineSlot === 0 ? ' style="display:none"' : '') . '>' . $deleteIcon . '</button></td>';
 			print '</tr>';
 		}
@@ -1520,20 +1500,16 @@ $renderQuickEntryForm = static function ($line, $openDocSearch, $entryTypeOption
 		print '<span class="krea-muted">' . $langs->trans('KreaBankQuickSupplierLinesTarget') . ': <strong id="' . $supplierTargetTotalId . '">' . kreabankPrice($prefillAmountNumber) . '</strong></span>';
 		print '<span class="krea-muted">' . $langs->trans('KreaBankQuickSupplierLinesCurrent') . ': <strong id="' . $supplierCurrentTotalId . '">' . kreabankPrice(0) . '</strong></span>';
 		print '</div>';
-		print '<div id="' . $supplierFeedbackId . '" class="warning" style="margin-top:8px;display:none"></div>';
+		print '<div id="' . $supplierFeedbackId . '" role="status" aria-live="polite" class="warning" style="margin-top:8px;display:none"></div>';
 		print '<div class="tabsAction" style="margin-top:10px">';
 		print '<button type="button" class="butAction" data-krea-modal-close="' . $supplierModalId . '">' . $langs->trans('KreaBankQuickSupplierLinesClose') . '</button>';
-		print '<button class="butAction" type="submit" name="entry_submit_action" value="supplier_invoice" id="' . $supplierConfirmId . '">' . $langs->trans('KreaBankQuickActionInvoiceConfirm') . '</button>';
+		print '<button class="button kb-primary-action" type="button" name="entry_submit_action" value="supplier_invoice" id="' . $supplierConfirmId . '">' . $langs->trans('KreaBankWorkspaceCreateInvoice') . '</button>';
 		print '</div>';
 		print '</div>';
 		print '</div>';
 	}
 	print '</form>';
 };
-
-$quickPaymentEntryTypeOptions = array(
-	array('value' => 'payment', 'label_key' => 'KreaBankQuickEntryTypePayment'),
-);
 
 llxHeader('', $langs->trans('KreaBankReconcile'), '', '', 0, 0, '', '', '', 'mod-kreabank page-reconcile');
 
@@ -1544,16 +1520,9 @@ if (!empty($quickCreateSuccessAlert['enabled']) && !empty($quickCreateSuccessAle
 	if ($stickyUrl !== '' && $stickyRef !== '') {
 		$stickyMessage .= ' <a href="' . dol_escape_htmltag($stickyUrl) . '" target="_blank" rel="noopener">' . dol_escape_htmltag($stickyRef) . '</a>';
 	}
-	print '<script nonce="' . getNonce() . '">';
-	print 'jQuery(function(){';
-	print 'if (window.jQuery && typeof jQuery.jnotify === "function") {';
-	print 'jQuery.jnotify(' . json_encode($stickyMessage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ', {type:"3000", sticky:true, showClose:true});';
-	print '}';
-	print '});';
-	print '</script>';
-	print '<noscript><div class="krea-embedded-success-alert">';
+	print '<div class="krea-embedded-success-alert" role="status">';
 	dol_htmloutput_mesg($stickyMessage, array(), 'ok', 1);
-	print '</div></noscript>';
+	print '</div>';
 }
 
 kreabankPrintWorkspaceNavigation('reconcile', $navigationAccount);
@@ -1568,269 +1537,79 @@ if ($selectedLine && !empty($selectedLine['fk_statement'])) {
 }
 
 
-print '<style>';
-print '.krea-embedded-success-alert .ok{margin:0 0 12px 0}';
-print '.krea-embedded-success-alert .ok a{font-weight:700;text-decoration:underline}';
-print '.krea-recon-layout{display:flex;gap:16px;margin-top:8px}';
-print '.krea-left{flex:1;min-width:0;padding-right:4px}';
-print '.krea-right{flex:1;min-width:0}';
-print '.krea-line-card{border:1px solid #d8d8d8;border-radius:6px;background:#fff;padding:10px;margin-bottom:10px;transition:all .2s ease}';
-print '.krea-line-card.selected{border-color:#0070d2;box-shadow:0 2px 6px rgba(0,112,210,.2)}';
-print '.krea-line-card-primary{border-width:2px;padding:12px;box-shadow:0 4px 12px rgba(0,112,210,.16)}';
-print '.krea-line-card-secondary{opacity:.55;filter:saturate(.72)}';
-print '.krea-line-card-secondary:hover{opacity:.9;filter:none}';
-print '.krea-line-card.cleaning{opacity:.35;transform:scale(.98)}';
-print '.krea-line-current-section{margin:8px 0 14px 0;padding:10px;border:1px solid #c8ddf2;background:#f5faff;border-radius:8px}';
-print '.krea-line-other-section{margin-top:8px;padding-top:8px;border-top:1px dashed #cfd5dc}';
-print '.krea-line-section-title{font-size:14px;font-weight:800;letter-spacing:.2px;text-transform:uppercase;color:#1f4e79;margin:0 0 8px 0}';
-print '.krea-direction-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700;line-height:1.4}';
-print '.krea-direction-credit{background:#e8f7ef;color:#1e7f3f;border:1px solid #bfe6ce}';
-print '.krea-direction-debit{background:#fdeeee;color:#a02f2f;border:1px solid #f2c1c1}';
-print '.krea-doc-item{border:1px solid #ddd;border-radius:6px;padding:8px;margin-bottom:8px;background:#fafafa}';
-print '.krea-doc-item:hover{border-color:#0070d2;background:#eef6ff}';
-print '.krea-doc-item-locked{background:#f7f7f7;border-style:dashed}';
-print '.krea-doc-item-locked:hover{border-color:#ddd;background:#f7f7f7}';
-print '.krea-badge{display:inline-block;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600;margin-right:4px}';
-print '.krea-badge-safe{background:#28a745;color:#fff}';
-print '.krea-badge-mid{background:#ffc107;color:#000}';
-print '.krea-muted{color:#666;font-size:12px}';
-print '.krea-line-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px}';
-print '.krea-line-meta .badge{margin-right:0}';
-print '.krea-nowrap{white-space:nowrap}';
-print '.krea-batch-force{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;line-height:1.35;background:#eef6ff;color:#1f4e79;border:1px solid #c3d9ef;text-decoration:none}';
-print '.krea-batch-force:hover{text-decoration:none;filter:brightness(.98)}';
-print '.krea-modal-overlay{position:fixed;top:0;right:0;bottom:0;left:0;z-index:1500;background:rgba(15,23,42,.45);padding:20px;display:none;align-items:flex-start;justify-content:center;overflow:auto}';
-print '.krea-modal-overlay.is-open{display:flex}';
-print '.krea-modal-dialog{margin-top:30px;background:#fff;border:1px solid #c8d3dd;border-radius:10px;box-shadow:0 12px 32px rgba(15,23,42,.25);width:min(1180px,100%);padding:14px}';
-print '.krea-modal-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}';
-print '.krea-modal-title{font-size:16px;font-weight:700;color:#1f4e79}';
-print '.krea-modal-close{border:1px solid #c8d3dd;background:#f8fbfe;border-radius:6px;min-width:30px;min-height:30px;line-height:1;font-weight:700;cursor:pointer}';
-print '.select2-container--open{z-index:1700 !important}';
-print '.select2-dropdown{z-index:1701 !important}';
-print '.krea-right .select2-container,.krea-right .minwidth300,.krea-right .minwidth200{max-width:100% !important}';
-print '.krea-product-line-table{table-layout:auto;width:100%}';
-print '.krea-product-line-table th,.krea-product-line-table td{vertical-align:middle}';
-print '.krea-product-line-table th:nth-child(3),.krea-product-line-table td:nth-child(3){width:88px}';
-print '.krea-product-line-table th:nth-child(4),.krea-product-line-table td:nth-child(4){width:140px;white-space:nowrap}';
-print '.krea-product-line-table th:nth-child(5),.krea-product-line-table td:nth-child(5){width:56px;white-space:nowrap}';
-print '.krea-product-line-table .select2-container{width:100% !important;max-width:100% !important}';
-print '.krea-product-line-table input[type=\"text\"],.krea-product-line-table input[type=\"number\"]{width:100%}';
-print '.krea-product-line-row-hidden{display:none}';
-print '.krea-product-line-table .krea-product-line-amount,.krea-product-line-table .krea-product-line-qty{text-align:right}';
-print '.krea-product-line-table .krea-product-line-remove{min-width:34px;width:34px;padding:2px 4px;display:inline-flex;align-items:center;justify-content:center}';
-print '.krea-product-line-table .krea-product-line-remove .krea-delete-icon{margin:0}';
-print '@media (max-width: 900px){.krea-modal-dialog{padding:10px}.krea-product-line-table .minwidth200{min-width:140px}}';
-print '@media (max-width: 1200px){.krea-recon-layout{flex-direction:column}}';
-print '</style>';
+print '<link rel="stylesheet" href="' . dol_buildpath('/custom/kreabank/css/reconcile.css', 1) . '?v=' . filemtime(__DIR__ . '/css/reconcile.css') . '">';
 
 print '<details class="kb-help"><summary>' . $langs->trans('KreaBankAssistedGuide') . '</summary><p>' . $langs->trans('KreaBankAssistedReconciliationSubtitle') . '</p></details>';
 
-print '<div class="krea-recon-layout">';
-
-print '<div class="krea-left">';
-print '<h3>' . $langs->trans('KreaBankPendingStatementLines') . ' (' . ((int) $pendingLinesTotal) . ')</h3>';
+$canCreate = true;
+$creationUnavailable = false;
+if ($selectedLine) {
+	try {
+		$canCreate = ((new KreaBankAccountPairs($db, (int) $conf->entity))->mainAccount((int) $selectedLine['bank_account_id']) <= 0);
+	} catch (Exception $e) {
+		$canCreate = false;
+		$creationUnavailable = true;
+	}
+}
+$canReconcile = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite);
+print '<div class="kb-recon" data-initial-workflow="' . ($quickEntryFailed ? 'create' : 'match') . '">';
+print '<aside class="kb-queue" aria-labelledby="kb-queue-heading"><details class="kb-queue-disclosure" open>';
+print '<summary class="kb-queue-heading"><h2 id="kb-queue-heading">' . $langs->trans('KreaBankWorkspacePending') . '</h2><span class="kb-count">' . ((int) $pendingLinesTotal) . '</span></summary>';
+print '<div class="kb-queue-search kb-js-only"><label for="kb-pending-search">' . $langs->trans('KreaBankWorkspaceSearchQueue') . '</label><input type="search" id="kb-pending-search" autocomplete="off" aria-controls="kb-pending-list" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceSearchHint')) . '"></div>';
 $reconciliationSortParams = array_merge(kreabankListParameters(), array('account_context' => $navigationAccountId, 'line_id' => $lineId));
 print kreabankListSortLinks($pendingColumns, $pendingSort, $reconciliationSortParams);
-$showBulkSkip = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite && !empty($pendingLines));
-if ($showBulkSkip) {
-	print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="bulkSkipForm" style="margin:0 0 12px 0">';
-	print kreabankNavigationHiddenFields($navigationAccountId);
-	print '<input type="hidden" name="token" value="' . newToken() . '">';
-	print '<input type="hidden" name="action" value="bulk_skip">';
-	print '<input type="hidden" name="selected_line_ids_csv" id="krea_selected_line_ids_csv" value="">';
-	print '<input type="hidden" name="line_id" value="' . ((int) $lineId) . '">';
-	print '<input type="hidden" name="open_doc_search" value="' . dol_escape_htmltag($openDocumentsSearch) . '">';
-	if ((int) $forceBatchDetect > 0) {
-		print '<input type="hidden" name="force_batch_detect" value="1">';
-	}
-	print '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">';
-	print '<label style="display:flex;gap:6px;align-items:center">';
-	print '<input type="checkbox" id="krea_bulk_skip_all">';
-	print '<span>' . $langs->trans('KreaBankSelectAll') . '</span>';
-	print '</label>';
-	print '<input class="flat minwidth300" type="text" name="skip_reason" value="" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankSkipReasonPlaceholder')) . '">';
-	print '<button type="submit" class="butAction">' . $langs->trans('KreaBankSkipSelected') . '</button>';
-	print '</div>';
+print '<nav id="kb-pending-list" class="kb-pending-list" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankWorkspacePending')) . '">';
+foreach ($pendingLines as $line) {
+	$isSelected = ((int) $line['rowid'] === (int) $lineId);
+	$lineTitle = trim((string) $line['description']);
+	if ($lineTitle === '') { $lineTitle = (string) ($line['counterparty_name'] ?: $line['payment_reference']); }
+	if ($lineTitle === '') { $lineTitle = $langs->trans('KreaBankStatementLine') . ' #' . (int) $line['rowid']; }
+	$lineDate = dol_print_date(strtotime((string) $line['operation_date']), 'day');
+	$queueParams = array('line_id' => (int) $line['rowid'], 'sortfield' => $pendingSort['field'], 'sortorder' => $pendingSort['order']);
+	$lineUrl = kreabankWorkspaceUrl('reconcile', $navigationAccountId) . '&' . http_build_query($queueParams);
+	$searchText = implode(' ', array($lineTitle, $line['counterparty_name'], $line['payment_reference'], $line['bank_reference'], $line['bank_account_ref'], $lineDate, $line['amount'], kreabankPrice($line['amount']), $line['currency']));
+	print '<a class="kb-queue-line' . ($isSelected ? ' selected' : '') . '" id="linecard-' . ((int) $line['rowid']) . '" href="' . dol_escape_htmltag($lineUrl) . '" data-search="' . dol_escape_htmltag($searchText) . '"' . ($isSelected ? ' aria-current="true"' : '') . '>';
+	print '<span class="kb-queue-description">' . dol_escape_htmltag($lineTitle) . '</span>';
+	print '<span class="kb-queue-meta"><span>' . dol_escape_htmltag($line['bank_account_ref']) . ' · ' . $lineDate . '</span><strong class="kb-money ' . ((float) $line['amount'] < 0 ? 'kb-debit' : 'kb-credit') . '">' . ((float) $line['amount'] > 0 ? '+' : '') . kreabankPrice($line['amount']) . ' ' . dol_escape_htmltag($line['currency']) . '</strong></span>';
+	if (!empty($line['is_duplicate'])) { print '<span class="kb-duplicate">' . $langs->trans('KreaBankDuplicate') . '</span>'; }
+	print '</a>';
 }
-
-if (empty($pendingLines)) {
-	print '<div class="opacitymedium">' . $langs->trans('KreaBankNoStatementLines') . '</div>';
-} else {
-	$renderPendingLineCard = static function ($line, $isSelected, $isDimmed, $showBulkSkip, $langs) {
-		$lineStatus = kreabankStatusLabel((int) $line['status'], $langs);
-		$lineBadge = kreabankStatusClass((int) $line['status']);
-		$lineOutstanding = max(0, abs((float) $line['amount']) - abs((float) $line['allocated_amount']));
-		$lineDirection = (int) (!empty($line['direction']) ? $line['direction'] : 0);
-		if ($lineDirection === 0) {
-			$lineAmount = (float) (!empty($line['amount']) ? $line['amount'] : 0);
-			if ($lineAmount > 0.0000001) {
-				$lineDirection = 1;
-			} elseif ($lineAmount < -0.0000001) {
-				$lineDirection = -1;
-			}
-		}
-		$lineDirectionLabel = '';
-		$lineDirectionClass = '';
-		if ($lineDirection > 0) {
-			$lineDirectionLabel = $langs->trans('Credit');
-			$lineDirectionClass = 'krea-direction-credit';
-		} elseif ($lineDirection < 0) {
-			$lineDirectionLabel = $langs->trans('Debit');
-			$lineDirectionClass = 'krea-direction-debit';
-		}
-		$linePaymentReference = trim((string) (!empty($line['payment_reference']) ? $line['payment_reference'] : ''));
-		$lineTitle = trim((string) (!empty($line['counterparty_name']) ? $line['counterparty_name'] : ''));
-		if ($lineTitle === '') {
-			$lineTitle = trim((string) (!empty($line['description']) ? $line['description'] : ''));
-		}
-		if ($lineTitle === '') {
-			$lineTitle = $linePaymentReference;
-		}
-		if ($lineTitle === '') {
-			$lineTitle = trim((string) (!empty($line['counterparty_iban']) ? $line['counterparty_iban'] : ''));
-		}
-		if ($lineTitle === '') {
-			$lineTitle = trim((string) (!empty($line['bank_reference']) ? $line['bank_reference'] : ''));
-		}
-		if ($lineTitle === '') {
-			$lineTitle = 'Linha #' . ((int) $line['rowid']);
-		}
-
-		$normalizeLineValue = static function ($value) {
-			$value = trim((string) $value);
-			if ($value === '') {
-				return '';
-			}
-
-			$normalized = kreabankNormalizeText($value);
-			$normalized = preg_replace('/\s+/', '', (string) $normalized);
-			$normalized = preg_replace('/[^a-z0-9]/', '', (string) $normalized);
-
-			return (string) $normalized;
-		};
-		$linePaymentReferenceNormalized = $normalizeLineValue($linePaymentReference);
-		$lineDetails = array();
-		$lineDetailsSeen = array();
-		$appendLineDetail = static function ($value) use (&$lineDetails, &$lineDetailsSeen, $normalizeLineValue, $linePaymentReferenceNormalized) {
-			$value = trim((string) $value);
-			if ($value === '') {
-				return;
-			}
-			$normalized = $normalizeLineValue($value);
-			if ($normalized === '') {
-				return;
-			}
-			if ($linePaymentReferenceNormalized !== '' && $normalized === $linePaymentReferenceNormalized) {
-				return;
-			}
-			if (isset($lineDetailsSeen[$normalized])) {
-				return;
-			}
-			$lineDetailsSeen[$normalized] = true;
-			$lineDetails[] = $value;
-		};
-		$appendLineDetail((string) (!empty($line['counterparty_iban']) ? $line['counterparty_iban'] : ''));
-		$appendLineDetail((string) (!empty($line['description']) ? $line['description'] : ''));
-		$lineCardClass = 'krea-line-card';
-		if (!empty($isSelected)) {
-			$lineCardClass .= ' selected krea-line-card-primary';
-		}
-		if (!empty($isDimmed)) {
-			$lineCardClass .= ' krea-line-card-secondary';
-		}
-
-		print '<div class="' . $lineCardClass . '" id="linecard-' . ((int) $line['rowid']) . '" data-line-id="' . ((int) $line['rowid']) . '" data-outstanding="' . price2num((string) $lineOutstanding, 'MU') . '">';
-		print '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">';
-		print '<div style="flex:1">';
-		print '<div style="font-weight:700">' . dol_escape_htmltag($lineTitle) . '</div>';
-		foreach ($lineDetails as $lineDetail) {
-			print '<div class="krea-muted">' . dol_escape_htmltag((string) $lineDetail) . '</div>';
-		}
-		if ($linePaymentReference !== '') {
-			print '<div class="krea-muted">' . $langs->trans('KreaBankReference') . ': ' . dol_escape_htmltag($linePaymentReference) . '</div>';
-		}
-		print '<div class="krea-line-meta">';
-		if ($lineDirectionLabel !== '') {
-			print '<span class="krea-direction-badge ' . $lineDirectionClass . '">' . dol_escape_htmltag((string) $lineDirectionLabel) . '</span>';
-		}
-		print '<span class="badge ' . $lineBadge . '">' . $lineStatus . '</span>';
-		if ((int) $line['is_duplicate'] === 1) {
-			print '<span class="badge badge-status7">' . $langs->trans('KreaBankDuplicate') . '</span>';
-		}
-		if ($lineOutstanding > 0) {
-			print '<span class="krea-muted">' . $langs->trans('KreaBankAllocate') . ': ' . kreabankPrice($lineOutstanding) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</span>';
-		}
-		print '</div>';
-		print '</div>';
-		print '<div class="krea-nowrap" style="text-align:right">';
-		if ($showBulkSkip) {
-			print '<div style="margin-bottom:6px"><input type="checkbox" name="selected_line_ids[]" value="' . ((int) $line['rowid']) . '" class="krea-bulk-line-selector"' . ($isSelected ? ' checked' : '') . '></div>';
-		}
-		print '<strong>' . kreabankPrice((float) $line['amount']) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong><br>';
-		print '<span class="krea-muted">' . dol_print_date(strtotime((string) $line['operation_date']), 'day') . '</span>';
-		print '</div>';
-		print '</div>';
-		print '</div>';
-	};
-
-	$selectedPendingLine = null;
-	$otherPendingLines = array();
-	foreach ($pendingLines as $line) {
-		if ((int) $line['rowid'] === (int) $lineId && $selectedPendingLine === null) {
-			$selectedPendingLine = $line;
-			continue;
-		}
-
-		$otherPendingLines[] = $line;
-	}
-	if ($selectedPendingLine === null && !empty($pendingLines)) {
-		$selectedPendingLine = $pendingLines[0];
-		$otherPendingLines = array_slice($pendingLines, 1);
-	}
-
-	if (!empty($selectedPendingLine)) {
-		print '<div class="krea-line-current-section">';
-		print '<div class="krea-line-section-title">' . $langs->trans('KreaBankCurrentLineInReconciliation') . '</div>';
-		$renderPendingLineCard($selectedPendingLine, true, false, $showBulkSkip, $langs);
-		print '</div>';
-	}
-
-	if (!empty($otherPendingLines)) {
-		print '<div class="krea-line-other-section">';
-		print '<div class="krea-line-section-title">' . $langs->trans('KreaBankOtherStatementLines') . '</div>';
-		foreach ($otherPendingLines as $line) {
-			$renderPendingLineCard($line, false, true, $showBulkSkip, $langs);
-		}
-		print '</div>';
-	}
-}
-if ($showBulkSkip) {
-	print '</form>';
-}
-print '</div>';
-
-print '<div class="krea-right">';
+print '</nav>';
+print '<p class="kb-empty" id="kb-queue-empty"' . (!empty($pendingLines) ? ' hidden' : '') . '>' . $langs->trans(empty($pendingLines) ? 'KreaBankNoStatementLines' : 'KreaBankWorkspaceNoSearchResults') . '</p>';
+print '<div class="kb-queue-footer"><span id="kb-queue-count" role="status" aria-live="polite">' . count($pendingLines) . ' / ' . ((int) $pendingLinesTotal) . '</span> · <a href="' . dol_escape_htmltag(kreabankWorkspaceUrl('pending', $navigationAccountId)) . '">' . $langs->trans('KreaBankWorkspaceAllPending') . '</a></div>';
+print '</details></aside>';
+print '<div class="kb-recon-main">';
 
 if (!$selectedLine) {
 	print '<div class="opacitymedium">' . $langs->trans('KreaBankNoStatementLines') . '</div>';
 } else {
-	print '<h3>' . $langs->trans('KreaBankOpenDocuments') . '</h3>';
-	print '<div class="info">';
-	print '<strong>' . dol_escape_htmltag((string) $selectedLine['counterparty_name']) . '</strong> | ';
 	$selectedNativeLineId = !empty($selectedLine['native_bank_line_id']) ? (int) $selectedLine['native_bank_line_id'] : 0;
-	$forceBatchUrl = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile&account_context=' . $navigationAccountId . '&line_id=' . (int) $selectedLine['rowid'] . '&force_batch_detect=1', 1);
-	if ($openDocumentsSearch !== '') {
-		$forceBatchUrl .= '&open_doc_search=' . urlencode((string) $openDocumentsSearch);
+	$forceBatchUrl = kreabankWorkspaceUrl('reconcile', $navigationAccountId) . '&line_id=' . (int) $selectedLine['rowid'] . '&force_batch_detect=1';
+	if ($openDocumentsSearch !== '') { $forceBatchUrl .= '&open_doc_search=' . urlencode($openDocumentsSearch); }
+	print '<section class="kb-source" aria-labelledby="kb-source-heading">';
+	print '<div class="kb-source-top"><span class="kb-eyebrow">' . $langs->trans('KreaBankWorkspaceSelectedLine') . '</span><span class="kb-source-status">' . kreabankStatusLabel((int) $selectedLine['status'], $langs) . '</span></div>';
+	print '<div class="kb-source-heading"><h2 id="kb-source-heading" tabindex="-1">' . dol_escape_htmltag((string) ($selectedLine['description'] ?: $selectedLine['counterparty_name'])) . '</h2><strong class="kb-source-amount kb-money">' . ((float) $selectedLine['amount'] > 0 ? '+' : '') . kreabankPrice($selectedLine['amount']) . ' <small>' . dol_escape_htmltag($selectedLine['currency']) . '</small></strong></div>';
+	print '<dl class="kb-source-facts"><div><dt>' . $langs->trans('BankAccount') . '</dt><dd>' . dol_escape_htmltag((string) $selectedLine['bank_account_ref']) . '</dd></div><div><dt>' . $langs->trans('KreaBankDate') . '</dt><dd>' . dol_print_date(strtotime((string) $selectedLine['operation_date']), 'day') . '</dd></div><div><dt>' . $langs->trans('KreaBankWorkspaceRemaining') . '</dt><dd id="kb-source-remaining">' . kreabankPrice($selectedOutstanding) . ' ' . dol_escape_htmltag($selectedLine['currency']) . '</dd></div></dl>';
+	print '<details class="kb-source-details"><summary>' . $langs->trans('KreaBankWorkspaceSourceDetails') . '</summary><dl class="kb-source-facts">';
+	foreach (array('counterparty_name' => 'ThirdParty', 'counterparty_iban' => 'IBAN', 'payment_reference' => 'KreaBankReference', 'bank_reference' => 'Ref') as $field => $labelKey) {
+		if (trim((string) $selectedLine[$field]) !== '') { print '<div><dt>' . $langs->trans($labelKey) . '</dt><dd>' . dol_escape_htmltag($selectedLine[$field]) . '</dd></div>'; }
 	}
-	print $langs->trans('KreaBankAmount') . ': <strong>' . kreabankPrice((float) $selectedLine['amount']) . ' ' . dol_escape_htmltag((string) $selectedLine['currency']) . '</strong> | ';
-	print $langs->trans('KreaBankAllocate') . ': <strong>' . kreabankPrice((float) $selectedOutstanding) . ' ' . dol_escape_htmltag((string) $selectedLine['currency']) . '</strong>';
-	if ($selectedNativeLineId > 0) {
-		print ' | <a href="' . dol_buildpath('/compta/bank/line.php?rowid=' . $selectedNativeLineId, 1) . '" target="_blank" rel="noopener">' . $langs->trans('KreaBankOpenNativeLine') . '</a>';
+	print '</dl>';
+	if ($selectedNativeLineId > 0) { print '<a href="' . dol_buildpath('/compta/bank/line.php?rowid=' . $selectedNativeLineId, 1) . '">' . $langs->trans('KreaBankOpenNativeLine') . '</a>'; }
+	print '</details></section>';
+	if (!$canReconcile) { print '<p class="kb-readonly" role="status">' . $langs->trans('KreaBankWorkspaceReadOnly') . '</p>'; }
+	print '<div class="kb-workflow-switch kb-js-only" role="tablist" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceWorkflow')) . '">';
+	foreach (array('match' => 'KreaBankWorkspaceMatch', 'create' => 'KreaBankWorkspaceCreate') as $workflow => $label) {
+		print '<button type="button" role="tab" id="kb-tab-' . $workflow . '" aria-controls="kb-panel-' . $workflow . '" aria-selected="' . ($workflow === 'match' ? 'true' : 'false') . '" tabindex="' . ($workflow === 'match' ? '0' : '-1') . '">' . $langs->trans($label) . '</button>';
 	}
-	if (!$isLoteBatchLine) {
-		print ' | <a class="krea-batch-force" href="' . $forceBatchUrl . '">' . $langs->trans('KreaBankBatchDetectForce') . '</a>';
-	}
-	print '</div><br>';
+	print '</div>';
+	print '<section class="kb-workflow-panel" id="kb-panel-match" aria-labelledby="kb-match-heading"><h3 id="kb-match-heading">' . $langs->trans('KreaBankWorkspaceMatch') . '</h3><p class="kb-panel-intro">' . $langs->trans('KreaBankWorkspaceMatchHelp') . '</p>';
+	print '<form class="kb-document-search" method="GET" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+	print kreabankNavigationHiddenFields($navigationAccountId);
+	print '<input type="hidden" name="line_id" value="' . (int) $selectedLine['rowid'] . '">';
+	if ($forceBatchDetect) { print '<input type="hidden" name="force_batch_detect" value="1">'; }
+	print '<label for="kb-document-search">' . $langs->trans('KreaBankWorkspaceSearchEntries') . '</label><div><input id="kb-document-search" type="search" name="open_doc_search" value="' . dol_escape_htmltag($openDocumentsSearch) . '"><button type="submit" class="button">' . $langs->trans('Search') . '</button></div></form>';
+	if (!$isLoteBatchLine) { print '<a class="kb-batch-link" href="' . dol_escape_htmltag($forceBatchUrl) . '">' . $langs->trans('KreaBankBatchDetectForce') . '</a>'; }
 	if ($batchDetectedAuto) {
 		print '<div class="info">' . $langs->trans('KreaBankBatchDetectedAuto') . '</div><br>';
 	}
@@ -1846,13 +1625,13 @@ if (!$selectedLine) {
 		$subsetDiffAmount = ((float) (int) $loteSubsetSuggestion['difference_cents']) / 100;
 		$subsetCurrency = dol_escape_htmltag((string) (!empty($selectedLine['currency']) ? $selectedLine['currency'] : 'EUR'));
 		if (!empty($loteSubsetSuggestion['exact'])) {
-			print '<div class="info">Sugestão automática LOTE: ' . ((int) $loteSubsetSuggestion['selected_count']) . ' pagamentos selecionados de ' . ((int) $loteSubsetSuggestion['candidate_count']) . ' candidatos, total ' . kreabankPrice($subsetSelectedAmount) . ' ' . $subsetCurrency . ' (alvo ' . kreabankPrice($subsetTargetAmount) . ' ' . $subsetCurrency . ').</div><br>';
+			print '<div class="info">' . $langs->trans('KreaBankWorkspaceBatchExact', (int) $loteSubsetSuggestion['selected_count'], (int) $loteSubsetSuggestion['candidate_count'], kreabankPrice($subsetSelectedAmount) . ' ' . $subsetCurrency) . '</div>';
 		} else {
-			print '<div class="warning">Sugestão aproximada LOTE: ' . ((int) $loteSubsetSuggestion['selected_count']) . ' pagamentos, total ' . kreabankPrice($subsetSelectedAmount) . ' ' . $subsetCurrency . '. Diferença para o alvo: ' . kreabankPrice($subsetDiffAmount) . ' ' . $subsetCurrency . '.</div><br>';
+			print '<div class="warning">' . $langs->trans('KreaBankWorkspaceBatchPartial', (int) $loteSubsetSuggestion['selected_count'], kreabankPrice($subsetSelectedAmount) . ' ' . $subsetCurrency, kreabankPrice($subsetDiffAmount) . ' ' . $subsetCurrency) . '</div>';
 		}
 	}
 
-	print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="manualReconcileForm">';
+	print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="manualReconcileForm" data-outstanding="' . dol_escape_htmltag((string) $selectedOutstanding) . '" data-currency="' . dol_escape_htmltag($selectedLine['currency']) . '" data-locale="' . dol_escape_htmltag(str_replace('_', '-', $langs->defaultlang)) . '">';
 	print kreabankNavigationHiddenFields($navigationAccountId);
 	print '<input type="hidden" name="token" value="' . newToken() . '">';
 	print '<input type="hidden" name="action" value="reconcile">';
@@ -1868,7 +1647,7 @@ if (!$selectedLine) {
 		return $doc[$field] ?? '';
 	});
 	if (empty($documents)) {
-		print '<div class="opacitymedium">' . $langs->trans('KreaBankNoOpenDocuments') . '</div>';
+		print '<div class="kb-empty"><strong>' . $langs->trans('KreaBankWorkspaceNoEntries') . '</strong><p>' . $langs->trans('KreaBankWorkspaceNoEntriesHelp') . '</p></div>';
 	} else {
 		$docCount = 0;
 		$maxDocumentsToRender = ($isLoteBatchLine ? 800 : 120);
@@ -1920,7 +1699,7 @@ if (!$selectedLine) {
 				print '<span class="badge ' . ($isLockedReconciled ? 'badge-status4' : 'badge-status7') . '">' . $lockedStatusLabel . '</span>';
 			} else {
 				$shouldCheck = !empty($autoSelectDocKeys[$docKey]);
-				print '<input type="checkbox" name="selected_docs[]" value="' . $docKey . '"' . ($shouldCheck ? ' checked' : '') . '>';
+				print '<input type="checkbox" name="selected_docs[]" value="' . $docKey . '"' . ($shouldCheck ? ' checked' : '') . (!$canReconcile ? ' disabled' : '') . '>';
 			}
 			print '<span>';
 			if ($docCardUrl !== '') {
@@ -1928,7 +1707,7 @@ if (!$selectedLine) {
 			} else {
 				print '<strong>' . dol_escape_htmltag((string) $doc['ref']) . '</strong>';
 			}
-			print ' <span class="krea-muted">(' . dol_escape_htmltag($docTypeLabel) . ')</span><br>';
+			print ' <span class="krea-muted">' . $langs->trans('KreaBankWorkspaceBankEntry') . '</span><br>';
 			print '<span class="krea-muted">' . dol_escape_htmltag((string) $doc['thirdparty_name']) . ' • ' . dol_print_date(strtotime((string) $doc['doc_date']), 'day') . '</span></span>';
 			print '</label>';
 			if (!empty($doc['linked_bank_line'])) {
@@ -1938,11 +1717,14 @@ if (!$selectedLine) {
 				print '<div class="krea-muted">' . $lockedDetailLabel . ': <a href="' . $linkedLineUrl . '" target="_blank" rel="noopener">#' . ((int) $doc['linked_bank_line']) . '</a>' . ($linkedLineDate !== '' ? ' • ' . $linkedLineDate : '') . '</div>';
 			}
 			if ($score > 0) {
-				$badgeClass = $score >= $safeScore ? 'krea-badge-safe' : 'krea-badge-mid';
+				$isSharedSafe = (!$isLoteBatchLine && !empty($safeSuggestion) && ((string) $safeSuggestion['doc_type'] . '__' . (int) $safeSuggestion['doc_id']) === $docKey);
+				$badgeClass = $isSharedSafe ? 'krea-badge-safe' : 'krea-badge-mid';
 				print '<div style="margin-top:4px">';
 				print '<span class="krea-badge ' . $badgeClass . '">' . $langs->trans('KreaBankBulkMatchScore') . ' ' . $score . '</span>';
 				foreach ($details as $detail) {
-					print '<span class="krea-badge ' . ($score >= $safeScore ? 'krea-badge-safe' : 'krea-badge-mid') . '">' . dol_escape_htmltag((string) $detail) . '</span>';
+					$reasonKey = 'KreaBankMatchReason_' . $detail;
+					$reasonLabel = $langs->trans($reasonKey);
+					print '<span class="krea-badge ' . $badgeClass . '">' . dol_escape_htmltag($reasonLabel === $reasonKey ? (string) $detail : $reasonLabel) . '</span>';
 				}
 				print '</div>';
 			}
@@ -1969,31 +1751,29 @@ if (!$selectedLine) {
 		$hasSelectableDocuments = false;
 	}
 
-	if ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite && !empty($hasSelectableDocuments)) {
-		print '<div class="tabsAction">';
-		print '<button type="submit" class="butAction" id="manualReconcileButton">' . $langs->trans('KreaBankReconcileSelected') . '</button>';
-		print '</div>';
+	print '<div class="kb-allocation" role="status" aria-live="polite" aria-atomic="true"><div><span>' . $langs->trans('KreaBankWorkspaceSelectedTotal') . '</span><strong id="kb-selected-total">' . kreabankPrice(0) . ' ' . dol_escape_htmltag($selectedLine['currency']) . '</strong></div><div><span>' . $langs->trans('KreaBankWorkspaceDifference') . '</span><strong id="kb-selection-difference">' . kreabankPrice($selectedOutstanding) . ' ' . dol_escape_htmltag($selectedLine['currency']) . '</strong></div></div>';
+	print '<p class="kb-selection-feedback" id="kb-selection-feedback" tabindex="-1" data-empty="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceSelectEntries')) . '" data-ready="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceReady')) . '" data-mismatch="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceMismatch')) . '">' . $langs->trans('KreaBankWorkspaceSelectEntries') . '</p>';
+	if ($canReconcile) {
+		print '<button type="submit" class="button kb-primary-action" id="manualReconcileButton" aria-describedby="kb-selection-feedback"' . (empty($hasSelectableDocuments) ? ' disabled' : '') . '>' . $langs->trans('KreaBankWorkspaceReconcileEntries') . '</button>';
 	}
-	print '</form>';
-
-	if ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite) {
+	print '</form></section>';
+	print '<section class="kb-workflow-panel kb-create-panel" id="kb-panel-create" aria-labelledby="kb-create-heading"><h3 id="kb-create-heading">' . $langs->trans('KreaBankWorkspaceCreate') . '</h3><p class="kb-panel-intro">' . $langs->trans('KreaBankWorkspaceCreateHelp') . '</p>';
+	if (!$canCreate) { print '<p class="kb-readonly">' . $langs->trans($creationUnavailable ? 'KreaBankWorkspaceCreationUnavailable' : 'KreaBankWorkspaceRestrictedCreation') . '</p>'; }
+	elseif ($canReconcile) {
 		$renderQuickEntryForm(
-			$selectedLine,
-			$openDocumentsSearch,
-			$quickPaymentEntryTypeOptions,
-			'KreaBankCreateQuickPaymentEntry',
-			'payment',
-			$quickEntryPrefillLabel,
-			$selectedOutstanding,
-			$quickEntryPrefillNote,
-			$quickSupplierLookupPrefill,
-			$quickSupplierRefSupplier,
-			$quickSupplierPredictedSocid,
-			$quickSupplierPrediction,
+			$selectedLine, $openDocumentsSearch, $quickEntryPrefillLabel,
+			$selectedOutstanding, $quickEntryPrefillNote, $quickSupplierLookupPrefill,
+			$quickSupplierRefSupplier, $quickSupplierPredictedSocid, $quickSupplierPrediction,
 			($canQuickSupplierInvoice && $selectedLineDirection < 0),
-			($canQuickTaxEntry && $selectedLineDirection < 0),
-			true
+			($canQuickTaxEntry && $selectedLineDirection < 0)
 		);
+	} else { print '<p class="kb-readonly">' . $langs->trans('KreaBankWorkspaceReadOnly') . '</p>'; }
+	print '</section>';
+	if ($canReconcile) {
+		print '<details class="kb-defer"><summary>' . $langs->trans('KreaBankWorkspaceDefer') . '</summary><form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+		print kreabankNavigationHiddenFields($navigationAccountId);
+		print '<input type="hidden" name="token" value="' . newToken() . '"><input type="hidden" name="action" value="skip_line"><input type="hidden" name="line_id" value="' . (int) $selectedLine['rowid'] . '">';
+		print '<label for="kb-defer-reason">' . $langs->trans('KreaBankReason') . '</label><input id="kb-defer-reason" name="skip_reason" type="text"><button type="submit" class="button">' . $langs->trans('KreaBankWorkspaceDeferAction') . '</button></form></details>';
 	}
 
 	if (!empty($lineLinks)) {
@@ -2015,439 +1795,8 @@ if (!$selectedLine) {
 print '</div>';
 print '</div>';
 
-print '<script>';
-print 'var manualForm = document.getElementById("manualReconcileForm");';
-print 'if (manualForm) {';
-print 'manualForm.addEventListener("submit", function(){';
-print 'var selectedCard = document.querySelector(".krea-line-card.selected");';
-print 'if(selectedCard){ selectedCard.classList.add("cleaning"); }';
-print '});';
-print '}';
-
-print 'var bulkToggle = document.getElementById("krea_bulk_skip_all");';
-print 'var bulkLineSelectors = document.querySelectorAll(".krea-bulk-line-selector");';
-print 'if (bulkToggle && bulkLineSelectors.length) {';
-print 'bulkToggle.addEventListener("change", function(){';
-print 'bulkLineSelectors.forEach(function(selector){ selector.checked = bulkToggle.checked; });';
-print '});';
-print 'bulkLineSelectors.forEach(function(selector){';
-print 'selector.addEventListener("change", function(){';
-print 'if (!selector.checked) { bulkToggle.checked = false; return; }';
-print 'var allChecked = true;';
-print 'bulkLineSelectors.forEach(function(innerSelector){ if (!innerSelector.checked) { allChecked = false; } });';
-print 'bulkToggle.checked = allChecked;';
-print '});';
-print '});';
-print '}';
-print 'var bulkSkipForm = document.getElementById("bulkSkipForm");';
-print 'var bulkIdsCsv = document.getElementById("krea_selected_line_ids_csv");';
-print 'if (bulkSkipForm && bulkIdsCsv) {';
-print 'bulkSkipForm.addEventListener("submit", function(){';
-print 'var ids = [];';
-print 'document.querySelectorAll(".krea-bulk-line-selector:checked").forEach(function(selector){';
-print 'if (selector.value) { ids.push(selector.value); }';
-print '});';
-print 'bulkIdsCsv.value = ids.join(",");';
-print '});';
-print '}';
-print 'var kreaParseNumber = function(value){';
-print 'var parsed = parseFloat(value);';
-print 'return isNaN(parsed) ? 0 : parsed;';
-print '};';
-print 'var kreaRefreshSupplierRows = function(modal){';
-print 'if (!modal) { return; }';
-print 'var rows = modal.querySelectorAll(".krea-product-line-row");';
-print 'var visibleRows = 0;';
-print 'rows.forEach(function(row){ if (!row.classList.contains("krea-product-line-row-hidden")) { visibleRows++; } });';
-print 'rows.forEach(function(row){';
-print 'var removeButton = row.querySelector(".krea-product-line-remove");';
-print 'if (!removeButton) { return; }';
-print 'if (row.classList.contains("krea-product-line-row-hidden") || visibleRows <= 1) {';
-print 'removeButton.style.display = "none";';
-print '} else {';
-print 'removeButton.style.display = "";';
-print '}';
-print '});';
-print 'var addButton = modal.querySelector(".krea-product-line-add");';
-print 'if (addButton) {';
-print 'addButton.disabled = (visibleRows >= rows.length);';
-print '}';
-print '};';
-print 'var kreaDecodeHtml = function(value){';
-print 'if (!value) { return ""; }';
-print 'var decoded = String(value);';
-print 'if (typeof htmlEntityDecodeJs === "function") { decoded = htmlEntityDecodeJs(decoded); }';
-print 'var node = document.createElement("div");';
-print 'node.innerHTML = decoded;';
-print 'return (node.textContent || node.innerText || "").replace(/\\s+/g, " ").trim();';
-print '};';
-print 'var kreaNormalizeSearch = function(value){';
-print 'var normalized = String(value || "");';
-print 'if (typeof normalized.normalize === "function") { normalized = normalized.normalize("NFD").replace(/[\\u0300-\\u036f]/g, ""); }';
-print 'return normalized.toUpperCase().replace(/\\s+/g, " ").trim();';
-print '};';
-print 'var kreaMatchesSearchTerm = function(term, candidate){';
-print 'if (term === "") { return true; }';
-print 'var keywords = term.split(" ");';
-print 'for (var i = 0; i < keywords.length; i++) {';
-print 'if (keywords[i] && candidate.indexOf(keywords[i]) === -1) { return false; }';
-print '}';
-print 'return true;';
-print '};';
-print 'var kreaSupplierSearchTerms = {};';
-print 'var kreaEnhanceSearchableSelect = function(selectElement){';
-print 'if (!selectElement || !window.jQuery || !jQuery.fn || typeof jQuery.fn.select2 !== "function") { return; }';
-print 'var $select = jQuery(selectElement);';
-print 'var currentValue = $select.val();';
-print 'var dropdownParent = null;';
-print 'var modalParent = selectElement.closest(".krea-modal-overlay");';
-print 'if (modalParent) { dropdownParent = jQuery(modalParent); }';
-print 'if ($select.hasClass("select2-hidden-accessible")) {';
-print 'try { $select.select2("destroy"); } catch (errorSelect2Destroy) { /* keep default rendering */ }';
-print '}';
-print '$select.select2({';
-print 'dir: "ltr",';
-print 'width: "resolve",';
-print 'minimumInputLength: 0,';
-print 'minimumResultsForSearch: 0,';
-print 'dropdownParent: (dropdownParent || jQuery("body")),';
-print 'language: (typeof select2arrayoflanguage === "undefined") ? "en" : select2arrayoflanguage,';
-print 'matcher: function(params, data){';
-print 'var term = kreaNormalizeSearch(params && params.term ? params.term : "");';
-print 'if (term === "") { return data; }';
-print 'var optionHtml = (data && data.element) ? (jQuery(data.element).attr("data-html") || "") : "";';
-print 'var candidate = kreaNormalizeSearch((data && data.text ? data.text : "") + " " + kreaDecodeHtml(optionHtml));';
-print 'return kreaMatchesSearchTerm(term, candidate) ? data : null;';
-print '},';
-print 'theme: "default",';
-print 'containerCssClass: ":all:",';
-print 'selectionCssClass: ":all:",';
-print 'dropdownCssClass: "ui-dialog",';
-print 'templateResult: function(data, container){';
-print 'if (data.element) { jQuery(container).addClass(jQuery(data.element).attr("class")); }';
-print 'if (data.id == "-1" && jQuery(data.element).attr("data-html") == undefined) { return "&nbsp;"; }';
-print 'if (jQuery(data.element).attr("data-html") != undefined) {';
-print 'return kreaDecodeHtml(jQuery(data.element).attr("data-html"));';
-print '}';
-print 'return data.text;';
-print '},';
-print 'templateSelection: function(selection){';
-print 'if (selection.id == "-1") { return "<span class=\\"placeholder\\">" + selection.text + "</span>"; }';
-print 'return selection.text;';
-print '},';
-print 'escapeMarkup: function(markup){ return markup; }';
-print '});';
-print 'if (typeof currentValue !== "undefined" && currentValue !== null) {';
-print '$select.val(currentValue).trigger("change.select2");';
-print '}';
-print '};';
-print 'var kreaExtractProductMetaFromText = function(rawText){';
-print 'var text = (rawText ? String(rawText) : "").replace(/\\s+/g, " ").trim();';
-print 'if (text === "") { return {ref: "", label: ""}; }';
-print 'var pieces = text.split(" - ");';
-print 'var ref = (pieces.length > 0 ? pieces[0].trim() : "");';
-print 'var label = "";';
-print 'if (pieces.length > 1) { label = pieces[1].trim(); }';
-print 'if (label === "" && pieces.length > 2) { label = pieces.slice(1, -1).join(" - ").trim(); }';
-print 'if (label === "") { label = text; }';
-print 'return {ref: ref, label: label};';
-print '};';
-print 'var kreaReadProductMeta = function(row){';
-print 'var meta = {id: 0, ref: "", label: ""};';
-print 'if (!row) { return meta; }';
-print 'var productField = row.querySelector("select[name^=entry_product_line_product_],input[name^=entry_product_line_product_]");';
-print 'if (!productField) { return meta; }';
-print 'meta.id = parseInt(productField.value || "0", 10) || 0;';
-print 'var sourceText = "";';
-print 'if (productField.tagName && productField.tagName.toUpperCase() === "SELECT") {';
-print 'var selectedOption = productField.options && productField.selectedIndex >= 0 ? productField.options[productField.selectedIndex] : null;';
-print 'if (selectedOption) {';
-print 'sourceText = selectedOption.getAttribute("data-html") || selectedOption.text || "";';
-print 'sourceText = kreaDecodeHtml(sourceText);';
-print '}';
-print '} else {';
-print 'var searchInput = row.querySelector("input[name^=search_entry_product_line_product_]");';
-print 'sourceText = searchInput ? String(searchInput.value || "") : "";';
-print '}';
-print 'var parsed = kreaExtractProductMetaFromText(sourceText);';
-print 'meta.ref = parsed.ref || (meta.id > 0 ? String(meta.id) : "");';
-print 'meta.label = parsed.label || "";';
-print 'return meta;';
-print '};';
-print 'var kreaSyncProductRow = function(row, productMeta){';
-print 'if (!row) { return; }';
-print 'var meta = productMeta || kreaReadProductMeta(row);';
-print 'var labelInput = row.querySelector("input[name^=entry_product_line_label_]");';
-print 'if (labelInput) {';
-print 'labelInput.value = (meta.id > 0 ? (meta.label || "") : "");';
-print '}';
-print 'var productSelect = row.querySelector("select[name^=entry_product_line_product_]");';
-print 'if (productSelect && meta.id > 0 && meta.ref !== "") {';
-print 'var select2Container = document.getElementById("select2-" + productSelect.id + "-container");';
-print 'if (select2Container) {';
-print 'select2Container.textContent = meta.ref;';
-print 'select2Container.setAttribute("title", meta.ref);';
-print '}';
-print '}';
-print '};';
-print 'var kreaReadProductId = function(row){';
-print 'return kreaReadProductMeta(row).id;';
-print '};';
-print 'var kreaBuildSupplierLines = function(modal){';
-print 'var payload = {lines: [], hasSelectedLine: false, hasIncompleteLine: false, currentTotal: 0};';
-print 'if (!modal) { return payload; }';
-print 'modal.querySelectorAll(".krea-product-line-row").forEach(function(row){';
-print 'if (row.classList.contains("krea-product-line-row-hidden")) { return; }';
-print 'var productMeta = kreaReadProductMeta(row);';
-print 'var productId = productMeta.id;';
-print 'kreaSyncProductRow(row, productMeta);';
-print 'var qtyInput = row.querySelector("input[name^=entry_product_line_qty_]");';
-print 'var amountInput = row.querySelector("input[name^=entry_product_line_amount_]");';
-print 'var labelInput = row.querySelector("input[name^=entry_product_line_label_]");';
-print 'var qtyValue = kreaParseNumber(qtyInput ? qtyInput.value : 0);';
-print 'var amountValue = kreaParseNumber(amountInput ? amountInput.value : 0);';
-print 'var lineLabel = labelInput ? String(labelInput.value || "").trim() : "";';
-print 'var lineIsEmpty = (productId <= 0 && qtyValue <= 0 && amountValue <= 0);';
-print 'if (lineIsEmpty) { return; }';
-print 'payload.hasSelectedLine = true;';
-print 'if (productId <= 0 || qtyValue <= 0 || amountValue <= 0) {';
-print 'payload.hasIncompleteLine = true;';
-print 'return;';
-print '}';
-print 'payload.currentTotal += amountValue;';
-print 'payload.lines.push({product_id: productId, label: lineLabel, qty: qtyValue, amount: Math.round(amountValue * 100) / 100});';
-print '});';
-print 'return payload;';
-print '};';
-print 'var kreaSyncSupplierLookup = function(form){';
-print 'if (!form) { return; }';
-print 'var lookupInput = form.querySelector("input[name=entry_supplier_lookup]");';
-print 'if (!lookupInput) { return; }';
-print 'var searchInput = form.querySelector("input[name=search_entry_supplier_socid]");';
-print 'var supplierField = form.querySelector("select[name=entry_supplier_socid],input[name=entry_supplier_socid]");';
-print 'var lookupValue = "";';
-print 'if (supplierField && supplierField.tagName && supplierField.tagName.toUpperCase() === "SELECT") {';
-print 'var selectedOption = supplierField.options && supplierField.selectedIndex >= 0 ? supplierField.options[supplierField.selectedIndex] : null;';
-print 'if (selectedOption && parseInt(selectedOption.value || "0", 10) > 0) {';
-print 'lookupValue = kreaDecodeHtml(selectedOption.getAttribute("data-html") || selectedOption.text || "");';
-print '}';
-print '}';
-print 'if (lookupValue === "" && searchInput && String(searchInput.value || "").trim() !== "") {';
-print 'lookupValue = String(searchInput.value || "").trim();';
-print '}';
-print 'if (lookupValue === "" && supplierField && supplierField.id && kreaSupplierSearchTerms[supplierField.id]) {';
-print 'lookupValue = String(kreaSupplierSearchTerms[supplierField.id] || "").trim();';
-print '}';
-print 'if (lookupValue === "" && supplierField && supplierField.id) {';
-print 'var renderedNode = document.getElementById("select2-" + supplierField.id + "-container");';
-print 'if (renderedNode && !renderedNode.querySelector(".placeholder")) {';
-print 'lookupValue = String(renderedNode.textContent || "").trim();';
-print '}';
-print '}';
-print 'lookupInput.value = lookupValue;';
-print '};';
-print 'var kreaReadSupplierId = function(form){';
-print 'if (!form) { return 0; }';
-print 'var supplierField = form.querySelector("select[name=entry_supplier_socid],input[name=entry_supplier_socid]");';
-print 'return parseInt(supplierField && supplierField.value ? supplierField.value : "0", 10) || 0;';
-print '};';
-print 'var kreaUpdateSupplierInvoiceOpenState = function(form){';
-print 'if (!form) { return; }';
-print 'var hasSupplier = (kreaReadSupplierId(form) > 0);';
-print 'form.querySelectorAll("[data-krea-supplier-modal-open]").forEach(function(openButton){';
-print 'openButton.disabled = false;';
-print 'if (!hasSupplier) {';
-print 'openButton.setAttribute("aria-disabled", "true");';
-print 'openButton.setAttribute("title", openButton.getAttribute("data-krea-msg-supplier") || "");';
-print '} else {';
-print 'openButton.removeAttribute("aria-disabled");';
-print 'openButton.removeAttribute("title");';
-print '}';
-print '});';
-print '};';
-print 'var kreaSetSupplierModalState = function(modal){';
-print 'if (!modal) { return; }';
-print 'var form = modal.closest("form");';
-print 'if (form) { kreaSyncSupplierLookup(form); }';
-print 'var targetAmount = kreaParseNumber(modal.getAttribute("data-target-total"));';
-print 'if (targetAmount < 0) { targetAmount = 0; }';
-print 'var build = kreaBuildSupplierLines(modal);';
-print 'var targetNodeId = modal.getAttribute("data-target-total-id");';
-print 'var currentNodeId = modal.getAttribute("data-current-total-id");';
-print 'var feedbackId = modal.getAttribute("data-feedback-id");';
-print 'var confirmId = modal.getAttribute("data-confirm-id");';
-print 'var jsonInputId = modal.getAttribute("data-json-input-id");';
-print 'var targetNode = targetNodeId ? document.getElementById(targetNodeId) : null;';
-print 'var currentNode = currentNodeId ? document.getElementById(currentNodeId) : null;';
-print 'var feedbackNode = feedbackId ? document.getElementById(feedbackId) : null;';
-print 'var confirmButton = confirmId ? document.getElementById(confirmId) : null;';
-print 'var jsonInput = jsonInputId ? document.getElementById(jsonInputId) : null;';
-print 'if (targetNode) { targetNode.textContent = targetAmount.toFixed(2); }';
-print 'if (currentNode) { currentNode.textContent = build.currentTotal.toFixed(2); }';
-print 'if (jsonInput) { jsonInput.value = JSON.stringify(build.lines); }';
-print 'var message = "";';
-print 'var isValid = true;';
-print 'if (!build.hasSelectedLine) {';
-print 'message = modal.getAttribute("data-msg-empty") || "";';
-print 'isValid = false;';
-print '} else if (build.hasIncompleteLine) {';
-print 'message = modal.getAttribute("data-msg-incomplete") || "";';
-print 'isValid = false;';
-print '} else if (Math.abs(build.currentTotal - targetAmount) > 0.01) {';
-print 'message = modal.getAttribute("data-msg-mismatch") || "";';
-print 'isValid = false;';
-print '} else if (form) {';
-print 'var supplierField = form.querySelector("select[name=entry_supplier_socid],input[name=entry_supplier_socid]");';
-print 'var supplierId = parseInt(supplierField && supplierField.value ? supplierField.value : "0", 10) || 0;';
-print 'if (supplierId <= 0) {';
-print 'message = modal.getAttribute("data-msg-supplier") || "";';
-print 'isValid = false;';
-print '}';
-print '}';
-print 'if (feedbackNode) {';
-print 'if (message !== "") {';
-print 'feedbackNode.textContent = message;';
-print 'feedbackNode.style.display = "block";';
-print '} else {';
-print 'feedbackNode.textContent = "";';
-print 'feedbackNode.style.display = "none";';
-print '}';
-print '}';
-print 'if (confirmButton) {';
-print 'confirmButton.disabled = !isValid;';
-print '}';
-print '};';
-print 'var kreaCloseSupplierModal = function(modal){';
-print 'if (!modal) { return; }';
-print 'modal.classList.remove("is-open");';
-print 'modal.style.display = "none";';
-print '};';
-print 'var kreaOpenSupplierModal = function(modal, form){';
-print 'if (!modal) { return; }';
-print 'if (form) {';
-print 'var amountInput = form.querySelector("input[name=entry_amount]");';
-print 'if (amountInput) {';
-print 'var targetAmount = kreaParseNumber(amountInput.value);';
-print 'if (targetAmount > 0) {';
-print 'modal.setAttribute("data-target-total", targetAmount.toFixed(2));';
-print 'var firstAmountInput = modal.querySelector("input[name^=entry_product_line_amount_]");';
-print 'if (firstAmountInput && kreaParseNumber(firstAmountInput.value) <= 0) { firstAmountInput.value = targetAmount.toFixed(2); }';
-print '}';
-print '}';
-print '}';
-print 'modal.classList.add("is-open");';
-print 'modal.style.display = "flex";';
-print 'kreaRefreshSupplierRows(modal);';
-print 'kreaSetSupplierModalState(modal);';
-print '};';
-print 'document.addEventListener("input", function(event){';
-print 'if (!event.target || !event.target.classList || !event.target.classList.contains("select2-search__field")) { return; }';
-print 'var controls = event.target.getAttribute("aria-controls") || "";';
-print 'var match = controls.match(/^select2-(.+)-results$/);';
-print 'if (!match || !match[1]) { return; }';
-print 'var fieldId = match[1];';
-print 'var supplierField = document.getElementById(fieldId);';
-print 'if (!supplierField || supplierField.name !== "entry_supplier_socid") { return; }';
-print 'kreaSupplierSearchTerms[fieldId] = String(event.target.value || "").trim();';
-print '});';
-print 'document.querySelectorAll("select[name=entry_supplier_socid],select[name^=entry_product_line_product_]").forEach(function(selectElement){';
-print 'kreaEnhanceSearchableSelect(selectElement);';
-print '});';
-print 'document.querySelectorAll("form[id^=krea_quick_entry_form_]").forEach(function(form){';
-print 'form.addEventListener("submit", function(){ kreaSyncSupplierLookup(form); });';
-print 'var supplierField = form.querySelector("select[name=entry_supplier_socid],input[name=entry_supplier_socid]");';
-print 'if (supplierField) {';
-print 'supplierField.addEventListener("change", function(){ kreaSyncSupplierLookup(form); kreaUpdateSupplierInvoiceOpenState(form); });';
-print '}';
-print 'kreaUpdateSupplierInvoiceOpenState(form);';
-print '});';
-print 'document.querySelectorAll("[data-krea-supplier-modal-open]").forEach(function(openButton){';
-print 'openButton.addEventListener("click", function(){';
-print 'var modalId = openButton.getAttribute("data-krea-supplier-modal-open");';
-print 'var formId = openButton.getAttribute("data-krea-form-id");';
-print 'var modal = modalId ? document.getElementById(modalId) : null;';
-print 'var form = formId ? document.getElementById(formId) : null;';
-print 'if (form && kreaReadSupplierId(form) <= 0) {';
-print 'var supplierMessage = openButton.getAttribute("data-krea-msg-supplier") || "";';
-print 'if (supplierMessage !== "") { window.alert(supplierMessage); }';
-print 'kreaUpdateSupplierInvoiceOpenState(form);';
-print 'return;';
-print '}';
-print 'kreaOpenSupplierModal(modal, form);';
-print '});';
-print '});';
-print 'document.querySelectorAll("[data-krea-modal-close]").forEach(function(closeButton){';
-print 'closeButton.addEventListener("click", function(){';
-print 'var modalId = closeButton.getAttribute("data-krea-modal-close");';
-print 'var modal = modalId ? document.getElementById(modalId) : null;';
-print 'kreaCloseSupplierModal(modal);';
-print '});';
-print '});';
-print 'document.querySelectorAll(".krea-supplier-lines-modal").forEach(function(modal){';
-print 'modal.querySelectorAll(".krea-product-line-row").forEach(function(row){ kreaSyncProductRow(row); });';
-print 'kreaRefreshSupplierRows(modal);';
-print 'kreaSetSupplierModalState(modal);';
-print 'modal.addEventListener("click", function(event){';
-print 'if (event.target === modal) { kreaCloseSupplierModal(modal); }';
-print '});';
-print 'var addButton = modal.querySelector(".krea-product-line-add");';
-print 'if (addButton) {';
-print 'addButton.addEventListener("click", function(){';
-print 'var nextRow = modal.querySelector(".krea-product-line-row-hidden");';
-print 'if (!nextRow) { return; }';
-print 'nextRow.classList.remove("krea-product-line-row-hidden");';
-print 'var qtyInput = nextRow.querySelector("input[name^=entry_product_line_qty_]");';
-print 'if (qtyInput && kreaParseNumber(qtyInput.value) <= 0) { qtyInput.value = "1"; }';
-print 'var amountInput = nextRow.querySelector("input[name^=entry_product_line_amount_]");';
-print 'if (amountInput && kreaParseNumber(amountInput.value) > 0) { amountInput.value = (Math.round(kreaParseNumber(amountInput.value) * 100) / 100).toFixed(2); }';
-print 'kreaSyncProductRow(nextRow);';
-print 'kreaRefreshSupplierRows(modal);';
-print 'kreaSetSupplierModalState(modal);';
-print '});';
-print '}';
-print 'modal.querySelectorAll(".krea-product-line-remove").forEach(function(removeButton){';
-print 'removeButton.addEventListener("click", function(){';
-print 'var row = removeButton.closest(".krea-product-line-row");';
-print 'if (!row) { return; }';
-print 'row.classList.add("krea-product-line-row-hidden");';
-print 'row.querySelectorAll("input").forEach(function(input){';
-print 'if (input.name && input.name.indexOf("entry_product_line_qty_") === 0) { input.value = ""; return; }';
-print 'if (input.name && input.name.indexOf("entry_product_line_amount_") === 0) { input.value = ""; return; }';
-print 'if (input.name && input.name.indexOf("entry_product_line_label_") === 0) { input.value = ""; return; }';
-print 'if (input.name && input.name.indexOf("entry_product_line_product_") === 0) { input.value = ""; return; }';
-print 'if (input.name && input.name.indexOf("search_entry_product_line_product_") === 0) { input.value = ""; }';
-print '});';
-print 'row.querySelectorAll("select[name^=entry_product_line_product_]").forEach(function(select){ select.value = ""; });';
-print 'kreaRefreshSupplierRows(modal);';
-print 'kreaSetSupplierModalState(modal);';
-print '});';
-print '});';
-print 'modal.querySelectorAll("input[name^=entry_product_line_amount_]").forEach(function(amountInput){';
-print 'amountInput.addEventListener("blur", function(){';
-print 'var value = kreaParseNumber(amountInput.value);';
-print 'if (value <= 0) { amountInput.value = ""; kreaSetSupplierModalState(modal); return; }';
-print 'amountInput.value = (Math.round(value * 100) / 100).toFixed(2);';
-print 'kreaSetSupplierModalState(modal);';
-print '});';
-print '});';
-print 'modal.addEventListener("input", function(event){';
-print 'if (event.target && event.target.name && (event.target.name.indexOf("entry_product_line_") === 0 || event.target.name.indexOf("search_entry_product_line_product_") === 0)) {';
-print 'kreaSetSupplierModalState(modal);';
-print '}';
-print '});';
-print 'modal.addEventListener("change", function(event){';
-print 'if (event.target && event.target.name && (event.target.name.indexOf("entry_product_line_") === 0 || event.target.name.indexOf("search_entry_product_line_product_") === 0)) {';
-print 'kreaSetSupplierModalState(modal);';
-print '}';
-print '});';
-print '});';
-print 'document.addEventListener("keydown", function(event){';
-print 'if (event.key !== "Escape") { return; }';
-print 'document.querySelectorAll(".krea-supplier-lines-modal.is-open").forEach(function(modal){';
-print 'kreaCloseSupplierModal(modal);';
-print '});';
-print '});';
-print '</script>';
+print '<script src="' . dol_buildpath('/custom/kreabank/js/reconcile-supplier.js', 1) . '?v=' . filemtime(__DIR__ . '/js/reconcile-supplier.js') . '" nonce="' . getNonce() . '"></script>';
+print '<script src="' . dol_buildpath('/custom/kreabank/js/reconcile.js', 1) . '?v=' . filemtime(__DIR__ . '/js/reconcile.js') . '" nonce="' . getNonce() . '"></script>';
 
 print dol_get_fiche_end();
 llxFooter();

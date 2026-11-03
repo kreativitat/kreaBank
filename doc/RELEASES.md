@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.19.0 — 2026-11-03
+
+- Redesign reconciliation around a compact searchable queue and a selected-line
+  summary, with separate existing-entry matching and record-creation workflows.
+- Show live allocation totals and differences; make bank entry, tax payment and
+  supplier invoice consequences explicit. Preserve service execution safeguards.
+- Add responsive queue disclosure, keyboard workflow selection and accessible
+  invoice review. Retain creation inputs after errors and show persistent results.
+- Add synthetic view/interaction fixtures and decimal-boundary checks. No schema
+  or scheduler changes. See [workspace validation](RECONCILIATION_UI.md).
+
 ## 1.18.17 — 2026-11-03
 
 - Add the Reconcile shortcut (pt_PT: Reconciliar) to the native bank left menu

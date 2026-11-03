@@ -208,3 +208,22 @@
   temporary private files and concurrent writers, with installed Dolibarr source
   but no application bootstrap/database. Its database counterpart uses ONLY the
   guarded disposable localhost:33317 fixture. See [learning](doc/MACHINE_LEARNING.md).
+
+## Selected-line reconciliation workspace
+
+- `reconcile.php` keeps the existing controller and shared service calls. Scoped
+  presentation assets are `css/reconcile.css`, `js/reconcile.js` and
+  `js/reconcile-supplier.js`; include all three when deploying this workspace.
+- Pending search filters the bounded loaded queue (up to 200 lines); the full
+  pending view remains accessible. Mobile starts with the queue collapsed.
+  Matching and creation have separate panels and explicitly labelled actions.
+- Allocation feedback sums original hidden decimal strings; two-decimal display
+  must never rewrite POST amounts. The service remains authoritative for amount,
+  company, permission, lock, duplicate and safe-match validation.
+- Creation choices must retain explicit submit actions, including implicit Enter
+  submission. Supplier invoices require product-line review; keep dialog focus
+  containment, Escape and return focus. Failed creation retains reviewed inputs.
+- `php test/test_reconcile_workspace.php` renders the actual view without an ERP
+  bootstrap or database. Its `--html <case> [locale]` output intercepts every
+  submission for browser checks. `node test/test_reconcile_workspace.cjs` checks
+  exact allocation boundaries. See `doc/RECONCILIATION_UI.md`.
