@@ -78,7 +78,7 @@ function renderMatchedFixture()
 	try { $confirmation=eval('?>'.$source); $html=ob_get_contents(); }
 	finally { ob_end_clean(); }
 	if ($confirmation!==null) return $confirmation;
-	return compact('html','prepareReviewRow','scanState','bulkScanCacheStoreKey','bulkScanCacheScope');
+	return compact('html','prepareReviewRow','buildLinkedFallbackSuggestions','scanState','bulkScanCacheStoreKey','bulkScanCacheScope');
 }
 $_SERVER['REQUEST_METHOD']='GET';
 $_SERVER['PHP_SELF']='/custom/kreabank/matched.php';
@@ -99,7 +99,8 @@ checkMatched($pair && !$pair['preselected'] && $pair['allocation']===20.0,'Uniqu
 $savedSuggestions=$fixtureService->suggestions;
 $fixtureService->suggestions=array();
 $fixtureService->linkedDocuments=array(array('rowid'=>98,'doc_type'=>'payment_supplier_linked','ref'=>'PAY-98','doc_date'=>'2026-10-20','amount_open'=>20,'bank_account_id'=>101,'bank_account_ref'=>'FALLBACK BANK'));
-checkMatched($prepare($line)['suggestion']['bank_account_ref']==='FALLBACK BANK','Linked fallback suggestions retain their recorded bank account');
+$fallback=$view['buildLinkedFallbackSuggestions'];
+checkMatched($fallback($fixtureService,$line,3)[0]['bank_account_ref']==='FALLBACK BANK','Linked fallback suggestions retain their recorded bank account');
 $fixtureService->linkedDocuments=array();
 $fixtureService->suggestions=$savedSuggestions;
 $fixtureService->suggestions[]=array_merge($fixtureService->suggestions[0],array('doc_id'=>100,'score'=>90));
