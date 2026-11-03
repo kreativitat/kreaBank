@@ -87,8 +87,7 @@ while ($row = $db->fetch_object($result)) {
 	print '<tr class="oddeven"><td class="nowrap">' . ($row->operation_date ? dol_print_date($db->jdate($row->operation_date), 'day') : '—')
 		. '</td><td class="nowrap">' . ($row->value_date ? dol_print_date($db->jdate($row->value_date), 'day') : '—') . '</td>';
 	print '<td class="kb-statement-description">' . dol_escape_htmltag($row->description);
-	$references = array_unique(array_filter(array($row->payment_reference, $row->bank_reference), static function ($value) { return $value !== null && $value !== ''; }));
-	foreach ($references as $reference) {
+	foreach (kreabankStatementReferences($row) as $reference) {
 		print '<br><small>' . dol_escape_htmltag($reference) . '</small>';
 	}
 	print '</td><td class="right nowrap">' . ((float) $row->amount < 0 ? kreabankPrice(-$row->amount) : '—') . '</td>';

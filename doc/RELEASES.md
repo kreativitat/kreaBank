@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.18.1 — 2026-11-03
+
+- Hide provider external transaction identifiers from combined and individual
+  statement tables. Preserve bank descriptions, payment references, amounts and
+  stored source identities used for duplicate detection.
+
 ## 1.18.0 — 2026-11-03
 
 - Add a Bank statement tab combining all imported statement movements in one

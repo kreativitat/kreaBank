@@ -22,6 +22,16 @@ function kreabankAccountFeedCells($row)
 	return $html . '</td><td>' . ($updated ? dol_print_date($updated, 'dayhour') : '—') . '</td>';
 }
 
+/** Feed bank_reference holds the provider's external ID, not an operator reference. */
+function kreabankStatementReferences($line, $sourceType = '')
+{
+	$references = array($line->payment_reference);
+	if (($sourceType ?: ($line->source_type ?? '')) !== 'fintable') {
+		$references[] = $line->bank_reference;
+	}
+	return array_unique(array_filter($references, static function ($value) { return $value !== null && $value !== ''; }));
+}
+
 function kreabankStatementUrl($accountId = 0, $reference = '')
 {
 	return dol_buildpath('/custom/kreabank/statement.php', 1) . '?mainmenu=bank&leftmenu=kreabank_import'

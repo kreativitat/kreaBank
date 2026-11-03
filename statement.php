@@ -107,8 +107,11 @@ if ($statement) {
 	print '</tr>';
 	while ($row = $db->fetch_object($result)) {
 		$state = kreabankIntegrationLineState($row, $reference);
-		print '<tr class="oddeven"><td>' . dol_escape_htmltag($row->operation_date) . '</td><td>' . dol_escape_htmltag($row->description)
-			. '<br><small>' . dol_escape_htmltag($row->payment_reference ?: $row->bank_reference) . '</small></td>';
+		print '<tr class="oddeven"><td>' . dol_escape_htmltag($row->operation_date) . '</td><td>' . dol_escape_htmltag($row->description);
+		foreach (kreabankStatementReferences($row, $statement->source_type) as $referenceValue) {
+			print '<br><small>' . dol_escape_htmltag($referenceValue) . '</small>';
+		}
+		print '</td>';
 		print '<td class="right">' . kreabankPrice($row->amount) . ' ' . dol_escape_htmltag($row->currency) . '</td>';
 		print '<td' . ($state === 'KreaBankLinkNeedsReview' ? ' class="warning"' : '') . '>' . $langs->trans($state) . '</td><td>';
 		if ((int) $row->native_id > 0) {

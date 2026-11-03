@@ -9,12 +9,14 @@ matching continues to reuse existing movements only.
 
 `bankstatement.php` combines content from all imports in one read-only table,
 newest operation first by default, with sorting before 50-row pagination. It shows
-operation/value dates, description and both original references, debit/credit,
+operation/value dates, description and bank/payment references, debit/credit,
 currency, source statement and reconciliation status. The account filter includes
 only current-company owned accounts, including closed accounts. Bank balances
 are the original supplied snapshots; missing balances remain unknown, and no
 opening balance or combined currency total is inferred. Potential source
 duplicates remain visibly flagged; mapped native movements are not repeated.
+Provider external transaction IDs stay stored for duplicate detection and are
+not shown as bank references in statement tables.
 Legacy imported movements without a staging mapping remain visible, even when
 other staged evidence shares their statement reference. Ordinary native ledger
 movements are not imported evidence and do not enter this table.
