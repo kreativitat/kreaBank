@@ -138,6 +138,7 @@ $action = '';
 $navigationRequest = array('kind' => 'cash', 'account_context' => 45);
 foreach (array('movements', 'bankstatement', 'statement', 'reconcile', 'feed', 'history') as $page) {
 	$html = kreabankBankingHeader($page, (object) array('id' => 45));
+	checkNavigation((strpos(end($db->queries), 'EXISTS (SELECT 1 FROM navtest_kreabank_statement') !== false) === in_array($page, array('bankstatement', 'statement'), true), 'Only statement views restrict the account selector to imported statements');
 	$dom = new DOMDocument();
 	@$dom->loadHTML($html);
 	$xpath = new DOMXPath($dom);

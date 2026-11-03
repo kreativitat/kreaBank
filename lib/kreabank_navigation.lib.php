@@ -126,16 +126,18 @@ function kreabankBankingFilters($page, $accountId = 0, $kind = null)
 		$html .= '<input type="hidden" name="kreabank_matched" value="1">';
 	}
 	$html .= '<strong class="kb-filter-title">' . $langs->trans('Filters') . '</strong>';
-	$html .= '<div class="kb-filter-field">' . kreabankAccountFilterSelect($accountId) . '</div>';
+	$html .= '<div class="kb-filter-field">' . kreabankAccountFilterSelect($accountId, in_array($page, array('bankstatement', 'statement'), true)) . '</div>';
 	return $html . '<button class="button" type="submit">' . $langs->trans('ToFilter') . '</button></form>';
 }
 
 /** Render the current-company account control for workspace or list filters. */
-function kreabankAccountFilterSelect($accountId = 0)
+function kreabankAccountFilterSelect($accountId = 0, $statementsOnly = false)
 {
 	global $db, $conf, $langs;
 	$html = '<label for="kreabank-account-context">' . $langs->trans('BankAccount') . '</label><select class="flat" id="kreabank-account-context" name="account_context"><option value="0">' . $langs->trans('KreaBankAllAccounts') . '</option>';
-	$result = $db->query('SELECT rowid,ref,label FROM ' . $db->prefix() . 'bank_account WHERE entity=' . (int) $conf->entity . ' ORDER BY clos,ref,label');
+	$result = $statementsOnly
+		? (new KreaBankIntegration($db, $conf->entity))->statementAccounts()
+		: $db->query('SELECT rowid,ref,label FROM ' . $db->prefix() . 'bank_account WHERE entity=' . (int) $conf->entity . ' ORDER BY clos,ref,label');
 	if (!$result) {
 		throw new RuntimeException('Unable to read company accounts');
 	}

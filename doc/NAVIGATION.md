@@ -9,7 +9,8 @@ Internal transfers and new-account creation keep the native layout without a
 workspace header or tabs.
 
 A separate Filters panel below the operational navigation contains one bank-account
-selector, listing only current-company accounts. The standalone accounts overview
+selector, listing only current-company accounts. On both statement views it lists
+only accounts with imported statements, including legacy imports. The standalone accounts overview
 uses compact account-type view links (all, bank, cash or closed) and has no filter
 form or account selector.
 It defaults to bank accounts. There is no selector inside the navigation header.

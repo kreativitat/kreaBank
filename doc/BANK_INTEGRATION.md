@@ -11,7 +11,8 @@ matching continues to reuse existing movements only.
 newest operation first by default, with sorting before 50-row pagination. It shows
 operation/value dates, description and bank/payment references, debit/credit,
 currency, source statement and reconciliation status. The account filter includes
-only current-company owned accounts, including closed accounts. Bank balances
+only current-company owned accounts with imported statements, including closed
+accounts and recognizable legacy imports. Bank balances
 are the original supplied snapshots; missing balances remain unknown, and no
 opening balance or combined currency total is inferred. Potential source
 duplicates remain visibly flagged; mapped native movements are not repeated.

@@ -47,6 +47,19 @@ class KreaBankIntegration
 		return $sql;
 	}
 
+	/** Only owned accounts with staged statements or recognizable legacy imports. */
+	public function statementAccounts()
+	{
+		$p = $this->db->prefix();
+		$e = $this->entity;
+		return $this->query("SELECT ba.rowid,ba.ref,ba.label FROM {$p}bank_account ba WHERE ba.entity=$e AND ("
+			. " EXISTS (SELECT 1 FROM {$p}kreabank_statement s WHERE s.entity=$e AND s.bank_account_id=ba.rowid)"
+			. " OR EXISTS (SELECT 1 FROM {$p}bank b LEFT JOIN {$p}kreabank_bankmeta m ON m.fk_bank_line=b.rowid AND m.entity=$e"
+			. " WHERE b.fk_account=ba.rowid AND COALESCE(b.num_releve,'')<>''"
+			. " AND (m.rowid IS NOT NULL OR b.note LIKE 'KreaBank import %' OR b.note LIKE 'KreaBank staged import %')))"
+			. ' ORDER BY ba.clos,ba.ref,ba.label,ba.rowid');
+	}
+
 	/** Current-company account overview; balances use native operation dates. */
 	public function accounts($kind = 'bank', $accountId = 0, $sortfield = 'ref', $sortorder = 'ASC', $limit = 0, $offset = 0, $withFeed = false)
 	{

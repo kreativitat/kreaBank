@@ -60,4 +60,16 @@ checkAuto(count($ids) === $count && count(array_unique($ids)) === $count, 'Stabl
 $first = $db->fetch_object($report->query('SELECT h.* FROM ' . $source . ' WHERE h.rowid BETWEEN 710 AND 769 ORDER BY h.amount ASC,h.rowid' . $db->plimit(1, 0)));
 checkAuto($first->amount === '-40.00000000', 'Numeric sorting applies before pagination');
 checkAuto($before[0] === countAuto('bank') && $before[1] + 60 === countAuto('kreabank_statement') && $before[2] + 60 === countAuto('kreabank_statement_line') && $before[3] === countAuto('kreabank_recon_audit'), 'Repeated statement reads create no ledger, staging or audit records');
+$db->query("INSERT INTO kbauto_bank_account (rowid,entity,ref,label,currency_code,clos,courant) VALUES (104,1,'LEGACY','Legacy only','EUR',1,1),(105,1,'EMPTY','No statements','EUR',0,1),(106,1,'LEDGER','Ledger only','EUR',0,1)");
+bankAuto(780, '12.00', 'LEGACY', 104);
+bankAuto(781, '12.00', 'ORDINARY', 106);
+$db->query("UPDATE kbauto_bank SET num_releve='LEGACY-ONLY',note='KreaBank import fixture' WHERE rowid=780");
+$db->query("UPDATE kbauto_bank SET num_releve='NATIVE-ONLY' WHERE rowid=781");
+$accounts = array();
+$result = $report->statementAccounts();
+while ($row = $db->fetch_object($result)) { $accounts[] = (int) $row->rowid; }
+checkAuto(in_array(101, $accounts, true) && in_array(102, $accounts, true), 'Statement account selector includes staged imports');
+checkAuto(in_array(104, $accounts, true), 'Statement account selector includes a closed account with only legacy imports');
+checkAuto(!in_array(105, $accounts, true) && !in_array(106, $accounts, true), 'Empty and ordinary-ledger-only accounts are absent from the statement selector');
+checkAuto(!in_array(202, $accounts, true), 'Statement selector never exposes another company account');
 print "OK: $checks combined bank statement database checks\n";

@@ -159,3 +159,5 @@
   locks. Recompute warnings after correction, never cache approval of a move.
 - `test/test_payment_account_review.php` is pure; its database counterpart extends
   only the guarded disposable port 33317 fixture. No schema or scheduler changes.
+
+- Statement-view account selectors list only current-company owned accounts with staged or recognizable legacy imported statements; keep the other operational account selectors unchanged.

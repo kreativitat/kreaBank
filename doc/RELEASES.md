@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.18.2 — 2026-11-03
+
+- Limit statement-view account filters to current-company accounts with imported
+  statements, including legacy imports. Other operational selectors are unchanged.
+
 ## 1.18.1 — 2026-11-03
 
 - Hide provider external transaction identifiers from combined and individual
