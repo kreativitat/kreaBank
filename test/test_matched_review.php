@@ -23,6 +23,7 @@ $db = new class {
 };
 $fixtureService = new class {
 	public $suggestions=array();
+	public $linkedDocuments=array();
 	public $accountReview=null;
 	public $pendingTotal=0;
 	public $line;
@@ -33,7 +34,7 @@ $fixtureService = new class {
 	public function getPendingLines(...$args) { return array(); }
 	public function getPaymentAccountReview($id,$accounts) { return $this->accountReview; }
 	public function getSuggestionsForLines($lines,...$args) { return array($lines[0]['rowid']=>$this->suggestions); }
-	public function getLinkedPaymentDocuments(...$args) { return array(); }
+	public function getLinkedPaymentDocuments(...$args) { return $this->linkedDocuments; }
 	public function getSafeSuggestion($suggestions,$score) { return null; }
 };
 function isModEnabled($module) { return $module !== 'degema'; }
@@ -92,9 +93,15 @@ checkMatched($view['bulkScanCacheStoreKey']==='kreabank_matched_scan_state' && !
 $line=array('rowid'=>11,'fk_statement'=>1,'bank_account_id'=>101,'status'=>0,'direction'=>-1,'amount'=>-20,'allocated_amount'=>0,'operation_date'=>'2026-10-20','currency'=>'EUR','description'=>'Synthetic source','bank_account_ref'=>'TEST','bank_account_label'=>'Synthetic');
 $prepare=$view['prepareReviewRow'];
 checkMatched($prepare($line)===null,'Unmatched sources are excluded');
-$fixtureService->suggestions=array(array('doc_type'=>'native_bank','doc_id'=>99,'doc_ref'=>'TEST-99','doc_date'=>'2026-10-20','thirdparty_name'=>'Synthetic party','amount_open'=>-20,'score'=>100,'details'=>array('amount','date')));
+$fixtureService->suggestions=array(array('doc_type'=>'native_bank','doc_id'=>99,'doc_ref'=>'TEST-99','doc_date'=>'2026-10-20','thirdparty_name'=>'Synthetic party','bank_account_id'=>101,'bank_account_ref'=>'TARGET & BANK','amount_open'=>-20,'score'=>100,'details'=>array('amount','date')));
 $pair=$prepare($line);
 checkMatched($pair && !$pair['preselected'] && $pair['allocation']===20.0,'Unique weak counterpart remains reviewable without automatic preselection');
+$savedSuggestions=$fixtureService->suggestions;
+$fixtureService->suggestions=array();
+$fixtureService->linkedDocuments=array(array('rowid'=>98,'doc_type'=>'payment_supplier_linked','ref'=>'PAY-98','doc_date'=>'2026-10-20','amount_open'=>20,'bank_account_id'=>101,'bank_account_ref'=>'FALLBACK BANK'));
+checkMatched($prepare($line)['suggestion']['bank_account_ref']==='FALLBACK BANK','Linked fallback suggestions retain their recorded bank account');
+$fixtureService->linkedDocuments=array();
+$fixtureService->suggestions=$savedSuggestions;
 $fixtureService->suggestions[]=array_merge($fixtureService->suggestions[0],array('doc_id'=>100,'score'=>90));
 checkMatched($prepare($line)===null,'Competing similar-score documents are excluded');
 $fixtureService->suggestions=array($fixtureService->suggestions[0]);
@@ -116,6 +123,7 @@ checkMatched(strpos($rendered['html'],'matched.php?page=1')!==false && strpos($r
 checkMatched(strpos($rendered['html'],'id="krea_bulk_match_all"')===false && strpos($rendered['html'],'KreaBankConfirmCurrentMatch')!==false, 'Individual review has no select-all action and confirms the current match');
 checkMatched(strpos($rendered['html'],'name="review_confirmed"')===false && strpos($rendered['html'],'type="checkbox"')===false,'Individual confirmation requires no selection or review checkboxes');
 checkMatched(strpos($rendered['html'],'type="hidden" name="selected_line_ids[]" value="11"')!==false && strpos($rendered['html'],'name="review_signatures[11]"')!==false,'The button submits only its displayed signed source');
+checkMatched(strpos($rendered['html'],'TARGET &amp; BANK')!==false && strpos($rendered['html'],'TARGET & BANK')===false,'Suggested account reference is displayed independently of the source and escaped');
 $state['done']=false;
 $_SESSION['kreabank_matched_scan_state']=$state;
 $loading=renderMatchedFixture();

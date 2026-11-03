@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.18.11 — 2026-11-03
+
+- Show the recorded bank account reference in suggested correspondence panels for
+  native movements and linked payments. Bind that account to manual review approval.
+
 ## 1.18.10 — 2026-11-03
 
 - Keep review panels stable during background progress; show individual matches

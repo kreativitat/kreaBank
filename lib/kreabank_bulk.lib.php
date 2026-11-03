@@ -41,8 +41,8 @@ function kreabankBulkReviewLineFacts($line)
 function kreabankBulkReviewSignature($row, $scope, $expires, $secret)
 {
 	$suggestion = $row['suggestion'] ?? array();
-	$document = array('doc_id' => (int) ($suggestion['doc_id'] ?? 0));
-	foreach (array('doc_type', 'doc_ref', 'doc_date', 'thirdparty_name') as $key) {
+	$document = array('doc_id' => (int) ($suggestion['doc_id'] ?? 0), 'bank_account_id' => (int) ($suggestion['bank_account_id'] ?? 0));
+	foreach (array('doc_type', 'doc_ref', 'doc_date', 'thirdparty_name', 'bank_account_ref') as $key) {
 		$document[$key] = (string) ($suggestion[$key] ?? '');
 	}
 	$document['amount_open'] = number_format((float) ($suggestion['amount_open'] ?? 0), 8, '.', '');

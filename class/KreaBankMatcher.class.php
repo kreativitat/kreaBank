@@ -58,6 +58,8 @@ class KreaBankMatcher
 				'doc_ref' => $document['ref'],
 				'doc_date' => !empty($document['doc_date']) ? (string) $document['doc_date'] : '',
 				'thirdparty_name' => $document['thirdparty_name'],
+				'bank_account_id' => (int) ($document['bank_account_id'] ?? 0),
+				'bank_account_ref' => (string) ($document['bank_account_ref'] ?? ''),
 				'amount_open' => (float) $document['amount_open'],
 				'supplier_payment_id' => (int) (!empty($document['supplier_payment_id']) ? $document['supplier_payment_id'] : 0),
 				'customer_payment_id' => (int) (!empty($document['customer_payment_id']) ? $document['customer_payment_id'] : 0),

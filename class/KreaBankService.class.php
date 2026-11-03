@@ -992,7 +992,7 @@ class KreaBankService
 		$dateRange = $this->resolveOpenDocumentsDateRange($anchorDate, $intervalDays);
 
 		$sql = 'SELECT b.rowid as bank_line_id, b.dateo as doc_date, b.amount as amount_open, b.num_chq, b.label as native_label, b.note as native_note,';
-		$sql .= ' ba.currency_code as bank_currency,';
+		$sql .= ' ba.currency_code as bank_currency, ba.rowid as bank_account_id, ba.ref as bank_account_ref,';
 		$sql .= ' m.counterparty_name, m.counterparty_iban, m.description, m.payment_reference, m.bank_reference,';
 		$sql .= " GROUP_CONCAT(DISTINCT bu.label ORDER BY bu.label SEPARATOR ' / ') as url_labels,";
 		$sql .= " GROUP_CONCAT(DISTINCT bu.type ORDER BY bu.type SEPARATOR ',') as url_types,";
@@ -1023,7 +1023,7 @@ class KreaBankService
 			$sql .= ' AND b.dateo >= ' . $this->sqlDate($dateRange['start']);
 			$sql .= ' AND b.dateo <= ' . $this->sqlDate($dateRange['end']);
 		}
-		$sql .= ' GROUP BY b.rowid, b.dateo, b.amount, b.num_chq, b.label, b.note, ba.currency_code, m.counterparty_name, m.counterparty_iban, m.description, m.payment_reference, m.bank_reference';
+		$sql .= ' GROUP BY b.rowid, b.dateo, b.amount, b.num_chq, b.label, b.note, ba.currency_code, ba.rowid, ba.ref, m.counterparty_name, m.counterparty_iban, m.description, m.payment_reference, m.bank_reference';
 		$sql .= ' ORDER BY b.dateo ASC, b.rowid ASC';
 		$sql .= $this->db->plimit($limit, 0);
 
@@ -1070,6 +1070,8 @@ class KreaBankService
 				'thirdparty_iban' => (string) (!empty($obj->counterparty_iban) ? $obj->counterparty_iban : ''),
 				'description' => ($description !== '' ? $description : ($nativeLabel !== '' ? $nativeLabel : $urlLabels)),
 				'bank_line_id' => $rowid,
+				'bank_account_id' => (int) $obj->bank_account_id,
+				'bank_account_ref' => (string) $obj->bank_account_ref,
 				'currency' => (string) $obj->bank_currency,
 				'amount_decimal' => (string) $obj->amount_open,
 				'native_label' => $nativeLabel,
@@ -1219,7 +1221,7 @@ class KreaBankService
 
 		if ($includeCustomerPayments) {
 			$sql = 'SELECT p.rowid, p.ref, p.num_paiement, p.datep as doc_date, p.amount as amount_open, p.note, p.fk_bank as linked_bank_line,';
-			$sql .= ' b.dateo as linked_bank_date, b.label as linked_bank_label, b.rappro as linked_bank_reconciled,';
+			$sql .= ' b.dateo as linked_bank_date, b.label as linked_bank_label, b.rappro as linked_bank_reconciled, kba.rowid as bank_account_id, kba.ref as bank_account_ref,';
 			$sql .= " GROUP_CONCAT(DISTINCT f.ref ORDER BY f.ref SEPARATOR ', ') as invoice_refs,";
 			$sql .= " GROUP_CONCAT(DISTINCT s.nom ORDER BY s.nom SEPARATOR ' / ') as thirdparty_name";
 			$sql .= ' FROM ' . $this->db->prefix() . 'paiement as p';
@@ -1245,7 +1247,7 @@ class KreaBankService
 			if ($hasTargetAmount) {
 				$sql .= ' AND ABS(ABS(p.amount) - ' . $targetAmountAbs . ') <= 0.01';
 			}
-			$sql .= ' GROUP BY p.rowid, p.ref, p.num_paiement, p.datep, p.amount, p.note, p.fk_bank, b.dateo, b.label, b.rappro';
+			$sql .= ' GROUP BY p.rowid, p.ref, p.num_paiement, p.datep, p.amount, p.note, p.fk_bank, b.dateo, b.label, b.rappro, kba.rowid, kba.ref';
 			$sql .= ' ORDER BY p.datep ASC, p.rowid ASC';
 			$sql .= $this->db->plimit($limit, 0);
 
@@ -1270,6 +1272,8 @@ class KreaBankService
 						'description' => (string) (!empty($obj->note) ? $obj->note : ''),
 						'is_locked' => ((int) $obj->linked_bank_reconciled === 1 ? 1 : 0),
 						'linked_bank_line' => (int) $obj->linked_bank_line,
+						'bank_account_id' => (int) $obj->bank_account_id,
+						'bank_account_ref' => (string) $obj->bank_account_ref,
 						'linked_bank_date' => $obj->linked_bank_date,
 						'linked_bank_label' => (string) (!empty($obj->linked_bank_label) ? $obj->linked_bank_label : ''),
 						'linked_bank_reconciled' => (int) $obj->linked_bank_reconciled,
@@ -1280,7 +1284,7 @@ class KreaBankService
 
 		if ($includeSupplierPayments) {
 			$sqlf = 'SELECT p.rowid, p.ref, p.num_paiement, p.datep as doc_date, p.amount as amount_open, p.note, p.fk_bank as linked_bank_line,';
-			$sqlf .= ' b.dateo as linked_bank_date, b.label as linked_bank_label, b.rappro as linked_bank_reconciled,';
+			$sqlf .= ' b.dateo as linked_bank_date, b.label as linked_bank_label, b.rappro as linked_bank_reconciled, kba.rowid as bank_account_id, kba.ref as bank_account_ref,';
 			$sqlf .= " GROUP_CONCAT(DISTINCT ff.ref ORDER BY ff.ref SEPARATOR ', ') as invoice_refs,";
 			$sqlf .= " GROUP_CONCAT(DISTINCT s.nom ORDER BY s.nom SEPARATOR ' / ') as thirdparty_name";
 			$sqlf .= ' FROM ' . $this->db->prefix() . 'paiementfourn as p';
@@ -1306,7 +1310,7 @@ class KreaBankService
 			if ($hasTargetAmount) {
 				$sqlf .= ' AND ABS(ABS(p.amount) - ' . $targetAmountAbs . ') <= 0.01';
 			}
-			$sqlf .= ' GROUP BY p.rowid, p.ref, p.num_paiement, p.datep, p.amount, p.note, p.fk_bank, b.dateo, b.label, b.rappro';
+			$sqlf .= ' GROUP BY p.rowid, p.ref, p.num_paiement, p.datep, p.amount, p.note, p.fk_bank, b.dateo, b.label, b.rappro, kba.rowid, kba.ref';
 			$sqlf .= ' ORDER BY p.datep ASC, p.rowid ASC';
 			$sqlf .= $this->db->plimit($limit, 0);
 
@@ -1331,6 +1335,8 @@ class KreaBankService
 						'description' => (string) (!empty($obj->note) ? $obj->note : ''),
 						'is_locked' => ((int) $obj->linked_bank_reconciled === 1 ? 1 : 0),
 						'linked_bank_line' => (int) $obj->linked_bank_line,
+						'bank_account_id' => (int) $obj->bank_account_id,
+						'bank_account_ref' => (string) $obj->bank_account_ref,
 						'linked_bank_date' => $obj->linked_bank_date,
 						'linked_bank_label' => (string) (!empty($obj->linked_bank_label) ? $obj->linked_bank_label : ''),
 						'linked_bank_reconciled' => (int) $obj->linked_bank_reconciled,

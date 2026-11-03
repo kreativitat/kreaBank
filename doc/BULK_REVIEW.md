@@ -22,6 +22,11 @@ and target document reference are shown separately from the counterparty name.
 Every prepared source and execution target must belong to the current company;
 native movement/payment links must use the same bank account. Payment parents
 cannot cross companies. These checks also run inside the execution transaction.
+The suggested correspondence panel shows the account reference read from the target
+native movement or linked payment. Documents without a recorded bank movement show
+`-`; the source account is never substituted. Target account identity/reference are
+bound to the signed approval. Validate with `test/test_suggestion_bank_account_database.php`
+on the same guarded disposable fixture.
 
 Users can select suggestions requiring manual review and tick the explicit approval
 checkbox before confirming. This is a manual decision, including for pairs without

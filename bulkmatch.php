@@ -103,7 +103,7 @@ if ($dateTolerance <= 0) {
 	$dateTolerance = 3;
 }
 $bulkScanCacheStoreKey = $singleReview ? 'kreabank_matched_scan_state' : 'kreabank_bulkmatch_scan_state';
-$bulkScanMatcherRevision = 16;
+$bulkScanMatcherRevision = 17;
 $bulkColumns = array('operation_date' => 'KreaBankDate', 'description' => 'KreaBankDescription', 'amount' => 'KreaBankAmount', 'doc_ref' => 'KreaBankDocument', 'score' => 'KreaBankAutoScore');
 $bulkSort = kreabankListSort($bulkColumns, 'operation_date');
 $bulkScanFilterScope = array(
@@ -363,6 +363,8 @@ $buildLinkedFallbackSuggestions = static function ($service, $line, $dateToleran
 			'doc_ref' => $docRef,
 			'doc_date' => (string) (!empty($document['doc_date']) ? $document['doc_date'] : ''),
 			'thirdparty_name' => (string) (!empty($document['thirdparty_name']) ? $document['thirdparty_name'] : ''),
+			'bank_account_id' => (int) ($document['bank_account_id'] ?? 0),
+			'bank_account_ref' => (string) ($document['bank_account_ref'] ?? ''),
 			'amount_open' => (float) (isset($document['amount_open']) ? $document['amount_open'] : 0.0),
 			'score' => $score,
 			'details' => $details,
@@ -998,6 +1000,7 @@ print '<input type="hidden" name="sortfield" value="' . dol_escape_htmltag($bulk
 		}
 		print '<table class="krea-bulk-panel">';
 		print '<tr><th colspan="2">' . $langs->trans('KreaBankBulkMatchSuggested') . ($docDirectionLabel !== '' ? '<span class="krea-dir-badge ' . $docDirectionClass . '">' . dol_escape_htmltag((string) $docDirectionLabel) . '</span>' : '') . $paymentBadgeHtml . '</th></tr>';
+		print '<tr><td class="krea-label">' . $langs->trans('BankAccount') . '</td><td>' . dol_escape_htmltag(trim((string) ($suggestion['bank_account_ref'] ?? '')) ?: '-') . '</td></tr>';
 		print '<tr><td class="krea-label">' . $langs->trans('Ref') . '</td><td><a href="' . dol_escape_htmltag($docUrl) . '">' . dol_escape_htmltag($docRef) . '</a></td></tr>';
 		print '<tr><td class="krea-label">' . $langs->trans('KreaBankDate') . '</td><td class="nowrap">' . $docDate . '</td></tr>';
 		print '<tr><td class="krea-label">' . $langs->trans('KreaBankCounterparty') . '</td><td><strong>' . dol_escape_htmltag($docThirdparty) . '</strong></td></tr>';

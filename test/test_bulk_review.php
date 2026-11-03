@@ -41,7 +41,8 @@ foreach (array('rowid' => 11, 'fk_statement' => 0, 'bank_account_id' => 102, 'am
 	checkReview(!$valid($changed), 'Changed source fact rejected: ' . $field);
 }
 foreach (array('doc_id' => 21, 'doc_type' => 'supplier_invoice', 'amount_open' => -47.65,
-	'doc_ref' => 'OTHER', 'doc_date' => '2026-10-31', 'thirdparty_name' => 'Different Person') as $field => $value) {
+	'doc_ref' => 'OTHER', 'doc_date' => '2026-10-31', 'thirdparty_name' => 'Different Person',
+	'bank_account_id' => 102, 'bank_account_ref' => 'OTHER BANK') as $field => $value) {
 	$changed = $row; $changed['suggestion'][$field] = $value;
 	checkReview(!$valid($changed), 'Changed target fact rejected: ' . $field);
 }
