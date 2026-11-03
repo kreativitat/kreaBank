@@ -166,6 +166,58 @@ class KreaBankIntegration
 			. " WHERE l.entity=$e AND s.bank_account_id=ba.rowid AND l.fk_native_bank_line=b.rowid)";
 	}
 
+	/** Read-only running balances anchored to a successfully collected bank snapshot. */
+	public function bankStatementWithBalancesSql($accountId = 0)
+	{
+		$p = $this->db->prefix();
+		$e = $this->entity;
+		$source = '(' . $this->bankStatementSql($accountId) . ') h';
+		$config = $this->db->fetch_object($this->query("SELECT value FROM {$p}const WHERE entity=0 AND name='KREABANK_FINTABLE_WORKSPACE'"));
+		if (!$config || trim((string) $config->value) === '') {
+			return 'SELECT h.*,h.running_balance display_balance,0 balance_calculated,NULL balance_updated_at FROM ' . $source;
+		}
+		// A completed collection proves that every returned page was persisted. A newer
+		// failed/partial collection, changed mapping, conflict or missing source link
+		// invalidates the snapshot as a running-balance anchor for the entire account.
+		$payload = "CASE WHEN JSON_VALID(x.source_payload) THEN x.source_payload ELSE '{}' END";
+		$anchor = "SELECT f.rowid,f.fk_bank_account,f.currency,f.balance,f.bank_updated_at FROM {$p}kreabank_feed_account f"
+			. " JOIN {$p}bank_account ba ON ba.rowid=f.fk_bank_account AND ba.entity=f.entity"
+			. " WHERE f.entity=$e AND f.workspace_id=" . $this->quote($config->value)
+			. " AND f.currency=ba.currency_code AND f.iban=UPPER(REPLACE(REPLACE(ba.iban_prefix,' ',''),'-','')) AND ba.courant<>2"
+			. " AND f.balance IS NOT NULL AND f.status IN ('ready','stale') AND COALESCE(f.watermark,'')<>''"
+			. " AND STR_TO_DATE(LEFT(f.bank_updated_at,10),'%Y-%m-%d') IS NOT NULL"
+			. " AND f.last_success>=f.last_attempt AND f.history_to<=LEFT(f.bank_updated_at,10)"
+			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_feed_transaction x"
+			. " LEFT JOIN {$p}kreabank_statement_line xl ON xl.rowid=x.fk_statement_line AND xl.entity=x.entity AND xl.line_uid=x.source_uid"
+			. " LEFT JOIN {$p}kreabank_statement xs ON xs.rowid=xl.fk_statement AND xs.entity=xl.entity"
+			. " WHERE x.fk_feed_account=f.rowid AND (x.entity<>f.entity OR x.status NOT IN ('imported','zero')"
+			. " OR (x.status='imported' AND (xl.rowid IS NULL OR xs.rowid IS NULL OR xs.bank_account_id<>f.fk_bank_account"
+			. " OR xs.source_type<>'fintable' OR xl.currency<>f.currency OR xl.is_duplicate<>0 OR xl.operation_date IS NULL"
+			. " OR xl.operation_date>LEFT(f.bank_updated_at,10)"
+			. " OR JSON_EXTRACT($payload,'$.amount') IS NULL OR JSON_EXTRACT($payload,'$.currency') IS NULL OR JSON_EXTRACT($payload,'$.operation_date') IS NULL"
+			. " OR xl.amount<>CAST(JSON_UNQUOTE(JSON_EXTRACT($payload,'$.amount')) AS DECIMAL(24,8))"
+			. " OR xl.currency<>JSON_UNQUOTE(JSON_EXTRACT($payload,'$.currency'))"
+			. " OR xl.operation_date<>JSON_UNQUOTE(JSON_EXTRACT($payload,'$.operation_date'))))))"
+			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_feed_transaction x WHERE x.fk_feed_account=f.rowid AND x.status='imported' GROUP BY x.fk_statement_line HAVING COUNT(*)>1)"
+			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement_line xl JOIN {$p}kreabank_statement xs ON xs.rowid=xl.fk_statement AND xs.entity=xl.entity"
+			. " WHERE xs.entity=f.entity AND xs.bank_account_id=f.fk_bank_account AND xs.source_type='fintable'"
+			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_feed_transaction x WHERE x.fk_feed_account=f.rowid AND x.entity=f.entity"
+			. " AND x.fk_statement_line=xl.rowid AND x.source_uid=xl.line_uid AND x.status='imported'))";
+		// Exact DECIMAL subtraction includes every later source line, independent of
+		// the visible page or chosen sort. Same-day ordering follows the default table.
+		$later = "SELECT SUM(nl.amount) FROM {$p}kreabank_feed_transaction nt"
+			. " JOIN {$p}kreabank_statement_line nl ON nl.rowid=nt.fk_statement_line AND nl.entity=nt.entity"
+			. " JOIN {$p}kreabank_statement ns ON ns.rowid=nl.fk_statement AND ns.entity=nl.entity"
+			. " WHERE nt.fk_feed_account=f.rowid AND nt.entity=$e AND nt.status='imported' AND ns.bank_account_id=h.bank_account_id"
+			. " AND (nl.operation_date>h.operation_date OR (nl.operation_date=h.operation_date AND (ns.rowid>h.statement_id"
+			. " OR (ns.rowid=h.statement_id AND (nl.line_rank>h.line_rank OR (nl.line_rank=h.line_rank AND nl.rowid>h.rowid))))))";
+		return "SELECT h.*,COALESCE(h.running_balance,f.balance-COALESCE(($later),0)) display_balance,"
+			. " CASE WHEN h.running_balance IS NULL AND f.rowid IS NOT NULL THEN 1 ELSE 0 END balance_calculated,f.bank_updated_at balance_updated_at"
+			. " FROM $source LEFT JOIN {$p}kreabank_feed_transaction t ON h.source_storage='staging' AND t.fk_statement_line=h.rowid AND t.entity=$e AND t.status='imported'"
+			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_feed_transaction t2 WHERE t2.entity=t.entity AND t2.fk_statement_line=t.fk_statement_line AND t2.rowid<>t.rowid)"
+			. " LEFT JOIN ($anchor) f ON f.rowid=t.fk_feed_account AND f.fk_bank_account=h.bank_account_id AND f.currency=h.currency";
+	}
+
 	/** A matched-list filter uses the native bank ID, never the staged row ID. */
 	public function matchedWhereSql($alias = 'b')
 	{

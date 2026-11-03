@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.18.4 — 2026-11-03
+
+- Show calculated running balances when the feed supplies only a current bank
+  balance. Work backwards across the complete collected account history using
+  exact decimals; sorting and pagination retain each line's balance.
+- Label calculated values and preserve supplied balances. Same-day ordering uses
+  the imported statement order because the feed supplies no transaction times.
+  Reject incomplete collections, changed mappings, conflicts, duplicates and
+  missing or inconsistent source links. No persisted balance or ledger changes.
+
 ## 1.18.3 — 2026-11-03
 
 - Open all imported statements when arriving from an account without imports,

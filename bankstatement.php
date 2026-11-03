@@ -65,9 +65,9 @@ $columns = array('operation_date' => 'KreaBankOperationDate', 'value_date' => 'K
 $sort = kreabankListSort($columns, 'operation_date', 'DESC');
 // Signed decimal expressions sort the complete scoped result before pagination.
 $fields = array('debit' => 'CASE WHEN h.amount<0 THEN -h.amount ELSE NULL END',
-	'credit' => 'CASE WHEN h.amount>=0 THEN h.amount ELSE NULL END');
+	'credit' => 'CASE WHEN h.amount>=0 THEN h.amount ELSE NULL END', 'running_balance' => 'h.display_balance');
 $orderField = $fields[$sort['field']] ?? 'h.' . $sort['field'];
-$source = '(' . $report->bankStatementSql($accountId) . ') h';
+$source = '(' . $report->bankStatementWithBalancesSql($accountId) . ') h';
 $total = (int) $db->fetch_object($report->query('SELECT COUNT(*) nb FROM ' . $source))->nb;
 $limit = 50;
 $page = max(0, GETPOSTINT('page'));
@@ -96,8 +96,9 @@ while ($row = $db->fetch_object($result)) {
 	}
 	print '</td><td class="right nowrap">' . ((float) $row->amount < 0 ? kreabankPrice(-$row->amount) : '—') . '</td>';
 	print '<td class="right nowrap">' . ((float) $row->amount >= 0 ? kreabankPrice($row->amount) : '—') . '</td>';
-	// A missing bank balance is unknown; never derive one from incomplete imports or the native ledger.
-	print '<td class="right nowrap">' . ($row->running_balance !== null ? kreabankPrice($row->running_balance) : '—') . '</td>';
+	print '<td class="right nowrap"' . ($row->balance_calculated ? ' title="' . dol_escape_htmltag($langs->trans('KreaBankCalculatedBalanceHelp', $row->balance_updated_at)) . '"' : '') . '>'
+		. ($row->display_balance !== null ? kreabankPrice($row->display_balance) : '—')
+		. ($row->balance_calculated ? '<br><small class="opacitymedium">' . $langs->trans('KreaBankCalculatedBalance') . '</small>' : '') . '</td>';
 	print '<td>' . dol_escape_htmltag($row->currency) . '</td><td>' . dol_escape_htmltag($row->bank_account_ref . ' — ' . $row->bank_account_label) . '</td>';
 	print '<td><a href="' . dol_escape_htmltag(kreabankStatementUrl($row->bank_account_id, $row->statement_ref)) . '">' . dol_escape_htmltag($row->statement_ref) . '</a></td>';
 	print '<td' . ($state === 'KreaBankLinkNeedsReview' ? ' class="warning"' : '') . '>' . $langs->trans($state);

@@ -13,8 +13,15 @@ operation/value dates, description and bank/payment references, debit/credit,
 currency, source statement and reconciliation status. The account filter includes
 only current-company owned accounts with imported statements, including closed
 accounts and recognizable legacy imports. Bank balances
-are the original supplied snapshots; missing balances remain unknown, and no
-opening balance or combined currency total is inferred. Potential source
+use original supplied line balances where available. For feed lines without one,
+`bankStatementWithBalancesSql()` calculates backwards from the last successfully
+collected bank balance, subtracting all later collected movements with exact SQL
+DECIMAL arithmetic before display sorting or pagination. These values are marked
+**Calculated**; same-day sequencing follows the default statement order, because
+the feed supplies no transaction time or bank sequence. No opening balance,
+ledger balance or combined currency total is invented. Incomplete collections,
+conflicts, duplicate/missing links and changed company/workspace/IBAN/currency
+mappings leave unknown balances blank. Stored source balances remain unchanged. Potential source
 duplicates remain visibly flagged; mapped native movements are not repeated.
 Provider external transaction IDs stay stored for duplicate detection and are
 not shown as bank references in statement tables.
@@ -51,6 +58,7 @@ Rolling back source does not require changing financial records.
 
 Validation:
 
+- `php test/test_statement_balances_database.php` (same guarded disposable database)
 - `php test/test_bank_statement_database.php` (same guarded disposable database)
 - `php test/test_navigation.php`
 - `php test/test_reconciliation_guards.php`
