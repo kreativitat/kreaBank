@@ -33,6 +33,11 @@ $_GET['history_page'] = 4;
 $auditSort = array('field' => 'datec', 'order' => 'DESC', 'prefix' => 'audit_');
 parse_str(parse_url(kreabankListSortUrl($auditSort, 'login'), PHP_URL_QUERY), $params);
 checkSort($params['audit_nav'] === '1' && $params['audit_page'] === '0' && $params['audit_sortfield'] === 'login' && $params['history_page'] === '4', 'Audit sorting has its own request namespace');
+$_GET=array('sortfield'=>'overview','sortorder'=>'ASC','limit'=>2);
+$overviewSort=kreabankListSort(array('ref'=>true,'balance'=>true),'overview');
+checkSort($overviewSort['field']==='overview','The account overview can retain its compound default in pagination forms');
+parse_str(parse_url(kreabankListSortUrl($overviewSort,'ref'),PHP_URL_QUERY),$params);
+checkSort($params['sortfield']==='ref' && $params['sortorder']==='ASC' && $params['limit']==='2','Clicking a column replaces the compound default with ordinary sorting');
 class SortTestDb
 {
 	public $sql;

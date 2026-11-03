@@ -6,6 +6,11 @@ active order. Action and selection columns are not sortable.
 
 - Accounts, statements and statement lines order allowlisted SQL columns before
   pagination. Pending lines retain the native sortable list controls.
+- The account overview defaults to `CO_` references first, then other accounts
+  connected to the current bank feed, then remaining accounts. Each group orders
+  by reference. Connections require the current company, workspace, currency and
+  IBAN mapping; unavailable or review mappings do not count. Column clicks select
+  ordinary column sorting instead, and pagination preserves the chosen order.
 - Connections order their complete current-company/account result using raw
   values. Missing values stay last in either direction.
 - Reconciliation exposes sort links above the statement and document cards.

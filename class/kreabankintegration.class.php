@@ -69,6 +69,7 @@ class KreaBankIntegration
 		$columns = array('ref' => 'ba.ref', 'currency_code' => 'ba.currency_code', 'balance' => 'balance', 'pending_count' => 'pending_count');
 		$feedColumns = '';
 		$feedJoin = '';
+		$connected = '0';
 		if ($withFeed) {
 			// Keep unconfigured installations independent of the optional feed schema.
 			$config = $this->db->fetch_object($this->query("SELECT value FROM {$p}const WHERE entity=0 AND name='KREABANK_FINTABLE_WORKSPACE'"));
@@ -79,11 +80,16 @@ class KreaBankIntegration
 					. ' AND f.workspace_id=' . $this->quote($config->value)
 					. " AND f.currency=ba.currency_code AND f.iban=UPPER(REPLACE(REPLACE(ba.iban_prefix,' ',''),'-',''))"
 					. ' AND ba.courant<>2';
+				$connected = "f.rowid IS NOT NULL AND f.status NOT IN ('mapping_review','unavailable')";
 			}
 			$columns['feed_balance'] = 'feed_balance';
 			$columns['bank_updated_at'] = 'bank_updated_at';
+			$columns['overview'] = "CASE WHEN UPPER(LEFT(ba.ref,3))='CO_' THEN 0 WHEN $connected THEN 1 ELSE 2 END";
 		}
 		$order = ($columns[$sortfield] ?? $columns['ref']) . (strtoupper($sortorder) === 'DESC' ? ' DESC' : ' ASC') . ',ba.rowid';
+		if ($withFeed && $sortfield === 'overview') {
+			$order = $columns['overview'] . ' ASC,ba.ref ASC,ba.rowid';
+		}
 		if ($withFeed && in_array($sortfield, array('feed_balance', 'bank_updated_at'), true)) {
 			$order = $sortfield . ' IS NULL ASC,' . $order;
 		}

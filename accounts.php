@@ -64,7 +64,7 @@ $account = null;
 $kind = kreabankNavigationKind('bank');
 $report = new KreaBankIntegration($db,$conf->entity);
 $accountColumns = array('ref' => 'BankAccount', 'currency_code' => 'Currency', 'feed_balance' => 'KreaBankFeedBalance', 'bank_updated_at' => 'KreaBankFeedBankUpdated', 'balance' => 'KreaBankLedgerBalance', 'pending_count' => 'KreaBankPending');
-$accountSort = kreabankListSort($accountColumns, 'ref');
+$accountSort = kreabankListSort($accountColumns, 'overview');
 $rows = $report->accounts($kind, $accountId, $accountSort['field'], $accountSort['order'], 0, 0, true);
 $total = $db->num_rows($rows);
 $paging = kreabankListPagination($total);

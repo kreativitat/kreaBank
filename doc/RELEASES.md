@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.18.16 — 2026-11-03
+
+- Default the account overview to CO_ accounts, then other bank-feed-connected
+  accounts, then remaining accounts, with reference ordering within each group.
+  Preserve manual column sorting and stable pagination.
+
 ## 1.18.15 — 2026-11-03
 
 - Correct batch learning feature scaling and Random Forest loading. Version new

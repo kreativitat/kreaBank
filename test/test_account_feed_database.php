@@ -70,5 +70,47 @@ $row->bank_updated_at = 'invalid';
 $row->feed_collected_at = null;
 $html = kreabankAccountFeedCells($row);
 checkAuto(strpos($html,'—') !== false && strpos($html,'0,00') === false && strpos($html,'KreaBankFeedState_unmapped') !== false, 'Missing snapshot never becomes a false zero');
+
+// Default overview grouping is independent of balance and explicit column sorts.
+$db->query("UPDATE kbauto_bank_account SET ref='A_CONNECTED',clos=0 WHERE rowid=101");
+$db->query("UPDATE kbauto_bank_account SET ref='Z_CONNECTED' WHERE rowid=102");
+$db->query("UPDATE kbauto_kreabank_feed_account SET status='ready' WHERE provider_account_id='acc_one'");
+$db->query("INSERT INTO kbauto_bank_account (rowid,entity,ref,label,currency_code,clos,courant,rappro,fk_pays) VALUES
+ (9911,1,'CO_Z','Current account Z','EUR',0,1,1,1),
+ (9912,1,'co_a','Current account A','EUR',0,1,1,1),
+ (9913,1,'A_UNLINKED','Unconnected account','EUR',0,1,1,1),
+ (9914,1,'COX','No literal underscore prefix','EUR',0,1,1,1)");
+$fixtureIds = array(101,102,9911,9912,9913,9914);
+$overview = static function ($field = 'overview', $direction = 'ASC', $limit = 0, $offset = 0) use ($db,$report,$fixtureIds) {
+ $result=$report->accounts('bank',0,$field,$direction,$limit,$offset,true);$ids=array();
+ while($account=$db->fetch_object($result)){
+  checkAuto((int)$account->rowid!==202,'Overview grouping never exposes a foreign-company account');
+  if(in_array((int)$account->rowid,$fixtureIds,true)){$ids[]=(int)$account->rowid;}
+ }
+ return $ids;
+};
+$expected = array(9912,9911,101,102,9913,9914);
+checkAuto($overview()===$expected,'CO_ accounts precede feed connections and remaining accounts, alphabetically within each group');
+checkAuto($overview('overview','DESC')===$expected,'A stale direction cannot reverse the default grouping');
+checkAuto($overview('ref')===array(101,9913,9912,9911,9914,102),'Explicit reference sorting overrides overview grouping');
+$all=$overview();$paged=array();
+$result=$report->accounts('bank',0,'overview','ASC',0,0,true);$total=$db->num_rows($result);
+for($offset=0;$offset<$total;$offset+=2){$paged=array_merge($paged,$overview('overview','ASC',2,$offset));}
+checkAuto($paged===$all && count(array_unique($paged))===count($all),'Default grouping stays stable across pages');
+foreach(array(
+ "UPDATE kbauto_kreabank_feed_account SET status='mapping_review' WHERE provider_account_id='acc_one'",
+ "UPDATE kbauto_kreabank_feed_account SET status='unavailable' WHERE provider_account_id='acc_one'",
+ "UPDATE kbauto_kreabank_feed_account SET status='ready',entity=2 WHERE provider_account_id='acc_one'",
+ "UPDATE kbauto_kreabank_feed_account SET entity=1,workspace_id='ws_other' WHERE provider_account_id='acc_one'",
+ "UPDATE kbauto_kreabank_feed_account SET workspace_id='ws_fixture',currency='USD' WHERE provider_account_id='acc_one'",
+ "UPDATE kbauto_kreabank_feed_account SET currency='EUR',iban='FR1420041010050500013M02606' WHERE provider_account_id='acc_one'",
+) as $mutation){
+ $db->query($mutation);
+ checkAuto($overview()===array(9912,9911,102,101,9913,9914),'Invalid feed mappings cannot promote an account into the connected group');
+}
+$db->query("UPDATE kbauto_kreabank_feed_account SET iban='GB82WEST12345698765432',status='failed' WHERE provider_account_id='acc_one'");
+checkAuto($overview()===$expected,'A connected zero-balance account remains connected after a collection failure');
+$db->query("DELETE FROM kbauto_const WHERE name='KREABANK_FINTABLE_WORKSPACE'");
+checkAuto($overview()===array(9912,9911,101,9913,9914,102),'An unconfigured feed still prioritizes CO_ accounts and sorts the rest by reference');
 checkAuto(countAuto('bank') === $before, 'Overview never materializes or changes native bank movements');
 print "OK: $checks account feed database checks\n";
