@@ -69,7 +69,7 @@ try {
 		}
 	}
 	$entities = $sync->activeEntities();
-	print '<div class="div-table-responsive"><table data-kb-sort class="liste centpercent"><tr class="liste_titre"><th>' . $langs->trans('Company') . '</th><th>' . $langs->trans('KreaBankFeedMappedAccounts') . '</th><th>' . $langs->trans('KreaBankFeedCollectedAt') . '</th></tr>';
+	$companyRows = array();
 	foreach ($entities as $entity => $label) {
 		$accounts = $sync->accountStatus($entity);
 		$mapped = 0;
@@ -78,8 +78,24 @@ try {
 			$mapped += empty($account->provider_account_id) ? 0 : 1;
 			$latest = max($latest, (string) $account->last_success);
 		}
-		print '<tr class="oddeven"><td>' . dol_escape_htmltag($label) . '</td><td data-kb-sort-value="' . $mapped . '">' . $mapped . ' / ' . count($accounts) . '</td><td data-kb-sort-value="' . dol_escape_htmltag($latest) . '">'
-			. ($latest ? dol_print_date($db->jdate($latest), 'dayhour') : '—') . '</td></tr>';
+		$companyRows[] = array('company'=>$label, 'mapped'=>$mapped, 'accounts'=>count($accounts), 'latest'=>$latest);
+	}
+	$columns = array('company'=>'Company', 'mapped'=>'KreaBankFeedMappedAccounts', 'latest'=>'KreaBankFeedCollectedAt');
+	$sort = kreabankListSort($columns, 'company');
+	$companyRows = kreabankListOrderRows($companyRows, $sort, static function($row,$field){return $row[$field];});
+	$total = count($companyRows);
+	$paging = kreabankListPagination($total);
+	$params = array('limit'=>$paging['limit']);
+	$param = '&' . http_build_query($params);
+	print '<form method="GET" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+	foreach(array('sortfield'=>$sort['field'],'sortorder'=>$sort['order']) as $key=>$value){print '<input type="hidden" name="'.$key.'" value="'.dol_escape_htmltag($value).'">';}
+	print_barre_liste($langs->trans('Company'), $paging['page'], $_SERVER['PHP_SELF'], $param, $sort['field'], $sort['order'], '', $paging['num'], $total, '', 0, '', '', $paging['limit'], 0, 0, 1);
+	print '</form><div class="div-table-responsive"><table class="liste centpercent"><tr class="liste_titre">';
+	foreach($columns as $field=>$label){print kreabankListHeader($langs->trans($label),$field,$sort,'',$params);}
+	print '</tr>';
+	foreach(array_slice($companyRows,$paging['offset'],$paging['limit']) as $row){
+		print '<tr class="oddeven"><td>'.dol_escape_htmltag($row['company']).'</td><td>'.$row['mapped'].' / '.$row['accounts'].'</td><td>'
+			.($row['latest'] ? dol_print_date($db->jdate($row['latest']),'dayhour') : '—').'</td></tr>';
 	}
 	print '</table></div>';
 } catch (Throwable $e) {

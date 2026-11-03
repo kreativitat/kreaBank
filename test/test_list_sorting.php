@@ -7,6 +7,7 @@ require_once __DIR__ . '/../lib/kreabank_list.lib.php';
 require_once __DIR__ . '/../lib/kreabank_bulk.lib.php';
 require_once __DIR__ . '/../class/kreabankintegration.class.php';
 function GETPOST($name, $filter) { return $_POST[$name] ?? $_GET[$name] ?? ''; }
+function GETPOSTISSET($name) { return isset($_POST[$name]) || isset($_GET[$name]); }
 function dol_escape_htmltag($value) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
 function dol_now() { return 100; }
 $checks = 0;
@@ -41,6 +42,17 @@ class SortTestDb
 	public function query($sql) { $this->sql = $sql; return true; }
 }
 $db = new SortTestDb();
+$conf = (object) array('liste_limit'=>25);
+$_GET=array();$_POST=array();
+checkSort(kreabankListPagination(58)===array('page'=>0,'limit'=>25,'offset'=>0,'num'=>26),'Native list sizing reports one extra row for the next-page arrow');
+$_GET=array('page'=>1,'limit'=>10);
+checkSort(kreabankListPagination(58)===array('page'=>1,'limit'=>10,'offset'=>10,'num'=>11),'Page size and offset apply to the complete sorted result');
+$_GET=array('page'=>0,'pageplusone'=>6,'limit'=>10);
+checkSort(kreabankListPagination(58)===array('page'=>5,'limit'=>10,'offset'=>50,'num'=>8),'Native one-based page entry reaches the last partial page');
+$_GET=array('page'=>PHP_INT_MAX,'limit'=>999999);
+checkSort(kreabankListPagination(58)===array('page'=>0,'limit'=>5000,'offset'=>0,'num'=>58),'Invalid pages and sizes are bounded before offset multiplication');
+$_GET=array('page'=>9,'limit'=>10);
+checkSort(kreabankListPagination(0)===array('page'=>0,'limit'=>10,'offset'=>0,'num'=>0),'An empty list resets stale pagination');
 $report = new KreaBankIntegration($db, 7);
 $report->accounts('cash', 12, 'balance', 'DESC');
 checkSort(strpos($db->sql, 'ORDER BY balance DESC,ba.rowid') !== false && strpos($db->sql, 'ba.entity=7') !== false && strpos($db->sql, 'ba.rowid=12') !== false && strpos($db->sql, 'ba.courant=2') !== false, 'SQL sorting preserves company, account and account-type boundaries');

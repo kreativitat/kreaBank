@@ -25,6 +25,20 @@ function kreabankListParameters()
 	return $params;
 }
 
+/** Native pagination uses a one-based page input and the configured default size. */
+function kreabankListPagination($total, $maximum = 5000)
+{
+	global $conf;
+	$limit = (int) GETPOST('limit', 'int');
+	if ($limit <= 0) { $limit = max(1, (int) $conf->liste_limit); }
+	$limit = min($maximum, $limit);
+	$page = GETPOSTISSET('pageplusone') ? (int) GETPOST('pageplusone', 'int') - 1 : (int) GETPOST('page', 'int');
+	$page = max(0, $page);
+	if ($page > ($total > 0 ? intdiv((int) $total - 1, $limit) : 0)) { $page = 0; }
+	$offset = $page * $limit;
+	return array('page'=>$page, 'limit'=>$limit, 'offset'=>$offset, 'num'=>min($limit + 1, max(0, $total - $offset)));
+}
+
 /** Link changes only read-only list state and starts at its first page. */
 function kreabankListSortUrl($sort, $field, $params = null)
 {

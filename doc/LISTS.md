@@ -78,6 +78,24 @@ balance projection; filtering never changes the feed anchor or recomputes a bala
 from the reduced result. Native/staged row order stays deterministic across pages.
 The read path creates no bank movements, payments, source rows or audits.
 
+## Native pagination throughout the lists
+
+Accounts, imported statements and statement details, connections and the feed
+administration company summary use the same native `print_barre_liste()` controls
+as pending lines, bulk review, import history, reconciliation history and audit.
+The configured native page size is the default. `kreabankListPagination()` bounds
+new list requests to 5,000 rows, handles one-based page entry and resets stale pages
+after the scoped result shrinks. Sort headers retain page size and read-only view
+state. Account type stays exclusive to the account overview; statements retain
+their source reference and connections retain the identified/unidentified view.
+
+Small account/company result sets are fully scoped and sorted before selecting a
+page. Statement SQL orders before applying its limit. Do not add `data-kb-sort` to
+these paginated tables. Existing bulk candidate/page limits and the fixed history
+and audit windows remain unchanged. Individual review keeps one signed pair per
+page; editable configuration matrices, import samples and transaction previews
+remain complete forms/previews rather than independently paginated record lists.
+
 ```sh
 php test/test_bank_statement_filters.php
 # ONLY the guarded disposable localhost:33317/kreabank_auto_test fixture:

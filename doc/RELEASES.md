@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.18.14 — 2026-11-03
+
+- Use native Dolibarr pagination for account lists, imported statements and their
+  lines, connection accounts and the installation feed company summary. Retain
+  account/view context, page size and complete-result sorting across navigation.
+
 ## 1.18.13 — 2026-11-03
 
 - Prefix suggested native-movement descriptions with their linked payment

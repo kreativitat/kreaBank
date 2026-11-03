@@ -66,22 +66,32 @@ $report = new KreaBankIntegration($db,$conf->entity);
 $accountColumns = array('ref' => 'BankAccount', 'currency_code' => 'Currency', 'feed_balance' => 'KreaBankFeedBalance', 'bank_updated_at' => 'KreaBankFeedBankUpdated', 'balance' => 'KreaBankLedgerBalance', 'pending_count' => 'KreaBankPending');
 $accountSort = kreabankListSort($accountColumns, 'ref');
 $rows = $report->accounts($kind, $accountId, $accountSort['field'], $accountSort['order'], 0, 0, true);
+$total = $db->num_rows($rows);
+$paging = kreabankListPagination($total);
+$params = array('kind'=>$kind, 'mainmenu'=>'bank', 'leftmenu'=>'kreabank_accounts', 'limit'=>$paging['limit']);
+$param = '&' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
 llxHeader('', $langs->trans('KreaBankAccounts'));
 kreabankPrintWorkspaceNavigation('accounts',$account);
-print '<div class="kb-accounts-toolbar"><h2>' . $langs->trans('KreaBankAccounts') . '</h2>';
+$newAccount = '';
 if ($user->hasRight('banque','configurer')) {
-	print '<a class="button" href="' . dol_buildpath('/compta/bank/card.php?action=create',1) . '">' . $langs->trans('NewFinancialAccount') . '</a>';
+	$newAccount = '<a class="button" href="' . dol_buildpath('/compta/bank/card.php?action=create',1) . '">' . $langs->trans('NewFinancialAccount') . '</a>';
 }
-print '</div>';
 print kreabankBankingFilters('accounts', $accountId, $kind);
+print '<form method="GET" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+foreach (array_merge($params, array('sortfield'=>$accountSort['field'],'sortorder'=>$accountSort['order'])) as $key=>$value) {
+	if ($key !== 'limit') { print '<input type="hidden" name="' . $key . '" value="' . dol_escape_htmltag((string) $value) . '">'; }
+}
+print_barre_liste($langs->trans('KreaBankAccounts'), $paging['page'], $_SERVER['PHP_SELF'], $param, $accountSort['field'], $accountSort['order'], '', $paging['num'], $total, 'bank', 0, $newAccount, '', $paging['limit'], 0, 0, 1);
+print '</form>';
 print '<div class="div-table-responsive kb-accounts-scroll"><table class="kb-accounts-table"><tr>';
 foreach ($accountColumns as $field => $label) {
-	print kreabankListHeader($langs->trans($label), $field, $accountSort, in_array($field, array('balance', 'feed_balance'), true) ? 'kb-money' : '', array('kind' => $kind, 'mainmenu' => 'bank', 'leftmenu' => 'kreabank_accounts'));
+	print kreabankListHeader($langs->trans($label), $field, $accountSort, in_array($field, array('balance', 'feed_balance'), true) ? 'kb-money' : '', $params);
 }
 print '</tr>';
 $count=0;
 while ($row=$db->fetch_object($rows)) {
-	$count++;
+	if ($count++ < $paging['offset']) { continue; }
+	if ($count > $paging['offset'] + $paging['limit']) { break; }
 	print '<tr><td><a class="kb-account-name" href="' . dol_escape_htmltag(kreabankNativeEntriesUrl($row->rowid)) . '">' . dol_escape_htmltag($row->ref) . '</a> ';
 	print '<a class="kb-account-edit" href="' . dol_escape_htmltag(kreabankBankingUrl('card', $row->rowid)) . '" aria-label="' . dol_escape_htmltag($langs->trans('Modify') . ' ' . $row->ref) . '" title="' . dol_escape_htmltag($langs->trans('Modify')) . '">' . img_picto('', 'edit') . '</a>';
 	print '<small>' . dol_escape_htmltag($row->label) . '</small></td>';
@@ -91,7 +101,7 @@ while ($row=$db->fetch_object($rows)) {
 	print '<td><a class="kb-count" href="' . dol_escape_htmltag(kreabankWorkspaceUrl('reconcile',$row->rowid)) . '">' . (int) $row->pending_count . '</a></td>';
 	print '</tr>';
 }
-if (!$count) {
+if (!$total) {
 	print '<tr><td colspan="6">' . $langs->trans('NoRecordFound') . '</td></tr>';
 }
 print '</table></div>';

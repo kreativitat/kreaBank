@@ -56,8 +56,6 @@ $reference = trim((string) GETPOST('ref', 'alphanohtml'));
 if ($reference !== '' && !$navigationAccount) {
 	accessforbidden();
 }
-$page = max(0, GETPOSTINT('page'));
-$limit = 50;
 $report = new KreaBankIntegration($db, $conf->entity);
 if ($reference === '' && $navigationAccountId > 0 && $db->num_rows($report->statementAccounts($navigationAccountId)) === 0) {
 	header('Location: ' . kreabankStatementUrl());
@@ -85,17 +83,24 @@ if ($statement) {
 $order = 'h.' . $sort['field'] . ' ' . $sort['order'] . $tieOrder;
 $result = $report->query('SELECT COUNT(*) nb FROM ' . $source);
 $total = (int) $db->fetch_object($result)->nb;
-if ($page * $limit >= $total) {
-	$page = 0;
-}
+$paging = kreabankListPagination($total);
+$page = $paging['page'];
+$limit = $paging['limit'];
+$params = array('mainmenu'=>'bank', 'leftmenu'=>'kreabank_import', 'account_context'=>$navigationAccountId, 'ref'=>$reference, 'limit'=>$limit);
+$param = '&' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
 $result = $report->query('SELECT h.* FROM ' . $source . ' ORDER BY ' . $order . $db->plimit($limit, $page * $limit));
 llxHeader('', $langs->trans('KreaBankImportedStatements'));
 kreabankPrintWorkspaceNavigation('statement', $navigationAccount);
-print '<div class="kb-page-heading"><h2>' . $langs->trans('KreaBankNavStatements') . '</h2>';
+$importAction = '';
 if ($user->hasRight('kreabank', 'reconciliation', 'write') && $user->hasRight('banque', 'modifier')) {
-	print '<a class="butAction" href="' . dol_escape_htmltag(kreabankWorkspaceUrl('import', $navigationAccountId)) . '">' . $langs->trans('KreaBankImport') . '</a>';
+	$importAction = '<a class="butAction" href="' . dol_escape_htmltag(kreabankWorkspaceUrl('import', $navigationAccountId)) . '">' . $langs->trans('KreaBankImport') . '</a>';
 }
-print '</div>';
+print '<form method="GET" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+foreach (array_merge($params,array('sortfield'=>$sort['field'],'sortorder'=>$sort['order'])) as $key=>$value) {
+	if ($key !== 'limit') { print '<input type="hidden" name="' . $key . '" value="' . dol_escape_htmltag((string) $value) . '">'; }
+}
+print_barre_liste($langs->trans('KreaBankNavStatements'), $page, $_SERVER['PHP_SELF'], $param, $sort['field'], $sort['order'], '', $paging['num'], $total, 'bank', 0, $importAction, '', $limit, 0, 0, 1);
+print '</form>';
 if ($statement) {
 	print '<h2>' . dol_escape_htmltag($reference) . '</h2>';
 	print '<p>' . $langs->trans('KreaBankStatementProgress', (int) $statement->imported_lines, (int) $statement->native_lines, (int) $statement->reconciled_lines) . '</p>';
@@ -106,7 +111,7 @@ if ($statement) {
 	}
 	print '<div class="div-table-responsive"><table class="liste centpercent kreabank-statement-list"><tr class="liste_titre">';
 	foreach ($columns as $field => $key) {
-		print kreabankListHeader($langs->trans($key), $field, $sort, $field === 'amount' ? 'right' : '');
+		print kreabankListHeader($langs->trans($key), $field, $sort, $field === 'amount' ? 'right' : '', $params);
 	}
 	print '</tr>';
 	while ($row = $db->fetch_object($result)) {
@@ -131,7 +136,7 @@ if ($statement) {
 } else {
 	print '<div class="div-table-responsive"><table class="liste centpercent kreabank-statement-list"><tr class="liste_titre">';
 	foreach ($columns as $field => $key) {
-		print kreabankListHeader($langs->trans($key), $field, $sort, $field === 'amount' ? 'right' : '');
+		print kreabankListHeader($langs->trans($key), $field, $sort, $field === 'amount' ? 'right' : '', $params);
 	}
 	print '</tr>';
 	while ($row = $db->fetch_object($result)) {
@@ -146,16 +151,7 @@ if ($statement) {
 if ($total === 0) {
 	print '<tr><td colspan="' . count($columns) . '">' . $langs->trans('KreaBankImportHistoryEmpty') . '</td></tr>';
 }
-print '</table></div><nav class="kreabank-tools" aria-label="' . dol_escape_htmltag($langs->trans('Page')) . '">';
-$base = kreabankStatementUrl($navigationAccountId, $reference) . '&sortfield=' . rawurlencode($sort['field']) . '&sortorder=' . $sort['order'];
-if ($page > 0) {
-	print '<a href="' . dol_escape_htmltag($base . '&page=' . ($page - 1)) . '">' . $langs->trans('Previous') . '</a>';
-}
-print '<span>' . ($total > 0 ? ($page * $limit + 1) : 0) . '–' . min($total, ($page + 1) * $limit) . ' / ' . $total . '</span>';
-if (($page + 1) * $limit < $total) {
-	print '<a href="' . dol_escape_htmltag($base . '&page=' . ($page + 1)) . '">' . $langs->trans('Next') . '</a>';
-}
-print '</nav>';
+print '</table></div>';
 print dol_get_fiche_end();
 llxFooter();
 $db->close();

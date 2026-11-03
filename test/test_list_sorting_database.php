@@ -29,5 +29,13 @@ foreach (array('ASC' => array(9901, 9902, 9903), 'DESC' => array(9903, 9902, 990
 }
 $result = $report->accounts('all', 9904, 'pending_count', 'DESC');
 checkAuto($db->num_rows($result) === 0, 'A sorted direct account selection cannot cross company boundaries');
+$result = $report->accounts('all', 0, 'balance', 'ASC');
+$all = array();while($row=$db->fetch_object($result)){$all[]=(int)$row->rowid;}
+$paged = array();
+for($offset=0;$offset<count($all);$offset+=2){
+	$result=$report->accounts('all',0,'balance','ASC',2,$offset);
+	while($row=$db->fetch_object($result)){$paged[]=(int)$row->rowid;}
+}
+checkAuto($paged===$all && count(array_unique($paged))===count($all),'Native account pages retain complete scoped sort order without duplicates or foreign accounts');
 checkAuto(countAuto('bank') === $bankCount, 'Sorting reports never creates a native movement');
 echo "OK: $checks list sorting database checks\n";

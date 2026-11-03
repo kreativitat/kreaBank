@@ -51,18 +51,35 @@ print '<p><a href="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '?mainmenu=ban
 	. $langs->trans($showUnidentified ? 'KreaBankFeedShowEligible' : 'KreaBankFeedShowOtherRecords') . '</a></p>';
 $columns = array('ref' => 'BankAccount', 'iban_prefix' => 'IBAN', 'balance' => 'KreaBankFeedBalance', 'balance_available' => 'KreaBankFeedAvailable', 'bank_updated_at' => 'KreaBankFeedBankUpdated', 'last_success' => 'KreaBankFeedCollectedAt', 'history_from' => 'KreaBankFeedHistory', 'status' => 'Status');
 $sort = kreabankListSort($columns, 'ref');
-print '<div class="div-table-responsive"><table class="liste centpercent">';
-print '<tr class="liste_titre">';
-foreach ($columns as $field => $key) {
-	print kreabankListHeader($langs->trans($key), $field, $sort, in_array($field, array('balance', 'balance_available'), true) ? 'right' : '');
-}
-print '</tr>';
+$rows = array();
+$loadError = '';
 try {
 	$rows = $sync->accountStatus((int) $conf->entity, $showUnidentified);
 	if ($navigationAccountId > 0) {
 		$rows = array_values(array_filter($rows, static function ($row) use ($navigationAccountId) { return (int) $row->rowid === $navigationAccountId; }));
 	}
 	$rows = kreabankListOrderRows($rows, $sort, static function ($row, $field) { return $row->$field; });
+} catch (Throwable $e) { $loadError = $e->getMessage(); }
+$total = count($rows);
+$paging = kreabankListPagination($total);
+$rows = array_slice($rows, $paging['offset'], $paging['limit']);
+$params = array('mainmenu'=>'bank', 'leftmenu'=>'kreabank_feed', 'account_context'=>$navigationAccountId, 'show_unidentified'=>(int) $showUnidentified, 'limit'=>$paging['limit']);
+$param = '&' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+print '<form method="GET" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+foreach (array_merge($params,array('sortfield'=>$sort['field'],'sortorder'=>$sort['order'])) as $key=>$value) {
+	if ($key !== 'limit') { print '<input type="hidden" name="' . $key . '" value="' . dol_escape_htmltag((string) $value) . '">'; }
+}
+print_barre_liste($langs->trans('KreaBankAccounts'), $paging['page'], $_SERVER['PHP_SELF'], $param, $sort['field'], $sort['order'], '', $paging['num'], $total, 'bank', 0, '', '', $paging['limit'], 0, 0, 1);
+print '</form>';
+print '<div class="div-table-responsive"><table class="liste centpercent">';
+print '<tr class="liste_titre">';
+foreach ($columns as $field => $key) {
+	print kreabankListHeader($langs->trans($key), $field, $sort, in_array($field, array('balance', 'balance_available'), true) ? 'right' : '', $params);
+}
+print '</tr>';
+if ($loadError !== '') {
+	print '<tr><td colspan="8">' . dol_escape_htmltag($loadError) . '</td></tr>';
+} else {
 	foreach ($rows as $row) {
 		$state = $row->status ?: 'unmapped';
 		print '<tr class="oddeven"><td><a href="' . DOL_URL_ROOT . '/compta/bank/card.php?id=' . (int) $row->rowid . '">'
@@ -83,8 +100,6 @@ try {
 	if (!$rows) {
 		print '<tr><td colspan="8">' . $langs->trans('KreaBankFeedNoAccounts') . '</td></tr>';
 	}
-} catch (Throwable $e) {
-	print '<tr><td colspan="8">' . dol_escape_htmltag($e->getMessage()) . '</td></tr>';
 }
 print '</table></div>';
 print '<p class="opacitymedium">' . $langs->trans('KreaBankFeedBalanceNotice') . '</p>';
