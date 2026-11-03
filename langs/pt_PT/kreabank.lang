@@ -533,3 +533,4 @@ KreaBankTpaEnable=Criar e conciliar automaticamente recebimentos de terminais de
 KreaBankTpaHelp=Para fechos TPA positivos reconhecidos nas contas selecionadas da empresa, reutiliza uma correspondência comprovada ou cria um recebimento bancário com o modo de pagamento selecionado. Movimentos ou identificadores de fecho em conflito ficam pendentes. Regista apenas o recebimento bancário; não cria faturas nem pagamentos de faturas.
 KreaBankTpaNewReceipt=Criar recebimento de TPA
 KreaBankTpaPaymentMode=Modo de pagamento dos recebimentos de TPA (obrigatório)
+KreaBankLedgerBalance=Saldo Dolibarr

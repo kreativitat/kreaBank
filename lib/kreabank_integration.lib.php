@@ -4,6 +4,29 @@
  */
 require_once __DIR__ . '/../class/kreabankintegration.class.php';
 
+/** Source balance and freshness remain distinct from native ledger amounts. */
+function kreabankAccountFeedCells($row)
+{
+	global $langs, $db;
+	$balance = $row->feed_balance === null ? '—' : kreabankPrice($row->feed_balance);
+	$updated = !empty($row->bank_updated_at) ? strtotime($row->bank_updated_at) : false;
+	$collected = !empty($row->feed_collected_at) ? $db->jdate($row->feed_collected_at) : false;
+	$state = $row->feed_status ?: 'unmapped';
+	if ($state === 'ready' && (!$updated || dol_now() - $updated > 129600)) {
+		$state = 'stale';
+	}
+	$html = '<td class="kb-money">' . $balance;
+	if ($state !== 'ready') {
+		$states = array('stale', 'failed', 'refresh_wait', 'mapping_review', 'unavailable', 'unmapped');
+		$html .= '<small>' . dol_escape_htmltag($langs->trans('KreaBankFeedState_' . (in_array($state, $states, true) ? $state : 'failed'))) . '</small>';
+	}
+	$html .= '</td><td>' . ($updated ? dol_print_date($updated, 'dayhour') : '—');
+	if ($collected) {
+		$html .= '<small>' . dol_escape_htmltag($langs->trans('KreaBankFeedCollectedAt')) . ': ' . dol_print_date($collected, 'dayhour') . '</small>';
+	}
+	return $html . '</td>';
+}
+
 function kreabankStatementUrl($accountId = 0, $reference = '')
 {
 	return dol_buildpath('/custom/kreabank/statement.php', 1) . '?mainmenu=bank&leftmenu=kreabank_import'

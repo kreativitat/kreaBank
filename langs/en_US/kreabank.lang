@@ -534,3 +534,4 @@ KreaBankTpaHelp=For recognized positive FECHO TPA settlements in selected compan
 KreaBankTpaNewReceipt=Create card-terminal receipt
 
 KreaBankTpaPaymentMode=Payment mode for TPA receipts (required)
+KreaBankLedgerBalance=Dolibarr balance

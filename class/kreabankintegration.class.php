@@ -48,20 +48,39 @@ class KreaBankIntegration
 	}
 
 	/** Current-company account overview; balances use native operation dates. */
-	public function accounts($kind = 'bank', $accountId = 0, $sortfield = 'ref', $sortorder = 'ASC', $limit = 0, $offset = 0)
+	public function accounts($kind = 'bank', $accountId = 0, $sortfield = 'ref', $sortorder = 'ASC', $limit = 0, $offset = 0, $withFeed = false)
 	{
 		$p = $this->db->prefix();
 		$e = $this->entity;
 		$columns = array('ref' => 'ba.ref', 'currency_code' => 'ba.currency_code', 'balance' => 'balance', 'pending_count' => 'pending_count');
+		$feedColumns = '';
+		$feedJoin = '';
+		if ($withFeed) {
+			// Keep unconfigured installations independent of the optional feed schema.
+			$config = $this->db->fetch_object($this->query("SELECT value FROM {$p}const WHERE entity=0 AND name='KREABANK_FINTABLE_WORKSPACE'"));
+			$feedColumns = ',NULL feed_balance,NULL bank_updated_at,NULL feed_collected_at,NULL feed_status';
+			if ($config && trim((string) $config->value) !== '') {
+				$feedColumns = ",CASE WHEN f.status IN ('mapping_review','unavailable') THEN NULL ELSE f.balance END feed_balance,f.bank_updated_at,f.last_attempt feed_collected_at,f.status feed_status";
+				$feedJoin = " LEFT JOIN {$p}kreabank_feed_account f ON f.fk_bank_account=ba.rowid AND f.entity=ba.entity"
+					. ' AND f.workspace_id=' . $this->quote($config->value)
+					. " AND f.currency=ba.currency_code AND f.iban=UPPER(REPLACE(REPLACE(ba.iban_prefix,' ',''),'-',''))"
+					. ' AND ba.courant<>2';
+			}
+			$columns['feed_balance'] = 'feed_balance';
+			$columns['bank_updated_at'] = 'bank_updated_at';
+		}
 		$order = ($columns[$sortfield] ?? $columns['ref']) . (strtoupper($sortorder) === 'DESC' ? ' DESC' : ' ASC') . ',ba.rowid';
+		if ($withFeed && in_array($sortfield, array('feed_balance', 'bank_updated_at'), true)) {
+			$order = $sortfield . ' IS NULL ASC,' . $order;
+		}
 		$now = $this->quote($this->db->idate(dol_now()));
 		$accountFilter = (int) $accountId > 0 ? ' AND ba.rowid=' . (int) $accountId : '';
 		$filter = $kind === 'all' ? '' : ($kind === 'closed' ? ' AND ba.clos=1' : ' AND ba.clos=0' . ($kind === 'cash' ? ' AND ba.courant=2' : ' AND ba.courant<>2'));
-		$sql = "SELECT ba.rowid,ba.ref,ba.label,ba.currency_code,ba.clos,COALESCE(nb.balance,0) balance,COALESCE(st.pending_count,0)+COALESCE(lg.pending_count,0) pending_count"
+		$sql = "SELECT ba.rowid,ba.ref,ba.label,ba.currency_code,ba.clos,COALESCE(nb.balance,0) balance,COALESCE(st.pending_count,0)+COALESCE(lg.pending_count,0) pending_count" . $feedColumns
 			. " FROM {$p}bank_account ba LEFT JOIN (SELECT b.fk_account,SUM(b.amount) balance FROM {$p}bank b JOIN {$p}bank_account owner ON owner.rowid=b.fk_account AND owner.entity=$e WHERE b.dateo<=$now GROUP BY b.fk_account) nb ON nb.fk_account=ba.rowid"
 			. " LEFT JOIN (SELECT s.bank_account_id,COUNT(*) pending_count FROM {$p}kreabank_statement_line l JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity LEFT JOIN {$p}bank b ON b.rowid=l.fk_native_bank_line WHERE s.entity=$e AND l.status IN (0,1) AND COALESCE(b.rappro,0)=0 GROUP BY s.bank_account_id) st ON st.bank_account_id=ba.rowid"
 			. " LEFT JOIN (SELECT b.fk_account,COUNT(*) pending_count FROM {$p}kreabank_bankmeta m JOIN {$p}bank b ON b.rowid=m.fk_bank_line WHERE m.entity=$e AND m.status IN (0,1) AND b.rappro=0 AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement_line l WHERE l.entity=$e AND l.fk_native_bank_line=b.rowid) GROUP BY b.fk_account) lg ON lg.fk_account=ba.rowid"
-			. " WHERE ba.entity=$e$filter$accountFilter ORDER BY $order";
+			. $feedJoin . " WHERE ba.entity=$e$filter$accountFilter ORDER BY $order";
 		if ((int) $limit > 0) {
 			$sql .= $this->db->plimit((int) $limit, max(0, (int) $offset));
 		}

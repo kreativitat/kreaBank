@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.16.1 — 2026-11-03
+
+- Show the daily feed bank balance, bank refresh and collection times in the
+  account overview beside the separately labelled Dolibarr ledger balance.
+- Keep missing balances distinct from zero and expose stale/failed feed states.
+  Scope snapshots by current company, workspace, account, currency and IBAN.
+- No schema, accounting, scheduler or REST contract changes.
+
 ## 1.16.0 — 2026-11-02
 
 - Add authenticated, current-company REST reads for accounts, statements, original

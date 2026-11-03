@@ -63,9 +63,9 @@ $accountId = 0;
 $account = null;
 $kind = kreabankNavigationKind('bank');
 $report = new KreaBankIntegration($db,$conf->entity);
-$accountColumns = array('ref' => 'BankAccount', 'currency_code' => 'Currency', 'balance' => 'KreaBankCurrentBalance', 'pending_count' => 'KreaBankPending');
+$accountColumns = array('ref' => 'BankAccount', 'currency_code' => 'Currency', 'feed_balance' => 'KreaBankFeedBalance', 'bank_updated_at' => 'KreaBankFeedBankUpdated', 'balance' => 'KreaBankLedgerBalance', 'pending_count' => 'KreaBankPending');
 $accountSort = kreabankListSort($accountColumns, 'ref');
-$rows = $report->accounts($kind, $accountId, $accountSort['field'], $accountSort['order']);
+$rows = $report->accounts($kind, $accountId, $accountSort['field'], $accountSort['order'], 0, 0, true);
 llxHeader('', $langs->trans('KreaBankAccounts'));
 kreabankPrintWorkspaceNavigation('accounts',$account);
 print '<div class="kb-accounts-toolbar"><h2>' . $langs->trans('KreaBankAccounts') . '</h2>';
@@ -76,7 +76,7 @@ print '</div>';
 print kreabankBankingFilters('accounts', $accountId, $kind);
 print '<div class="div-table-responsive"><table class="kb-accounts-table"><tr>';
 foreach ($accountColumns as $field => $label) {
-	print kreabankListHeader($langs->trans($label), $field, $accountSort, $field === 'balance' ? 'kb-money' : '', array('kind' => $kind, 'mainmenu' => 'bank', 'leftmenu' => 'kreabank_accounts'));
+	print kreabankListHeader($langs->trans($label), $field, $accountSort, in_array($field, array('balance', 'feed_balance'), true) ? 'kb-money' : '', array('kind' => $kind, 'mainmenu' => 'bank', 'leftmenu' => 'kreabank_accounts'));
 }
 print '<th scope="col" class="kb-actions-heading">' . $langs->trans('KreaBankActions') . '</th>';
 print '</tr>';
@@ -84,12 +84,14 @@ $count=0;
 while ($row=$db->fetch_object($rows)) {
 	$count++;
 	print '<tr><td><a class="kb-account-name" href="' . dol_escape_htmltag(kreabankBankingUrl('card', $row->rowid)) . '">' . dol_escape_htmltag($row->ref) . '</a><small>' . dol_escape_htmltag($row->label) . '</small></td>';
-	print '<td>' . dol_escape_htmltag($row->currency_code) . '</td><td class="kb-money">' . kreabankPrice($row->balance) . '</td>';
+	print '<td>' . dol_escape_htmltag($row->currency_code) . '</td>';
+	print kreabankAccountFeedCells($row);
+	print '<td class="kb-money">' . kreabankPrice($row->balance) . '</td>';
 	print '<td><a class="kb-count" href="' . dol_escape_htmltag(kreabankWorkspaceUrl('reconcile',$row->rowid)) . '">' . (int) $row->pending_count . '</a></td>';
 	print '<td><div class="kb-account-actions"><a href="' . dol_escape_htmltag(kreabankNativeEntriesUrl($row->rowid)) . '">' . $langs->trans('KreaBankNavMovements') . '</a><a href="' . dol_escape_htmltag(kreabankWorkspaceUrl('reconcile',$row->rowid)) . '">' . $langs->trans('KreaBankReconcile') . '</a></div></td></tr>';
 }
 if (!$count) {
-	print '<tr><td colspan="5">' . $langs->trans('NoRecordFound') . '</td></tr>';
+	print '<tr><td colspan="7">' . $langs->trans('NoRecordFound') . '</td></tr>';
 }
 print '</table></div>';
 print dol_get_fiche_end();

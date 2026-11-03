@@ -35,6 +35,17 @@ before becoming actionable failures. It never requests a billed realtime refresh
 is not repeated automatically. The displayed bank refresh time remains distinct
 from the Dolibarr collection time; bank/provider freshness is not guaranteed.
 
+## Account overview
+
+`accounts.php` shows the stored bank balance and bank refresh time alongside
+the separately labelled Dolibarr ledger balance. The smaller collection timestamp
+records when the balance snapshot was received (`last_attempt`); transaction
+collection can fail independently. Stale or failed feeds remain visible, while
+unmapped accounts show a dash rather than a zero. No provider request runs when
+opening or sorting the page. Snapshot reads require the current company, configured
+workspace, account currency and unchanged IBAN. The existing REST accounts contract
+continues to return native ledger balances.
+
 ## Storage and recovery
 
 The token stays in the operator's Keychain and is installed via stdin, encrypted
