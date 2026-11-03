@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.4 — 2026-11-03
+
+- Wrap the native bulk paging title on small screens, preserving its page-size
+  selector and eliminating horizontal overflow. Extend the synthetic native shell.
+
 ## 1.19.3 — 2026-11-03
 
 - Align individual matched and bulk review with the reconciliation workspace:

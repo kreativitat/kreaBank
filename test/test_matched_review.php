@@ -55,13 +55,16 @@ function dol_print_date($value,$format) { return gmdate('Y-m-d',is_numeric($valu
 function price($value,...$args) { return number_format((float)$value,2,!empty($GLOBALS['reviewHtmlMode']) ? ',' : '.', ''); }
 function llxHeader(...$args) {
 	if (empty($GLOBALS['reviewHtmlMode'])) { print '<html><body>'; return; }
-	print '<!doctype html><html lang="pt-PT"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic reconciliation review</title><link rel="stylesheet" href="/custom/kreabank/css/navigation.css"><style>body{font:14px Arial,sans-serif;color:#253e49;margin:0}.fixture-shell{display:grid;grid-template-columns:170px minmax(0,1fr)}aside{background:#f3f6f5;padding:25px 15px;line-height:2.5}main{padding:25px;min-width:0}.kb-header{margin-bottom:25px}.button{padding:9px;background:#f3f6f5;border:1px solid #b9c9c2;border-radius:5px}h1{font-size:20px}@media(max-width:760px){.fixture-shell{grid-template-columns:1fr}aside{display:none}main{padding:14px}}</style></head><body><div class="fixture-shell"><aside aria-label="Native banking menu">Banks<br>Account list<br>Transfers<br>Cheque deposits</aside><main><strong>Synthetic company · No ERP connection · Submissions intercepted</strong>';
+	print '<!doctype html><html lang="pt-PT"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic reconciliation review</title><link rel="stylesheet" href="/custom/kreabank/css/navigation.css"><style>body{font:14px Arial,sans-serif;color:#253e49;margin:0}.fixture-shell{display:grid;grid-template-columns:170px minmax(0,1fr)}aside{background:#f3f6f5;padding:25px 15px;line-height:2.5}main{padding:25px;min-width:0}.kb-header{margin-bottom:25px}.button{padding:9px;background:#f3f6f5;border:1px solid #b9c9c2;border-radius:5px}h1{font-size:20px}.nowrap{white-space:nowrap}@media(max-width:760px){.fixture-shell{grid-template-columns:1fr}aside{display:none}main{padding:14px}}</style></head><body><div class="fixture-shell"><aside aria-label="Native banking menu">Banks<br>Account list<br>Transfers<br>Cheque deposits</aside><main><strong>Synthetic company · No ERP connection · Submissions intercepted</strong>';
 }
 function llxFooter() {
 	if (!empty($GLOBALS['reviewHtmlMode'])) { print '</main></div><output id="fixture-submit" role="status"></output><script>document.addEventListener("submit",function(event){event.preventDefault();document.getElementById("fixture-submit").textContent="Synthetic submission: "+JSON.stringify(Object.assign(Object.fromEntries(new FormData(event.target)),{selected_line_ids:new FormData(event.target).getAll("selected_line_ids[]")}))});</script>'; }
 	print '</body></html>';
 }
-function print_barre_liste(...$args) { print '<p>Page 1 · Synthetic review</p>'; }
+function print_barre_liste(...$args) {
+	// Retain native paging structure and its nowrap title in responsive fixtures.
+	print '<table class="centpercent table-fiche-title" style="width:100%"><tr class="toptitle"><td class="col-title"><div class="titre nowrap">' . $args[0] . '</div></td><td class="col-right"><select aria-label="Page size" style="width:75px"><option>25</option></select></td></tr></table>';
+}
 function load_fiche_titre($title,...$args) { return '<h1>'.$title.'</h1>'; }
 function dol_get_fiche_head(...$args) { return '<main>'; }
 function dol_get_fiche_end() { return '</main>'; }

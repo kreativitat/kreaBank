@@ -59,3 +59,4 @@
 .kb-review-empty a{display:inline-block}
 @media(max-width:1100px){.kb-review-card-title{display:block}.kb-review-money{display:block;margin-top:10px}.kb-review-heading{align-items:flex-start}}
 @media(max-width:760px){.kb-review-heading{display:block}.kb-review-heading>a{margin-top:14px}.kb-review-pair{grid-template-columns:minmax(0,1fr);gap:8px}.kb-review-row-content{padding:16px}.kb-review .krea-bulk-actions{position:static;display:block}.kb-review-approval{margin:16px 0}.kb-review-submit{width:100%}.kb-review-selection{margin-bottom:12px}.kb-review .krea-bulk-row-check{align-items:flex-start}.kb-review-empty{padding:22px}.kb-review-allocation{justify-content:flex-start;gap:10px}.kb-review .krea-bulk-summary{gap:12px;font-size:12px}}
+@media(max-width:760px){.kb-review #kreaBulkMatchPagerForm .table-fiche-title .titre{white-space:normal}}
