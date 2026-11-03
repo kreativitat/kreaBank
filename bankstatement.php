@@ -122,7 +122,7 @@ foreach ($columns as $field=>$label) {
 		print '</select>';
 	} else {
 		$class = $field === 'description' ? 'minwidth100 maxwidth150' : ($field === 'currency' ? 'width50' : 'width75');
-		print $input($field, $title, 'text', $class . (isset($fields[$field]) ? ' right' : ''));
+		print $input($field, $title, isset($fields[$field]) ? 'text' : 'search', $class . (isset($fields[$field]) ? ' right' : ''));
 	}
 	print '</td>';
 }

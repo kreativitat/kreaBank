@@ -27,6 +27,10 @@ native movement or linked payment. Documents without a recorded bank movement sh
 `-`; the source account is never substituted. Target account identity/reference are
 bound to the signed approval. Validate with `test/test_suggestion_bank_account_database.php`
 on the same guarded disposable fixture.
+Native movements also show their linked customer/supplier payment references before
+the existing description. These are read through owned, consistent payment links
+and signed with the displayed pair; scoring references remain unchanged. Validate
+with `test/test_suggestion_payment_reference_database.php` on that disposable fixture.
 
 Users can select suggestions requiring manual review and tick the explicit approval
 checkbox before confirming. This is a manual decision, including for pairs without

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.18.13 — 2026-11-03
+
+- Prefix suggested native-movement descriptions with their linked payment
+  references. Revalidate company, movement and invoice-parent ownership without
+  changing matching scores.
+- Use search inputs for literal statement text filters so native numeric-search
+  tooltips do not advertise unsupported text expressions.
+
 ## 1.18.12 — 2026-11-03
 
 - Add combined-statement table header filters and native Dolibarr pagination,

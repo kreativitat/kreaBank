@@ -996,12 +996,18 @@ class KreaBankService
 		$sql .= ' m.counterparty_name, m.counterparty_iban, m.description, m.payment_reference, m.bank_reference,';
 		$sql .= " GROUP_CONCAT(DISTINCT bu.label ORDER BY bu.label SEPARATOR ' / ') as url_labels,";
 		$sql .= " GROUP_CONCAT(DISTINCT bu.type ORDER BY bu.type SEPARATOR ',') as url_types,";
+		$sql .= " GROUP_CONCAT(DISTINCT cp.ref ORDER BY cp.ref SEPARATOR ' / ') as customer_payment_refs,";
+		$sql .= " GROUP_CONCAT(DISTINCT sp.ref ORDER BY sp.ref SEPARATOR ' / ') as supplier_payment_refs,";
 		$sql .= " MAX(CASE WHEN bu.type = 'payment_supplier' THEN bu.url_id ELSE 0 END) as supplier_payment_id,";
 		$sql .= " MAX(CASE WHEN bu.type = 'payment' THEN bu.url_id ELSE 0 END) as customer_payment_id";
 		$sql .= ' FROM ' . $this->db->prefix() . 'bank as b';
 		$sql .= ' INNER JOIN ' . $this->db->prefix() . 'bank_account as ba ON ba.rowid = b.fk_account';
 		$sql .= ' LEFT JOIN ' . $this->db->prefix() . 'kreabank_bankmeta as m ON m.entity = ' . ((int) $this->entity) . ' AND m.fk_bank_line = b.rowid';
 		$sql .= ' LEFT JOIN ' . $this->db->prefix() . 'bank_url as bu ON bu.fk_bank = b.rowid';
+		$sql .= ' LEFT JOIN ' . $this->db->prefix() . "paiement cp ON bu.type='payment' AND cp.rowid=bu.url_id AND cp.fk_bank=b.rowid AND cp.entity=ba.entity";
+		$sql .= ' AND NOT EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'paiement_facture cpl JOIN ' . $this->db->prefix() . 'facture cf ON cf.rowid=cpl.fk_facture WHERE cpl.fk_paiement=cp.rowid AND cf.entity<>cp.entity)';
+		$sql .= ' LEFT JOIN ' . $this->db->prefix() . "paiementfourn sp ON bu.type='payment_supplier' AND sp.rowid=bu.url_id AND sp.fk_bank=b.rowid AND sp.entity=ba.entity";
+		$sql .= ' AND NOT EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'paiementfourn_facturefourn spl JOIN ' . $this->db->prefix() . 'facture_fourn sf ON sf.rowid=spl.fk_facturefourn WHERE spl.fk_paiementfourn=sp.rowid AND sf.entity<>sp.entity)';
 		$sql .= ' WHERE ba.entity = ' . ((int) $this->entity);
 		$sql .= ' AND ba.clos = 0';
 		$sql .= ' AND ba.rappro = 1';
@@ -1072,6 +1078,7 @@ class KreaBankService
 				'bank_line_id' => $rowid,
 				'bank_account_id' => (int) $obj->bank_account_id,
 				'bank_account_ref' => (string) $obj->bank_account_ref,
+				'payment_ref' => implode(' / ', array_unique(array_filter(array(trim((string) $obj->customer_payment_refs), trim((string) $obj->supplier_payment_refs))))),
 				'currency' => (string) $obj->bank_currency,
 				'amount_decimal' => (string) $obj->amount_open,
 				'native_label' => $nativeLabel,

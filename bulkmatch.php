@@ -103,7 +103,7 @@ if ($dateTolerance <= 0) {
 	$dateTolerance = 3;
 }
 $bulkScanCacheStoreKey = $singleReview ? 'kreabank_matched_scan_state' : 'kreabank_bulkmatch_scan_state';
-$bulkScanMatcherRevision = 17;
+$bulkScanMatcherRevision = 18;
 $bulkColumns = array('operation_date' => 'KreaBankDate', 'description' => 'KreaBankDescription', 'amount' => 'KreaBankAmount', 'doc_ref' => 'KreaBankDocument', 'score' => 'KreaBankAutoScore');
 $bulkSort = kreabankListSort($bulkColumns, 'operation_date');
 $bulkScanFilterScope = array(
@@ -975,7 +975,7 @@ print '<input type="hidden" name="sortfield" value="' . dol_escape_htmltag($bulk
 		$docType = (string) (!empty($suggestion['doc_type']) ? $suggestion['doc_type'] : '');
 		$docId = (int) $suggestion['doc_id'];
 		$docUrl = $resolveSuggestionCardUrl($docType, $docId);
-		$docRef = (string) (!empty($suggestion['doc_ref']) ? $suggestion['doc_ref'] : ('#' . $docId));
+		$docRef = kreabankBulkSuggestionReference($suggestion);
 		$docThirdparty = trim((string) (!empty($suggestion['thirdparty_name']) ? $suggestion['thirdparty_name'] : ''));
 		if ($docThirdparty === '') {
 			$docThirdparty = $docRef;

@@ -42,7 +42,7 @@ foreach (array('rowid' => 11, 'fk_statement' => 0, 'bank_account_id' => 102, 'am
 }
 foreach (array('doc_id' => 21, 'doc_type' => 'supplier_invoice', 'amount_open' => -47.65,
 	'doc_ref' => 'OTHER', 'doc_date' => '2026-10-31', 'thirdparty_name' => 'Different Person',
-	'bank_account_id' => 102, 'bank_account_ref' => 'OTHER BANK') as $field => $value) {
+	'bank_account_id' => 102, 'bank_account_ref' => 'OTHER BANK', 'payment_ref' => 'OTHER PAYMENT') as $field => $value) {
 	$changed = $row; $changed['suggestion'][$field] = $value;
 	checkReview(!$valid($changed), 'Changed target fact rejected: ' . $field);
 }
@@ -52,6 +52,9 @@ foreach (array('', str_repeat('0', 64), array('nested')) as $invalid) {
 	checkReview(!kreabankBulkReviewIsValid($row, $scope, $expires, $invalid, $secret, 1000, true, 101), 'Missing, tampered and malformed signatures fail closed');
 }
 $matcher = new KreaBankMatcher();
+checkReview(kreabankBulkSuggestionReference(array('doc_ref'=>'(paiement) / Synthetic supplier','payment_ref'=>'TEST-PAY-001'))==='TEST-PAY-001 / (paiement) / Synthetic supplier','Payment reference precedes the original suggested description');
+checkReview(kreabankBulkSuggestionReference(array('doc_ref'=>'TEST-PAY-001','payment_ref'=>'TEST-PAY-001'))==='TEST-PAY-001','Existing payment references are not repeated');
+checkReview(kreabankBulkSuggestionReference(array('doc_id'=>20,'doc_ref'=>'BANK-20'))==='BANK-20','Movements without a linked payment retain their reference');
 $document = array('rowid' => 20, 'doc_type' => 'native_bank', 'ref' => '', 'ref_client' => '',
 	'doc_date' => '2026-11-01', 'amount_open' => -47.66, 'thirdparty_name' => '(paiement) / Example Recipient');
 $score = $matcher->scoreLineToDocument($row['line'], $document, array(), 3);
