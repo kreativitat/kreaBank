@@ -25,6 +25,10 @@ $fixtureService = new class {
 	public $suggestions=array();
 	public $accountReview=null;
 	public $pendingTotal=0;
+	public $line;
+	public $executions=array();
+	public function getBulkReviewLine($id,$source) { return $source==='staged' && (int)$id===(int)$this->line['rowid'] ? $this->line : null; }
+	public function reconcileLine(...$args) { $this->executions[]=$args; }
 	public function getPendingLinesCount($filter) { return $this->pendingTotal; }
 	public function getPendingLines(...$args) { return array(); }
 	public function getPaymentAccountReview($id,$accounts) { return $this->accountReview; }
@@ -51,7 +55,7 @@ function load_fiche_titre($title,...$args) { return '<h1>'.$title.'</h1>'; }
 function dol_get_fiche_head(...$args) { return '<main>'; }
 function dol_get_fiche_end() { return '</main>'; }
 function accessforbidden(...$args) { throw new RuntimeException('Forbidden'); }
-function setEventMessages(...$args) { throw new RuntimeException('Unexpected controller error: '.json_encode($args)); }
+function setEventMessages(...$args) { $GLOBALS['fixtureEvents'][]=$args; }
 function renderMatchedFixture()
 {
 	global $conf,$mysoc,$user,$langs,$db;
@@ -63,9 +67,16 @@ function renderMatchedFixture()
 	$source=substr($source,0,$start).substr($source,$end);
 	$source=str_replace('__DIR__',var_export(dirname($path),true),$source);
 	$source=str_replace('$service = new KreaBankService($db, $user, $langs);', '$service = $GLOBALS[\'fixtureService\'];', $source);
+	if (GETPOST('action')==='bulk_match_confirm') {
+		// Return the actual controller result instead of redirecting/exiting the test process.
+		$start=strpos($source, "header('Location: ' . dol_buildpath");
+		$end=strpos($source, 'exit;', $start)+5;
+		$source=substr($source,0,$start)."return compact('done','changed','failed','reviewConfirmed','lineIds');".substr($source,$end);
+	}
 	ob_start();
-	try { eval('?>'.$source); $html=ob_get_contents(); }
+	try { $confirmation=eval('?>'.$source); $html=ob_get_contents(); }
 	finally { ob_end_clean(); }
+	if ($confirmation!==null) return $confirmation;
 	return compact('html','prepareReviewRow','scanState','bulkScanCacheStoreKey','bulkScanCacheScope');
 }
 $_SERVER['REQUEST_METHOD']='GET';
@@ -103,13 +114,33 @@ $rendered=renderMatchedFixture();
 checkMatched(substr_count($rendered['html'],'name="selected_line_ids[]"')===1 && strpos($rendered['html'],'value="11"')!==false, 'Exactly the current pair is displayed');
 checkMatched(strpos($rendered['html'],'matched.php?page=1')!==false && strpos($rendered['html'],'KreaBankReviewPosition:1/2')!==false, 'Next link and position refer to the matched queue');
 checkMatched(strpos($rendered['html'],'id="krea_bulk_match_all"')===false && strpos($rendered['html'],'KreaBankConfirmCurrentMatch')!==false, 'Individual review has no select-all action and confirms the current match');
-checkMatched(strpos($rendered['html'],'name="review_confirmed"')!==false && strpos($rendered['html'],'name="review_signatures[11]"')!==false,'Manual review and exact-pair signature remain required');
+checkMatched(strpos($rendered['html'],'name="review_confirmed"')===false && strpos($rendered['html'],'type="checkbox"')===false,'Individual confirmation requires no selection or review checkboxes');
+checkMatched(strpos($rendered['html'],'type="hidden" name="selected_line_ids[]" value="11"')!==false && strpos($rendered['html'],'name="review_signatures[11]"')!==false,'The button submits only its displayed signed source');
 $request['page']=1;
 $state['display_page']=1;
 $state['display_rows']=array(12=>array_merge($pair,array('line'=>$other)));
 $_SESSION['kreabank_matched_scan_state']=$state;
 $second=renderMatchedFixture();
 checkMatched(strpos($second['html'],'value="12"')!==false && strpos($second['html'],'KreaBankReviewPosition:2/2')!==false && strpos($second['html'],'matched.php?page=0')!==false,'Second pair has previous navigation and retains a single source');
+$fixtureService->line=$line;
+$_SERVER['REQUEST_METHOD']='POST';
+$request=array('action'=>'bulk_match_confirm','token'=>'synthetic-csrf','selected_line_ids'=>array(11),
+	'review_sources'=>array(11=>'staged'),'review_expires'=>dol_now()+1800);
+$request['review_signatures']=array(11=>kreabankBulkReviewSignature($pair,'7|9|0',$request['review_expires'],$_SESSION['kreabank_bulk_review_secret']));
+$posted=renderMatchedFixture();
+checkMatched($posted['done']===1 && count($fixtureService->executions)===1,'The individual button confirms a weak signed pair without review_confirmed');
+checkMatched($fixtureService->executions[0][2]==='bulk_manual' && $fixtureService->executions[0][3]===0,'Direct confirmation remains an explicit manual reconciliation');
+$request['review_signatures'][11]=str_repeat('0',64);
+$posted=renderMatchedFixture();
+checkMatched($posted['changed']===1 && count($fixtureService->executions)===1,'Tampered direct approval cannot execute');
+$request['review_signatures'][11]=kreabankBulkReviewSignature($pair,'7|9|0',$request['review_expires'],$_SESSION['kreabank_bulk_review_secret']);
+$fixtureService->suggestions[0]['doc_id']=100;
+$posted=renderMatchedFixture();
+checkMatched($posted['changed']===1 && count($fixtureService->executions)===1,'A changed current counterpart invalidates direct approval');
+$request['token']='bad-token';
+try { renderMatchedFixture(); throw new LogicException('Invalid CSRF accepted'); }
+catch (RuntimeException $e) { checkMatched($e->getMessage()==='Forbidden','Direct confirmation still requires valid CSRF'); }
+$_SERVER['REQUEST_METHOD']='GET';$request=array();
 $user->allowed=false;
 try { renderMatchedFixture(); throw new LogicException('Denied user was accepted'); }
 catch (RuntimeException $e) { checkMatched($e->getMessage()==='Forbidden','Matched review enforces native and module read permissions'); }

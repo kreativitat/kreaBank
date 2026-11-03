@@ -167,3 +167,7 @@
 - `matched.php` reuses the bulk review controller with one pair per page, a separate
   scan cache and the same signed manual approval. Exclude unmatched lines and
   wrong-account warnings; never relax matching or unattended approval rules.
+
+- In individual matched review, clicking **Reconcile this match** is the explicit
+  approval of the sole signed pair. Do not require either selection or review
+  checkboxes there. Bulk selections retain their separate review checkbox.

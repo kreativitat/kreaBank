@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.18.9 — 2026-11-03
+
+- Confirm the current matched pair directly with its reconciliation button. Remove
+  the individual review checkboxes; keep signed-pair revalidation and bulk approval.
+
 ## 1.18.8 — 2026-11-03
 
 - Open account movements from each account reference. Keep account details on a

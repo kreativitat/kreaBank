@@ -457,7 +457,8 @@ if ($action === 'bulk_match_confirm') {
 	$reviewSignatures = GETPOST('review_signatures', 'array');
 	$reviewSources = GETPOST('review_sources', 'array');
 	$reviewExpires = GETPOSTINT('review_expires');
-	$reviewConfirmed = GETPOSTINT('review_confirmed') === 1;
+	// The individual submit button approves its sole signed displayed pair.
+	$reviewConfirmed = $singleReview || GETPOSTINT('review_confirmed') === 1;
 	$lineIds = array();
 	if (is_array($selectedLineIds)) {
 		foreach ($selectedLineIds as $selectedLineId) {
@@ -922,7 +923,11 @@ print '<input type="hidden" name="sortfield" value="' . dol_escape_htmltag($bulk
 		$reviewSignature = kreabankBulkReviewSignature($row, $bulkReviewScope, $reviewExpires, $bulkReviewSecret);
 		print '<input type="hidden" name="review_signatures[' . $lineId . ']" value="' . $reviewSignature . '">';
 		print '<input type="hidden" name="review_sources[' . $lineId . ']" value="' . (!empty($line['fk_statement']) ? 'staged' : 'native') . '">';
-		print '<div class="krea-bulk-row-check"><input type="checkbox" class="krea-bulk-match-line" name="selected_line_ids[]" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankSelectMatch')) . '" value="' . $lineId . '"' . ($isPreselected ? ' checked' : '') . '></div>';
+		if ($singleReview) {
+			print '<input type="hidden" name="selected_line_ids[]" value="' . $lineId . '">';
+		} else {
+			print '<div class="krea-bulk-row-check"><input type="checkbox" class="krea-bulk-match-line" name="selected_line_ids[]" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankSelectMatch')) . '" value="' . $lineId . '"' . ($isPreselected ? ' checked' : '') . '></div>';
+		}
 		print '<div class="krea-bulk-row-panels">';
 		$counterpartyValue = trim((string) (!empty($line['counterparty_name']) ? $line['counterparty_name'] : ''));
 		if ($counterpartyValue === '') {
@@ -1011,7 +1016,9 @@ print '<input type="hidden" name="sortfield" value="' . dol_escape_htmltag($bulk
 	print '</div>';
 	if ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite) {
 		print '<div class="krea-bulk-actions">';
-		print '<label><input type="checkbox" name="review_confirmed" value="1" required> ' . $langs->trans('KreaBankBulkMatchReviewApproval') . '</label><br>';
+		if (!$singleReview) {
+			print '<label><input type="checkbox" name="review_confirmed" value="1" required> ' . $langs->trans('KreaBankBulkMatchReviewApproval') . '</label><br>';
+		}
 		print '<button type="submit" class="butAction">' . $langs->trans($singleReview ? 'KreaBankConfirmCurrentMatch' : 'KreaBankBulkMatchConfirm') . '</button>';
 		print '</div>';
 	}
