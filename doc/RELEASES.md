@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.18.0 — 2026-11-03
+
+- Add a Bank statement tab combining all imported statement movements in one
+  company/account-scoped table, including pending and legacy imports.
+- Show operation/value dates, original descriptions and references, debit, credit,
+  currency, supplied bank balances, source statements and reconciliation status.
+  Sort before pagination; mapped native entries appear once. Missing balances
+  remain unknown. No schema, ledger, REST or scheduler changes.
+
 ## 1.17.0 — 2026-11-03
 
 - Flag possible invoice payments recorded in another company-owned bank account

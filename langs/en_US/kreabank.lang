@@ -545,3 +545,10 @@ KreaBankAccountReviewLocked=Already reconciled: review the existing reconciliati
 KreaBankAccountReviewTruncated=The search reached its limit. Review the payment records; this list may be incomplete.
 KreaBankAccountReviewUnavailable=Payment account verification is unavailable. Try again before reconciling.
 KreaBankBulkReviewResults=Matches and accounts to verify
+
+# Combined bank statement
+KreaBankBankStatement=Bank statement
+KreaBankOperationDate=Operation date
+KreaBankStatementValueDate=Value date
+KreaBankStatementBalance=Bank balance
+KreaBankSourceStatement=Source statement

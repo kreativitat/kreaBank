@@ -1,8 +1,9 @@
 # Banking workspace
 
-Operational banking pages share five tabs: Movements, Statements, Reconciliation,
-Connections and History. Account management is separate: the native left-menu Account list
-opens the accounts overview, and account names open their details and tool tabs.
+Operational banking pages share six tabs: Movements, Bank statement, Statements,
+Reconciliation, Connections and History. Bank statement combines all imported
+movements; Statements retains the individual import list and details. Account
+management is separate: the native left-menu Account list opens the accounts overview, and account names open their details and tool tabs.
 The accounts overview and account-tool pages do not display the operational tabs.
 Internal transfers and new-account creation keep the native layout without a
 workspace header or tabs.

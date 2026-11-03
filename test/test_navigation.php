@@ -51,10 +51,10 @@ $head = array(array('/card?id=45', 'Account', 'bankname'), array('/entries?id=45
 $newHead = kreabankCompleteAccountHead($head, 45);
 checkNavigation($newHead === $head, 'Shared header replaces native tabs without inserting another navigation layer');
 $tabs = kreabankPrepareHead(45);
-checkNavigation(array_column($tabs, 2) === array('movements', 'statement', 'reconcile', 'feed', 'history'), 'Operational tabs exclude account management');
+checkNavigation(array_column($tabs, 2) === array('movements', 'bankstatement', 'statement', 'reconcile', 'feed', 'history'), 'Operational tabs exclude account management');
 $user->allowed[] = 'kreabank.reconciliation.write';
 $user->allowed[] = 'banque.modifier';
-checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('movements', 'statement', 'reconcile', 'feed', 'history'), 'Write actions do not add another navigation layer');
+checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('movements', 'bankstatement', 'statement', 'reconcile', 'feed', 'history'), 'Write actions do not add another navigation layer');
 foreach (kreabankPrepareHead(45) as $tab) {
 	checkNavigation((strpos($tab[0], 'account_context=45') !== false || preg_match('/[?&]id=45(?:&|$)/', $tab[0])) && strpos($tab[0], 'line_id') === false, 'Carry account without copying a stale line/action');
 }
@@ -136,13 +136,13 @@ $action = 'create';
 checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0 && $hooks->resprints === '' && count($db->queries) === $queryCount, 'New-account creation keeps only the native form without workspace navigation');
 $action = '';
 $navigationRequest = array('kind' => 'cash', 'account_context' => 45);
-foreach (array('movements', 'statement', 'reconcile', 'feed', 'history') as $page) {
+foreach (array('movements', 'bankstatement', 'statement', 'reconcile', 'feed', 'history') as $page) {
 	$html = kreabankBankingHeader($page, (object) array('id' => 45));
 	$dom = new DOMDocument();
 	@$dom->loadHTML($html);
 	$xpath = new DOMXPath($dom);
 	checkNavigation($xpath->query('//header//form')->length === 0 && $xpath->query('//form[contains(@class,"kb-accounts-filters")]')->length === 1, 'Each operational page has one separate filter panel');
-	checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a')->length === 5, 'Exactly five operational tabs remain for selected accounts');
+	checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a')->length === 6, 'Six operational tabs include the combined bank statement');
 	checkNavigation($xpath->query('//form/input[@name="view"]')->length === 0 && $xpath->query('//form//*[@name="kind"]')->length === 0 && $xpath->query('//select[@name="account_context"]')->length === 1, 'Operational panels contain only the account filter');
 	checkNavigation(strpos($html, 'KreaBankNavAccounts') === false && strpos($html, 'KreaBankAccountOptions') === false, 'Account management stays outside operational tabs');
 }

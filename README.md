@@ -79,9 +79,10 @@ If the ZIP package does not ship the `vendor/` directory, run the same `composer
 
 ## Account navigation
 
-Open a native bank account and choose **KreaBank**. The selected account stays
-available across native account tabs and KreaBank tasks. The four main tasks are
-**Reconcile**, **Import statements**, **Bank connections**, and **History**.
+The banking workspace provides **Movements**, **Bank statement**, **Statements**,
+**Reconciliation**, **Connections** and **History**. The selected account stays
+available across operational tabs. **Bank statement** combines all imports into
+one table with dates, debit/credit, supplied bank balances and source links.
 Batch review and pending lines are tools inside reconciliation. Native statement
 numbering remains a separate, clearly labelled account tool. See
 [navigation and upgrade instructions](doc/NAVIGATION.md).

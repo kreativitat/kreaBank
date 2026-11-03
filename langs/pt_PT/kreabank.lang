@@ -544,3 +544,10 @@ KreaBankAccountReviewLocked=Já reconciliado: verifique primeiro a reconciliaç�
 KreaBankAccountReviewTruncated=A pesquisa atingiu o limite. Verifique os registos de pagamento; esta lista pode estar incompleta.
 KreaBankAccountReviewUnavailable=Não foi possível verificar a conta do pagamento. Tente novamente antes de reconciliar.
 KreaBankBulkReviewResults=Correspondências e contas a verificar
+
+# Combined bank statement
+KreaBankBankStatement=Extrato bancário
+KreaBankOperationDate=Data de operação
+KreaBankStatementValueDate=Data-valor
+KreaBankStatementBalance=Saldo bancário
+KreaBankSourceStatement=Extrato de origem

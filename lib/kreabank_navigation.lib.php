@@ -10,7 +10,7 @@ require_once __DIR__ . '/kreabank_integration.lib.php';
 /** Build a workspace URL without carrying actions, line IDs or pagination across pages. */
 function kreabankWorkspaceUrl($page, $accountId = 0)
 {
-	$pages = array('reconcile', 'bulkmatch', 'pending', 'import', 'feed', 'history', 'statement', 'accounts');
+	$pages = array('reconcile', 'bulkmatch', 'pending', 'import', 'feed', 'history', 'statement', 'bankstatement', 'accounts');
 	if (!in_array($page, $pages, true)) {
 		throw new InvalidArgumentException('Unknown bank workspace page');
 	}

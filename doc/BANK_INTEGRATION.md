@@ -7,6 +7,18 @@ Reconciliation links to an existing native movement, or uses the established
 reviewed reconciliation path to create the required native entry. Automatic
 matching continues to reuse existing movements only.
 
+`bankstatement.php` combines content from all imports in one read-only table,
+newest operation first by default, with sorting before 50-row pagination. It shows
+operation/value dates, description and both original references, debit/credit,
+currency, source statement and reconciliation status. The account filter includes
+only current-company owned accounts, including closed accounts. Bank balances
+are the original supplied snapshots; missing balances remain unknown, and no
+opening balance or combined currency total is inferred. Potential source
+duplicates remain visibly flagged; mapped native movements are not repeated.
+Legacy imported movements without a staging mapping remain visible, even when
+other staged evidence shares their statement reference. Ordinary native ledger
+movements are not imported evidence and do not enter this table.
+
 `statement.php` provides a read-only list/detail view for both storage generations.
 It preserves original imported amounts and shows the linked native ID, native
 amount when different, and whether reconciliation flags, signed amount, account
@@ -36,6 +48,7 @@ Rolling back source does not require changing financial records.
 
 Validation:
 
+- `php test/test_bank_statement_database.php` (same guarded disposable database)
 - `php test/test_navigation.php`
 - `php test/test_reconciliation_guards.php`
 - `php test/test_bank_integration_database.php` (runs the native automatic suite
