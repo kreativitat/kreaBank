@@ -9,9 +9,9 @@ const source = fs.readFileSync(require('node:path').join(__dirname, '../js/bulkm
 const tick = () => new Promise(resolve => setImmediate(resolve));
 let checks = 0;
 function check(condition, message) { assert.ok(condition, message); checks++; }
-function harness() {
+function harness(overrides = {}) {
     const config = {url: '/custom/kreabank/bulkmatch.php', token: 'fixture', account: 101,
-        page: 0, limit: 25, more: true, auto: true, loading: 'Loading', paused: 'Paused', failed: 'Failed', refresh: 'Refresh'};
+        page: 0, limit: 25, more: true, auto: true, loading: 'Loading', paused: 'Paused', failed: 'Failed', refresh: 'Refresh', ...overrides};
     const calls = [];
     const timers = new Map();
     const events = {};
@@ -33,7 +33,8 @@ function harness() {
             approval.checked = false;
         }};
     let reloads = 0;
-    const window = {location: {href: 'https://erp.example.test/custom/kreabank/bulkmatch.php', origin: 'https://erp.example.test', reload() { reloads++; }},
+    const redirects = [];
+    const window = {location: {href: 'https://erp.example.test/custom/kreabank/bulkmatch.php', origin: 'https://erp.example.test', reload() { reloads++; }, assign(url) { redirects.push(url); }},
         setTimeout(fn) { const id = Symbol(); timers.set(id, fn); return id; }, clearTimeout(id) { timers.delete(id); },
         addEventListener(name, fn) { windowEvents[name] = fn; }};
     const elements = {'krea-bulk-scan-config': {textContent: JSON.stringify(config)}, 'krea-bulk-results': results,
@@ -41,7 +42,7 @@ function harness() {
     const fetch = (url, options) => new Promise(resolve => calls.push({url, options, resolve}));
     vm.runInNewContext(source, {document: {getElementById: id => elements[id]}, window, URL, URLSearchParams, AbortController, fetch});
     return {calls, timers, events, listeners, windowEvents, results, status, resume, approval, submit,
-        boxes: () => boxes, reloads: () => reloads,
+        redirects, boxes: () => boxes, reloads: () => reloads,
         respond(index, data, ok = true, status = 200) { calls[index].resolve({ok, status, json: async () => data}); },
         runTimer() { const [id, fn] = timers.entries().next().value; timers.delete(id); fn(); }};
 }
@@ -92,5 +93,15 @@ function harness() {
     let prevented = false;
     reviewed.events.submit({preventDefault() { prevented = true; }});
     check(prevented, 'A second submit is blocked while the first is pending');
+    const single = harness({url: '/custom/kreabank/matched.php', limit: 1, page: 2});
+    const singlePost = new URLSearchParams(single.calls[0].options.body);
+    check(single.calls[0].url.pathname === '/custom/kreabank/matched.php' && singlePost.get('limit') === '1' && singlePost.get('page') === '2', 'Individual matched scanning preserves its endpoint and one-pair page');
+    single.respond(0, {redirect: '/custom/kreabank/matched.php?account_context=101'});
+    await tick();
+    check(single.redirects[0] === 'https://erp.example.test/custom/kreabank/matched.php?account_context=101', 'A removed last match returns to the remaining queue');
+    const foreign = harness();
+    foreign.respond(0, {redirect: 'https://other.example.test/private'});
+    await tick();
+    check(!foreign.redirects.length && foreign.status.textContent === 'Failed', 'Scan redirects cannot leave the ERP origin');
     console.log(`OK: ${checks} bulk review browser behavior checks`);
 }()).catch(error => { console.error(error); process.exitCode = 1; });

@@ -10,7 +10,7 @@ require_once __DIR__ . '/kreabank_integration.lib.php';
 /** Build a workspace URL without carrying actions, line IDs or pagination across pages. */
 function kreabankWorkspaceUrl($page, $accountId = 0)
 {
-	$pages = array('reconcile', 'bulkmatch', 'pending', 'import', 'feed', 'history', 'statement', 'bankstatement', 'accounts');
+	$pages = array('reconcile', 'matched', 'bulkmatch', 'pending', 'import', 'feed', 'history', 'statement', 'bankstatement', 'accounts');
 	if (!in_array($page, $pages, true)) {
 		throw new InvalidArgumentException('Unknown bank workspace page');
 	}
@@ -159,7 +159,7 @@ function kreabankBankingHeader($page, $account = null)
 	$html .= '<span class="kb-company" title="' . dol_escape_htmltag($mysoc->name ?? '') . '">' . dol_escape_htmltag($mysoc->name ?? '') . '</span></div>';
 	$html .= '</div>';
 	$accountTools = $accountId > 0 ? kreabankAccountToolEntries($accountId) : array();
-	$active = in_array($page, array('card', 'documents', 'reports', 'forecast', 'native_statements', 'numbering'), true) ? 'account' : (in_array($page, array('bulkmatch', 'pending'), true) ? 'reconcile' : ($page === 'import' ? 'statement' : $page));
+	$active = in_array($page, array('card', 'documents', 'reports', 'forecast', 'native_statements', 'numbering'), true) ? 'account' : (in_array($page, array('matched', 'bulkmatch', 'pending'), true) ? 'reconcile' : ($page === 'import' ? 'statement' : $page));
 	if ($page !== 'accounts' && $active !== 'account') {
 		$html .= '<nav class="kb-primary" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankBanking')) . '">';
 		foreach (kreabankPrepareHead($accountId) as $tab) {
@@ -176,7 +176,7 @@ function kreabankBankingHeader($page, $account = null)
 	}
 	if ($active === 'reconcile') {
 		$html .= '<div class="kb-view-switch" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankReconcile')) . '">';
-		foreach (array('reconcile' => 'KreaBankReviewOneByOne', 'bulkmatch' => 'KreaBankBulkMatch', 'pending' => 'KreaBankPending') as $view => $label) {
+		foreach (array('reconcile' => 'KreaBankReviewOneByOne', 'matched' => 'KreaBankReviewMatched', 'bulkmatch' => 'KreaBankBulkMatch', 'pending' => 'KreaBankPending') as $view => $label) {
 			$html .= '<a' . ($page === $view ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag(kreabankWorkspaceUrl($view, $accountId)) . '">' . $langs->trans($label) . '</a>';
 		}
 		$html .= '</div>';

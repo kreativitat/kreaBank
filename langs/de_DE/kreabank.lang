@@ -375,3 +375,8 @@ KreaBankBulkMatchScanFailed=Zuordnungen konnten nicht geladen werden. Erneut ver
 KreaBankBulkMatchContextChanged=Unternehmen, Konto oder offene Zeilen haben sich geändert. Zum Fortfahren die Seite aktualisieren.
 KreaBankBulkMatchScanProgress=Zuordnungen prüfen: %s / %s Zeilen (%s%%).
 KreaBankBulkMatchNoSuggestions=Keine passenden Vorschläge gefunden.
+
+KreaBankReviewMatched=Treffer einzeln prüfen
+KreaBankReviewPosition=Treffer %s von %s
+KreaBankSelectMatch=Diesen Treffer auswählen
+KreaBankConfirmCurrentMatch=Diesen Treffer abgleichen

@@ -553,3 +553,8 @@ KreaBankStatementBalance=Saldo bancário
 KreaBankSourceStatement=Extrato de origem
 KreaBankCalculatedBalance=Calculado
 KreaBankCalculatedBalanceHelp=Calculado a partir do saldo bancário atualizado em %s, usando os movimentos recolhidos pela data e ordem do extrato. O banco não fornece a sequência dos movimentos no mesmo dia.
+
+KreaBankReviewMatched=Rever com correspondência
+KreaBankReviewPosition=Correspondência %s de %s
+KreaBankSelectMatch=Selecionar esta correspondência
+KreaBankConfirmCurrentMatch=Reconciliar esta correspondência

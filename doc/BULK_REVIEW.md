@@ -59,6 +59,7 @@ Validation:
 ```sh
 php test/test_bulk_scan.php
 php test/test_bulk_review.php
+php test/test_matched_review.php
 node test/test_bulkmatch_client.cjs
 php test/test_reconciliation_guards.php
 php test/test_navigation.php
@@ -74,3 +75,16 @@ Deploy changed source and translations together. No schema migration, module
 reactivation, scheduler change or worker restart is needed. Existing open bulk forms
 must be refreshed before confirming. Back up the changed files and restore those
 exact preimages for rollback; do not restore a database or replay a confirmation.
+
+## Individual matched review
+
+`matched.php` uses the same controller, matcher and signed approval as bulk review,
+with exactly one proposed pair per page. The reconciliation subtab **Review matched
+one by one** excludes unmatched lines and payment-account warnings. Ambiguous
+candidates remain pending under the existing shared resolver rules. Weak unique
+suggestions still require explicit manual approval; only safe suggestions are
+preselected. Previous/next links preserve the account and sort order. Confirmation
+accepts at most one source and reloads the remaining queue. Both presentation
+caches are invalidated after a confirmation. This view has its own scoped scan
+state, so scanning it cannot overwrite the bulk page's progress. No schema or
+scheduler changes are required.

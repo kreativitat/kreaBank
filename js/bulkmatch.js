@@ -85,6 +85,12 @@
                 failure.userMessage = data.error || config.failed;
                 throw failure;
             }
+            if (typeof data.redirect === 'string') {
+                const target = new URL(data.redirect, window.location.href);
+                if (target.origin !== endpoint.origin) throw new Error(config.failed);
+                window.location.assign(target.href);
+                return;
+            }
             if (typeof data.html !== 'string' || typeof data.more !== 'boolean') throw new Error(config.failed);
             config.token = data.token;
             more = data.more;

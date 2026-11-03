@@ -554,3 +554,8 @@ KreaBankStatementBalance=Bank balance
 KreaBankSourceStatement=Source statement
 KreaBankCalculatedBalance=Calculated
 KreaBankCalculatedBalanceHelp=Calculated backwards from the bank balance updated at %s, using collected movements in statement date/order. Same-day bank sequencing is not supplied.
+
+KreaBankReviewMatched=Review matched one by one
+KreaBankReviewPosition=Match %s of %s
+KreaBankSelectMatch=Select this match
+KreaBankConfirmCurrentMatch=Reconcile this match

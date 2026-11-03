@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.18.7 — 2026-11-03
+
+- Add a matched-only reconciliation tab with one proposed pair at a time, account
+  filtering and previous/next navigation. Reuse the bounded background scan and
+  signed manual confirmation; unmatched and wrong-account-review lines stay pending.
+
 ## 1.18.6 — 2026-11-03
 
 - Show only account references in statement account columns and filters.

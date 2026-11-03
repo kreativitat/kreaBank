@@ -118,6 +118,10 @@ try { kreabankAccountToolEntries(0); throw new RuntimeException('All-accounts to
 $html = kreabankBankingHeader('documents', (object) array('id' => 45));
 checkNavigation(strpos($html, 'kb-account-tabs') !== false && preg_match('/aria-current="page"[^>]*href="[^"]*document\.php\?id=45/', $html), 'Account-tool tabs retain the selected account and mark the actual native page');
 checkNavigation(strpos($html, '/admin/automation.php') === false, 'Automatic reconciliation is absent from operational tabs');
+$html = kreabankBankingHeader('matched', (object) array('id' => 45));
+checkNavigation(preg_match('/aria-current="page"[^>]*href="[^"]*matched\.php\?[^" ]*account_context=45/', $html) === 1, 'Matched review has its own active subtab and preserves the owned account');
+checkNavigation(strpos($html, 'action="/erp/custom/kreabank/matched.php"') !== false, 'Matched account filtering stays in the individual matched view');
+checkNavigation(strpos($html, 'KreaBankReviewOneByOne') !== false && strpos($html, 'KreaBankBulkMatch') !== false, 'Existing individual and bulk reviews remain available');
 $html = kreabankBankingHeader('forecast', (object) array('id' => 45));
 checkNavigation(preg_match('/aria-current="page"[^>]*href="[^"]*treso\.php\?account=45&amp;/', $html) === 1 && strpos($html, 'treso.php?id=') === false, 'The rendered treasury tab passes the account parameter expected by Dolibarr');
 checkNavigation(kreabankBankingUrl('reports', 0) === kreabankWorkspaceUrl('accounts'), 'Clearing the account context returns account-specific pages to the overview');

@@ -375,3 +375,8 @@ KreaBankBulkMatchScanFailed=Impossible de charger les correspondances. Réessaye
 KreaBankBulkMatchContextChanged=L’entreprise, le compte ou les lignes en attente ont changé. Actualisez cette page pour continuer.
 KreaBankBulkMatchScanProgress=Analyse des correspondances : %s / %s lignes (%s%%).
 KreaBankBulkMatchNoSuggestions=Aucune suggestion de correspondance trouvée.
+
+KreaBankReviewMatched=Revoir les correspondances une par une
+KreaBankReviewPosition=Correspondance %s sur %s
+KreaBankSelectMatch=Sélectionner cette correspondance
+KreaBankConfirmCurrentMatch=Rapprocher cette correspondance

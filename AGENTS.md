@@ -163,3 +163,7 @@
 - Statement-view account selectors list only current-company owned accounts with staged or recognizable legacy imported statements. Show only account references in statement selectors and account columns; keep the other operational account selectors unchanged.
 
 - Combined-statement balances prefer supplied line balances; the read-only `bankStatementWithBalancesSql()` fallback calculates backwards from a completed, coherent feed snapshot with exact DECIMAL subtraction. Keep calculation provenance in the balance tooltip without a visible Calculated label, preserve same-day statement order across sorting/pages, and fail closed on source/mapping/conflict/coverage errors. Never persist derived balances or use the native ledger as the anchor. Validate with `test/test_statement_balances_database.php` on the guarded disposable database.
+
+- `matched.php` reuses the bulk review controller with one pair per page, a separate
+  scan cache and the same signed manual approval. Exclude unmatched lines and
+  wrong-account warnings; never relax matching or unattended approval rules.

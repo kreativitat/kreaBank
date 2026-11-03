@@ -375,3 +375,8 @@ KreaBankBulkMatchScanFailed=No se pudieron cargar las coincidencias. Reinténtel
 KreaBankBulkMatchContextChanged=La empresa, la cuenta o las líneas pendientes han cambiado. Actualice esta página para continuar.
 KreaBankBulkMatchScanProgress=Analizando coincidencias: %s / %s líneas (%s%%).
 KreaBankBulkMatchNoSuggestions=No se encontraron sugerencias de coincidencia.
+
+KreaBankReviewMatched=Revisar coincidencias una a una
+KreaBankReviewPosition=Coincidencia %s de %s
+KreaBankSelectMatch=Seleccionar esta coincidencia
+KreaBankConfirmCurrentMatch=Conciliar esta coincidencia
