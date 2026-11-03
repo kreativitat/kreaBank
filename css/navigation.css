@@ -26,6 +26,8 @@ body.kreabank-banking.kb-native-bank #id-right > .fiche > .tabs { display:none !
 .kb-filter-field label { font-size:12px; color:#576878; }
 .kb-filter-field select { min-width:180px; max-width:100%; }
 .kb-accounts-filters .button { margin:0; }
+/* Prevent the native table-cell layout from expanding to the table's minimum width. */
+.kb-accounts-scroll { width:0; min-width:100%; }
 .kb-accounts-table { border-collapse:separate; border-spacing:0; width:100%; border:1px solid #dbe3e9; border-radius:8px; overflow:hidden; background:#fff; }
 .kb-accounts-table th { background:#f4f7f9; color:#566a7b; font-weight:600; font-size:12px; text-align:left; padding:12px 16px; }
 .kb-accounts-table td { padding:16px; border-top:1px solid #e5ebef; }

@@ -74,7 +74,7 @@ if ($user->hasRight('banque','configurer')) {
 }
 print '</div>';
 print kreabankBankingFilters('accounts', $accountId, $kind);
-print '<div class="div-table-responsive"><table class="kb-accounts-table"><tr>';
+print '<div class="div-table-responsive kb-accounts-scroll"><table class="kb-accounts-table"><tr>';
 foreach ($accountColumns as $field => $label) {
 	print kreabankListHeader($langs->trans($label), $field, $accountSort, in_array($field, array('balance', 'feed_balance'), true) ? 'kb-money' : '', array('kind' => $kind, 'mainmenu' => 'bank', 'leftmenu' => 'kreabank_accounts'));
 }

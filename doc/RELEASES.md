@@ -6,6 +6,7 @@
   account overview beside the separately labelled Dolibarr ledger balance.
 - Keep missing balances distinct from zero and expose stale/failed feed states.
   Scope snapshots by current company, workspace, account, currency and IBAN.
+- Keep wide account tables scrollable inside the content area.
 - No schema, accounting, scheduler or REST contract changes.
 
 ## 1.16.0 — 2026-11-02
