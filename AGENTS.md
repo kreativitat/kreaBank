@@ -185,3 +185,26 @@
 - In individual matched review, clicking **Reconcile this match** is the explicit
   approval of the sole signed pair. Do not require either selection or review
   checkboxes there. Bulk selections retain their separate review checkbox.
+
+## Machine learning
+
+- `KreaBankService` owns batch/supplier learning; `KreaBankParser` owns header
+  mapping. Learning remains advisory and never changes the shared safe matcher.
+- Batch schema version 2 stores normalized features exactly once and an explicit
+  native `bank_line_id`. Load only current-company, still-reconciled sources and
+  the newest sample per movement. Preserve unversioned data but exclude it from
+  training: its repeatedly scaled values cannot be reconstructed reliably.
+- Learn only from `manual`/`drag_drop` pre-mutation snapshots. Automatic, bulk and
+  quick-entry results do not create training truth. Multi-link batches do not
+  train recurring single-document patterns.
+- Keep validation chronological; remove duplicate feature groups from training
+  when they occur in holdout. Balance only training, evaluate the production
+  confidence gate, and report prediction errors instead of successful metrics.
+- Supplier confidence needs three identity-supported historical outflows, matching
+  company ownership and no conflicting IBAN. Header samples stay company-local;
+  never load the unowned shared legacy file. Save templates under a merge lock and
+  atomic replacement; model caches permit only the bundled classifier classes.
+- `php test/test_machine_learning.php` covers the real bundled PHP-ML classifiers,
+  temporary private files and concurrent writers, with installed Dolibarr source
+  but no application bootstrap/database. Its database counterpart uses ONLY the
+  guarded disposable localhost:33317 fixture. See [learning](doc/MACHINE_LEARNING.md).

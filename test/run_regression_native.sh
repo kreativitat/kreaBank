@@ -25,6 +25,9 @@ php_files=(
   "class/parser/KreaBankDelimitedTextParseStrategy.class.php"
   "core/modules/modKreaBank.class.php"
   "test/test_reconciliation_guards.php"
+  "test/test_machine_learning.php"
+  "test/test_machine_learning_database.php"
+  "test/test_machine_learning_render.php"
 )
 
 for f in "${php_files[@]}"; do
@@ -85,7 +88,9 @@ else
   exit 1
 fi
 
-echo "[5/7] Format consistency fixtures"
+echo "[5/7] Machine learning and format fixtures"
+php "${ROOT_DIR}/test/test_machine_learning.php"
+php "${ROOT_DIR}/test/test_machine_learning_render.php"
 php "${ROOT_DIR}/test/test_format_consistency.php"
 
 echo "[6/7] Reconciliation guard checks"

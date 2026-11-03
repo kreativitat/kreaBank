@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.18.15 — 2026-11-03
+
+- Correct batch learning feature scaling and Random Forest loading. Version new
+  samples, retain incompatible legacy evidence, and learn once per current native
+  movement from confirmed manual snapshots. Undone/corrected outcomes no longer
+  inflate or silently retain obsolete training labels.
+- Validate on later observations without duplicate feature leakage; report failed
+  predictions, F1, balanced accuracy and a majority-class baseline. Keep financial
+  approval rules unchanged.
+- Require supplier identity support and abstain on unfamiliar/conflicting evidence.
+  Isolate approved header examples by company, reject ambiguous mappings, and
+  serialize concurrent template saves. Restrict/private-cache model restoration.
+- See [learning design, upgrade behavior and validation](MACHINE_LEARNING.md).
+
 ## 1.18.14 — 2026-11-03
 
 - Use native Dolibarr pagination for account lists, imported statements and their

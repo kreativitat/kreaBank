@@ -33,6 +33,12 @@ class KreaBankNullLangs
  */
 class KreaBankService
 {
+	/** Legacy samples were repeatedly scaled and cannot be reconstructed safely. */
+	const BATCH_ML_FEATURE_VERSION = 2;
+
+	/** @var array<string,int> */
+	protected $batchMlSampleDiagnostics = array('legacy' => 0, 'invalid' => 0);
+
 	/** @var DoliDB */
 	public $db;
 
@@ -1610,6 +1616,7 @@ class KreaBankService
 			return $result;
 		}
 		$result['enabled'] = 1;
+		if (!$this->isMlLineOwned($line)) { $result['reason'] = 'outside_company'; return $result; }
 
 		$vector = $this->buildBatchMlFeatureVector($line, (array) $documents);
 		if (empty($vector)) {
@@ -1625,13 +1632,18 @@ class KreaBankService
 			return $result;
 		}
 
-		$predicted = (int) $classifier->predict($vector);
+		try {
+			$predicted = (int) $classifier->predict($vector);
+		} catch (Throwable $e) {
+			$result['reason'] = 'prediction_failed';
+			return $result;
+		}
 		$probability = $this->estimateBatchMlProbability($vector, $this->batchMlSamples);
 		$probabilityPct = (int) round(max(0.0, min(1.0, $probability)) * 100.0);
 
 		$result['probability'] = $probability;
 		$result['probability_pct'] = $probabilityPct;
-		$result['is_batch'] = (($predicted === 1) && ($probabilityPct >= $thresholdPct) ? 1 : 0);
+		$result['is_batch'] = (($predicted === 1) && ($probability >= $thresholdPct / 100.0) ? 1 : 0);
 		$result['reason'] = 'ok';
 
 		return $result;
@@ -1679,6 +1691,8 @@ class KreaBankService
 			return $result;
 		}
 
+		if (!$this->isMlLineOwned($resolvedLine)) { $result['reason'] = 'outside_company'; return $result; }
+		if ((float) ($resolvedLine['amount'] ?? 0) >= 0) { $result['reason'] = 'not_supplier_outflow'; return $result; }
 		$vector = $this->buildSupplierMlFeatureVector($resolvedLine);
 		$expectedSupplierFeatureDimension = $this->getSupplierMlFeatureDimension();
 		if (count($vector) < $expectedSupplierFeatureDimension) {
@@ -1701,6 +1715,14 @@ class KreaBankService
 			return $result;
 		}
 
+		$sourceBankId = !empty($resolvedLine['fk_statement']) ? (int) ($resolvedLine['fk_native_bank_line'] ?? 0) : (int) ($resolvedLine['rowid'] ?? 0);
+		$samples = array_values(array_filter($samples, function ($sample) use ($resolvedLine, $sourceBankId) {
+			return !empty($sample['line']) && ($sourceBankId <= 0 || (int) ($sample['bank_line_id'] ?? 0) !== $sourceBankId)
+				&& $this->supplierMlIdentityMatches($resolvedLine, $sample['line']);
+		}));
+		$result['support_count'] = count($samples);
+		if (count($samples) < 3) { $result['reason'] = 'insufficient_identity_support'; return $result; }
+
 		$knnClass = '\\Phpml\\Classification\\KNearestNeighbors';
 		if (!class_exists($knnClass)) {
 			$result['reason'] = 'model_dependency_missing';
@@ -1716,7 +1738,7 @@ class KreaBankService
 			$trainVectors[] = (array) $sample['features'];
 			$trainLabels[] = (int) $sample['label'];
 		}
-		if (count($trainVectors) < $minSamples || count($trainVectors) !== count($trainLabels)) {
+		if (count($trainVectors) < 3 || count($trainVectors) !== count($trainLabels)) {
 			$result['reason'] = 'model_not_ready';
 			return $result;
 		}
@@ -1737,6 +1759,13 @@ class KreaBankService
 			$result['reason'] = 'no_neighbors';
 			return $result;
 		}
+
+		if ($predictedSocid !== (int) $estimation['predicted_socid']) {
+			$result['reason'] = 'model_disagreement'; return $result;
+		}
+		$supportCount = count(array_filter($samples, static function ($sample) use ($predictedSocid) { return (int) $sample['label'] === $predictedSocid; }));
+		$result['support_count'] = $supportCount;
+		if ($supportCount < 3) { $result['reason'] = 'insufficient_identity_support'; return $result; }
 
 		$scoreTotal = (float) (!empty($estimation['score_total']) ? $estimation['score_total'] : 0.0);
 		$votes = !empty($estimation['votes']) && is_array($estimation['votes']) ? (array) $estimation['votes'] : array();
@@ -1770,7 +1799,7 @@ class KreaBankService
 		$confidenceGapPct = max(0, $probabilityPct - $runnerUpProbabilityPct);
 
 		// Require both absolute confidence and separation from the next-best label to avoid near-tie auto-fill.
-		$isConfident = ($predictedSocid > 0 && $probabilityPct >= $thresholdPct && $confidenceGapPct >= $minimumGapPct);
+		$isConfident = ($predictedSocid > 0 && $probability >= $thresholdPct / 100.0 && $probability - $runnerUpProbability >= $minimumGapPct / 100.0);
 
 		$predictedName = !empty($labelNames[$predictedSocid]) ? (string) $labelNames[$predictedSocid] : '';
 		$predictedName = $this->decodeHtmlEntitiesRecursive($predictedName);
@@ -2206,7 +2235,9 @@ class KreaBankService
 		}
 
 		try {
-			$this->learnPatternsFromReconciliation($line, $links);
+			if ($this->shouldLearnBatchMlFromReconciliation($strategy, $isAuto)) {
+				$this->learnPatternsFromReconciliation($line, $links);
+			}
 		} catch (Throwable $patternError) {
 			if (function_exists('dol_syslog')) {
 				dol_syslog(
@@ -2229,7 +2260,7 @@ class KreaBankService
 				'native_bank_line_id' => $nativeLineId,
 			)
 		);
-		$this->learnBatchMlFromReconciliation($line, $links, $strategy, $isAuto, $batchMlFeatureSnapshot);
+		$this->learnBatchMlFromReconciliation($line, $links, $strategy, $isAuto, $batchMlFeatureSnapshot, $nativeLineId);
 
 		return (int) $line['rowid'];
 	}
@@ -3939,6 +3970,7 @@ class KreaBankService
 	 */
 	protected function isBatchMlEnabled()
 	{
+		if ($this->entity <= 0 || (int) ($GLOBALS['conf']->entity ?? 0) !== $this->entity) { return false; }
 		if ((int) getDolGlobalInt('KREABANK_BATCH_ML_ENABLED', 1) <= 0) {
 			return false;
 		}
@@ -3953,6 +3985,7 @@ class KreaBankService
 	 */
 	protected function isSupplierMlEnabled()
 	{
+		if ($this->entity <= 0 || (int) ($GLOBALS['conf']->entity ?? 0) !== $this->entity) { return false; }
 		if ((int) getDolGlobalInt('KREABANK_SUPPLIER_ML_ENABLED', 1) <= 0) {
 			return false;
 		}
@@ -3971,11 +4004,11 @@ class KreaBankService
 			'knn' => '\\Phpml\\Classification\\KNearestNeighbors',
 			'naive_bayes' => '\\Phpml\\Classification\\NaiveBayes',
 			'decision_tree' => '\\Phpml\\Classification\\DecisionTree',
-			'random_forest' => '\\Phpml\\Classification\\RandomForest',
+			'random_forest' => '\\Phpml\\Classification\\Ensemble\\RandomForest',
 		);
 		$classifierCode = $this->resolveBatchMlClassifierCode();
 		$requiredClass = !empty($requiredClasses[$classifierCode]) ? (string) $requiredClasses[$classifierCode] : $requiredClasses['knn'];
-		if ((class_exists($requiredClass) || class_exists('\\Phpml\\Classification\\KNearestNeighbors')) && class_exists('\\Phpml\\Classification\\KNearestNeighbors')) {
+		if (class_exists($requiredClass) && class_exists('\\Phpml\\Classification\\KNearestNeighbors')) {
 			return true;
 		}
 		if (defined('PHP_VERSION_ID') && PHP_VERSION_ID < 80000) {
@@ -3992,7 +4025,7 @@ class KreaBankService
 		foreach ($candidates as $autoloadPath) {
 			if (is_string($autoloadPath) && $autoloadPath !== '' && file_exists($autoloadPath)) {
 				require_once $autoloadPath;
-				if ((class_exists($requiredClass) || class_exists('\\Phpml\\Classification\\KNearestNeighbors')) && class_exists('\\Phpml\\Classification\\KNearestNeighbors')) {
+				if (class_exists($requiredClass) && class_exists('\\Phpml\\Classification\\KNearestNeighbors')) {
 					return true;
 				}
 			}
@@ -4135,12 +4168,13 @@ class KreaBankService
 			$meta['class'] = $className;
 			return new $className();
 		}
-		if ($meta['code'] === 'random_forest' && class_exists('\\Phpml\\Classification\\RandomForest')) {
-			$className = '\\Phpml\\Classification\\RandomForest';
+		if ($meta['code'] === 'random_forest' && class_exists('\\Phpml\\Classification\\Ensemble\\RandomForest')) {
+			$className = '\\Phpml\\Classification\\Ensemble\\RandomForest';
 			$meta['class'] = $className;
 			$meta['trees'] = 31;
 			return new $className(31);
 		}
+		if ($meta['code'] !== 'knn') { return null; }
 
 		if (!class_exists('\\Phpml\\Classification\\KNearestNeighbors')) {
 			return null;
@@ -4163,12 +4197,11 @@ class KreaBankService
 	 */
 	protected function buildBatchMlClassifierCacheKey($samples, $classifierMeta)
 	{
-		$parts = array();
+		$parts = array('feature_version:' . self::BATCH_ML_FEATURE_VERSION, 'runtime:' . PHP_VERSION_ID, 'dependencies:' . hash_file('sha256', __DIR__ . '/../composer.lock'));
 		$parts[] = 'entity:' . ((int) $this->entity);
 		$parts[] = 'meta:' . json_encode((array) $classifierMeta);
 		$parts[] = 'count:' . count((array) $samples);
-		$tail = array_slice((array) $samples, -120);
-		foreach ($tail as $sample) {
+		foreach ((array) $samples as $sample) {
 			if (!is_array($sample)) {
 				continue;
 			}
@@ -4179,7 +4212,7 @@ class KreaBankService
 			$parts[] = $label . '|' . $datec . '|' . $featureHash;
 		}
 
-		return sha1(implode(';', $parts));
+		return hash('sha256', implode(';', $parts));
 	}
 
 	/**
@@ -4213,12 +4246,12 @@ class KreaBankService
 	protected function loadCachedBatchMlClassifier($cacheKey)
 	{
 		$path = $this->getBatchMlClassifierCachePath();
-		if ($path === '' || !is_readable($path)) {
+		if ($path === '' || is_link($path) || !is_readable($path) || filesize($path) > 16777216) {
 			return null;
 		}
 
-		$raw = file_get_contents($path);
-		if (!is_string($raw) || $raw === '') {
+		$raw = file_get_contents($path, false, null, 0, 16777217);
+		if (!is_string($raw) || $raw === '' || strlen($raw) > 16777216) {
 			return null;
 		}
 		$decoded = $this->decodeJsonArraySafe($raw);
@@ -4236,11 +4269,18 @@ class KreaBankService
 		}
 
 		try {
-			$classifier = unserialize($payload);
+			$classifier = @unserialize($payload, array('max_depth' => 128, 'allowed_classes' => array(
+				'Phpml\\Classification\\KNearestNeighbors', 'Phpml\\Math\\Distance\\Euclidean',
+				'Phpml\\Classification\\NaiveBayes', 'Phpml\\Classification\\DecisionTree',
+				'Phpml\\Classification\\DecisionTree\\DecisionTreeLeaf',
+				'Phpml\\Classification\\Ensemble\\RandomForest',
+			)));
 		} catch (Throwable $e) {
 			return null;
 		}
-		if (!is_object($classifier) || !method_exists($classifier, 'predict')) {
+		$meta = array();
+		$expected = $this->instantiateBatchMlClassifier(1, $meta);
+		if (!is_object($classifier) || !$expected || get_class($classifier) !== get_class($expected)) {
 			return null;
 		}
 
@@ -4288,8 +4328,12 @@ class KreaBankService
 		}
 
 		$tmpPath = $path . '.tmp.' . ((int) getmypid()) . '.' . str_replace('.', '', (string) microtime(true));
-		$written = file_put_contents($tmpPath, $payloadJson, LOCK_EX);
-		if ($written === false) {
+		$handle = fopen($tmpPath, 'x');
+		if (!$handle) { return; }
+		$private = chmod($tmpPath, 0600);
+		$written = $private && flock($handle, LOCK_EX) ? fwrite($handle, $payloadJson) : false;
+		fclose($handle);
+		if ($written === false || $written !== strlen($payloadJson)) {
 			dol_syslog('KreaBank failed to write batch ML classifier cache temp file: ' . $tmpPath, LOG_WARNING);
 			if (file_exists($tmpPath) && !unlink($tmpPath)) {
 				dol_syslog('KreaBank failed to cleanup batch ML classifier cache temp file: ' . $tmpPath, LOG_WARNING);
@@ -4338,16 +4382,18 @@ class KreaBankService
 	 * @param array<int,float|int|string> $features
 	 * @param int $label
 	 * @param string|null $sampleDate
+	 * @param int $nativeBankLineId Reconciled native movement, never a staging ID
 	 * @return bool
 	 */
-	protected function appendBatchMlSample($features, $label, $sampleDate = null)
+	protected function appendBatchMlSample($features, $label, $sampleDate = null, $nativeBankLineId = 0)
 	{
 		$label = (int) $label;
+		if ($nativeBankLineId <= 0 || $this->entity <= 0 || (int) ($GLOBALS['conf']->entity ?? 0) !== $this->entity) { return false; }
 		if ($label !== 0 && $label !== 1) {
 			return false;
 		}
 
-		$normalized = $this->normalizeBatchMlVector((array) $features);
+		$normalized = $this->validateBatchMlVector($features);
 		if (count($normalized) < 6) {
 			return false;
 		}
@@ -4367,7 +4413,7 @@ class KreaBankService
 		$sql = 'INSERT INTO ' . $table . ' (entity, label, features_json, datec) VALUES (';
 		$sql .= ((int) $this->entity);
 		$sql .= ', ' . $label;
-		$sql .= ', ' . $this->sqlText(json_encode(array_values($normalized), JSON_UNESCAPED_UNICODE));
+		$sql .= ', ' . $this->sqlText(json_encode(array('version' => self::BATCH_ML_FEATURE_VERSION, 'features' => $normalized, 'bank_line_id' => (int) $nativeBankLineId), JSON_UNESCAPED_UNICODE));
 		$sql .= ', ' . $this->sqlDateTime($when);
 		$sql .= ')';
 
@@ -4385,6 +4431,7 @@ class KreaBankService
 	 */
 	protected function loadBatchMlSamples()
 	{
+		$this->batchMlSampleDiagnostics = array('legacy' => 0, 'invalid' => 0);
 		$table = $this->ensureBatchMlSampleTable();
 		$sql = 'SELECT rowid, label, features_json, datec';
 		$sql .= ' FROM ' . $table;
@@ -4401,20 +4448,43 @@ class KreaBankService
 					continue;
 				}
 				$decoded = $this->decodeJsonArraySafe((string) $obj->features_json);
-				if ($decoded === null || count($decoded) < 6) {
+				if ($decoded !== null && !isset($decoded['version'])) {
+					$this->batchMlSampleDiagnostics['legacy']++;
 					continue;
 				}
-				$normalized = $this->normalizeBatchMlVector($decoded);
-				if (count($normalized) < 6) {
+				$normalized = $decoded !== null && ($decoded['version'] ?? null) === self::BATCH_ML_FEATURE_VERSION
+					? $this->validateBatchMlVector($decoded['features'] ?? null) : array();
+				if (count($normalized) !== 6 || !is_int($decoded['bank_line_id'] ?? null) || $decoded['bank_line_id'] <= 0) {
+					$this->batchMlSampleDiagnostics['invalid']++;
 					continue;
 				}
 				$samples[] = array(
 					'rowid' => (int) $obj->rowid,
+					'bank_line_id' => (int) $decoded['bank_line_id'],
 					'features' => $normalized,
 					'label' => $label,
 					'datec' => (string) (!empty($obj->datec) ? $obj->datec : ''),
 				);
 			}
+		}
+
+		// One current observation per native movement. Undo/deletion invalidates training
+		// without deleting evidence; a later manual correction replaces the older label.
+		if ($samples) {
+			$ids = array_unique(array_column($samples, 'bank_line_id'));
+			$sql = 'SELECT b.rowid FROM ' . $this->db->prefix() . 'bank b JOIN ' . $this->db->prefix() . 'bank_account ba ON ba.rowid=b.fk_account';
+			$sql .= ' WHERE ba.entity=' . (int) $this->entity . ' AND b.rappro=1 AND b.rowid IN (' . implode(',', $ids) . ')';
+			$result = $this->db->query($sql);
+			if (!$result) { return array(); }
+			$valid = array();
+			while ($row = $this->db->fetch_object($result)) { $valid[(int) $row->rowid] = true; }
+			$seen = array();
+			$samples = array_values(array_filter($samples, static function ($sample) use ($valid, &$seen) {
+				$id = $sample['bank_line_id'];
+				if (isset($seen[$id]) || !isset($valid[$id])) { return false; }
+				$seen[$id] = true;
+				return true;
+			}));
 		}
 
 		if (!empty($samples) && !empty($samples[0]['rowid'])) {
@@ -4429,55 +4499,15 @@ class KreaBankService
 	}
 
 	/**
-	 * Persist normalized batch ML samples (compatibility helper).
-	 *
-	 * @param array<int,array{features:array<int,float>,label:int}> $samples
-	 * @return void
-	 */
-	protected function saveBatchMlSamples($samples)
-	{
-		$table = $this->ensureBatchMlSampleTable();
-
-		$clean = array();
-		foreach ((array) $samples as $sample) {
-			if (!is_array($sample)) {
-				continue;
-			}
-			$label = isset($sample['label']) ? (int) $sample['label'] : -1;
-			if ($label !== 0 && $label !== 1) {
-				continue;
-			}
-			$features = isset($sample['features']) && is_array($sample['features']) ? (array) $sample['features'] : array();
-			$features = $this->normalizeBatchMlVector($features);
-			if (count($features) < 6) {
-				continue;
-			}
-			$clean[] = array(
-				'features' => $features,
-				'label' => $label,
-			);
-		}
-
-		if (count($clean) > 5000) {
-			$clean = array_slice($clean, count($clean) - 5000);
-		}
-
-		$this->db->query('DELETE FROM ' . $table . ' WHERE entity = ' . ((int) $this->entity));
-		foreach ($clean as $sample) {
-			$this->appendBatchMlSample($sample['features'], (int) $sample['label'], null);
-		}
-	}
-
-	/**
 	 * Get or train ML classifier for batch detection.
 	 *
 	 * @return object|null
 	 */
 	protected function getBatchMlClassifier()
 	{
-		if ($this->batchMlClassifierReady) {
-			return $this->batchMlClassifier;
-		}
+		// Recheck source eligibility even when this service already made a prediction.
+		$previousClassifier = $this->batchMlClassifier;
+		$previousCacheKey = $this->batchMlClassifierCacheKey;
 		$this->batchMlClassifierReady = true;
 		$this->batchMlClassifier = null;
 		$this->batchMlSamples = array();
@@ -4522,6 +4552,11 @@ class KreaBankService
 		}
 		$cacheKey = $this->buildBatchMlClassifierCacheKey($samples, $classifierMeta);
 		$this->batchMlClassifierCacheKey = $cacheKey;
+		if ($previousClassifier && $previousCacheKey === $cacheKey) {
+			$this->batchMlClassifier = $previousClassifier;
+			$this->batchMlSamples = $samples;
+			return $this->batchMlClassifier;
+		}
 
 		$cachedClassifier = $this->loadCachedBatchMlClassifier($cacheKey);
 		if (is_object($cachedClassifier) && method_exists($cachedClassifier, 'predict')) {
@@ -4544,153 +4579,79 @@ class KreaBankService
 		return $this->batchMlClassifier;
 	}
 
-	/**
-	 * Evaluate batch ML quality with a stratified holdout split.
-	 *
-	 * @return array<string,mixed>
-	 */
+	/** Evaluate later observations, excluding duplicate feature groups from training. */
 	public function getBatchMlValidationReport()
 	{
 		$report = array(
-			'enabled' => 0,
-			'classifier' => $this->resolveBatchMlClassifierCode(),
-			'sample_count' => 0,
-			'train_count' => 0,
-			'test_count' => 0,
-			'accuracy_pct' => 0.0,
-			'precision_pct' => 0.0,
-			'recall_pct' => 0.0,
+			'enabled' => 0, 'classifier' => $this->resolveBatchMlClassifierCode(),
+			'feature_version' => self::BATCH_ML_FEATURE_VERSION,
+			'split' => 'chronological_grouped_holdout',
+			'sample_count' => 0, 'train_count' => 0, 'test_count' => 0,
+			'legacy_sample_count' => 0, 'invalid_sample_count' => 0,
+			'duplicate_train_count' => 0, 'prediction_errors' => 0, 'evaluated_count' => 0,
+			'accuracy_pct' => 0.0, 'precision_pct' => 0.0, 'recall_pct' => 0.0,
+			'f1_pct' => 0.0, 'balanced_accuracy_pct' => 0.0, 'baseline_accuracy_pct' => 0.0,
 			'confusion' => array('tp' => 0, 'fp' => 0, 'tn' => 0, 'fn' => 0),
-			'status' => 'disabled',
+			'status' => 'disabled_by_setup_or_dependency',
 		);
-
-		if (!$this->isBatchMlEnabled()) {
-			$report['status'] = 'disabled_by_setup_or_dependency';
-			return $report;
-		}
+		if (!$this->isBatchMlEnabled()) { return $report; }
 		$report['enabled'] = 1;
-
-		$samples = $this->rebalanceBatchMlSamples($this->loadBatchMlSamples(), 4);
+		$samples = $this->loadBatchMlSamples();
+		$report['legacy_sample_count'] = $this->batchMlSampleDiagnostics['legacy'];
+		$report['invalid_sample_count'] = $this->batchMlSampleDiagnostics['invalid'];
 		$report['sample_count'] = count($samples);
-		if (count($samples) < 10) {
-			$report['status'] = 'model_not_ready';
-			return $report;
-		}
+		if (count($samples) < 10) { $report['status'] = 'model_not_ready'; return $report; }
 
-		$byLabel = array(0 => array(), 1 => array());
-		foreach ($samples as $sample) {
-			if (!is_array($sample)) {
-				continue;
-			}
-			$label = isset($sample['label']) ? (int) $sample['label'] : -1;
-			if (!array_key_exists($label, $byLabel)) {
-				continue;
-			}
-			$features = isset($sample['features']) && is_array($sample['features']) ? (array) $sample['features'] : array();
-			if (count($features) < 6) {
-				continue;
-			}
-			$byLabel[$label][] = array(
-				'features' => $features,
-				'label' => $label,
-			);
-		}
-		if (count($byLabel[0]) < 2 || count($byLabel[1]) < 2) {
-			$report['status'] = 'class_coverage_insufficient';
-			return $report;
-		}
-
+		// Row order is observation order. Never balance or shuffle future evidence into training.
+		$testCount = max(2, (int) ceil(count($samples) * 0.2));
+		$test = array_slice($samples, -$testCount);
+		$testGroups = array();
+		foreach ($test as $sample) { $testGroups[json_encode($sample['features'])] = true; }
 		$train = array();
-		$test = array();
-		foreach (array(0, 1) as $label) {
-			$classRows = $byLabel[$label];
-			$classCount = count($classRows);
-			$testCount = (int) floor($classCount * 0.2);
-			$testCount = max(1, $testCount);
-			if (($classCount - $testCount) < 1) {
-				$testCount = max(0, $classCount - 1);
-			}
-			if ($testCount <= 0) {
-				$report['status'] = 'holdout_split_failed';
-				return $report;
-			}
-			$train = array_merge($train, array_slice($classRows, 0, $classCount - $testCount));
-			$test = array_merge($test, array_slice($classRows, $classCount - $testCount));
+		foreach (array_slice($samples, 0, -$testCount) as $sample) {
+			if (isset($testGroups[json_encode($sample['features'])])) { $report['duplicate_train_count']++; continue; }
+			$train[] = $sample;
 		}
-
+		$train = $this->rebalanceBatchMlSamples($train, 4);
 		$report['train_count'] = count($train);
 		$report['test_count'] = count($test);
-		if (empty($train) || empty($test)) {
-			$report['status'] = 'holdout_split_failed';
-			return $report;
+		foreach (array($train, $test) as $partition) {
+			$counts = array_count_values(array_column($partition, 'label'));
+			if (empty($counts[0]) || empty($counts[1])) {
+				$report['status'] = 'class_coverage_insufficient'; return $report;
+			}
 		}
-
-		$trainVectors = array();
-		$trainLabels = array();
-		foreach ($train as $sample) {
-			$trainVectors[] = (array) $sample['features'];
-			$trainLabels[] = (int) $sample['label'];
-		}
-
-		$classifierMeta = array();
-		$classifier = $this->instantiateBatchMlClassifier(count($trainVectors), $classifierMeta);
-		if (!is_object($classifier) || !method_exists($classifier, 'train') || !method_exists($classifier, 'predict')) {
-			$report['status'] = 'classifier_unavailable';
-			return $report;
-		}
-		$report['classifier'] = (string) (!empty($classifierMeta['code']) ? $classifierMeta['code'] : $report['classifier']);
-
-		try {
-			$classifier->train($trainVectors, $trainLabels);
-		} catch (Throwable $e) {
-			$report['status'] = 'validation_train_failed';
-			return $report;
-		}
-
-		$tp = 0;
-		$fp = 0;
-		$tn = 0;
-		$fn = 0;
+		$meta = array();
+		$classifier = $this->instantiateBatchMlClassifier(count($train), $meta);
+		if (!$classifier) { $report['status'] = 'classifier_unavailable'; return $report; }
+		$report['classifier'] = $meta['code'];
+		try { $classifier->train(array_column($train, 'features'), array_column($train, 'label')); }
+		catch (Throwable $e) { $report['status'] = 'validation_train_failed'; return $report; }
+		$threshold = max(50, min(99, (int) getDolGlobalInt('KREABANK_BATCH_ML_AUTO_THRESHOLD', 80))) / 100.0;
 		foreach ($test as $sample) {
-			$expected = (int) $sample['label'];
-			$predicted = 0;
 			try {
-				$predicted = (int) $classifier->predict((array) $sample['features']);
-			} catch (Throwable $e) {
-				continue;
-			}
-			if ($expected === 1 && $predicted === 1) {
-				$tp++;
-			} elseif ($expected === 0 && $predicted === 1) {
-				$fp++;
-			} elseif ($expected === 0 && $predicted === 0) {
-				$tn++;
-			} elseif ($expected === 1 && $predicted === 0) {
-				$fn++;
-			}
+				// Evaluate the same classifier AND confidence gate used by predictBatchMl().
+				$predicted = (int) $classifier->predict($sample['features']);
+				$predicted = $predicted === 1 && $this->estimateBatchMlProbability($sample['features'], $train) >= $threshold ? 1 : 0;
+			} catch (Throwable $e) { $report['prediction_errors']++; continue; }
+			$key = $sample['label'] === 1 ? ($predicted === 1 ? 'tp' : 'fn') : ($predicted === 1 ? 'fp' : 'tn');
+			$report['confusion'][$key]++;
+			$report['evaluated_count']++;
 		}
-
-		$total = $tp + $tn + $fp + $fn;
-		if ($total <= 0) {
-			$report['status'] = 'validation_no_predictions';
-			return $report;
-		}
-
-		$accuracy = ($tp + $tn) / $total;
-		$precision = (($tp + $fp) > 0 ? ($tp / ($tp + $fp)) : 0.0);
-		$recall = (($tp + $fn) > 0 ? ($tp / ($tp + $fn)) : 0.0);
-
-		$report['accuracy_pct'] = round($accuracy * 100.0, 2);
-		$report['precision_pct'] = round($precision * 100.0, 2);
-		$report['recall_pct'] = round($recall * 100.0, 2);
-		$report['confusion'] = array(
-			'tp' => $tp,
-			'fp' => $fp,
-			'tn' => $tn,
-			'fn' => $fn,
-		);
+		if ($report['prediction_errors']) { $report['status'] = 'validation_prediction_failed'; return $report; }
+		$c = $report['confusion'];
+		$precision = $c['tp'] / max(1, $c['tp'] + $c['fp']);
+		$recall = $c['tp'] / max(1, $c['tp'] + $c['fn']);
+		$report['accuracy_pct'] = round(100 * ($c['tp'] + $c['tn']) / count($test), 2);
+		$report['precision_pct'] = round(100 * $precision, 2);
+		$report['recall_pct'] = round(100 * $recall, 2);
+		$report['f1_pct'] = $precision + $recall > 0 ? round(200 * $precision * $recall / ($precision + $recall), 2) : 0.0;
+		$report['balanced_accuracy_pct'] = round(50 * ($recall + $c['tn'] / max(1, $c['tn'] + $c['fp'])), 2);
+		$trainCounts = array_count_values(array_column($train, 'label'));
+		$majority = $trainCounts[1] > $trainCounts[0] ? 1 : 0;
+		$testCounts = array_count_values(array_column($test, 'label'));
+		$report['baseline_accuracy_pct'] = round(100 * $testCounts[$majority] / count($test), 2);
 		$report['status'] = 'ok';
-
 		return $report;
 	}
 
@@ -4738,8 +4699,10 @@ class KreaBankService
 		$k = min($this->resolveAdaptiveNeighborCount(count($distances), 3, 31), count($distances));
 		$scorePositive = 0.0;
 		$scoreTotal = 0.0;
-		for ($i = 0; $i < $k; $i++) {
+		$cutoff = (float) $distances[$k - 1]['distance'];
+		for ($i = 0; $i < count($distances); $i++) {
 			$row = $distances[$i];
+			if ((float) $row['distance'] > $cutoff + 1.0e-12) { break; }
 			$distance = (float) $row['distance'];
 			$weight = 1.0 / (1.0 + max(0.0, $distance));
 			$scoreTotal += $weight;
@@ -4764,8 +4727,8 @@ class KreaBankService
 	 */
 	protected function batchMlDistance($a, $b)
 	{
-		$len = min(count((array) $a), count((array) $b));
-		if ($len <= 0) {
+		$len = count((array) $a);
+		if ($len <= 0 || $len !== count((array) $b)) {
 			return 999.0;
 		}
 
@@ -4773,6 +4736,7 @@ class KreaBankService
 		for ($i = 0; $i < $len; $i++) {
 			$av = (float) (isset($a[$i]) ? $a[$i] : 0.0);
 			$bv = (float) (isset($b[$i]) ? $b[$i] : 0.0);
+			if (!is_finite($av) || !is_finite($bv)) { return 999.0; }
 			$delta = $av - $bv;
 			$sum += ($delta * $delta);
 		}
@@ -4789,7 +4753,10 @@ class KreaBankService
 	protected function normalizeBatchMlVector($vector)
 	{
 		$raw = array_values((array) $vector);
-		if (count($raw) < 6) {
+		foreach ($raw as $value) {
+			if (!is_numeric($value) || !is_finite((float) $value)) { return array(); }
+		}
+		if (count($raw) !== 6) {
 			return array();
 		}
 
@@ -4809,6 +4776,17 @@ class KreaBankService
 			$textLen,
 			$direction,
 		);
+	}
+
+	/** Validate already normalized features without scaling them a second time. */
+	protected function validateBatchMlVector($vector)
+	{
+		if (!is_array($vector) || count($vector) !== 6 || array_keys($vector) !== range(0, 5)) { return array(); }
+		foreach ($vector as $value) {
+			if (!is_numeric($value) || !is_finite((float) $value) || $value < 0 || $value > 1) { return array(); }
+		}
+		if (!in_array((float) $vector[0], array(0.0, 1.0), true) || !in_array((float) $vector[5], array(0.0, 1.0), true)) { return array(); }
+		return array_map('floatval', $vector);
 	}
 
 	/**
@@ -4856,9 +4834,10 @@ class KreaBankService
 	 * @param string $strategy
 	 * @param int $isAuto
 	 * @param array<int,float> $featureSnapshot
+	 * @param int $nativeBankLineId Reconciled native movement
 	 * @return void
 	 */
-	protected function learnBatchMlFromReconciliation($line, $links, $strategy, $isAuto, $featureSnapshot = array())
+	protected function learnBatchMlFromReconciliation($line, $links, $strategy, $isAuto, $featureSnapshot = array(), $nativeBankLineId = 0)
 	{
 		if (!$this->isBatchMlEnabled()) {
 			return;
@@ -4876,15 +4855,18 @@ class KreaBankService
 		}
 
 		$features = (is_array($featureSnapshot) && !empty($featureSnapshot))
-			? $this->normalizeBatchMlVector($featureSnapshot)
-			: $this->buildBatchMlSnapshotForLine($line);
+			? $this->validateBatchMlVector($featureSnapshot)
+			: array();
 		if (count($features) < 6) {
 			return;
 		}
 
 		try {
 			$sampleDate = !empty($line['operation_date']) ? (string) $line['operation_date'] : '';
-			$this->appendBatchMlSample($features, $label, $sampleDate);
+			if (!$this->appendBatchMlSample($features, $label, $sampleDate, $nativeBankLineId)) {
+				if (function_exists('dol_syslog')) { dol_syslog('KreaBank batch learning sample could not be saved', LOG_WARNING); }
+				return;
+			}
 			$this->batchMlClassifierReady = false;
 			$this->batchMlClassifier = null;
 			$this->batchMlSamples = array();
@@ -5275,7 +5257,7 @@ class KreaBankService
 		$preferredBankAccountId = (int) $preferredBankAccountId;
 		$expectedFeatureDimension = $this->getSupplierMlFeatureDimension();
 
-		$sql = 'SELECT b.rowid as bank_line_id, b.fk_account as bank_account_id, b.amount,';
+		$sql = 'SELECT b.rowid as bank_line_id, b.fk_account as bank_account_id, b.amount, b.label as native_label,';
 		$sql .= ' m.counterparty_name, m.counterparty_iban, m.description, m.payment_reference, m.bank_reference,';
 		$sql .= " GROUP_CONCAT(DISTINCT bu.url_id ORDER BY bu.url_id SEPARATOR ',') as supplier_ids,";
 		$sql .= " GROUP_CONCAT(DISTINCT s.nom ORDER BY s.nom SEPARATOR ' / ') as supplier_names,";
@@ -5289,8 +5271,10 @@ class KreaBankService
 		$sql .= ' AND s.entity = ' . ((int) $this->entity);
 		$sql .= ' AND s.fournisseur > 0';
 		$sql .= ' AND b.rappro = 1';
-		$sql .= ' AND ABS(b.amount) > 0.0000001';
-		$sql .= ' GROUP BY b.rowid, b.fk_account, b.amount, m.counterparty_name, m.counterparty_iban, m.description, m.payment_reference, m.bank_reference';
+		$sql .= ' AND NOT EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'bank_url otherlink JOIN ' . $this->db->prefix() . 'societe othersoc ON othersoc.rowid=otherlink.url_id';
+		$sql .= " WHERE otherlink.fk_bank=b.rowid AND otherlink.type='company' AND othersoc.entity<>" . ((int) $this->entity) . ')';
+		$sql .= ' AND b.amount < -0.0000001';
+		$sql .= ' GROUP BY b.rowid, b.fk_account, b.amount, b.label, m.counterparty_name, m.counterparty_iban, m.description, m.payment_reference, m.bank_reference';
 		$sql .= ' HAVING COUNT(DISTINCT bu.url_id) = 1';
 		if ($preferredBankAccountId > 0) {
 			$sql .= ' ORDER BY CASE WHEN b.fk_account = ' . $preferredBankAccountId . ' THEN 0 ELSE 1 END ASC, line_date DESC, b.rowid DESC';
@@ -5325,6 +5309,7 @@ class KreaBankService
 				'rowid' => (int) $obj->bank_line_id,
 				'bank_account_id' => (int) $obj->bank_account_id,
 				'amount' => (float) $obj->amount,
+				'native_label' => (string) $obj->native_label,
 				'allocated_amount' => 0.0,
 				'counterparty_name' => (string) (!empty($obj->counterparty_name) ? $obj->counterparty_name : ''),
 				'counterparty_iban' => (string) (!empty($obj->counterparty_iban) ? $obj->counterparty_iban : ''),
@@ -5340,6 +5325,8 @@ class KreaBankService
 			$samples[] = array(
 				'features' => $features,
 				'label' => $supplierId,
+				'bank_line_id' => (int) $obj->bank_line_id,
+				'line' => $line,
 			);
 			if (!isset($labelNames[$supplierId])) {
 				$supplierLabel = (string) (!empty($obj->supplier_names) ? $obj->supplier_names : '');
@@ -5352,6 +5339,37 @@ class KreaBankService
 			'samples' => $samples,
 			'label_names' => $labelNames,
 		);
+	}
+
+	/** Predictions may never project another company or a fabricated source line. */
+	protected function isMlLineOwned($line)
+	{
+		try { (new KreaBankReconciliationScope($this->db, $this->entity))->assertLine($line); return true; }
+		catch (Throwable $e) { return false; }
+	}
+
+	/** A numerical neighbor is insufficient identity evidence for supplier auto-fill. */
+	protected function supplierMlIdentityMatches($line, $historical)
+	{
+		require_once __DIR__ . '/KreaBankFintableMapper.class.php';
+		$rawIban = trim((string) ($line['counterparty_iban'] ?? ''));
+		$oldRawIban = trim((string) ($historical['counterparty_iban'] ?? ''));
+		$iban = KreaBankFintableMapper::iban($rawIban);
+		$oldIban = KreaBankFintableMapper::iban($oldRawIban);
+		if ($rawIban !== '' && !$iban) { return false; }
+		if ($oldRawIban !== '' && !$oldIban) { return false; }
+		if ($iban && $oldIban) { return $iban === $oldIban; }
+		$name = kreabankNormalizeText((string) ($line['counterparty_name'] ?? ''));
+		$oldName = kreabankNormalizeText((string) ($historical['counterparty_name'] ?? ''));
+		if (strlen($name) >= 6 && $name === $oldName) { return true; }
+		$tokens = static function ($row) {
+			$text = kreabankNormalizeText(($row['counterparty_name'] ?? '') . ' ' . ($row['description'] ?? '') . ' ' . ($row['native_label'] ?? ''));
+			preg_match_all('/[a-z]{3,}/i', $text, $matches);
+			return array_values(array_diff(array_unique($matches[0]), array('payment', 'transfer', 'pagamento', 'transferencia', 'compra', 'debito', 'credito', 'sepa')));
+		};
+		$left = $tokens($line); $right = $tokens($historical);
+		$shared = count(array_intersect($left, $right));
+		return $shared >= 2 && $shared / max(1, count(array_unique(array_merge($left, $right)))) >= 0.5;
 	}
 
 	/**
@@ -5412,8 +5430,10 @@ class KreaBankService
 		$k = max(1, min((int) $k, count($distances)));
 		$votes = array();
 		$scoreTotal = 0.0;
-		for ($i = 0; $i < $k; $i++) {
+		$cutoff = (float) $distances[$k - 1]['distance'];
+		for ($i = 0; $i < count($distances); $i++) {
 			$row = $distances[$i];
+			if ((float) $row['distance'] > $cutoff + 1.0e-12) { break; }
 			$label = (int) $row['label'];
 			if ($label <= 0) {
 				continue;
@@ -5531,7 +5551,7 @@ class KreaBankService
 	 */
 	protected function learnPatternsFromReconciliation($line, $links)
 	{
-		if (empty($links[0])) {
+		if (count($links) !== 1 || empty($links[0])) {
 			return;
 		}
 		$primary = $links[0];
@@ -5663,7 +5683,7 @@ class KreaBankService
 				continue;
 			}
 			$label = isset($columns[$idx]['label']) ? trim((string) $columns[$idx]['label']) : '';
-			if ($label === '') {
+			if ($label === '' || strlen($label) > 255) {
 				continue;
 			}
 			$newSamples[] = array(
@@ -5684,47 +5704,69 @@ class KreaBankService
 			dol_mkdir($dir);
 		}
 
-		$existing = array();
-		if (is_readable($path)) {
-			$raw = file_get_contents($path);
-			if (is_string($raw) && $raw !== '') {
-				$decoded = $this->decodeJsonArraySafe($raw);
-				if ($decoded !== null) {
-					$existing = $decoded;
+		// Serialize read/merge/replace, while readers see only complete JSON files.
+		$lock = fopen($path . '.lock', 'c');
+		if (!$lock) { return; }
+		if (!chmod($path . '.lock', 0600) || !flock($lock, LOCK_EX)) { fclose($lock); return; }
+		try {
+			$existing = array();
+			if (is_readable($path)) {
+				$raw = file_get_contents($path);
+				if (is_string($raw) && $raw !== '') {
+					$decoded = $this->decodeJsonArraySafe($raw);
+					if ($decoded !== null) {
+						$existing = $decoded;
+					} else {
+						dol_syslog('KreaBank ML template store is invalid; retaining it for review', LOG_WARNING);
+						return;
+					}
+				} else {
+					dol_syslog('KreaBank failed to read ML template sample store: ' . $path, LOG_WARNING);
+					return;
 				}
-			} else {
-				dol_syslog('KreaBank failed to read ML template sample store: ' . $path, LOG_WARNING);
+			} elseif (file_exists($path)) {
+				dol_syslog('KreaBank ML template sample store is not readable: ' . $path, LOG_WARNING);
+				return;
 			}
-		} elseif (file_exists($path)) {
-			dol_syslog('KreaBank ML template sample store is not readable: ' . $path, LOG_WARNING);
-		}
 
-		$dedup = array();
-		$merged = array();
-		foreach (array_merge($existing, $newSamples) as $sample) {
-			if (!is_array($sample)) {
-				continue;
+			$dedup = array();
+			$merged = array();
+			foreach (array_merge($existing, $newSamples) as $sample) {
+				if (!is_array($sample)) {
+					continue;
+				}
+				$field = isset($sample['field']) ? trim((string) $sample['field']) : '';
+				$header = isset($sample['header']) ? trim((string) $sample['header']) : '';
+				if ($field === '' || $header === '') {
+					continue;
+				}
+				$key = $field . '|' . strtolower($header);
+				if (isset($dedup[$key])) {
+					continue;
+				}
+				$dedup[$key] = 1;
+				$merged[] = array('field' => $field, 'header' => $header);
 			}
-			$field = isset($sample['field']) ? trim((string) $sample['field']) : '';
-			$header = isset($sample['header']) ? trim((string) $sample['header']) : '';
-			if ($field === '' || $header === '') {
-				continue;
-			}
-			$key = $field . '|' . strtolower($header);
-			if (isset($dedup[$key])) {
-				continue;
-			}
-			$dedup[$key] = 1;
-			$merged[] = array('field' => $field, 'header' => $header);
-		}
 
-		if (count($merged) > 4000) {
-			$merged = array_slice($merged, count($merged) - 4000);
-		}
+			if (count($merged) > 4000) {
+				$merged = array_slice($merged, count($merged) - 4000);
+			}
 
-		$writeResult = file_put_contents($path, json_encode($merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-		if ($writeResult === false) {
-			dol_syslog('KreaBank failed to write ML template sample store: ' . $path, LOG_WARNING);
+			$payload = json_encode($merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+			if (!is_string($payload)) { return; }
+			$tmp = $path . '.tmp.' . getmypid() . '.' . str_replace('.', '', (string) microtime(true));
+			$handle = fopen($tmp, 'x');
+			if (!$handle) { return; }
+			$private = chmod($tmp, 0600);
+			$written = $private ? fwrite($handle, $payload) : false;
+			fclose($handle);
+			if ($written !== strlen($payload) || !rename($tmp, $path)) {
+				if (is_file($tmp)) { unlink($tmp); }
+				dol_syslog('KreaBank failed to save ML template samples for entity ' . $this->entity, LOG_WARNING);
+			}
+		} finally {
+			flock($lock, LOCK_UN);
+			fclose($lock);
 		}
 	}
 
@@ -5735,7 +5777,7 @@ class KreaBankService
 	 */
 	protected function getMlTemplateStorePath()
 	{
-		if (!defined('DOL_DATA_ROOT') || DOL_DATA_ROOT === '') {
+		if (!defined('DOL_DATA_ROOT') || DOL_DATA_ROOT === '' || $this->entity <= 0 || (int) ($GLOBALS['conf']->entity ?? 0) !== $this->entity) {
 			return '';
 		}
 

@@ -240,7 +240,7 @@ $assertContains($serviceSource, 'protected function resolveExistingNativeBankLin
 $assertContains($serviceSource, 'protected function resolveLinkedPaymentNativeBankLineForReconciliation(', 'service should resolve linked payment fk_bank without creating staged native rows', $errors);
 $assertContains($serviceSource, 'protected function getSupplierMlHashBinCount()', 'service should expose supplier ML hash-bin configuration helper', $errors);
 $assertContains($serviceSource, 'return 64;', 'service should use 64 hashed bins for supplier ML text features', $errors);
-$assertContains($serviceSource, 'file_put_contents($tmpPath, $payloadJson, LOCK_EX)', 'service should write batch ML cache payload to temp file with lock', $errors);
+$assertContains($serviceSource, 'flock($handle, LOCK_EX) ? fwrite($handle, $payloadJson)', 'service should write batch ML cache through the exclusively created private temp handle with lock', $errors);
 $assertContains($serviceSource, 'if (!rename($tmpPath, $path))', 'service should atomically replace batch ML cache file after temp write', $errors);
 $assertContains($serviceSource, "\$nativeLinkedPaymentIds = array(", 'service should track native-linked payment ids for dedupe', $errors);
 $assertContains($serviceSource, '$appendDocuments($this->getOpenNativeBankDocuments(0, $limit, $anchorDate, $intervalDays, $excludeNativeLineId, (int) $bankAccountId));', 'service should search native bank rows without direction filter when staged import direction is unreliable', $errors);

@@ -30,6 +30,12 @@ class KreaBankParser
 	/** @var bool */
 	protected $mlHeaderClassifierReady = false;
 
+	/** @var int|null Company bound to the cached classifier. */
+	protected $mlHeaderClassifierEntity = null;
+
+	/** @var array<string,array<string,bool>> Approved and built-in header labels. */
+	protected $mlHeaderExamples = array();
+
 	/** @var int */
 	protected $mlHeaderVectorSize = 96;
 
@@ -3017,52 +3023,40 @@ class KreaBankParser
 	 */
 	protected function applyMlHeaderMapping($mapping, $headerMap)
 	{
-		if (!$this->isPhpMlAvailable()) {
-			return $mapping;
-		}
-		if (empty($headerMap) || !is_array($headerMap)) {
-			return $mapping;
-		}
-
+		if (!$this->isPhpMlAvailable() || empty($headerMap) || !is_array($headerMap)) { return $mapping; }
 		$classifier = $this->getMlHeaderClassifier();
-		if (!is_object($classifier) || !method_exists($classifier, 'predict')) {
-			return $mapping;
-		}
-
+		if (!$classifier) { return $mapping; }
 		$usedIndexes = array();
-		foreach ($mapping as $field => $idx) {
-			if (is_int($idx) && $idx >= 0) {
-				$usedIndexes[(int) $idx] = true;
-			}
-		}
-
-		$aliases = $this->getFieldAliases();
+		foreach ($mapping as $index) { if (is_int($index) && $index >= 0) { $usedIndexes[$index] = true; } }
+		$proposals = array();
 		foreach ($headerMap as $headerKey => $index) {
 			$index = (int) $index;
-			if (isset($usedIndexes[$index])) {
-				continue;
+			$key = $this->normalizeHeaderKey((string) $headerKey);
+			if (isset($usedIndexes[$index]) || $key === '') { continue; }
+			$known = $this->mlHeaderExamples[$key] ?? array();
+			if (count($known) > 1) { continue; }
+			try { $field = $known ? (string) key($known) : (string) $classifier->predict($this->headerToMlVector($key)); }
+			catch (Throwable $e) { continue; }
+			if (!array_key_exists($field, $mapping) || (int) $mapping[$field] >= 0) { continue; }
+			$confidence = 0.0;
+			$runnerUp = 0.0;
+			foreach ($this->mlHeaderExamples as $example => $labels) {
+				if (count($labels) !== 1) { continue; }
+				$score = $this->estimateMlPredictionConfidence($key, array($example));
+				if (isset($labels[$field])) { $confidence = max($confidence, $score); }
+				else { $runnerUp = max($runnerUp, $score); }
 			}
-			if ($headerKey === '') {
-				continue;
-			}
-
-			$predictedField = (string) $classifier->predict($this->headerToMlVector((string) $headerKey));
-			if ($predictedField === '' || !array_key_exists($predictedField, $mapping)) {
-				continue;
-			}
-			if ((int) $mapping[$predictedField] >= 0) {
-				continue;
-			}
-
-			$confidence = $this->estimateMlPredictionConfidence((string) $headerKey, isset($aliases[$predictedField]) ? (array) $aliases[$predictedField] : array());
-			if ($confidence < 0.58) {
-				continue;
-			}
-
-			$mapping[$predictedField] = $index;
-			$usedIndexes[$index] = true;
+			if (!$known && ($confidence < 0.72 || $confidence - $runnerUp < 0.15)) { continue; }
+			$proposals[$field][] = array('index' => $index, 'confidence' => $confidence);
 		}
-
+		foreach ($proposals as $field => $rows) {
+			usort($rows, static function ($a, $b) { return $b['confidence'] <=> $a['confidence']; });
+			// Two plausible columns for the same field require explicit mapping review.
+			if (isset($rows[1]) && $rows[0]['confidence'] - $rows[1]['confidence'] < 0.15) { continue; }
+			if (isset($usedIndexes[$rows[0]['index']])) { continue; }
+			$mapping[$field] = $rows[0]['index'];
+			$usedIndexes[$rows[0]['index']] = true;
+		}
 		return $mapping;
 	}
 
@@ -3103,7 +3097,8 @@ class KreaBankParser
 			}
 		}
 
-		return $vector;
+		$norm = sqrt(array_sum(array_map(static function ($value) { return $value * $value; }, $vector)));
+		return $norm > 0 ? array_map(static function ($value) use ($norm) { return $value / $norm; }, $vector) : $vector;
 	}
 
 	/**
@@ -3152,61 +3147,35 @@ class KreaBankParser
 	 */
 	protected function getMlHeaderClassifier()
 	{
-		if ($this->mlHeaderClassifierReady) {
-			return $this->mlHeaderClassifier;
-		}
+		$entity = (int) ($GLOBALS['conf']->entity ?? 0);
+		if ($this->mlHeaderClassifierReady && $this->mlHeaderClassifierEntity === $entity) { return $this->mlHeaderClassifier; }
 		$this->mlHeaderClassifierReady = true;
+		$this->mlHeaderClassifierEntity = $entity;
 		$this->mlHeaderClassifier = null;
-
-		if (!$this->isPhpMlAvailable()) {
-			return null;
-		}
-		$knnClass = '\\Phpml\\Classification\\KNearestNeighbors';
-		if (!class_exists($knnClass)) {
-			return null;
-		}
-
+		$this->mlHeaderExamples = array();
+		if (!$this->isPhpMlAvailable()) { return null; }
 		try {
-			$classifier = new $knnClass(5);
 			$aliases = $this->getFieldAliases();
-			$samples = array();
-			$labels = array();
-			foreach ($aliases as $fieldKey => $fieldAliases) {
-				foreach ((array) $fieldAliases as $alias) {
-					$aliasKey = $this->normalizeHeaderKey((string) $alias);
-					if ($aliasKey === '') {
-						continue;
-					}
-					$samples[] = $this->headerToMlVector($aliasKey);
-					$labels[] = (string) $fieldKey;
-				}
+			$examples = $this->loadMlTrainingSamplesFromStore();
+			foreach ($aliases as $field => $values) {
+				foreach ($values as $header) { $examples[] = array('field' => $field, 'header' => $header); }
 			}
-
-			$templateSamples = $this->loadMlTrainingSamplesFromStore();
-			foreach ($templateSamples as $sample) {
-				$fieldKey = !empty($sample['field']) ? (string) $sample['field'] : '';
-				$header = !empty($sample['header']) ? (string) $sample['header'] : '';
-				if ($fieldKey === '' || $header === '' || !array_key_exists($fieldKey, $aliases)) {
-					continue;
-				}
-
-				$headerKey = $this->normalizeHeaderKey($header);
-				if ($headerKey === '') {
-					continue;
-				}
-				$samples[] = $this->headerToMlVector($headerKey);
-				$labels[] = $fieldKey;
+			foreach ($examples as $example) {
+				$field = (string) ($example['field'] ?? '');
+				$key = $this->normalizeHeaderKey((string) ($example['header'] ?? ''));
+				if ($key !== '' && isset($aliases[$field])) { $this->mlHeaderExamples[$key][$field] = true; }
 			}
-			if (count($samples) < 8 || count($samples) !== count($labels)) {
-				return null;
+			$samples = array(); $labels = array();
+			foreach ($this->mlHeaderExamples as $header => $fields) {
+				if (count($fields) !== 1) { continue; }
+				$samples[] = $this->headerToMlVector($header);
+				$labels[] = (string) key($fields);
 			}
-
+			if (count($samples) < 8) { return null; }
+			$classifier = new \Phpml\Classification\KNearestNeighbors(3);
 			$classifier->train($samples, $labels);
 			$this->mlHeaderClassifier = $classifier;
-		} catch (Throwable $e) {
-			$this->mlHeaderClassifier = null;
-		}
-
+		} catch (Throwable $e) { $this->mlHeaderClassifier = null; }
 		return $this->mlHeaderClassifier;
 	}
 
@@ -3224,7 +3193,7 @@ class KreaBankParser
 				continue;
 			}
 
-			$raw = $this->readFileContentSafe($path, 0, 'load_ml_template_samples');
+			$raw = $this->readFileContentSafe($path, 2097152, 'load_ml_template_samples');
 			if (!is_string($raw) || $raw === '') {
 				continue;
 			}
@@ -3239,7 +3208,7 @@ class KreaBankParser
 				}
 				$field = isset($row['field']) ? trim((string) $row['field']) : '';
 				$header = isset($row['header']) ? trim((string) $row['header']) : '';
-				if ($field === '' || $header === '') {
+				if ($field === '' || $header === '' || strlen($header) > 255) {
 					continue;
 				}
 				$samples[] = array('field' => $field, 'header' => $header);
@@ -3253,7 +3222,7 @@ class KreaBankParser
 	}
 
 	/**
-	 * Resolve ML training store paths (entity-specific first).
+	 * Resolve only the current company training store. Legacy shared samples have no ownership proof.
 	 *
 	 * @return array<int,string>
 	 */
@@ -3263,15 +3232,9 @@ class KreaBankParser
 			return array();
 		}
 
-		$entity = 1;
-		if (isset($GLOBALS['conf']) && is_object($GLOBALS['conf']) && isset($GLOBALS['conf']->entity)) {
-			$entity = max(1, (int) $GLOBALS['conf']->entity);
-		}
-
-		return array(
-			rtrim((string) DOL_DATA_ROOT, '/') . '/kreabank/header_templates_entity' . $entity . '.json',
-			rtrim((string) DOL_DATA_ROOT, '/') . '/kreabank/header_templates.json',
-		);
+		$entity = (int) ($GLOBALS['conf']->entity ?? 0);
+		if ($entity <= 0) { return array(); }
+		return array(rtrim((string) DOL_DATA_ROOT, '/') . '/kreabank/header_templates_entity' . $entity . '.json');
 	}
 
 	/**

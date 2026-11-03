@@ -135,6 +135,7 @@ The script includes:
 
 ## Additional documentation
 
+- [Machine learning and validation](doc/MACHINE_LEARNING.md)
 - [List sorting and validation](doc/LISTS.md)
 - Native assistant architecture note (Portuguese): `doc/KREABANK_NATIVE_ASSISTANT.md`
 

@@ -325,12 +325,15 @@ print $formSetup->generateOutput(true);
 
 print '<br><div class="fichecenter">';
 print '<table class="noborder centpercent">';
-print '<tr class="liste_titre"><th colspan="2">Batch ML validation (stratified holdout)</th></tr>';
+print '<tr class="liste_titre"><th colspan="2">Batch ML validation (chronological holdout; duplicate groups excluded)</th></tr>';
 print '<tr><td class="titlefield">Classifier</td><td>' . dol_escape_htmltag((string) $batchMlValidationReport['classifier']) . '</td></tr>';
 print '<tr><td class="titlefield">Sample count</td><td>' . ((int) $batchMlValidationReport['sample_count']) . '</td></tr>';
 print '<tr><td class="titlefield">Train/Test split</td><td>' . ((int) $batchMlValidationReport['train_count']) . ' / ' . ((int) $batchMlValidationReport['test_count']) . '</td></tr>';
 print '<tr><td class="titlefield">Accuracy / Precision / Recall</td><td>' . kreabankPrice((float) $batchMlValidationReport['accuracy_pct']) . '% / ' . kreabankPrice((float) $batchMlValidationReport['precision_pct']) . '% / ' . kreabankPrice((float) $batchMlValidationReport['recall_pct']) . '%</td></tr>';
 print '<tr><td class="titlefield">Confusion matrix (TP/FP/TN/FN)</td><td>' . ((int) $batchMlValidationReport['confusion']['tp']) . ' / ' . ((int) $batchMlValidationReport['confusion']['fp']) . ' / ' . ((int) $batchMlValidationReport['confusion']['tn']) . ' / ' . ((int) $batchMlValidationReport['confusion']['fn']) . '</td></tr>';
+print '<tr><td class="titlefield">F1 / Balanced accuracy / Majority baseline</td><td>' . kreabankPrice($batchMlValidationReport['f1_pct']) . '% / ' . kreabankPrice($batchMlValidationReport['balanced_accuracy_pct']) . '% / ' . kreabankPrice($batchMlValidationReport['baseline_accuracy_pct']) . '%</td></tr>';
+print '<tr><td class="titlefield">Excluded legacy / Invalid samples / Duplicate training rows</td><td>' . ((int) $batchMlValidationReport['legacy_sample_count']) . ' / ' . ((int) $batchMlValidationReport['invalid_sample_count']) . ' / ' . ((int) $batchMlValidationReport['duplicate_train_count']) . '</td></tr>';
+print '<tr><td class="titlefield">Evaluated predictions / Prediction errors</td><td>' . ((int) $batchMlValidationReport['evaluated_count']) . ' / ' . ((int) $batchMlValidationReport['prediction_errors']) . '</td></tr>';
 print '<tr><td class="titlefield">Status</td><td>' . dol_escape_htmltag((string) $batchMlValidationReport['status']) . '</td></tr>';
 print '</table>';
 print '</div>';
