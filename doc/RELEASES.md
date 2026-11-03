@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.1 — 2026-11-03
+
+- Keep Reconcile (pt_PT: Reconciliar) inside the native Banks/Cash left-menu
+  group instead of rendering it outside the group after sorting.
+
 ## 1.19.0 — 2026-11-03
 
 - Redesign reconciliation around a compact searchable queue and a selected-line

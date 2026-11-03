@@ -76,7 +76,8 @@ class ActionsKreaBank extends CommonHookActions
 			}
 			require_once DOL_DOCUMENT_ROOT . '/core/class/menu.class.php';
 			$shortcut = new Menu();
-			$shortcut->add('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile', $langs->trans('KreaBankReconcile'), 1, 1, '', 'bank', 'kreabank_reconcile', (int) ($menuitems[$accountListIndex]['position'] ?? 0) + 1);
+			// Native block closing uses adjacent array keys, so retain the siblings' sort position.
+			$shortcut->add('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile', $langs->trans('KreaBankReconcile'), 1, 1, '', 'bank', 'kreabank_reconcile', (int) ($menuitems[$accountListIndex]['position'] ?? 0));
 			array_splice($menuitems, $insertIndex, 0, $shortcut->liste);
 		}
 		if (!$changed) {

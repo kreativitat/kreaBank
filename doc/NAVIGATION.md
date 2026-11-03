@@ -38,6 +38,8 @@ responsive behavior. Its bank section includes a **Reconcile** shortcut
 (pt_PT: **Reconciliar**) to `reconcile.php` for internal users with both native
 bank and KreaBank read access. The existing `leftblock` hook adds it after the
 account list and its children, without a new menu registration or module restart.
+Retain the native siblings' sort position so the rendered shortcut stays inside
+the **Banks/Cash** block (pt_PT: **Bancos Dinheiro**).
 Only the duplicate native account tab bar is hidden inside
 this workspace. Global ERP navigation remains available. Selected-account pages
 have tabs for details, documents, annual reports, forecasts and statement numbering.
