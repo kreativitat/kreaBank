@@ -52,3 +52,34 @@ history/audit filters and the bulk background flow in a signed-in test session.
 No schema, menu-registration or scheduler migration is required. Deploy the full
 module source, including the new list helper, stylesheet and script. Source
 publication alone does not update production.
+
+## Combined bank statement
+
+`bankstatement.php` uses `print_barre_liste()` for native page size and navigation,
+`print_liste_field_titre()` for sort headers and `Form::showFilterButtons()` for
+search/reset. The initial page size follows the native list setting; requests are
+bounded to 5,000 rows. Native one-based page entry is supported. Search and reset
+return to the first page; sort and pagination links retain normalized filters,
+account context and page size without carrying actions or tokens.
+
+Every data column has a header filter. Operation/value dates have independent,
+inclusive date bounds. Description searches also cover visible payment and file
+bank references; hidden feed provider IDs remain excluded. Text is a literal
+substring, including `%` and `_`. Debit/credit use the positive amounts displayed
+in those columns. Debit, credit and balance accept an exact decimal or one comparison
+(`>=100`, `<0`), using a dot or comma decimal separator and up to eight fractional
+digits. Unknown balances cannot match a numeric filter. Currency, account reference,
+source statement and displayed evidence status can be filtered independently.
+Duplicate warnings are available in the status selector.
+
+`lib/kreabank_statement_list.lib.php` owns normalization and allowlisted SQL filter
+expressions. Count and data queries use the same filters after the full scoped
+balance projection; filtering never changes the feed anchor or recomputes a balance
+from the reduced result. Native/staged row order stays deterministic across pages.
+The read path creates no bank movements, payments, source rows or audits.
+
+```sh
+php test/test_bank_statement_filters.php
+# ONLY the guarded disposable localhost:33317/kreabank_auto_test fixture:
+php test/test_bank_statement_filters_database.php
+```

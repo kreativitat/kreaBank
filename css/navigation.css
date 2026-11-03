@@ -63,3 +63,4 @@ body.kreabank-banking.kb-native-bank #id-right > .fiche > .tabs { display:none !
 
 .kb-bank-statement td { vertical-align:top; }
 .kb-bank-statement .kb-statement-description { min-width:22ch; overflow-wrap:anywhere; }
+.kb-bank-statement .kb-statement-date-filter { display:flex; flex-direction:column; gap:4px; }

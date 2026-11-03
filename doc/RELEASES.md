@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.18.12 — 2026-11-03
+
+- Add combined-statement table header filters and native Dolibarr pagination,
+  including page size, direct page entry, sorting and search/reset controls.
+- Filter the complete owned-account projection before pagination, preserving
+  original and calculated balances and the source evidence status.
+
 ## 1.18.11 — 2026-11-03
 
 - Show the recorded bank account reference in suggested correspondence panels for

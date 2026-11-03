@@ -138,6 +138,12 @@
 
 ## List sorting
 
+- Combined statement header filters and native pagination are owned by
+  `bankstatement.php` and `lib/kreabank_statement_list.lib.php`. Apply identical
+  filters to counts and rows after the complete scoped balance projection; never
+  filter the balance anchor inputs. Preserve filters/account/size across native
+  paging and sorting. See `doc/LISTS.md` and the guarded disposable
+  `test/test_bank_statement_filters_database.php` suite.
 - `lib/kreabank_list.lib.php` owns allowlisted sort state and read-only sort links. Keep `kind` exclusive to the accounts overview; never carry actions, CSRF tokens or selections into sort URLs.
 - Sort SQL/complete scoped arrays before pagination. History and audit have independent sort state and a fixed 5,000-row recent window; changing the window with the page causes duplicates/skips under other orders.
 - Bulk sorting orders compact results, preserves the scan cursor/budget and binds the presentation generation to the sort order. Rehydrate only the visible page; confirmation still recomputes and authenticates the reviewed pair.
