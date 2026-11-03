@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.18.5 — 2026-11-03
+
+- Remove the visible Calculated label beneath statement balances. Keep the
+  calculation and source information in the balance tooltip.
+
 ## 1.18.4 — 2026-11-03
 
 - Show calculated running balances when the feed supplies only a current bank

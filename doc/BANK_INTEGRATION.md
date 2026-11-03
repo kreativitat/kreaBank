@@ -16,8 +16,8 @@ accounts and recognizable legacy imports. Bank balances
 use original supplied line balances where available. For feed lines without one,
 `bankStatementWithBalancesSql()` calculates backwards from the last successfully
 collected bank balance, subtracting all later collected movements with exact SQL
-DECIMAL arithmetic before display sorting or pagination. These values are marked
-**Calculated**; same-day sequencing follows the default statement order, because
+DECIMAL arithmetic before display sorting or pagination. The balance tooltip
+identifies calculated values; same-day sequencing follows the default statement order, because
 the feed supplies no transaction time or bank sequence. No opening balance,
 ledger balance or combined currency total is invented. Incomplete collections,
 conflicts, duplicate/missing links and changed company/workspace/IBAN/currency

@@ -97,8 +97,7 @@ while ($row = $db->fetch_object($result)) {
 	print '</td><td class="right nowrap">' . ((float) $row->amount < 0 ? kreabankPrice(-$row->amount) : '—') . '</td>';
 	print '<td class="right nowrap">' . ((float) $row->amount >= 0 ? kreabankPrice($row->amount) : '—') . '</td>';
 	print '<td class="right nowrap"' . ($row->balance_calculated ? ' title="' . dol_escape_htmltag($langs->trans('KreaBankCalculatedBalanceHelp', $row->balance_updated_at)) . '"' : '') . '>'
-		. ($row->display_balance !== null ? kreabankPrice($row->display_balance) : '—')
-		. ($row->balance_calculated ? '<br><small class="opacitymedium">' . $langs->trans('KreaBankCalculatedBalance') . '</small>' : '') . '</td>';
+		. ($row->display_balance !== null ? kreabankPrice($row->display_balance) : '—') . '</td>';
 	print '<td>' . dol_escape_htmltag($row->currency) . '</td><td>' . dol_escape_htmltag($row->bank_account_ref . ' — ' . $row->bank_account_label) . '</td>';
 	print '<td><a href="' . dol_escape_htmltag(kreabankStatementUrl($row->bank_account_id, $row->statement_ref)) . '">' . dol_escape_htmltag($row->statement_ref) . '</a></td>';
 	print '<td' . ($state === 'KreaBankLinkNeedsReview' ? ' class="warning"' : '') . '>' . $langs->trans($state);
