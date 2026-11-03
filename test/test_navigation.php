@@ -181,8 +181,38 @@ $menus = array(
 	array('url' => '/compta/bank/list.php?leftmenu=bank&mainmenu=bank&search_status=opened', 'titre' => 'BankCash', 'level' => 0),
 );
 $originalMenus = $menus;
+$user->allowed = array('banque.lire');
 checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null) === 1 && $hooks->results[0]['titre'] === 'KreaBankAccountList', 'Native account-list label is renamed through the left-menu hook');
 $originalMenus[0]['titre'] = 'KreaBankAccountList';
 checkNavigation($menus === $originalMenus && $hooks->results === $menus, 'Menu URLs, permissions, ordering and unrelated labels remain intact');
 checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'products'), $menus, $action, null) === 0 && $hooks->results === array(), 'Unrelated left menus are untouched');
+$user->allowed = array('banque.lire', 'kreabank.reconciliation.read');
+$bankMenus = array(
+	array('url' => '/compta/bank/list.php', 'titre' => 'BankCash', 'level' => 0),
+	array('url' => '/compta/bank/list.php?leftmenu=bank', 'titre' => 'List', 'level' => 1, 'position' => 100),
+	array('url' => '/compta/bank/card.php?id=45', 'titre' => 'Account', 'level' => 2),
+	array('url' => '/compta/bank/transfer.php', 'titre' => 'Transfer', 'level' => 1),
+);
+$menus = $bankMenus;
+$hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null);
+checkNavigation(count($menus) === 5 && $menus[3]['titre'] === 'KreaBankReconcile' && $menus[3]['level'] === 1 && $menus[3]['enabled'] === 1, 'Workspace readers get a reconciliation shortcut inside the native bank section');
+checkNavigation($menus[2] === $bankMenus[2] && $menus[4] === $bankMenus[3], 'Account children and native transfer navigation retain their hierarchy');
+checkNavigation($menus[3]['url'] === '/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile' && $menus[3]['target'] === '', 'Shortcut opens the requested local workspace without stale account or action parameters');
+$hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null);
+checkNavigation(count($menus) === 5, 'Repeated menu hooks never duplicate the reconciliation shortcut');
+foreach (array(array('banque.lire'), array('kreabank.reconciliation.read'), array()) as $rights) {
+	$user->allowed = $rights;
+	$menus = $bankMenus;
+	$hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null);
+	checkNavigation(count($menus) === 4, 'Reconciliation shortcut requires both native bank and workspace read rights');
+}
+$user->allowed = array('banque.lire', 'kreabank.reconciliation.read');
+$user->socid = 9;
+$menus = $bankMenus;
+$hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null);
+checkNavigation(count($menus) === 4, 'External users do not receive the reconciliation shortcut');
+$user->socid = 0;
+$menus = array($bankMenus[3]);
+$hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null);
+checkNavigation($menus === array($bankMenus[3]), 'Missing bank account section never creates an orphaned shortcut');
 print "OK: $checks navigation and account-scope checks\n";

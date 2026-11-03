@@ -45,7 +45,7 @@ class ActionsKreaBank extends CommonHookActions
 		return 0;
 	}
 
-	/** Rename the native account-list entry without changing its URL or permissions. */
+	/** Keep account navigation and the reconciliation shortcut in the native bank menu. */
 	public function menuLeftMenuItems($parameters, &$menuitems, &$action, $hookmanager)
 	{
 		global $langs, $user;
@@ -55,13 +55,30 @@ class ActionsKreaBank extends CommonHookActions
 		}
 		$langs->load('kreabank@kreabank');
 		$changed = false;
-		foreach ($menuitems as &$item) {
+		$accountListIndex = null;
+		$hasReconcile = false;
+		foreach ($menuitems as $index => &$item) {
+			if (parse_url($item['url'] ?? '', PHP_URL_PATH) === '/custom/kreabank/reconcile.php') {
+				$hasReconcile = true;
+			}
 			if ((int) ($item['level'] ?? 0) === 1 && parse_url($item['url'] ?? '', PHP_URL_PATH) === '/compta/bank/list.php') {
 				$item['titre'] = $langs->trans('KreaBankAccountList');
+				$accountListIndex = $index;
 				$changed = true;
 			}
 		}
 		unset($item);
+		if ($accountListIndex !== null && !$hasReconcile && empty($user->socid) && $user->hasRight('kreabank', 'reconciliation', 'read')) {
+			// Insert after account children so the shortcut cannot become their parent.
+			$insertIndex = $accountListIndex + 1;
+			while (isset($menuitems[$insertIndex]) && (int) ($menuitems[$insertIndex]['level'] ?? 0) > 1) {
+				$insertIndex++;
+			}
+			require_once DOL_DOCUMENT_ROOT . '/core/class/menu.class.php';
+			$shortcut = new Menu();
+			$shortcut->add('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile', $langs->trans('KreaBankReconcile'), 1, 1, '', 'bank', 'kreabank_reconcile', (int) ($menuitems[$accountListIndex]['position'] ?? 0) + 1);
+			array_splice($menuitems, $insertIndex, 0, $shortcut->liste);
+		}
 		if (!$changed) {
 			return 0;
 		}

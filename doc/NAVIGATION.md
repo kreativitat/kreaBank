@@ -34,7 +34,11 @@ account-list GETs route here for KreaBank readers. Readers without module rights
 retain the native banking interface.
 
 The native Dolibarr left menu remains visible with its standard layout and
-responsive behavior. Only the duplicate native account tab bar is hidden inside
+responsive behavior. Its bank section includes a **Reconcile** shortcut
+(pt_PT: **Reconciliar**) to `reconcile.php` for internal users with both native
+bank and KreaBank read access. The existing `leftblock` hook adds it after the
+account list and its children, without a new menu registration or module restart.
+Only the duplicate native account tab bar is hidden inside
 this workspace. Global ERP navigation remains available. Selected-account pages
 have tabs for details, documents, annual reports, forecasts and statement numbering.
 These tools do not add left-menu sections or operational tabs. Transfers and

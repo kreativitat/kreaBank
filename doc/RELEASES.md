@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.18.17 — 2026-11-03
+
+- Add the Reconcile shortcut (pt_PT: Reconciliar) to the native bank left menu
+  for internal bank and workspace readers, preserving account children and links.
+
 ## 1.18.16 — 2026-11-03
 
 - Default the account overview to CO_ accounts, then other bank-feed-connected
