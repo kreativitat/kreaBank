@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.18.3 — 2026-11-03
+
+- Open all imported statements when arriving from an account without imports,
+  keeping the statement filter and displayed account scope consistent.
+
 ## 1.18.2 — 2026-11-03
 
 - Limit statement-view account filters to current-company accounts with imported

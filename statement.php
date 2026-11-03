@@ -59,6 +59,10 @@ if ($reference !== '' && !$navigationAccount) {
 $page = max(0, GETPOSTINT('page'));
 $limit = 50;
 $report = new KreaBankIntegration($db, $conf->entity);
+if ($reference === '' && $navigationAccountId > 0 && $db->num_rows($report->statementAccounts($navigationAccountId)) === 0) {
+	header('Location: ' . kreabankStatementUrl());
+	exit;
+}
 $statement = $reference !== '' ? $report->statement($navigationAccountId, $reference) : null;
 if ($reference !== '' && !$statement) {
 	http_response_code(404);

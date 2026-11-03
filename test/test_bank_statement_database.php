@@ -72,4 +72,5 @@ checkAuto(in_array(101, $accounts, true) && in_array(102, $accounts, true), 'Sta
 checkAuto(in_array(104, $accounts, true), 'Statement account selector includes a closed account with only legacy imports');
 checkAuto(!in_array(105, $accounts, true) && !in_array(106, $accounts, true), 'Empty and ordinary-ledger-only accounts are absent from the statement selector');
 checkAuto(!in_array(202, $accounts, true), 'Statement selector never exposes another company account');
+checkAuto($db->num_rows($report->statementAccounts(101)) === 1 && $db->num_rows($report->statementAccounts(105)) === 0 && $db->num_rows($report->statementAccounts(202)) === 0, 'Selected statement account validation distinguishes owned imports, empty accounts and foreign accounts');
 print "OK: $checks combined bank statement database checks\n";

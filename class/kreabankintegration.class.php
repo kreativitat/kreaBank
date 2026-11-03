@@ -48,11 +48,12 @@ class KreaBankIntegration
 	}
 
 	/** Only owned accounts with staged statements or recognizable legacy imports. */
-	public function statementAccounts()
+	public function statementAccounts($accountId = 0)
 	{
 		$p = $this->db->prefix();
 		$e = $this->entity;
-		return $this->query("SELECT ba.rowid,ba.ref,ba.label FROM {$p}bank_account ba WHERE ba.entity=$e AND ("
+		$account = (int) $accountId > 0 ? ' AND ba.rowid=' . (int) $accountId : '';
+		return $this->query("SELECT ba.rowid,ba.ref,ba.label FROM {$p}bank_account ba WHERE ba.entity=$e$account AND ("
 			. " EXISTS (SELECT 1 FROM {$p}kreabank_statement s WHERE s.entity=$e AND s.bank_account_id=ba.rowid)"
 			. " OR EXISTS (SELECT 1 FROM {$p}bank b LEFT JOIN {$p}kreabank_bankmeta m ON m.fk_bank_line=b.rowid AND m.entity=$e"
 			. " WHERE b.fk_account=ba.rowid AND COALESCE(b.num_releve,'')<>''"

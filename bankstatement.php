@@ -54,6 +54,10 @@ if (!isModEnabled('kreabank') || !isModEnabled('banque') || !empty($user->socid)
 $accountId = max(0, GETPOSTINT('account_context'));
 $account = kreabankNavigationAccount($accountId);
 $report = new KreaBankIntegration($db, $conf->entity);
+if ($accountId > 0 && $db->num_rows($report->statementAccounts($accountId)) === 0) {
+	header('Location: ' . kreabankWorkspaceUrl('bankstatement'));
+	exit;
+}
 $columns = array('operation_date' => 'KreaBankOperationDate', 'value_date' => 'KreaBankStatementValueDate',
 	'description' => 'KreaBankDescription', 'debit' => 'KreaBankHistorySummaryDebits', 'credit' => 'KreaBankHistorySummaryCredits',
 	'running_balance' => 'KreaBankStatementBalance', 'currency' => 'KreaBankCurrency', 'bank_account_ref' => 'BankAccount',
