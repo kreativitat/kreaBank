@@ -601,3 +601,24 @@ KreaBankWorkspaceBatchExact=Sugestão de lote: %s de %s movimentos selecionados,
 KreaBankWorkspaceBatchPartial=Sugestão aproximada de lote: %s movimentos, total de %s. Diferença por alocar: %s.
 KreaBankWorkspaceRestrictedCreation=Esta conta restrita só aceita transferências com a conta principal configurada. Associe um movimento de transferência existente.
 KreaBankWorkspaceCreationUnavailable=A criação de registos está indisponível. Reveja a configuração da conta.
+
+# Matched and bulk review workspace
+KreaBankReviewExistingRecords=Associar a registos existentes
+KreaBankReviewSingleHelp=Compare a linha de extrato com o registo proposto e confirme a reconciliação desta correspondência.
+KreaBankReviewBulkHelp=Reveja cada par, selecione as correspondências a reconciliar e aprove o conjunto selecionado.
+KreaBankReviewPending=Rever linhas pendentes
+KreaBankReviewNoMatchHelp=Existem linhas de extrato pendentes sem uma correspondência elegível. Abra a área de criação para rever uma linha e escolher o registo a criar.
+KreaBankReviewExistingBank=Movimento bancário existente
+KreaBankReviewExistingPayment=Pagamento existente
+KreaBankReviewExistingInvoice=Fatura existente
+KreaBankReviewConsequenceBank=Reconcilia esta linha de extrato com o movimento bancário existente. Não cria uma nova fatura nem um novo pagamento.
+KreaBankReviewConsequencePayment=Associa o pagamento existente a um movimento bancário e reconcilia esta linha de extrato. Não cria um novo pagamento.
+KreaBankReviewConsequenceInvoice=Regista um pagamento desta fatura existente e reconcilia a linha de extrato. Não cria uma nova fatura.
+KreaBankReviewAllocation=Valor a alocar
+KreaBankReviewStrongEvidence=Correspondência com indícios fortes
+KreaBankReviewSelectedCount=Correspondências selecionadas: %s
+KreaBankReviewConfirmSelected=Reconciliar as correspondências selecionadas
+KreaBankReviewSelectFirst=Selecione pelo menos uma correspondência para reconciliar.
+KreaBankReviewReady=Correspondências selecionadas revistas. Pode confirmar a reconciliação.
+KreaBankReviewSingleApproval=O botão Reconciliar esta correspondência confirma a sua aprovação do par apresentado acima.
+KreaBankReviewStatementLine=Linha de extrato

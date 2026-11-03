@@ -34,6 +34,7 @@
             toggle.checked = checked === boxes.length;
             toggle.indeterminate = checked > 0 && checked < boxes.length;
         }
+        if (window.kreabankReviewRefresh) window.kreabankReviewRefresh();
     }
     results.addEventListener('change', function (event) {
         if (event.target.id === 'krea_bulk_match_all') {
@@ -44,6 +45,7 @@
         } else if (event.target.matches('.krea-bulk-match-line')) {
             selections.set(event.target.value, event.target.checked);
         } else if (event.target.matches('[name="review_confirmed"]')) {
+            updateToggle();
             pause();
             return;
         } else return;
@@ -53,6 +55,7 @@
         pause();
     });
     results.addEventListener('submit', function (event) {
+        if (event.defaultPrevented) return;
         pause();
         if (submitting) {
             event.preventDefault();

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.19.3 — 2026-11-03
+
+- Align individual matched and bulk review with the reconciliation workspace:
+  separate statement and existing-record summaries, allocation differences,
+  explicit payment consequences and expandable evidence.
+- Show live bulk selection counts and exact per-currency totals; retain signed
+  manual approval, stable scanning and native navigation. Empty match results
+  open the permitted creation workflow through the selected account context.
+- Add synthetic view and interaction coverage. No schema or scheduler changes.
+
 ## 1.19.2 — 2026-11-03
 
 - Open record creation when a selected statement line has no existing candidates

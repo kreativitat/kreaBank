@@ -19,7 +19,7 @@ function dol_print_date($timestamp, $format = '') { return date('d/m/Y', $timest
 function kreabankStatusLabel($status, $langs) { return $langs->trans('KreaBankStatusPending'); }
 function kreabankNavigationHiddenFields($id) { return '<input type="hidden" name="account_context" value="' . (int) $id . '">'; }
 function kreabankWorkspaceUrl($page, $id = 0) { return '?view=' . $page . '&account_context=' . (int) $id; }
-function GETPOST($key, $type = '') { return ''; }
+function GETPOST($key, $type = '') { return $GLOBALS['fixtureRequest'][$key] ?? ''; }
 function kreabankPrintWorkspaceNavigation($page, $account) {
 	global $langs;
 	print '<header class="kb-header"><div class="kb-brand"><strong>KreaBank</strong><span class="kb-company">Synthetic company · UI fixture</span></div><nav class="kb-primary" aria-label="Banking">';
@@ -68,6 +68,7 @@ class KreaBankAccountPairs {
 function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = array()) {
 	global $langs, $fixtureCase;
 	$fixtureCase = $case;
+	$GLOBALS['fixtureRequest'] = array('workflow'=>$options['workflow'] ?? '');
 	$langs = new WorkspaceFixtureLangs($locale);
 	$conf = (object) array('entity'=>7);
 	$db = new class { public function close() {} };
@@ -157,6 +158,10 @@ foreach (array(
 	array('locked', array(), 'match'),
 	array('safe', array(), 'match'),
 	array('error', array('search'=>'RETAINED-SEARCH'), 'create'),
+	array('debit', array('workflow'=>'create'), 'create'),
+	array('noentries', array('workflow'=>'match'), 'match'),
+	array('readonly', array('workflow'=>'create'), 'match'),
+	array('restricted', array('workflow'=>'create'), 'match'),
 ) as $scenario) {
 	list($case, $options, $expected) = $scenario;
 	$html = renderWorkspaceFixture($case, 'pt_PT', $options);

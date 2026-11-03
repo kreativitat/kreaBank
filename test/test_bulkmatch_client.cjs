@@ -20,6 +20,7 @@ function harness(overrides = {}) {
     const toggle = {};
     const approval = {checked: false, matches: selector => selector === '[name="review_confirmed"]'};
     const submit = {disabled: false};
+    let reviewRefreshes = 0;
     let boxes = [{value: '1', checked: false, matches: selector => selector === '.krea-bulk-match-line'}];
     let html = 'original';
     let replacements = 0;
@@ -38,6 +39,7 @@ function harness(overrides = {}) {
     let reloads = 0;
     const redirects = [];
     const window = {location: {href: 'https://erp.example.test/custom/kreabank/bulkmatch.php', origin: 'https://erp.example.test', reload() { reloads++; }, assign(url) { redirects.push(url); }},
+        kreabankReviewRefresh() { reviewRefreshes++; },
         setTimeout(fn) { const id = Symbol(); timers.set(id, fn); return id; }, clearTimeout(id) { timers.delete(id); },
         addEventListener(name, fn) { windowEvents[name] = fn; }};
     const elements = {'krea-bulk-scan-config': {textContent: JSON.stringify(config)}, 'krea-bulk-results': results, 'krea-bulk-progress': progress,
@@ -45,7 +47,7 @@ function harness(overrides = {}) {
     const fetch = (url, options) => new Promise(resolve => calls.push({url, options, resolve}));
     vm.runInNewContext(source, {document: {getElementById: id => elements[id]}, window, URL, URLSearchParams, AbortController, fetch});
     return {calls, timers, events, listeners, windowEvents, results, status, resume, approval, submit,
-        redirects, progress, replacements: () => replacements, boxes: () => boxes, reloads: () => reloads,
+        redirects, progress, reviewRefreshes: () => reviewRefreshes, replacements: () => replacements, boxes: () => boxes, reloads: () => reloads,
         respond(index, data, ok = true, status = 200) { calls[index].resolve({ok, status, json: async () => data}); },
         runTimer() { const [id, fn] = timers.entries().next().value; timers.delete(id); fn(); }};
 }
@@ -90,6 +92,9 @@ function harness(overrides = {}) {
     reviewed.boxes()[0].checked = true;
     reviewed.events.change({target: reviewed.boxes()[0]});
     check(!reviewed.approval.checked, 'Changing a selection requires approving the new selected set');
+    check(reviewed.reviewRefreshes() >= 3, 'Initial selection, approval and changes refresh the visible selection summary');
+    reviewed.events.submit({defaultPrevented: true});
+    check(!reviewed.submit.disabled, 'A presentation gate cancellation must not mark the form submitted or block a later valid approval');
     reviewed.approval.checked = true;
     reviewed.events.submit({preventDefault() { throw new Error('First reviewed submit must proceed'); }});
     check(reviewed.submit.disabled && reviewed.calls[0].options.signal.aborted, 'Submitting disables the button and stops background work');

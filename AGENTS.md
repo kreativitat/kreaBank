@@ -87,6 +87,10 @@
 
 ## Bulk review performance
 
+- `lib/kreabank_review_view.lib.php` renders prepared pairs only; it never loads
+  candidates or executes records. Deploy `css/review-workspace.css` and
+  `js/review-workspace.js` with the shared review controller and scan client.
+  `test/test_review_workspace.php` and its Node counterpart use synthetic data.
 - Keep progress separate from review presentation; unchanged results must preserve
   focus and expanded details. Individual matched review waits for stable sorted
   results before displaying a pair. Payment lookup indexes are explicit CLI-only

@@ -1553,7 +1553,8 @@ if ($selectedLine) {
 }
 $canReconcile = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite);
 // Keep explicit searches in matching; an empty initial candidate set opens permitted creation.
-$initialWorkflow = ($quickEntryFailed || ($selectedLine && empty($documents) && $canReconcile && $canCreate && $openDocumentsSearch === '' && !$forceBatchDetect)) ? 'create' : 'match';
+$requestedWorkflow = GETPOST('workflow', 'aZ09');
+$initialWorkflow = ($quickEntryFailed || ($selectedLine && $canReconcile && $canCreate && ($requestedWorkflow === 'create' || ($requestedWorkflow !== 'match' && empty($documents) && $openDocumentsSearch === '' && !$forceBatchDetect)))) ? 'create' : 'match';
 print '<div class="kb-recon" data-initial-workflow="' . $initialWorkflow . '">';
 print '<aside class="kb-queue" aria-labelledby="kb-queue-heading"><details class="kb-queue-disclosure" open>';
 print '<summary class="kb-queue-heading"><h2 id="kb-queue-heading">' . $langs->trans('KreaBankWorkspacePending') . '</h2><span class="kb-count">' . ((int) $pendingLinesTotal) . '</span></summary>';

@@ -69,6 +69,7 @@ try {
 	$serviceSource = $readFile($serviceFile);
 	$nativeSource = $readFile($nativeFile);
 	$bulkSource = $readFile($bulkFile);
+	$reviewViewSource = $readFile($rootDir . '/lib/kreabank_review_view.lib.php');
 	$bulkScanSource = $readFile($rootDir.'/lib/kreabank_bulk.lib.php');
 	$reconcileSource = $readFile($reconcileFile);
 	$pendingSource = $readFile($pendingFile);
@@ -362,9 +363,9 @@ if (strpos($bulkSource, "'is_bulk_safe' => (\$matchScore >= \$bulkMatchMinScore)
 	$errors[] = 'bulkmatch should not classify amount-and-date-only suggestions as safe by score alone';
 }
 $assertContains($bulkSource, 'reload_count', 'bulkmatch should track bounded auto-refresh attempts in scan state', $errors);
-$assertContains($bulkSource, '$formatDisplayDate = static function ($value)', 'bulkmatch should centralize guarded date rendering helper', $errors);
-$assertContains($bulkSource, 'if ($ts === false || $ts <= 0)', 'bulkmatch should guard strtotime failures before rendering dates', $errors);
-$assertContains($bulkSource, "isModEnabled('degema')", 'bulkmatch should guard external degema link rendering by module availability', $errors);
+$assertContains($reviewViewSource, '$formatDisplayDate = static function ($value)', 'bulkmatch should centralize guarded date rendering helper', $errors);
+$assertContains($reviewViewSource, 'if ($ts === false || $ts <= 0)', 'bulkmatch should guard strtotime failures before rendering dates', $errors);
+$assertContains($reviewViewSource, "isModEnabled('degema')", 'bulkmatch should guard external degema link rendering by module availability', $errors);
 $assertContains($bulkSource, 'fingerprint', 'bulkmatch should track pending queue fingerprint for cache invalidation', $errors);
 $assertContains($parserSource, 'readFileContentSafe(', 'parser should use safe file reads with diagnostics', $errors);
 $callHelperBody = $extractFunctionBody($parserSource, 'callHelper');

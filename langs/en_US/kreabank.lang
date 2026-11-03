@@ -602,3 +602,24 @@ KreaBankWorkspaceBatchExact=Batch suggestion: %s of %s entries selected, total %
 KreaBankWorkspaceBatchPartial=Approximate batch suggestion: %s entries, total %s. Remaining difference: %s.
 KreaBankWorkspaceRestrictedCreation=This restricted account accepts only transfers with its configured main account. Match an existing transfer entry.
 KreaBankWorkspaceCreationUnavailable=Record creation is unavailable. Review the account configuration.
+
+# Matched and bulk review workspace
+KreaBankReviewExistingRecords=Match existing records
+KreaBankReviewSingleHelp=Compare the statement line with its proposed record, then explicitly reconcile this match.
+KreaBankReviewBulkHelp=Review each pair, select the matches to reconcile and approve the selected set.
+KreaBankReviewPending=Review pending lines
+KreaBankReviewNoMatchHelp=There are pending statement lines without an eligible match. Open the creation workspace to review a line and choose the record to create.
+KreaBankReviewExistingBank=Existing bank movement
+KreaBankReviewExistingPayment=Existing payment
+KreaBankReviewExistingInvoice=Existing invoice
+KreaBankReviewConsequenceBank=Reconciles this statement line with the existing bank movement. No new invoice or payment is created.
+KreaBankReviewConsequencePayment=Links the existing payment to a bank movement and reconciles this statement line. No new payment is created.
+KreaBankReviewConsequenceInvoice=Records a payment against this existing invoice and reconciles the statement line. No new invoice is created.
+KreaBankReviewAllocation=Amount to allocate
+KreaBankReviewStrongEvidence=Strong matching evidence
+KreaBankReviewSelectedCount=Selected matches: %s
+KreaBankReviewConfirmSelected=Reconcile selected matches
+KreaBankReviewSelectFirst=Select at least one match to reconcile.
+KreaBankReviewReady=Selected matches reviewed. Ready to reconcile.
+KreaBankReviewSingleApproval=Reconcile this match is your explicit approval of the pair shown above.
+KreaBankReviewStatementLine=Statement line

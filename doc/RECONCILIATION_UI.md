@@ -15,6 +15,8 @@ When the initial candidate set is empty, the workspace opens **Create a new entr
 and reconcile** if creation is permitted. Existing candidates (including locked
 evidence), an explicit entry search or batch search keep matching visible.
 Users can always switch workflows; opening creation never submits a record.
+Read-only links from matched/bulk review may explicitly request `workflow=create`
+or `workflow=match`. Creation still requires the existing write/account checks.
 
 **Match an existing entry** offers existing native bank movements using the
 existing candidate loader, search, batch detection and shared safe preselection.

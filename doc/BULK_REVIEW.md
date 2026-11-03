@@ -1,5 +1,24 @@
 # Responsive bulk review
 
+The individual and bulk pages share the reconciliation workspace's visual layout.
+Each pair separates the signed statement-line description, account, date and amount
+from the existing target record. Allocation and remaining difference are visible;
+matching evidence and original references expand without replacing the pair.
+The target explains whether confirmation links an existing movement/payment or
+records a payment against an existing invoice. It never implies a new invoice.
+
+Completed scans without eligible matches offer **Create a new entry and reconcile**
+in the account-scoped selected-line workspace. This is a read-only navigation link;
+`workflow=create` requests presentation only and cannot bypass permissions or account
+restrictions. Loading and truly empty queues offer no financial action. Other
+pending lines remain accessible through the account-scoped workspace navigation.
+
+Bulk selections show a live count and exact, separately formatted currency totals.
+Approval stays separate from selection, and changing the selection clears approval.
+No currencies are combined. Individual review still uses one explicit approval
+button and no checkboxes. Without JavaScript, native required approval and all
+server checks remain authoritative.
+
 Bulk review opens without computing suggestions. Authenticated, CSRF-protected
 background POST requests use the existing service and matcher to advance the scan.
 Each request checks its configured time budget between individual lines, including
@@ -75,6 +94,8 @@ php test/test_bulk_scan.php
 php test/test_bulk_review.php
 php test/test_matched_review.php
 node test/test_bulkmatch_client.cjs
+php test/test_review_workspace.php
+node test/test_review_workspace.cjs
 php test/test_reconciliation_guards.php
 php test/test_navigation.php
 # ONLY the disposable localhost:33317/kreabank_auto_test fixture:
@@ -89,6 +110,20 @@ Deploy changed source and translations together. No schema migration, module
 reactivation, scheduler change or worker restart is needed. Existing open bulk forms
 must be refreshed before confirming. Back up the changed files and restore those
 exact preimages for rollback; do not restore a database or replay a confirmation.
+
+Presentation lives in `lib/kreabank_review_view.lib.php`,
+`css/review-workspace.css` and `js/review-workspace.js`. Deploy these with
+`bulkmatch.php`, `js/bulkmatch.js`, both translations and the selected-line
+`reconcile.php` workflow-link support. Assets use modification-time cache keys.
+The scan client owns selection changes and refreshes the display after updating
+selection/approval; unchanged scan presentations still retain focus and details.
+
+For browser checks, `php test/test_matched_review.php --html single ready` (or
+`bulk`, with `invoice`, `unmatched`, `empty`, `loading`, `readonly`) emits the actual
+controller/view with synthetic dependencies. Serve it as static HTML with module
+assets exposed under `/custom/kreabank/`. Submissions are intercepted and no ERP
+endpoint exists behind this fixture. Never submit financial actions on production
+as a UI test.
 
 ## Individual matched review
 

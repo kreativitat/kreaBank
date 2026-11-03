@@ -50,6 +50,7 @@ if (!$res) {
 
 require_once __DIR__ . '/lib/kreabank.lib.php';
 require_once __DIR__ . '/lib/kreabank_bulk.lib.php';
+require_once __DIR__ . '/lib/kreabank_review_view.lib.php';
 require_once __DIR__ . '/class/KreaBankService.class.php';
 
 $langs->loadLangs(array('errors', 'companies', 'kreabank@kreabank'));
@@ -787,44 +788,18 @@ if (!$isScanRequest) {
 	kreabankPrintWorkspaceNavigation($reviewPage, $navigationAccount);
 	print load_fiche_titre($langs->trans($singleReview ? $reviewTitle : 'KreaBankBulkMatchTitle'), '', 'title_setup');
 
-	print '<style>';
-	print '.krea-bulk-score{display:inline-block;padding:2px 6px;border-radius:10px;font-size:11px;font-weight:700;background:#eef6ff;color:#1f4e79;border:1px solid #c3d9ef}';
-	print '.krea-bulk-summary{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px 0}';
-	print '.krea-bulk-summary .badge{font-size:12px}';
-	print '#krea-bulk-scan-resume[hidden],#krea-bulk-scan-status[hidden]{display:none}';
-	print '.krea-bulk-progress{margin:0 0 12px 0;padding:10px 12px;border:1px solid #d8e4ef;background:#f5f9fc;border-radius:8px}';
-	print '.krea-bulk-progress-bar{height:8px;background:#dbe6f2;border-radius:999px;overflow:hidden;margin:6px 0 0 0}';
-	print '.krea-bulk-progress-bar > span{display:block;height:100%;background:#2f6f9f}';
-	print '.krea-bulk-warning{margin:0 0 12px 0;padding:10px 12px;border:1px solid #f0d7a5;background:#fff8e8;border-radius:8px;color:#664d03}';
-	print '.krea-bulk-actions{display:flex;justify-content:flex-end;margin-top:12px}';
-	print '.krea-bulk-select-all{margin:0 0 8px 0;display:flex;align-items:center;gap:6px}';
-	print '.krea-bulk-list{display:flex;flex-direction:column;gap:10px}';
-	print '.krea-bulk-row{display:flex;gap:10px;align-items:stretch;border:1px solid #d8e1ea;border-radius:8px;background:#fff;padding:10px}';
-	print '.krea-bulk-row-check{display:flex;align-items:flex-start;padding-top:6px}';
-	print '.krea-bulk-row-panels{flex:1;display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,1fr) minmax(160px,.5fr);gap:10px}';
-	print '.krea-bulk-panel{width:100%;border:1px solid #dbe4ec;border-radius:6px;overflow:hidden;background:#fbfdff;border-collapse:collapse}';
-	print '.krea-bulk-panel th{padding:6px 8px;background:#f2f6fa;color:#2b4a63;font-size:11px;text-transform:uppercase;letter-spacing:.2px;text-align:left}';
-	print '.krea-bulk-panel td{padding:6px 8px;border-top:1px solid #e7edf3;vertical-align:top}';
-	print '.krea-bulk-panel .krea-label{color:#6f8090;white-space:nowrap;width:95px}';
-	print '.krea-dir-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;line-height:1.35;margin-left:6px;vertical-align:middle}';
-	print '.krea-dir-credit{background:#e8f7ef;color:#1e7f3f;border:1px solid #bfe6ce}';
-	print '.krea-dir-debit{background:#fdeeee;color:#a02f2f;border:1px solid #f2c1c1}';
-	print '.krea-payment-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;line-height:1.35;margin-left:6px;vertical-align:middle;background:#eef3ff;color:#2f4aa0;border:1px solid #c8d4ff;text-decoration:none}';
-	print '.krea-payment-badge:hover{text-decoration:none;filter:brightness(.98)}';
-	print '.krea-bulk-low-score{display:inline-block;padding:2px 6px;border-radius:10px;font-size:11px;font-weight:700;background:#fff3cd;color:#7a5b00;border:1px solid #f2d890;margin-left:6px}';
-	print '@media (max-width: 1200px){.krea-bulk-row-panels{grid-template-columns:1fr}}';
-	print '</style>';
-
-
+	print '<link rel="stylesheet" href="' . dol_buildpath('/custom/kreabank/css/review-workspace.css', 1) . '?v=' . filemtime(__DIR__ . '/css/review-workspace.css') . '">';
+	print '<div class="kb-review" data-review-mode="' . ($singleReview ? 'single' : 'bulk') . '">';
+	print '<div class="kb-review-heading"><div><h2>' . $langs->trans('KreaBankReviewExistingRecords') . '</h2><p>' . $langs->trans($singleReview ? 'KreaBankReviewSingleHelp' : 'KreaBankReviewBulkHelp') . '</p></div><a class="kb-review-secondary" href="' . dol_escape_htmltag(kreabankWorkspaceUrl('reconcile', $navigationAccountId)) . '">' . $langs->trans('KreaBankReviewPending') . '</a></div>';
 	print '<div id="krea-bulk-progress">';
 } else {
 	ob_start();
 }
 
 print '<div class="krea-bulk-summary">';
-print '<span class="badge badge-status1">' . $langs->trans('KreaBankPendingCount') . ': ' . ((int) $pendingTotal) . '</span>';
-print '<span class="badge badge-status4">' . $langs->trans($singleReview ? 'KreaBankBulkMatchSuggested' : 'KreaBankBulkReviewResults') . ': ' . ((int) $matchedCount) . '</span>';
-if (!$singleReview) print '<span class="badge badge-status2">' . $langs->trans('KreaBankBulkMatchPreselected') . ': ' . ((int) $preselectedCount) . '</span>';
+print '<span>' . $langs->trans('KreaBankPendingCount') . ' <strong>' . ((int) $pendingTotal) . '</strong></span>';
+print '<span>' . $langs->trans($singleReview ? 'KreaBankBulkMatchSuggested' : 'KreaBankBulkReviewResults') . ' <strong>' . ((int) $matchedCount) . '</strong></span>';
+if (!$singleReview) print '<span>' . $langs->trans('KreaBankBulkMatchPreselected') . ' <strong>' . ((int) $preselectedCount) . '</strong></span>';
 print '</div>';
 if ($scanInProgress) {
 	print '<div class="krea-bulk-progress">';
@@ -866,176 +841,52 @@ if ($singleReview) {
 }
 print '</form>';
 
+$canReviewWrite = $user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite;
 if (empty($rows)) {
-	print '<div class="opacitymedium">' . $langs->trans($scanInProgress ? 'KreaBankBulkMatchLoading' : 'KreaBankBulkMatchNoSuggestions') . '</div>';
+	print '<section class="kb-review-empty" aria-labelledby="kb-review-empty-title"><h2 id="kb-review-empty-title">' . $langs->trans($scanInProgress ? 'KreaBankBulkMatchLoading' : ($pendingTotal > 0 ? 'KreaBankBulkMatchNoSuggestions' : 'KreaBankNoStatementLines')) . '</h2>';
+	if (!$scanInProgress && $pendingTotal > 0) {
+		print '<p>' . $langs->trans('KreaBankReviewNoMatchHelp') . '</p>';
+		if ($canReviewWrite) { print '<a class="kb-review-primary" href="' . dol_escape_htmltag(kreabankWorkspaceUrl('reconcile', $navigationAccountId) . '&workflow=create') . '">' . $langs->trans('KreaBankWorkspaceCreate') . '</a>'; }
+		else { print '<a class="kb-review-secondary" href="' . dol_escape_htmltag(kreabankWorkspaceUrl('reconcile', $navigationAccountId)) . '">' . $langs->trans('KreaBankReviewPending') . '</a>'; }
+	}
+	print '</section>';
 } else {
-	print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="kreaBulkMatchForm">';
+	print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="kreaBulkMatchForm" data-locale="' . dol_escape_htmltag(str_replace('_', '-', $langs->defaultlang ?? 'en_US')) . '">';
 	print kreabankNavigationHiddenFields($navigationAccountId);
-print '<input type="hidden" name="sortfield" value="' . dol_escape_htmltag($bulkSort['field']) . '"><input type="hidden" name="sortorder" value="' . $bulkSort['order'] . '">';
+	print '<input type="hidden" name="sortfield" value="' . dol_escape_htmltag($bulkSort['field']) . '"><input type="hidden" name="sortorder" value="' . dol_escape_htmltag($bulkSort['order']) . '">';
 	print '<input type="hidden" name="token" value="' . newToken() . '">';
 	print '<input type="hidden" name="action" value="bulk_match_confirm">';
-	print '<input type="hidden" name="mainmenu" value="bank">';
-	print '<input type="hidden" name="leftmenu" value="kreabank_' . $reviewPage . '">';
-	print '<input type="hidden" name="page" value="' . ((int) $page) . '">';
-	print '<input type="hidden" name="limit" value="' . ((int) $limit) . '">';
+	print '<input type="hidden" name="mainmenu" value="bank"><input type="hidden" name="leftmenu" value="kreabank_' . $reviewPage . '">';
+	print '<input type="hidden" name="page" value="' . ((int) $page) . '"><input type="hidden" name="limit" value="' . ((int) $limit) . '">';
 	$reviewExpires = dol_now() + 1800;
 	print '<input type="hidden" name="review_expires" value="' . $reviewExpires . '">';
 	print '<details class="kb-help"><summary>' . $langs->trans('KreaBankScoreGuide') . '</summary><p>' . $langs->trans('KreaBankBulkMatchScoreHelp') . '</p></details>';
-	if (!$singleReview) print '<label class="krea-bulk-select-all"><input type="checkbox" id="krea_bulk_match_all"' . ($preselectedCount === count($rows) ? ' checked' : '') . '> ' . $langs->trans('KreaBankSelectAll') . '</label>';
+	if (!$singleReview && $canReviewWrite) { print '<label class="krea-bulk-select-all"><input type="checkbox" id="krea_bulk_match_all"' . ($preselectedCount === count($rows) ? ' checked' : '') . '> ' . $langs->trans('KreaBankSelectAll') . '</label>'; }
 	print '<div class="krea-bulk-list">';
-	$normalizeCompact = static function ($value) {
-		$value = dol_string_nospecial((string) $value);
-		$value = strtoupper((string) preg_replace('/[^A-Z0-9]/', '', (string) $value));
-
-		return trim((string) $value);
-	};
-	$formatDisplayDate = static function ($value) {
-		$value = trim((string) $value);
-		if ($value === '') {
-			return '<span class="opacitymedium">-</span>';
-		}
-		$ts = strtotime($value);
-		if ($ts === false || $ts <= 0) {
-			return '<span class="opacitymedium">-</span>';
-		}
-
-		return dol_print_date($ts, 'day');
-	};
-	$hasDegemaModule = function_exists('isModEnabled') && isModEnabled('degema');
-
 	foreach ($rows as $row) {
 		$line = (array) $row['line'];
-		if (!empty($row['account_review'])) {
-			print kreabankPaymentAccountReviewHtml($row['account_review'], $langs);
-			continue;
-		}
-		$suggestion = !empty($row['suggestion']) ? (array) $row['suggestion'] : null;
+		if (!empty($row['account_review'])) { print kreabankPaymentAccountReviewHtml($row['account_review'], $langs); continue; }
 		$lineId = (int) $line['rowid'];
-		$lineDate = !empty($line['operation_date']) ? (string) $line['operation_date'] : (!empty($line['value_date']) ? (string) $line['value_date'] : '');
-		$isPreselected = !empty($row['preselected']);
-		$isBulkSafe = !empty($row['is_bulk_safe']);
-		$lineDirection = (int) (!empty($line['direction']) ? $line['direction'] : 0);
-		if ($lineDirection === 0) {
-			$lineAmountRaw = (float) (!empty($line['amount']) ? $line['amount'] : 0.0);
-			if ($lineAmountRaw > 0.0000001) {
-				$lineDirection = 1;
-			} elseif ($lineAmountRaw < -0.0000001) {
-				$lineDirection = -1;
-			}
-		}
-		$lineDirectionClass = '';
-		$lineDirectionLabel = '';
-		if ($lineDirection > 0) {
-			$lineDirectionClass = 'krea-dir-credit';
-			$lineDirectionLabel = $langs->trans('Credit');
-		} elseif ($lineDirection < 0) {
-			$lineDirectionClass = 'krea-dir-debit';
-			$lineDirectionLabel = $langs->trans('Debit');
-		}
-
-		print '<div class="krea-bulk-row">';
 		$reviewSignature = kreabankBulkReviewSignature($row, $bulkReviewScope, $reviewExpires, $bulkReviewSecret);
+		print '<article class="krea-bulk-row" aria-labelledby="kb-review-source-' . $lineId . '">';
 		print '<input type="hidden" name="review_signatures[' . $lineId . ']" value="' . $reviewSignature . '">';
 		print '<input type="hidden" name="review_sources[' . $lineId . ']" value="' . (!empty($line['fk_statement']) ? 'staged' : 'native') . '">';
-		if ($singleReview) {
-			print '<input type="hidden" name="selected_line_ids[]" value="' . $lineId . '">';
-		} else {
-			print '<div class="krea-bulk-row-check"><input type="checkbox" class="krea-bulk-match-line" name="selected_line_ids[]" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankSelectMatch')) . '" value="' . $lineId . '"' . ($isPreselected ? ' checked' : '') . '></div>';
+		if ($singleReview) { print '<input type="hidden" name="selected_line_ids[]" value="' . $lineId . '">'; }
+		elseif ($canReviewWrite) {
+			print '<div class="krea-bulk-row-check"><label><input type="checkbox" class="krea-bulk-match-line" name="selected_line_ids[]" data-allocation="' . number_format((float) $row['allocation'], 8, '.', '') . '" data-currency="' . dol_escape_htmltag($line['currency']) . '" aria-describedby="kb-review-source-' . $lineId . '" value="' . $lineId . '"' . (!empty($row['preselected']) ? ' checked' : '') . '> ' . $langs->trans('KreaBankSelectMatch') . '</label><span>' . $langs->trans(empty($row['is_bulk_safe']) ? 'KreaBankBulkMatchLowConfidence' : 'KreaBankReviewStrongEvidence') . '</span></div>';
 		}
-		print '<div class="krea-bulk-row-panels">';
-		$counterpartyValue = trim((string) (!empty($line['counterparty_name']) ? $line['counterparty_name'] : ''));
-		if ($counterpartyValue === '') {
-			$counterpartyValue = trim((string) (!empty($line['description']) ? $line['description'] : ''));
-		}
-		$counterpartyExtra = trim((string) (!empty($line['counterparty_iban']) ? $line['counterparty_iban'] : ''));
-		if ($counterpartyExtra !== '') {
-			$counterpartyMainNormalized = $normalizeCompact($counterpartyValue);
-			$counterpartyExtraNormalized = $normalizeCompact($counterpartyExtra);
-			$looksLikeIban = (bool) preg_match('/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/', $counterpartyExtraNormalized);
-			$isDuplicateText = (
-				$counterpartyExtraNormalized === ''
-				|| $counterpartyExtraNormalized === $counterpartyMainNormalized
-				|| ($counterpartyMainNormalized !== '' && strpos($counterpartyMainNormalized, $counterpartyExtraNormalized) !== false)
-				|| ($counterpartyExtraNormalized !== '' && $counterpartyMainNormalized !== '' && strpos($counterpartyExtraNormalized, $counterpartyMainNormalized) !== false)
-			);
-			if (!$looksLikeIban || $isDuplicateText) {
-				$counterpartyExtra = '';
-			}
-		}
-
-		print '<table class="krea-bulk-panel">';
-		print '<tr><th colspan="2">' . $langs->trans('KreaBankPendingStatementLines') . ($lineDirectionLabel !== '' ? '<span class="krea-dir-badge ' . $lineDirectionClass . '">' . dol_escape_htmltag((string) $lineDirectionLabel) . '</span>' : '') . '</th></tr>';
-		print '<tr><td class="krea-label">' . $langs->trans('BankAccount') . '</td><td>' . dol_escape_htmltag(trim(($line['bank_account_ref'] ?? '') . ' — ' . ($line['bank_account_label'] ?? ''))) . '</td></tr>';
-		print '<tr><td class="krea-label">' . $langs->trans('KreaBankAccountOwner') . '</td><td>' . dol_escape_htmltag($mysoc->name) . '</td></tr>';
-		print '<tr><td class="krea-label">' . $langs->trans('KreaBankDate') . '</td><td class="nowrap">' . $formatDisplayDate($lineDate) . '</td></tr>';
-		print '<tr><td class="krea-label">' . $langs->trans('KreaBankCounterparty') . '</td><td><strong>' . dol_escape_htmltag($counterpartyValue) . '</strong>' . ($counterpartyExtra !== '' ? '<br><span class="opacitymedium">' . dol_escape_htmltag($counterpartyExtra) . '</span>' : '') . '</td></tr>';
-		print '<tr><td class="krea-label">' . $langs->trans('KreaBankAmount') . '</td><td class="right nowrap"><strong>' . kreabankPrice((float) $line['amount']) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong></td></tr>';
-		print '</table>';
-
-		$docType = (string) (!empty($suggestion['doc_type']) ? $suggestion['doc_type'] : '');
-		$docId = (int) $suggestion['doc_id'];
-		$docUrl = $resolveSuggestionCardUrl($docType, $docId);
-		$docRef = kreabankBulkSuggestionReference($suggestion);
-		$docThirdparty = trim((string) (!empty($suggestion['thirdparty_name']) ? $suggestion['thirdparty_name'] : ''));
-		if ($docThirdparty === '') {
-			$docThirdparty = $docRef;
-		}
-		$docDirection = $resolveSuggestionDirection($suggestion);
-		$docDirectionClass = '';
-		$docDirectionLabel = '';
-		if ($docDirection > 0) {
-			$docDirectionClass = 'krea-dir-credit';
-			$docDirectionLabel = $langs->trans('Credit');
-		} elseif ($docDirection < 0) {
-			$docDirectionClass = 'krea-dir-debit';
-			$docDirectionLabel = $langs->trans('Debit');
-		}
-		$docDate = $formatDisplayDate((string) (!empty($suggestion['doc_date']) ? $suggestion['doc_date'] : ''));
-		$docAmount = (float) (isset($suggestion['amount_open']) ? $suggestion['amount_open'] : 0.0);
-		$supplierPaymentId = (int) (isset($suggestion['supplier_payment_id']) ? $suggestion['supplier_payment_id'] : 0);
-		$supplierPaymentCardUrl = ($hasDegemaModule && $supplierPaymentId > 0 ? dol_buildpath('/custom/degema/paiement_card.php?id=' . $supplierPaymentId, 1) : '');
-		$paymentBadgeHtml = '';
-		if ($supplierPaymentCardUrl !== '') {
-			$paymentBadgeHtml = '<a class="krea-payment-badge" href="' . $supplierPaymentCardUrl . '" target="_blank" rel="noopener">' . dol_escape_htmltag($langs->trans('KreaBankPaymentBadge') . ' #' . $supplierPaymentId) . '</a>';
-		}
-		print '<table class="krea-bulk-panel">';
-		print '<tr><th colspan="2">' . $langs->trans('KreaBankBulkMatchSuggested') . ($docDirectionLabel !== '' ? '<span class="krea-dir-badge ' . $docDirectionClass . '">' . dol_escape_htmltag((string) $docDirectionLabel) . '</span>' : '') . $paymentBadgeHtml . '</th></tr>';
-		print '<tr><td class="krea-label">' . $langs->trans('BankAccount') . '</td><td>' . dol_escape_htmltag(trim((string) ($suggestion['bank_account_ref'] ?? '')) ?: '-') . '</td></tr>';
-		print '<tr><td class="krea-label">' . $langs->trans('Ref') . '</td><td><a href="' . dol_escape_htmltag($docUrl) . '">' . dol_escape_htmltag($docRef) . '</a></td></tr>';
-		print '<tr><td class="krea-label">' . $langs->trans('KreaBankDate') . '</td><td class="nowrap">' . $docDate . '</td></tr>';
-		print '<tr><td class="krea-label">' . $langs->trans('KreaBankCounterparty') . '</td><td><strong>' . dol_escape_htmltag($docThirdparty) . '</strong></td></tr>';
-		print '<tr><td class="krea-label">' . $langs->trans('KreaBankAmount') . '</td><td class="right nowrap">';
-		if ($docUrl !== '') {
-			print '<a href="' . $docUrl . '" target="_blank" rel="noopener"><strong>' . kreabankPrice($docAmount) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong></a>';
-		} else {
-			print '<strong>' . kreabankPrice($docAmount) . ' ' . dol_escape_htmltag((string) $line['currency']) . '</strong>';
-		}
-		print '</td></tr>';
-		print '</table>';
-
-		print '<table class="krea-bulk-panel">';
-		print '<tr><th colspan="2">' . $langs->trans('KreaBankBulkMatchEvidence') . '</th></tr>';
-		print '<tr><td class="krea-label">' . $langs->trans('KreaBankBulkMatchScore') . '</td><td><span class="krea-bulk-score">' . ((int) $suggestion['score']) . '</span>' . (!$isBulkSafe ? '<span class="krea-bulk-low-score">' . $langs->trans('KreaBankBulkMatchLowConfidence') . '</span>' : '') . '</td></tr>';
-		$reasonLabels = array();
-		foreach ((array) $suggestion['details'] as $reason) {
-			$reasonKey = 'KreaBankMatchReason_' . $reason;
-			$reasonLabels[] = $langs->trans($reasonKey) === $reasonKey ? $reason : $langs->trans($reasonKey);
-		}
-		print '<tr><td class="krea-label">' . $langs->trans('KreaBankBulkMatchReasons') . '</td><td>' . dol_escape_htmltag(implode(', ', $reasonLabels)) . '</td></tr>';
-		print '</table>';
-
-		print '</div>';
-		print '</div>';
+		print '<div class="kb-review-row-content">' . kreabankReviewPairHtml($row, $langs, $mysoc->name, $resolveSuggestionCardUrl);
+		print '</div></article>';
 	}
-
 	print '</div>';
-	if ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite) {
+	if ($canReviewWrite) {
 		print '<div class="krea-bulk-actions">';
 		if (!$singleReview) {
-			print '<label><input type="checkbox" name="review_confirmed" value="1" required> ' . $langs->trans('KreaBankBulkMatchReviewApproval') . '</label><br>';
+			print '<output class="kb-review-selection" id="kb-review-selection" aria-live="polite" data-label="' . dol_escape_htmltag($langs->trans('KreaBankReviewSelectedCount')) . '"></output>';
+			print '<label class="kb-review-approval"><input type="checkbox" name="review_confirmed" value="1" required> ' . $langs->trans('KreaBankBulkMatchReviewApproval') . '</label>';
 		}
-		print '<button type="submit" class="butAction">' . $langs->trans($singleReview ? 'KreaBankConfirmCurrentMatch' : 'KreaBankBulkMatchConfirm') . '</button>';
-		print '</div>';
+		print '<button type="submit" class="kb-review-submit" aria-describedby="kb-review-feedback">' . $langs->trans($singleReview ? 'KreaBankConfirmCurrentMatch' : 'KreaBankReviewConfirmSelected') . '</button></div>';
+		print '<p class="kb-review-feedback" id="kb-review-feedback" role="status" data-select="' . dol_escape_htmltag($langs->trans('KreaBankReviewSelectFirst')) . '" data-approve="' . dol_escape_htmltag($langs->trans('KreaBankBulkMatchReviewRequired')) . '" data-ready="' . dol_escape_htmltag($langs->trans('KreaBankReviewReady')) . '">' . $langs->trans($singleReview ? 'KreaBankReviewSingleApproval' : 'KreaBankBulkMatchReviewRequired') . '</p>';
 	}
 	print '</form>';
 }
@@ -1058,7 +909,9 @@ $scanClientConfig = array('sortfield' => $bulkSort['field'], 'sortorder' => $bul
 	'loading' => $langs->transnoentities('KreaBankBulkMatchLoading'), 'paused' => $langs->transnoentities('KreaBankBulkMatchReviewPaused'),
 	'failed' => $langs->transnoentities('KreaBankBulkMatchScanFailed'), 'refresh' => $langs->transnoentities('Refresh'));
 print '<script type="application/json" id="krea-bulk-scan-config">' . json_encode($scanClientConfig, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . '</script>';
-print '<script src="' . dol_buildpath('/custom/kreabank/js/bulkmatch.js', 1) . '?v=1.18.10" defer></script>';
+print '</div>';
+print '<script src="' . dol_buildpath('/custom/kreabank/js/review-workspace.js', 1) . '?v=' . filemtime(__DIR__ . '/js/review-workspace.js') . '" defer></script>';
+print '<script src="' . dol_buildpath('/custom/kreabank/js/bulkmatch.js', 1) . '?v=' . filemtime(__DIR__ . '/js/bulkmatch.js') . '" defer></script>';
 print dol_get_fiche_end();
 llxFooter();
 $db->close();
