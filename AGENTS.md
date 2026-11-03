@@ -87,6 +87,11 @@
 
 ## Bulk review performance
 
+- Keep progress separate from review presentation; unchanged results must preserve
+  focus and expanded details. Individual matched review waits for stable sorted
+  results before displaying a pair. Payment lookup indexes are explicit CLI-only
+  online maintenance, never page-load DDL; see `doc/PERFORMANCE.md` and the guarded
+  disposable `test/test_review_indexes_database.php` suite.
 - Initial bulk review GETs do not run matching. Background POSTs retain native authorization and CSRF checks; `kreabankAdvanceBulkScan()` budgets work between individual lines, not whole chunks.
 - Release the PHP session lock during read-only matching. Check session identity, generation and cursor before saving progress; never overwrite a newer company/account/page scan.
 - Cache presentation only for the displayed page. Confirmation recomputes suggestions, authenticates the displayed pair and uses the same native reconciliation service. Manual approval rechecks source facts under locks and persists the audit atomically; it does not train automatic patterns.

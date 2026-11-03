@@ -5,6 +5,7 @@
     'use strict';
     const config = JSON.parse(document.getElementById('krea-bulk-scan-config').textContent);
     const results = document.getElementById('krea-bulk-results');
+    const progress = document.getElementById('krea-bulk-progress');
     const status = document.getElementById('krea-bulk-scan-status');
     const resume = document.getElementById('krea-bulk-scan-resume');
     const endpoint = new URL(config.url, window.location.href);
@@ -68,6 +69,7 @@
         running = true;
         resume.disabled = true;
         status.textContent = config.loading;
+        status.hidden = false;
         status.setAttribute('aria-busy', 'true');
         request = new AbortController();
         try {
@@ -95,11 +97,16 @@
             config.token = data.token;
             more = data.more;
             if (!paused) {
-                results.innerHTML = data.html;
-                results.querySelectorAll('.krea-bulk-match-line').forEach(function (box) {
-                    if (selections.has(box.value)) box.checked = selections.get(box.value);
-                });
-                updateToggle();
+                if (progress && typeof data.progressHtml === 'string') progress.innerHTML = data.progressHtml;
+                // Progress updates must not collapse details, move focus or rebuild the same review.
+                if (!data.presentation || data.presentation !== config.presentation) {
+                    results.innerHTML = data.html;
+                    config.presentation = data.presentation;
+                    results.querySelectorAll('.krea-bulk-match-line').forEach(function (box) {
+                        if (selections.has(box.value)) box.checked = selections.get(box.value);
+                    });
+                    updateToggle();
+                }
             }
             status.textContent = '';
             status.hidden = !more;

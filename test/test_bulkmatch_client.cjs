@@ -22,12 +22,15 @@ function harness(overrides = {}) {
     const submit = {disabled: false};
     let boxes = [{value: '1', checked: false, matches: selector => selector === '.krea-bulk-match-line'}];
     let html = 'original';
+    let replacements = 0;
+    const progress = {innerHTML: ''};
     const status = {setAttribute() {}, removeAttribute() {}};
     const resume = {addEventListener(name, fn) { listeners[name] = fn; }};
     const results = {addEventListener(name, fn) { events[name] = fn; },
         querySelector(selector) { return selector === '[name="review_confirmed"]' ? approval : toggle; },
         querySelectorAll(selector) { return selector === 'button[type="submit"]' ? [submit] : boxes; },
         get innerHTML() { return html; }, set innerHTML(value) {
+            replacements++;
             html = value;
             boxes = JSON.parse(value).map(box => ({...box, matches: selector => selector === '.krea-bulk-match-line'}));
             approval.checked = false;
@@ -37,12 +40,12 @@ function harness(overrides = {}) {
     const window = {location: {href: 'https://erp.example.test/custom/kreabank/bulkmatch.php', origin: 'https://erp.example.test', reload() { reloads++; }, assign(url) { redirects.push(url); }},
         setTimeout(fn) { const id = Symbol(); timers.set(id, fn); return id; }, clearTimeout(id) { timers.delete(id); },
         addEventListener(name, fn) { windowEvents[name] = fn; }};
-    const elements = {'krea-bulk-scan-config': {textContent: JSON.stringify(config)}, 'krea-bulk-results': results,
+    const elements = {'krea-bulk-scan-config': {textContent: JSON.stringify(config)}, 'krea-bulk-results': results, 'krea-bulk-progress': progress,
         'krea-bulk-scan-status': status, 'krea-bulk-scan-resume': resume};
     const fetch = (url, options) => new Promise(resolve => calls.push({url, options, resolve}));
     vm.runInNewContext(source, {document: {getElementById: id => elements[id]}, window, URL, URLSearchParams, AbortController, fetch});
     return {calls, timers, events, listeners, windowEvents, results, status, resume, approval, submit,
-        redirects, boxes: () => boxes, reloads: () => reloads,
+        redirects, progress, replacements: () => replacements, boxes: () => boxes, reloads: () => reloads,
         respond(index, data, ok = true, status = 200) { calls[index].resolve({ok, status, json: async () => data}); },
         runTimer() { const [id, fn] = timers.entries().next().value; timers.delete(id); fn(); }};
 }
@@ -103,5 +106,15 @@ function harness(overrides = {}) {
     foreign.respond(0, {redirect: 'https://other.example.test/private'});
     await tick();
     check(!foreign.redirects.length && foreign.status.textContent === 'Failed', 'Scan redirects cannot leave the ERP origin');
+    const stable = harness({presentation: 'loading'});
+    const focused = stable.boxes()[0];
+    stable.respond(0, {html: JSON.stringify([{value: '2', checked: false}]), progressHtml: '20%', presentation: 'loading', more: true, auto: true});
+    await tick();
+    check(stable.replacements() === 0 && stable.boxes()[0] === focused && stable.progress.innerHTML === '20%', 'Progress alone never rebuilds the review panel or moves focus');
+    stable.runTimer();
+    stable.respond(1, {html: JSON.stringify([{value: '2', checked: false}]), progressHtml: 'Complete', presentation: 'ready', more: false, auto: false});
+    await tick();
+    check(stable.replacements() === 1 && stable.boxes()[0].value === '2' && stable.timers.size === 0, 'A completed search displays its results once and stops updating');
+    check(stable.reloads() === 0 && stable.redirects.length === 0, 'Normal progress and completion never reload or navigate the page');
     console.log(`OK: ${checks} bulk review browser behavior checks`);
 }()).catch(error => { console.error(error); process.exitCode = 1; });

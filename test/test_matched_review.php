@@ -116,6 +116,12 @@ checkMatched(strpos($rendered['html'],'matched.php?page=1')!==false && strpos($r
 checkMatched(strpos($rendered['html'],'id="krea_bulk_match_all"')===false && strpos($rendered['html'],'KreaBankConfirmCurrentMatch')!==false, 'Individual review has no select-all action and confirms the current match');
 checkMatched(strpos($rendered['html'],'name="review_confirmed"')===false && strpos($rendered['html'],'type="checkbox"')===false,'Individual confirmation requires no selection or review checkboxes');
 checkMatched(strpos($rendered['html'],'type="hidden" name="selected_line_ids[]" value="11"')!==false && strpos($rendered['html'],'name="review_signatures[11]"')!==false,'The button submits only its displayed signed source');
+$state['done']=false;
+$_SESSION['kreabank_matched_scan_state']=$state;
+$loading=renderMatchedFixture();
+checkMatched(strpos($loading['html'],'id="kreaBulkMatchForm"')===false && strpos($loading['html'],'KreaBankBulkMatchLoading')!==false,'Individual review waits for stable sorted results instead of repeatedly changing its proposed pair');
+checkMatched(strpos($loading['html'],'id="krea-bulk-progress"')!==false && strpos($loading['html'],'"presentation":')!==false,'Progress is separate from the signed review panel');
+$state['done']=true;
 $request['page']=1;
 $state['display_page']=1;
 $state['display_rows']=array(12=>array_merge($pair,array('line'=>$other)));

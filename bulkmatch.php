@@ -769,6 +769,11 @@ try {
 	setEventMessages($e->getMessage(), null, 'errors');
 }
 
+// Individual review starts only once sorting can no longer move the displayed pair.
+if ($singleReview && $scanInProgress) { $rows = array(); }
+$presentation = hash('sha256', json_encode($singleReview && $scanInProgress
+	? array('loading', $page, $bulkSort) : array($page, $bulkSort, $matchedCount, $rows, $scanInProgress && !$rows)));
+
 $param = '&mainmenu=bank&leftmenu=kreabank_' . $reviewPage . '&account_context=' . $navigationAccountId . '&sortfield=' . $bulkSort['field'] . '&sortorder=' . $bulkSort['order'];
 if ($limit > 0 && $limit !== (int) $conf->liste_limit) {
 	$param .= '&limit=' . $limit;
@@ -809,7 +814,7 @@ if (!$isScanRequest) {
 	print '</style>';
 
 
-	print '<div id="krea-bulk-results">';
+	print '<div id="krea-bulk-progress">';
 } else {
 	ob_start();
 }
@@ -827,6 +832,13 @@ if ($scanInProgress) {
 	if (!$scanAutoReloadEnabled) {
 		print '<div class="krea-bulk-warning">' . $langs->trans('KreaBankBulkMatchRefreshPaused', (string) $scanAutoReloadCount, (string) $bulkAutoReloadMax) . '</div>';
 	}
+}
+
+if ($isScanRequest) {
+	$progressHtml = ob_get_clean();
+	ob_start();
+} else {
+	print '</div><div id="krea-bulk-results">';
 }
 
 print kreabankListSortLinks($bulkColumns, $bulkSort);
@@ -1028,7 +1040,7 @@ print '<input type="hidden" name="sortfield" value="' . dol_escape_htmltag($bulk
 if ($isScanRequest) {
 	header('Content-Type: application/json');
 	header('Cache-Control: no-store');
-	echo json_encode(array('html' => ob_get_clean(), 'more' => $scanInProgress,
+	echo json_encode(array('html' => ob_get_clean(), 'progressHtml' => $progressHtml, 'presentation' => $presentation, 'more' => $scanInProgress,
 		'auto' => $scanAutoReloadEnabled, 'scanned' => $scanScannedCount, 'total' => $pendingTotal,
 		'token' => currentToken()), (defined('JSON_INVALID_UTF8_SUBSTITUTE') ? JSON_INVALID_UTF8_SUBSTITUTE : 0));
 	$db->close();
@@ -1038,11 +1050,12 @@ print '</div>';
 print '<div class="krea-bulk-progress" id="krea-bulk-scan-status" role="status" aria-live="polite"></div>';
 print '<button type="button" class="button" id="krea-bulk-scan-resume" hidden>' . $langs->trans('KreaBankBulkMatchContinue') . '</button>';
 $scanClientConfig = array('sortfield' => $bulkSort['field'], 'sortorder' => $bulkSort['order'], 'url' => $_SERVER['PHP_SELF'], 'token' => currentToken(), 'page' => $page, 'limit' => $limit,
+	'presentation' => $presentation,
 	'account' => $navigationAccountId, 'more' => $scanInProgress, 'auto' => $scanAutoReloadEnabled,
 	'loading' => $langs->transnoentities('KreaBankBulkMatchLoading'), 'paused' => $langs->transnoentities('KreaBankBulkMatchReviewPaused'),
 	'failed' => $langs->transnoentities('KreaBankBulkMatchScanFailed'), 'refresh' => $langs->transnoentities('Refresh'));
 print '<script type="application/json" id="krea-bulk-scan-config">' . json_encode($scanClientConfig, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . '</script>';
-print '<script src="' . dol_buildpath('/custom/kreabank/js/bulkmatch.js', 1) . '?v=1.18.7" defer></script>';
+print '<script src="' . dol_buildpath('/custom/kreabank/js/bulkmatch.js', 1) . '?v=1.18.10" defer></script>';
 print dol_get_fiche_end();
 llxFooter();
 $db->close();

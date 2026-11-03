@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.18.10 — 2026-11-03
+
+- Keep review panels stable during background progress; show individual matches
+  after sorting finishes and stop polling when ready.
+- Add explicit online payment lookup index maintenance for large native payment
+  histories. Preserve candidate rules, ownership checks and financial records.
+
 ## 1.18.9 — 2026-11-03
 
 - Confirm the current matched pair directly with its reconciliation button. Remove

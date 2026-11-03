@@ -50,6 +50,11 @@ so the current review remains stable; **Continue analysis** resumes explicitly.
 The existing automatic-request limit also pauses the scan. Failed requests display
 a retry action and preserve already displayed rows. Leaving the page cancels the
 browser request; an already running read-only pass may finish and save progress.
+Progress has its own region. An unchanged results presentation preserves its DOM,
+open details and keyboard focus. Individual matched review displays its pair only
+when scanning and sorting finish, then stops polling; partial discoveries cannot
+replace the pair being reviewed. Payment lookup index maintenance is documented in
+[PERFORMANCE.md](PERFORMANCE.md).
 
 No financial operation occurs during loading or scanning. Scheduled automatic
 reconciliation remains independent; no job configuration or schema is changed.
