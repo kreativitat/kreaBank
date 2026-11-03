@@ -78,20 +78,21 @@ print '<div class="div-table-responsive kb-accounts-scroll"><table class="kb-acc
 foreach ($accountColumns as $field => $label) {
 	print kreabankListHeader($langs->trans($label), $field, $accountSort, in_array($field, array('balance', 'feed_balance'), true) ? 'kb-money' : '', array('kind' => $kind, 'mainmenu' => 'bank', 'leftmenu' => 'kreabank_accounts'));
 }
-print '<th scope="col" class="kb-actions-heading">' . $langs->trans('KreaBankActions') . '</th>';
 print '</tr>';
 $count=0;
 while ($row=$db->fetch_object($rows)) {
 	$count++;
-	print '<tr><td><a class="kb-account-name" href="' . dol_escape_htmltag(kreabankBankingUrl('card', $row->rowid)) . '">' . dol_escape_htmltag($row->ref) . '</a><small>' . dol_escape_htmltag($row->label) . '</small></td>';
+	print '<tr><td><a class="kb-account-name" href="' . dol_escape_htmltag(kreabankNativeEntriesUrl($row->rowid)) . '">' . dol_escape_htmltag($row->ref) . '</a> ';
+	print '<a class="kb-account-edit" href="' . dol_escape_htmltag(kreabankBankingUrl('card', $row->rowid)) . '" aria-label="' . dol_escape_htmltag($langs->trans('Modify') . ' ' . $row->ref) . '" title="' . dol_escape_htmltag($langs->trans('Modify')) . '">' . img_picto('', 'edit') . '</a>';
+	print '<small>' . dol_escape_htmltag($row->label) . '</small></td>';
 	print '<td>' . dol_escape_htmltag($row->currency_code) . '</td>';
 	print kreabankAccountFeedCells($row);
 	print '<td class="kb-money">' . kreabankPrice($row->balance) . '</td>';
 	print '<td><a class="kb-count" href="' . dol_escape_htmltag(kreabankWorkspaceUrl('reconcile',$row->rowid)) . '">' . (int) $row->pending_count . '</a></td>';
-	print '<td><div class="kb-account-actions"><a href="' . dol_escape_htmltag(kreabankNativeEntriesUrl($row->rowid)) . '">' . $langs->trans('KreaBankNavMovements') . '</a><a href="' . dol_escape_htmltag(kreabankWorkspaceUrl('reconcile',$row->rowid)) . '">' . $langs->trans('KreaBankReconcile') . '</a></div></td></tr>';
+	print '</tr>';
 }
 if (!$count) {
-	print '<tr><td colspan="7">' . $langs->trans('NoRecordFound') . '</td></tr>';
+	print '<tr><td colspan="6">' . $langs->trans('NoRecordFound') . '</td></tr>';
 }
 print '</table></div>';
 print dol_get_fiche_end();

@@ -3,7 +3,9 @@
 Operational banking pages share six tabs: Movements, Bank statement, Statements,
 Reconciliation, Connections and History. Bank statement combines all imported
 movements; Statements retains the individual import list and details. Account
-management is separate: the native left-menu Account list opens the accounts overview, and account names open their details and tool tabs.
+management is separate: the native left-menu Account list opens the accounts
+overview. Account references open movements; the pencil icon beside each reference
+opens its native details and tool tabs. There is no separate row actions column.
 The accounts overview and account-tool pages do not display the operational tabs.
 Internal transfers and new-account creation keep the native layout without a
 workspace header or tabs.

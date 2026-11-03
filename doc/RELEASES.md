@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.18.8 — 2026-11-03
+
+- Open account movements from each account reference. Keep account details on a
+  pencil icon beside the reference and remove the separate row actions column.
+
 ## 1.18.7 — 2026-11-03
 
 - Add a matched-only reconciliation tab with one proposed pair at a time, account
