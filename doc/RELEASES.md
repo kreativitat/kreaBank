@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.16.3 — 2026-11-03
+
+- Shorten the Portuguese bank refresh heading to “Última atualização”.
+
 ## 1.16.2 — 2026-11-03
 
 - Show only the bank refresh date and time in the account overview update column.
