@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.18.6 — 2026-11-03
+
+- Show only account references in statement account columns and filters.
+
 ## 1.18.5 — 2026-11-03
 
 - Remove the visible Calculated label beneath statement balances. Keep the

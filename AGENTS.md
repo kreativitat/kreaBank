@@ -160,6 +160,6 @@
 - `test/test_payment_account_review.php` is pure; its database counterpart extends
   only the guarded disposable port 33317 fixture. No schema or scheduler changes.
 
-- Statement-view account selectors list only current-company owned accounts with staged or recognizable legacy imported statements; keep the other operational account selectors unchanged.
+- Statement-view account selectors list only current-company owned accounts with staged or recognizable legacy imported statements. Show only account references in statement selectors and account columns; keep the other operational account selectors unchanged.
 
 - Combined-statement balances prefer supplied line balances; the read-only `bankStatementWithBalancesSql()` fallback calculates backwards from a completed, coherent feed snapshot with exact DECIMAL subtraction. Keep calculation provenance in the balance tooltip without a visible Calculated label, preserve same-day statement order across sorting/pages, and fail closed on source/mapping/conflict/coverage errors. Never persist derived balances or use the native ledger as the anchor. Validate with `test/test_statement_balances_database.php` on the guarded disposable database.

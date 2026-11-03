@@ -142,7 +142,7 @@ function kreabankAccountFilterSelect($accountId = 0, $statementsOnly = false)
 		throw new RuntimeException('Unable to read company accounts');
 	}
 	while ($row = $db->fetch_object($result)) {
-		$html .= '<option value="' . (int) $row->rowid . '"' . ((int) $row->rowid === (int) $accountId ? ' selected' : '') . '>' . dol_escape_htmltag($row->ref . ' — ' . $row->label) . '</option>';
+		$html .= '<option value="' . (int) $row->rowid . '"' . ((int) $row->rowid === (int) $accountId ? ' selected' : '') . '>' . dol_escape_htmltag($statementsOnly ? $row->ref : $row->ref . ' — ' . $row->label) . '</option>';
 	}
 	return $html . '</select>';
 }
