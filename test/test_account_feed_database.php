@@ -59,6 +59,7 @@ function price($amount, $dummy = 0, $lang = '', $truncate = 0, $max = 2, $min = 
 $row = $read();
 $html = kreabankAccountFeedCells($row);
 checkAuto(strpos($html,'0,00') !== false && strpos($html,'KreaBankFeedState_failed') !== false, 'Zero snapshot renders with its failed status');
+checkAuto(substr($html, strrpos($html, '<td>')) === '<td>' . dol_print_date(strtotime($row->bank_updated_at), 'dayhour') . '</td>', 'Bank refresh cell contains only the date and time');
 $row->feed_balance = '-20.50000000';
 $row->feed_status = 'ready';
 $row->bank_updated_at = '2000-01-01T00:00:00Z';

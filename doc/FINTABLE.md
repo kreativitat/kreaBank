@@ -38,10 +38,10 @@ from the Dolibarr collection time; bank/provider freshness is not guaranteed.
 ## Account overview
 
 `accounts.php` shows the stored bank balance and bank refresh time alongside
-the separately labelled Dolibarr ledger balance. The smaller collection timestamp
-records when the balance snapshot was received (`last_attempt`); transaction
-collection can fail independently. Stale or failed feeds remain visible, while
-unmapped accounts show a dash rather than a zero. No provider request runs when
+the separately labelled Dolibarr ledger balance. The bank update column shows only
+the date and time; collection details remain on the bank feeds page. Stale or
+failed feeds remain visible, while unmapped accounts show a dash rather than a zero.
+No provider request runs when
 opening or sorting the page. Snapshot reads require the current company, configured
 workspace, account currency and unchanged IBAN. The existing REST accounts contract
 continues to return native ledger balances.

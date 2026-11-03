@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.16.2 — 2026-11-03
+
+- Show only the bank refresh date and time in the account overview update column.
+  Collection details remain on the bank feeds page; synchronization is unchanged.
+
 ## 1.16.1 — 2026-11-03
 
 - Show the daily feed bank balance, bank refresh and collection times in the
