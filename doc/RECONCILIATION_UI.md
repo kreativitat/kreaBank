@@ -11,6 +11,11 @@ keystroke. **View all pending lines** opens the full company/account-scoped pend
 view; bulk deferral remains there. The queue starts collapsed at mobile widths.
 Selecting a line is a read-only link and preserves queue search and sort state.
 
+When the initial candidate set is empty, the workspace opens **Create a new entry
+and reconcile** if creation is permitted. Existing candidates (including locked
+evidence), an explicit entry search or batch search keep matching visible.
+Users can always switch workflows; opening creation never submits a record.
+
 **Match an existing entry** offers existing native bank movements using the
 existing candidate loader, search, batch detection and shared safe preselection.
 Selecting a checkbox updates the selected total and remaining difference. The

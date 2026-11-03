@@ -1552,7 +1552,9 @@ if ($selectedLine) {
 	}
 }
 $canReconcile = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite);
-print '<div class="kb-recon" data-initial-workflow="' . ($quickEntryFailed ? 'create' : 'match') . '">';
+// Keep explicit searches in matching; an empty initial candidate set opens permitted creation.
+$initialWorkflow = ($quickEntryFailed || ($selectedLine && empty($documents) && $canReconcile && $canCreate && $openDocumentsSearch === '' && !$forceBatchDetect)) ? 'create' : 'match';
+print '<div class="kb-recon" data-initial-workflow="' . $initialWorkflow . '">';
 print '<aside class="kb-queue" aria-labelledby="kb-queue-heading"><details class="kb-queue-disclosure" open>';
 print '<summary class="kb-queue-heading"><h2 id="kb-queue-heading">' . $langs->trans('KreaBankWorkspacePending') . '</h2><span class="kb-count">' . ((int) $pendingLinesTotal) . '</span></summary>';
 print '<div class="kb-queue-search kb-js-only"><label for="kb-pending-search">' . $langs->trans('KreaBankWorkspaceSearchQueue') . '</label><input type="search" id="kb-pending-search" autocomplete="off" aria-controls="kb-pending-list" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceSearchHint')) . '"></div>';
@@ -1600,7 +1602,7 @@ if (!$selectedLine) {
 	if (!$canReconcile) { print '<p class="kb-readonly" role="status">' . $langs->trans('KreaBankWorkspaceReadOnly') . '</p>'; }
 	print '<div class="kb-workflow-switch kb-js-only" role="tablist" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceWorkflow')) . '">';
 	foreach (array('match' => 'KreaBankWorkspaceMatch', 'create' => 'KreaBankWorkspaceCreate') as $workflow => $label) {
-		print '<button type="button" role="tab" id="kb-tab-' . $workflow . '" aria-controls="kb-panel-' . $workflow . '" aria-selected="' . ($workflow === 'match' ? 'true' : 'false') . '" tabindex="' . ($workflow === 'match' ? '0' : '-1') . '">' . $langs->trans($label) . '</button>';
+		print '<button type="button" role="tab" id="kb-tab-' . $workflow . '" aria-controls="kb-panel-' . $workflow . '" aria-selected="' . ($workflow === $initialWorkflow ? 'true' : 'false') . '" tabindex="' . ($workflow === $initialWorkflow ? '0' : '-1') . '">' . $langs->trans($label) . '</button>';
 	}
 	print '</div>';
 	print '<section class="kb-workflow-panel" id="kb-panel-match" aria-labelledby="kb-match-heading"><h3 id="kb-match-heading">' . $langs->trans('KreaBankWorkspaceMatch') . '</h3><p class="kb-panel-intro">' . $langs->trans('KreaBankWorkspaceMatchHelp') . '</p>';

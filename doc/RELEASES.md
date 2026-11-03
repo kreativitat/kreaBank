@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.19.2 — 2026-11-03
+
+- Open record creation when a selected statement line has no existing candidates
+  and creation is permitted. Preserve explicit matching searches, restrictions
+  and failed-creation inputs. No financial execution or schema changes.
+
 ## 1.19.1 — 2026-11-03
 
 - Keep Reconcile (pt_PT: Reconciliar) inside the native Banks/Cash left-menu

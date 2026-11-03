@@ -65,7 +65,7 @@ class KreaBankAccountPairs {
 	public function __construct(...$args) {}
 	public function mainAccount($id) { if ($GLOBALS['fixtureCase'] === 'unavailable') { throw new DomainException('Synthetic invalid configuration'); } return $GLOBALS['fixtureCase'] === 'restricted' ? 92 : 0; }
 }
-function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT') {
+function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = array()) {
 	global $langs, $fixtureCase;
 	$fixtureCase = $case;
 	$langs = new WorkspaceFixtureLangs($locale);
@@ -79,7 +79,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT') {
 	$service = new class { public function getPaymentAccountReview(...$args) { return array(); } };
 	$form = new WorkspaceFixtureForm();
 	$navigationAccountId = 81; $navigationAccount = null;
-	$forceBatchDetect = 0; $openDocumentsSearch = '';
+	$forceBatchDetect = $options['force_batch_detect'] ?? 0; $openDocumentsSearch = $options['search'] ?? '';
 	$pendingColumns = array('b.dateo'=>'KreaBankDate','m.description'=>'KreaBankDescription','b.amount'=>'KreaBankAmount');
 	$pendingSort = array('field'=>'b.dateo','order'=>'ASC','prefix'=>'','sortfield_param'=>'sortfield','sortorder_param'=>'sortorder');
 	$documentColumns = array('ref'=>'Ref','doc_date'=>'KreaBankDate','amount_open'=>'KreaBankAmount');
@@ -102,6 +102,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT') {
 	if (in_array($case, array('noentries', 'empty'))) { $documents = array(); }
 	if ($case === 'locked') { $documents = array($documents[2]); }
 	if ($case === 'safe') { $autoSelectDocKeys['native_bank__103'] = true; $documents = array($documents[2]); $documents[0]['is_locked'] = false; }
+	if (isset($options['documents'])) { $documents = $options['documents']; }
 	if ($case === 'empty') { $selectedLine = null; $pendingLines = array(); $pendingLinesTotal = 0; }
 	$selectedOutstanding = 125.5;
 	if ($case === 'precision') { $selectedOutstanding = 125.5000001; $documents[0]['amount_open'] = 75.2500001; }
@@ -143,6 +144,24 @@ foreach (array('debit','credit','readonly','empty','locked','noentries','safe','
 	if ($case === 'locked') { workspaceCheck(strpos($html, 'name="selected_docs[]"') === false, 'Locked movement must not be selectable'); }
 	if ($case === 'error') { workspaceCheck(strpos($html, 'data-initial-workflow="create"') !== false && strpos($html, 'value="Retained label"') !== false && strpos($html, 'value="supplier_invoice" checked') !== false, 'Failed creation retains workflow, choice and inputs'); }
 	if ($case === 'success') { workspaceCheck(strpos($html, 'role="status">') !== false && strpos($html, 'Synthetic record created and reconciled') !== false, 'Persistent accessible success state'); }
+}
+foreach (array(
+	array('noentries', array(), 'create'),
+	array('credit', array('documents'=>array()), 'create'),
+	array('noentries', array('search'=>'MISSING-REFERENCE'), 'match'),
+	array('noentries', array('force_batch_detect'=>1), 'match'),
+	array('readonly', array('documents'=>array()), 'match'),
+	array('restricted', array('documents'=>array()), 'match'),
+	array('unavailable', array('documents'=>array()), 'match'),
+	array('debit', array(), 'match'),
+	array('locked', array(), 'match'),
+	array('safe', array(), 'match'),
+	array('error', array('search'=>'RETAINED-SEARCH'), 'create'),
+) as $scenario) {
+	list($case, $options, $expected) = $scenario;
+	$html = renderWorkspaceFixture($case, 'pt_PT', $options);
+	workspaceCheck(strpos($html, 'data-initial-workflow="' . $expected . '"') !== false, $case . ': appropriate initial workflow');
+	workspaceCheck(strpos($html, 'id="kb-tab-' . $expected . '" aria-controls="kb-panel-' . $expected . '" aria-selected="true" tabindex="0"') !== false, $case . ': initial tab selection and keyboard focus agree');
 }
 workspaceCheck(strpos(renderWorkspaceFixture('precision'), 'value="75.2500001"') !== false, 'Native amount precision survives rendering');
 workspaceCheck(strpos(renderWorkspaceFixture('precision'), 'data-outstanding="125.5000001"') !== false, 'Outstanding precision survives rendering');
