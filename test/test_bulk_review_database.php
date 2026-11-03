@@ -7,13 +7,6 @@
 require __DIR__ . '/test_automatic_reconciliation_database.php';
 require_once __DIR__ . '/../lib/kreabank_bulk.lib.php';
 $initialChecks = $checks;
-// Manual review also reads payment/invoice candidates; use empty native schemas.
-foreach (array('paiement', 'paiement_facture', 'facture', 'paiementfourn', 'paiementfourn_facturefourn', 'facture_fourn', 'societe', 'societe_rib', 'societe_remise_except') as $table) {
-	$sql = preg_replace('/--[^\n]*/', '', file_get_contents(DOL_DOCUMENT_ROOT . '/install/mysql/tables/llx_' . $table . '.sql'));
-	foreach (explode(';', str_replace('llx_', MAIN_DB_PREFIX, $sql)) as $statement) {
-		if (trim($statement) !== '') { $db->query($statement); }
-	}
-}
 function reviewedFixture($id, $bankId, $source = 'staged') {
 	global $service;
 	$line = $service->getBulkReviewLine($id, $source);

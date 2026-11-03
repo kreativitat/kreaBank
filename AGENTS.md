@@ -146,3 +146,16 @@
 - `php test/test_tpa_receipts.php` is pure. `php test/test_tpa_receipts_database.php` extends ONLY the guarded disposable port 33317 fixture. See `doc/TPA_RECEIPTS.md`; test-installation jobs remain disabled.
 
 - Account overview feed snapshots are opt-in on `KreaBankIntegration::accounts()`. Keep native `balance` and the REST contract unchanged; `feed_balance` uses current workspace/company/account/currency/IBAN, with bank refresh and balance collection timestamps. Validate with `test/test_account_feed_database.php` on the guarded disposable database.
+
+## Payment account review
+
+- `KreaBankService::getPaymentAccountReview()` accepts explicit staging IDs and
+  checks current-company invoice payments in other owned accounts. It returns
+  review evidence only; never feed these records into cross-account execution.
+- Exact signed persisted amount/currency, nearby booking dates and a complete
+  payment/check reference are required. Suspected errors block automatic-native
+  and TPA execution and bulk approval. Review/correction uses the existing native
+  bank movement form; preserve payment allocations, accounting and reconciliation
+  locks. Recompute warnings after correction, never cache approval of a move.
+- `test/test_payment_account_review.php` is pure; its database counterpart extends
+  only the guarded disposable port 33317 fixture. No schema or scheduler changes.

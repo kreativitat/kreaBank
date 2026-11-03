@@ -1558,6 +1558,15 @@ if (!empty($quickCreateSuccessAlert['enabled']) && !empty($quickCreateSuccessAle
 
 kreabankPrintWorkspaceNavigation('reconcile', $navigationAccount);
 print load_fiche_titre($langs->trans('KreaBankReconcile'), '', 'bank');
+if ($selectedLine && !empty($selectedLine['fk_statement'])) {
+	try {
+		$accountReview = $service->getPaymentAccountReview($selectedLine['rowid'], array($selectedLine['bank_account_id']));
+		if ($accountReview) { print kreabankPaymentAccountReviewHtml($accountReview, $langs); }
+	} catch (Throwable $e) {
+		print '<p class="error">' . $langs->trans('KreaBankAccountReviewUnavailable') . '</p>';
+	}
+}
+
 
 print '<style>';
 print '.krea-embedded-success-alert .ok{margin:0 0 12px 0}';

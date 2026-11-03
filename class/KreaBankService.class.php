@@ -1987,6 +1987,9 @@ class KreaBankService
 					throw new Exception($this->langs->trans('KreaBankBulkMatchReviewChanged', '1'));
 				}
 				$line = $currentLine;
+				if (!empty($line['fk_statement']) && $this->getPaymentAccountReview($lineId, array($line['bank_account_id']))) {
+					throw new Exception($this->langs->trans('KreaBankAccountReviewTitle'));
+				}
 			}
 			if ($isAutomaticNative) {
 				$fresh = $this->getAutomaticNativeSuggestion((int) $lineId, (array) $automaticAccounts);
@@ -2292,6 +2295,7 @@ class KreaBankService
 	public function getAutomaticNativeSuggestion($lineId, $accountIds)
 	{
 		$this->assertAutomaticActor();
+		if ($this->getPaymentAccountReview($lineId, $accountIds)) { return null; }
 		$ids = array_filter(array_map('intval', (array) $accountIds), static function ($id) { return $id > 0; });
 		if (!$ids) {
 			return null;
@@ -2385,15 +2389,90 @@ class KreaBankService
 		return array('line' => $line, 'suggestion' => $safe);
 	}
 
-	/** Shared unattended actor boundary; a company change invalidates the service. */
-	private function assertAutomaticActor()
+	/**
+	 * Possible invoice payments recorded in another owned account. Read-only:
+	 * these are review evidence, never cross-account reconciliation candidates.
+	 * $lineId is explicitly a staging ID; source accounts must be selected by the caller.
+	 */
+	public function getPaymentAccountReview($lineId, $accountIds)
+	{
+		$this->assertAutomaticActor(true);
+		$ids = array_filter(array_map('intval', (array) $accountIds), static function ($id) { return $id > 0; });
+		if (!$ids) { return null; }
+		$p = $this->db->prefix();
+		$rows = $this->transferRows("SELECT l.amount FROM {$p}kreabank_statement_line l"
+			. " JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
+			. " JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=l.entity"
+			. ' WHERE l.entity=' . $this->entity . ' AND l.rowid=' . (int) $lineId
+			. ' AND l.status=0 AND l.is_duplicate=0 AND l.allocated_amount=0 AND l.amount<>0'
+			. ' AND l.fk_native_bank_line IS NULL AND ba.clos=0 AND ba.rappro=1 AND ba.courant<>2'
+			. ' AND l.currency=ba.currency_code AND ba.rowid IN (' . implode(',', $ids) . ')');
+		if (!$rows) { return null; }
+		$line = $this->native->getStatementLineById((int) $lineId);
+		if (!$line || self::automaticDecimal($rows[0]->amount) !== self::automaticDecimal($line['amount'])) { return null; }
+		$date = (string) $line['operation_date'];
+		if (!preg_match('/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D', $date, $parts)
+			|| !checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])) { return null; }
+		$policy = new KreaBankAccountPairs($this->db, $this->entity);
+		if ($policy->mainAccount((int) $line['bank_account_id'])) { return null; }
+		$tolerance = max(0, min(31, (int) getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE', 3)));
+		$range = $this->resolveOpenDocumentsDateRange($date, $tolerance);
+		$supplier = substr(self::automaticDecimal($rows[0]->amount), 0, 1) === '-';
+		$paymentTable = $supplier ? 'paiementfourn' : 'paiement';
+		$linkTable = $supplier ? 'paiementfourn_facturefourn' : 'paiement_facture';
+		$invoiceTable = $supplier ? 'facture_fourn' : 'facture';
+		$paymentKey = $supplier ? 'fk_paiementfourn' : 'fk_paiement';
+		$invoiceKey = $supplier ? 'fk_facturefourn' : 'fk_facture';
+		$sql = "SELECT b.rowid,b.fk_account,b.amount,b.dateo,b.rappro,b.label,b.num_chq,"
+			. ' ba.ref AS account_ref,ba.label AS account_label,p.rowid AS payment_id,p.ref AS payment_ref,p.num_paiement'
+			. " FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account"
+			. " JOIN {$p}{$paymentTable} p ON p.fk_bank=b.rowid AND p.entity=ba.entity"
+			. ' WHERE ba.entity=' . $this->entity . ' AND b.fk_account<>' . (int) $line['bank_account_id']
+			. ' AND ba.currency_code=' . $this->sqlText($line['currency'])
+			. ' AND b.amount=' . self::automaticDecimal($rows[0]->amount)
+			. ' AND p.amount>0 AND p.amount=ABS(b.amount) AND b.dateo>=' . $this->sqlDate($range['start'])
+			. ' AND b.dateo<' . $this->sqlDate(gmdate('Y-m-d', strtotime($range['end'] . ' UTC') + 86400))
+			. " AND EXISTS (SELECT 1 FROM {$p}{$linkTable} pf JOIN {$p}{$invoiceTable} f ON f.rowid=pf.{$invoiceKey}"
+			. " WHERE pf.{$paymentKey}=p.rowid AND f.entity=p.entity AND f.type<>2)"
+			. " AND NOT EXISTS (SELECT 1 FROM {$p}{$linkTable} pf LEFT JOIN {$p}{$invoiceTable} f ON f.rowid=pf.{$invoiceKey}"
+			. " WHERE pf.{$paymentKey}=p.rowid AND (f.rowid IS NULL OR f.entity<>p.entity OR f.type=2))"
+			. " ORDER BY b.dateo,b.rowid,p.rowid" . $this->db->plimit(101);
+		$payments = $this->transferRows($sql);
+		$candidates = array();
+		foreach ($payments as $payment) {
+			if ($policy->mainAccount((int) $payment->fk_account)) { continue; }
+			$reference = '';
+			foreach (array_unique(array($payment->num_paiement, $payment->num_chq, $payment->payment_ref)) as $rawReference) {
+				$possible = trim((string) $rawReference);
+				if (strlen(preg_replace('/[^a-z0-9]/i', '', $possible)) < 8 || !preg_match('/[0-9]/', $possible)) { continue; }
+				if (!preg_match('/(?<![a-z0-9])' . preg_quote($possible, '/') . '(?![a-z0-9])/i', $line['payment_reference'] . ' ' . $line['description'])) { continue; }
+				$document = array('rowid'=>(int) $payment->rowid,'doc_type'=>'native_bank','ref'=>$possible,
+					'amount_open'=>(float) $payment->amount,'doc_date'=>$payment->dateo,'description'=>$payment->label);
+				$score = $this->matcher->scoreLineToDocument($line, $document, array(), $tolerance);
+				if (in_array('date', $score['details'], true) && in_array('amount', $score['details'], true)) { $reference = $possible; break; }
+			}
+			if ($reference === '') { continue; }
+			$candidates[] = array('bank_line_id'=>(int) $payment->rowid,'bank_account_id'=>(int) $payment->fk_account,
+				'account_ref'=>$payment->account_ref,'account_label'=>$payment->account_label,
+				'payment_id'=>(int) $payment->payment_id,'payment_ref'=>$payment->payment_ref,
+				'payment_type'=>$supplier ? 'payment_supplier' : 'payment','reference'=>$reference,
+				'amount'=>(string) $payment->amount,'date'=>$payment->dateo,'reconciled'=>(bool) $payment->rappro);
+		}
+		// A truncated search is itself a review condition; never assume there are no conflicts.
+		return $candidates || count($payments) >= 101
+			? array('line'=>$line,'candidates'=>$candidates,'truncated'=>count($payments) >= 101) : null;
+	}
+
+	/** Shared company boundary; read-only account reviews require both native and module read rights. */
+	private function assertAutomaticActor($readOnly = false)
 	{
 		global $conf;
 		if ($this->entity <= 0 || (int) $conf->entity !== $this->entity || !isModEnabled('kreabank') || !isModEnabled('banque')
 			|| empty($this->user->id) || (int) $this->user->statut !== 1 || !empty($this->user->socid)
 			|| (!empty($this->user->entity) && (int) $this->user->entity !== $this->entity)
-			|| !$this->user->hasRight('banque', 'lire') || !$this->user->hasRight('banque', 'modifier')
-			|| !$this->user->hasRight('kreabank', 'reconciliation', 'write')) {
+			|| !$this->user->hasRight('banque', 'lire')
+			|| ($readOnly ? !$this->user->hasRight('kreabank', 'reconciliation', 'read')
+				: (!$this->user->hasRight('banque', 'modifier') || !$this->user->hasRight('kreabank', 'reconciliation', 'write')))) {
 			throw new Exception('Bank reconciliation permission is required in the current company');
 		}
 		if (isModEnabled('multicompany') && !$this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'entity WHERE rowid=' . $this->entity . ' AND active=1')) {
@@ -2406,6 +2485,7 @@ class KreaBankService
 	{
 		global $conf;
 		$this->assertAutomaticActor();
+		if ($this->getPaymentAccountReview($lineId, $accountIds)) { return null; }
 		$p = $this->db->prefix();
 		$settings = array();
 		foreach ($this->transferRows("SELECT name,value FROM {$p}const WHERE entity=" . $this->entity

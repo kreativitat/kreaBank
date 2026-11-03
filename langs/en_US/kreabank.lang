@@ -535,3 +535,13 @@ KreaBankTpaNewReceipt=Create card-terminal receipt
 
 KreaBankTpaPaymentMode=Payment mode for TPA receipts (required)
 KreaBankLedgerBalance=Dolibarr balance
+
+KreaBankAccountReviewTitle=Verify the payment bank account
+KreaBankAccountReviewHelp=A possible invoice payment was recorded in another bank account. Verify the payment and the account shown on the bank statement before correcting its existing bank movement. This line stays pending; no account is changed automatically. Refresh reconciliation after the correction.
+KreaBankAccountReviewStatementAccount=Bank statement account to verify
+KreaBankAccountReviewRecordedAccount=Account recorded on the payment
+KreaBankAccountReviewOpen=Verify / correct bank account
+KreaBankAccountReviewLocked=Already reconciled: review the existing reconciliation first.
+KreaBankAccountReviewTruncated=The search reached its limit. Review the payment records; this list may be incomplete.
+KreaBankAccountReviewUnavailable=Payment account verification is unavailable. Try again before reconciling.
+KreaBankBulkReviewResults=Matches and accounts to verify

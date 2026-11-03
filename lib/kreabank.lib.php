@@ -21,6 +21,36 @@ function kreabankPrice($amount)
 	return price($amount, 0, '', 0, 2, 2);
 }
 
+/** Render current-company evidence only; all corrections use the native bank-line form. */
+function kreabankPaymentAccountReviewHtml($review, $langs)
+{
+	$line = $review['line'];
+	$html = '<div class="warning kb-account-review"><h3>' . $langs->trans('KreaBankAccountReviewTitle') . '</h3>';
+	$html .= '<p>' . $langs->trans('KreaBankAccountReviewHelp') . '</p>';
+	$html .= '<p><strong>' . $langs->trans('KreaBankAccountReviewStatementAccount') . ':</strong> '
+		. dol_escape_htmltag(trim($line['bank_account_ref'] . ' — ' . $line['bank_account_label'])) . ' · '
+		. kreabankPrice($line['amount']) . ' ' . dol_escape_htmltag($line['currency']) . ' · '
+		. dol_escape_htmltag($line['operation_date']) . '<br>' . dol_escape_htmltag($line['description']) . '</p>';
+	$html .= '<div class="div-table-responsive"><table class="liste centpercent"><tr class="liste_titre"><th scope="col">'
+		. $langs->trans('KreaBankAccountReviewRecordedAccount') . '</th><th scope="col">' . $langs->trans('KreaBankDocument')
+		. '</th><th scope="col">' . $langs->trans('KreaBankDate') . '</th><th scope="col">' . $langs->trans('KreaBankAction') . '</th></tr>';
+	foreach ($review['candidates'] as $candidate) {
+		$paymentPath = $candidate['payment_type'] === 'payment_supplier' ? '/fourn/paiement/card.php?id=' : '/compta/paiement/card.php?id=';
+		$html .= '<tr class="oddeven"><td>' . dol_escape_htmltag(trim($candidate['account_ref'] . ' — ' . $candidate['account_label']))
+			. '</td><td><a href="' . dol_escape_htmltag(dol_buildpath($paymentPath . (int) $candidate['payment_id'], 1)) . '">'
+			. dol_escape_htmltag($candidate['payment_ref']) . '</a><br>' . dol_escape_htmltag($candidate['reference'])
+			. '</td><td class="nowrap">' . dol_escape_htmltag(substr($candidate['date'], 0, 10)) . '</td><td><a href="'
+			. dol_escape_htmltag(dol_buildpath('/compta/bank/line.php?rowid=' . (int) $candidate['bank_line_id'], 1)) . '">'
+			. $langs->trans('KreaBankAccountReviewOpen') . '</a>'
+			. ($candidate['reconciled'] ? '<br>' . $langs->trans('KreaBankAccountReviewLocked') : '') . '</td></tr>';
+	}
+	$html .= '</table></div>';
+	if ($review['truncated']) { $html .= '<p>' . $langs->trans('KreaBankAccountReviewTruncated') . '</p>'; }
+	$html .= '<p><a href="' . dol_escape_htmltag(dol_buildpath('/custom/kreabank/reconcile.php?line_id=' . (int) $line['rowid']
+		. '&account_context=' . (int) $line['bank_account_id'], 1)) . '">' . $langs->trans('KreaBankReconcile') . '</a></p></div>';
+	return $html;
+}
+
 /**
  * Prepare admin pages header.
  *

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.17.0 — 2026-11-03
+
+- Flag possible invoice payments recorded in another company-owned bank account
+  during automatic preview, bulk review and individual reconciliation. Show the
+  recorded and statement accounts, payment and existing native movement to verify.
+- Keep suspected mistakes pending, exclude them from automatic execution and bulk
+  approval, and require a reviewed native correction before ordinary matching resumes.
+  Exact signed amount, currency, nearby dates and a complete payment reference are
+  required; ambiguous candidates remain visible for review. No schema migration,
+  automatic account correction, new payments or scheduler configuration changes.
+
 ## 1.16.3 — 2026-11-03
 
 - Shorten the Portuguese bank refresh heading to “Última atualização”.

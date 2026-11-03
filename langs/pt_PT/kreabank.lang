@@ -534,3 +534,13 @@ KreaBankTpaHelp=Para fechos TPA positivos reconhecidos nas contas selecionadas d
 KreaBankTpaNewReceipt=Criar recebimento de TPA
 KreaBankTpaPaymentMode=Modo de pagamento dos recebimentos de TPA (obrigatório)
 KreaBankLedgerBalance=Saldo Dolibarr
+
+KreaBankAccountReviewTitle=Verifique a conta bancária do pagamento
+KreaBankAccountReviewHelp=Foi encontrado um possível pagamento de fatura registado noutra conta bancária. Verifique o pagamento e a conta indicada no extrato antes de corrigir o movimento bancário existente. Esta linha fica pendente; a conta não é alterada automaticamente. Atualize a reconciliação após a correção.
+KreaBankAccountReviewStatementAccount=Conta do extrato bancário a verificar
+KreaBankAccountReviewRecordedAccount=Conta registada no pagamento
+KreaBankAccountReviewOpen=Verificar / corrigir conta bancária
+KreaBankAccountReviewLocked=Já reconciliado: verifique primeiro a reconciliação existente.
+KreaBankAccountReviewTruncated=A pesquisa atingiu o limite. Verifique os registos de pagamento; esta lista pode estar incompleta.
+KreaBankAccountReviewUnavailable=Não foi possível verificar a conta do pagamento. Tente novamente antes de reconciliar.
+KreaBankBulkReviewResults=Correspondências e contas a verificar

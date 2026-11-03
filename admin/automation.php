@@ -86,6 +86,7 @@ try {
 			print '<p>' . $langs->trans('KreaBankAutoSelectAccounts') . '</p>';
 		} else {
 			print '<p>' . $langs->trans('KreaBankAutoSummary', (int) $preview['scanned'], (int) $preview['eligible'], (int) $preview['failed']) . '</p>';
+			foreach ($preview['account_reviews'] as $review) { print kreabankPaymentAccountReviewHtml($review, $langs); }
 			print '<div class="div-table-responsive"><table data-kb-sort class="liste centpercent"><tr class="liste_titre"><th scope="col">' . $langs->trans('KreaBankAutoStatementLine')
 				. '</th><th scope="col">' . $langs->trans('KreaBankAutoBankMovement') . '</th><th scope="col">' . $langs->trans('KreaBankAutoScore') . '</th></tr>';
 			foreach ($preview['matches'] as $match) {

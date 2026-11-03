@@ -117,3 +117,43 @@ Release 1.15.4 adds an independent opt-in TPA settlement receipt option to this
 runner. It may create a native card receipt only from a recognized positive
 settlement with no conflicting financial evidence. Existing matching rules are
 unchanged. See [TPA receipts](TPA_RECEIPTS.md).
+
+## Invoice payments recorded in the wrong bank account
+
+Since 1.17.0, each scanned staging line is checked for an existing customer or
+supplier invoice payment recorded in a different account owned by the active
+company. The statement's signed persisted amount and currency must agree with
+the payment's native movement; its booking date must be within the configured
+automatic tolerance. A complete payment/check reference with at least eight
+alphanumeric characters and a digit must occur in the statement reference or
+description. Amount/date or payee name alone does not establish an account error;
+missing reference evidence means the mistake may remain undetected.
+
+These are possible mistakes for human verification. Multiple candidates are
+shown together; reaching the 101-payment search limit also requires review.
+Foreign-company bank accounts, payments and parent invoices, mixed-company
+allocations, credit notes and restricted transfer-only accounts are excluded.
+An already reconciled payment can be flagged, but its existing reconciliation
+and native accounting restrictions must be reviewed before correction.
+
+**Preview matches**, the bounded background **bulk reconciliation** scan, and the
+individual reconciliation page display **Verify the payment bank account**.
+Compare the statement account with the account recorded on the payment, open the
+payment and choose **Verify / correct bank account** to inspect the existing
+native bank movement. Make the correction only after checking the bank evidence.
+Refresh reconciliation afterward; the existing same-account matcher then applies
+its normal safety checks. The warning does not offer a bulk approval checkbox,
+move a payment, duplicate a bank line, or change invoice allocations/paid states.
+
+Scheduled output includes `review_required` and staging IDs in `account_reviews`,
+without financial descriptions or account details. Review is a pending business
+condition rather than a processing failure. The cursor continues to rotate over
+the full selected queue. UI review is recalculated from current evidence; no
+second scheduler or stored financial correction queue is created. Bulk submission
+rechecks for account warnings before accepting the signed ordinary match.
+
+Validate with `php test/test_payment_account_review.php` and
+`php test/test_payment_account_review_database.php`. The latter extends only the
+guarded disposable MariaDB fixture described above. Source deployment requires
+the service, runner, views, shared library and translations together; no database
+migration or settings save is needed. Existing job enablement remains unchanged.

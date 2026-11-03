@@ -98,7 +98,7 @@ if ($dateTolerance <= 0) {
 	$dateTolerance = 3;
 }
 $bulkScanCacheStoreKey = 'kreabank_bulkmatch_scan_state';
-$bulkScanMatcherRevision = 15;
+$bulkScanMatcherRevision = 16;
 $bulkColumns = array('operation_date' => 'KreaBankDate', 'description' => 'KreaBankDescription', 'amount' => 'KreaBankAmount', 'doc_ref' => 'KreaBankDocument', 'score' => 'KreaBankAutoScore');
 $bulkSort = kreabankListSort($bulkColumns, 'operation_date');
 $bulkScanFilterScope = array(
@@ -461,6 +461,10 @@ if ($action === 'bulk_match_confirm') {
 					continue;
 				}
 
+				if (!empty($line['fk_statement']) && $service->getPaymentAccountReview($lineId, array($line['bank_account_id']))) {
+					$changed++;
+					continue;
+				}
 				$freshSuggestions = $service->getSuggestionsForLines(array($line), 0, $dateTolerance, null, false);
 				$suggestions = $freshSuggestions[(int) $lineId] ?? array();
 				$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestions, $dateTolerance);
@@ -664,6 +668,11 @@ try {
 		}
 		$prepareReviewRow = static function ($line) use ($service, $dateTolerance, $appendLinkedFallbackSuggestions, $resolveLineBestSuggestion) {
 			$lineId = (int) $line['rowid'];
+			$review = !empty($line['fk_statement']) ? $service->getPaymentAccountReview($lineId, array($line['bank_account_id'])) : null;
+			if ($review) {
+				return array('line'=>$line,'account_review'=>$review,'suggestion'=>array('doc_type'=>'account_review','doc_id'=>0),
+					'allocation'=>0,'preselected'=>false,'is_bulk_safe'=>false);
+			}
 			$suggestionsByLine = $service->getSuggestionsForLines(array($line), 0, $dateTolerance, null, false);
 			$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestionsByLine[$lineId] ?? array(), $dateTolerance);
 			$resolved = $resolveLineBestSuggestion($line, $suggestions);
@@ -787,7 +796,7 @@ if (!$isScanRequest) {
 
 print '<div class="krea-bulk-summary">';
 print '<span class="badge badge-status1">' . $langs->trans('KreaBankPendingCount') . ': ' . ((int) $pendingTotal) . '</span>';
-print '<span class="badge badge-status4">' . $langs->trans('KreaBankBulkMatchWithSuggestion') . ': ' . ((int) $matchedCount) . '</span>';
+print '<span class="badge badge-status4">' . $langs->trans('KreaBankBulkReviewResults') . ': ' . ((int) $matchedCount) . '</span>';
 print '<span class="badge badge-status2">' . $langs->trans('KreaBankBulkMatchPreselected') . ': ' . ((int) $preselectedCount) . '</span>';
 print '</div>';
 if ($scanInProgress) {
@@ -806,7 +815,7 @@ print kreabankNavigationHiddenFields($navigationAccountId);
 print '<input type="hidden" name="sortfield" value="' . dol_escape_htmltag($bulkSort['field']) . '"><input type="hidden" name="sortorder" value="' . $bulkSort['order'] . '">';
 print '<input type="hidden" name="mainmenu" value="bank">';
 print '<input type="hidden" name="leftmenu" value="kreabank_bulkmatch">';
-print_barre_liste($langs->trans('KreaBankBulkMatchWithSuggestion'), $page, $_SERVER['PHP_SELF'], $param, '', '', '', $bulkPagerNum, $matchedCount, 'title_setup', 0, '', '', $limit, 0, 0, 1);
+print_barre_liste($langs->trans('KreaBankBulkReviewResults'), $page, $_SERVER['PHP_SELF'], $param, '', '', '', $bulkPagerNum, $matchedCount, 'title_setup', 0, '', '', $limit, 0, 0, 1);
 print '</form>';
 
 if (empty($rows)) {
@@ -848,6 +857,10 @@ print '<input type="hidden" name="sortfield" value="' . dol_escape_htmltag($bulk
 
 	foreach ($rows as $row) {
 		$line = (array) $row['line'];
+		if (!empty($row['account_review'])) {
+			print kreabankPaymentAccountReviewHtml($row['account_review'], $langs);
+			continue;
+		}
 		$suggestion = !empty($row['suggestion']) ? (array) $row['suggestion'] : null;
 		$lineId = (int) $line['rowid'];
 		$lineDate = !empty($line['operation_date']) ? (string) $line['operation_date'] : (!empty($line['value_date']) ? (string) $line['value_date'] : '');

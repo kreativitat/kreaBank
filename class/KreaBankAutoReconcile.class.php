@@ -148,7 +148,7 @@ class KreaBankAutoReconcile
 				. ' AND ba.rowid IN (' . implode(',', $ids) . ') ORDER BY l.rowid' . $this->db->plimit(50);
 			$rows = $this->rows($sql);
 			$result = array('status' => $preview || $mode !== 'enabled' ? 'preview' : 'completed',
-				'scanned' => 0, 'eligible' => 0, 'reconciled' => 0, 'failed' => 0, 'matches' => array(), 'errors' => array());
+				'scanned' => 0, 'eligible' => 0, 'reconciled' => 0, 'failed' => 0, 'matches' => array(), 'errors' => array(), 'review_required' => 0, 'account_reviews' => array());
 			$pairedTransfers = $this->setting('PAIRS_ENABLED', '0') === '1';
 			$tpaReceipts = $this->setting('TPA_ENABLED', '0') === '1';
 			$previewedPairs = array();
@@ -157,38 +157,46 @@ class KreaBankAutoReconcile
 				$cursor = (int) $row->rowid;
 				$result['scanned']++;
 				try {
-					$pair = $pairedTransfers ? $service->getAutomaticTransferSuggestion($cursor, $ids) : null;
-					if ($pair) {
-						$other = (int) $pair['lines'][1]->rowid;
-						if (!isset($previewedPairs[$cursor])) {
+					$review = $service->getPaymentAccountReview($cursor, $ids);
+					if ($review) {
+						$result['review_required']++;
+						// IDs only in scheduled output; previews may display current-company evidence.
+						$result['account_reviews'][] = $preview ? $review : array('statement_line_id'=>$cursor);
+					} else {
+						$pair = $pairedTransfers ? $service->getAutomaticTransferSuggestion($cursor, $ids) : null;
+						if ($pair) {
+							$other = (int) $pair['lines'][1]->rowid;
+							if (!isset($previewedPairs[$cursor])) {
+								$result['eligible']++;
+								$result['matches'][] = array('statement_line_id' => $cursor, 'paired_statement_line_id' => $other,
+									'bank_line_id' => (int) $pair['bank_ids'][0], 'score' => null);
+								$previewedPairs[$other] = true;
+								if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticTransferPair($cursor, $ids)) {
+									$result['reconciled'] += 2;
+								}
+							}
+							$match = null;
+						} else {
+							$match = $service->getAutomaticNativeSuggestion($cursor, $ids);
+						}
+						if ($match) {
 							$result['eligible']++;
-							$result['matches'][] = array('statement_line_id' => $cursor, 'paired_statement_line_id' => $other,
-								'bank_line_id' => (int) $pair['bank_ids'][0], 'score' => null);
-							$previewedPairs[$other] = true;
-							if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticTransferPair($cursor, $ids)) {
-								$result['reconciled'] += 2;
+							$result['matches'][] = array('statement_line_id' => $cursor,
+								'bank_line_id' => (int) $match['suggestion']['doc_id'], 'score' => (int) $match['suggestion']['score']);
+							if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticNativeLine($cursor, $ids)) {
+								$result['reconciled']++;
 							}
 						}
-						$match = null;
-					} else {
-						$match = $service->getAutomaticNativeSuggestion($cursor, $ids);
-					}
-					if ($match) {
-						$result['eligible']++;
-						$result['matches'][] = array('statement_line_id' => $cursor,
-							'bank_line_id' => (int) $match['suggestion']['doc_id'], 'score' => (int) $match['suggestion']['score']);
-						if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticNativeLine($cursor, $ids)) {
-							$result['reconciled']++;
+						if (!$pair && !$match && $tpaReceipts) {
+							$tpa = $service->getAutomaticTpaSuggestion($cursor, $ids);
+							if ($tpa) {
+								$result['eligible']++;
+								$result['matches'][] = array('statement_line_id' => $cursor, 'bank_line_id' => 0, 'score' => null, 'tpa_receipt' => true);
+								if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticTpaReceipt($cursor, $ids)) { $result['reconciled']++; }
+							}
 						}
 					}
-					if (!$pair && !$match && $tpaReceipts) {
-						$tpa = $service->getAutomaticTpaSuggestion($cursor, $ids);
-						if ($tpa) {
-							$result['eligible']++;
-							$result['matches'][] = array('statement_line_id' => $cursor, 'bank_line_id' => 0, 'score' => null, 'tpa_receipt' => true);
-							if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticTpaReceipt($cursor, $ids)) { $result['reconciled']++; }
-						}
-					}
+
 				} catch (Throwable $e) {
 					$result['failed']++;
 					// No descriptions, account details or database diagnostics in the job output.

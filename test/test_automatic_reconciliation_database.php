@@ -80,7 +80,7 @@ $db = new DoliDB();
 foreach ($db->query('SHOW TABLES')->fetch_all() as $table) {
 	if (strpos($table[0], MAIN_DB_PREFIX) === 0) { $db->query('DROP TABLE `' . $table[0] . '`'); }
 }
-foreach (array('bank_account','bank','bank_url','const','cronjob') as $table) {
+foreach (array('bank_account','bank','bank_url','const','cronjob','paiement','paiement_facture','facture','paiementfourn','paiementfourn_facturefourn','facture_fourn','societe','societe_rib','societe_remise_except') as $table) {
 	$sql = file_get_contents(DOL_DOCUMENT_ROOT . '/install/mysql/tables/llx_' . $table . '.sql');
 	$sql = preg_replace('/--[^\n]*/', '', $sql);
 	foreach (explode(';', str_replace('llx_', MAIN_DB_PREFIX, $sql)) as $statement) {
