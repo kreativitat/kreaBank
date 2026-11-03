@@ -60,7 +60,7 @@ checkAuto(count($ids) === $count && count(array_unique($ids)) === $count, 'Stabl
 $first = $db->fetch_object($report->query('SELECT h.* FROM ' . $source . ' WHERE h.rowid BETWEEN 710 AND 769 ORDER BY h.amount ASC,h.rowid' . $db->plimit(1, 0)));
 checkAuto($first->amount === '-40.00000000', 'Numeric sorting applies before pagination');
 checkAuto($before[0] === countAuto('bank') && $before[1] + 60 === countAuto('kreabank_statement') && $before[2] + 60 === countAuto('kreabank_statement_line') && $before[3] === countAuto('kreabank_recon_audit'), 'Repeated statement reads create no ledger, staging or audit records');
-$db->query("INSERT INTO kbauto_bank_account (rowid,entity,ref,label,currency_code,clos,courant) VALUES (104,1,'LEGACY','Legacy only','EUR',1,1),(105,1,'EMPTY','No statements','EUR',0,1),(106,1,'LEDGER','Ledger only','EUR',0,1)");
+$db->query("INSERT INTO kbauto_bank_account (rowid,entity,ref,label,currency_code,clos,courant,fk_pays) VALUES (104,1,'LEGACY','Legacy only','EUR',1,1,1),(105,1,'EMPTY','No statements','EUR',0,1,1),(106,1,'LEDGER','Ledger only','EUR',0,1,1)");
 bankAuto(780, '12.00', 'LEGACY', 104);
 bankAuto(781, '12.00', 'ORDINARY', 106);
 $db->query("UPDATE kbauto_bank SET num_releve='LEGACY-ONLY',note='KreaBank import fixture' WHERE rowid=780");
