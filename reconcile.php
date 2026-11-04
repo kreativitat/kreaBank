@@ -1727,7 +1727,7 @@ if (!$selectedLine) {
 			$isLocked = !empty($doc['is_locked']);
 			$isLockedReconciled = ($isLocked && !empty($doc['linked_bank_reconciled']));
 			$lockedStatusLabel = $isLockedReconciled ? $langs->trans('KreaBankAlreadyConciliatedShort') : $langs->trans('KreaBankAlreadyLinkedShort');
-			if (!$isLocked) {
+			if (!$isLocked && $doc['doc_type'] === 'native_bank') {
 				$hasSelectableDocuments = true;
 			}
 			$docKey = $doc['doc_type'] . '__' . $doc['rowid'];
@@ -1762,7 +1762,7 @@ if (!$selectedLine) {
 			print '<label style="display:flex;gap:6px;align-items:flex-start">';
 			if ($isLocked) {
 				print '<span class="badge ' . ($isLockedReconciled ? 'badge-status4' : 'badge-status7') . '">' . $lockedStatusLabel . '</span>';
-			} else {
+			} elseif ($rawDocType === 'native_bank') {
 				$shouldCheck = !empty($autoSelectDocKeys[$docKey]);
 				if ($rawDocType === 'native_bank' && (int) $doc['rowid'] === $correctedBankLineId) { $shouldCheck = false; }
 				print '<input type="checkbox" name="selected_docs[]" value="' . $docKey . '"' . ($shouldCheck ? ' checked' : '') . (!$canReconcile ? ' disabled' : '') . '>';
@@ -1773,7 +1773,8 @@ if (!$selectedLine) {
 			} else {
 				print '<strong>' . dol_escape_htmltag((string) $doc['ref']) . '</strong>';
 			}
-			print ' <span class="krea-muted">' . $langs->trans('KreaBankWorkspaceBankEntry') . '</span><br>';
+			$documentKind = $rawDocType === 'native_bank' ? 'Bank' : (in_array($rawDocType, array('customer_invoice', 'supplier_invoice'), true) ? 'Invoice' : 'Payment');
+			print ' <span class="krea-muted">' . $langs->trans('KreaBankReviewExisting' . $documentKind) . '</span><br>';
 			print '<span class="krea-muted">' . dol_escape_htmltag((string) $doc['thirdparty_name']) . ' • ' . dol_print_date(strtotime((string) $doc['doc_date']), 'day') . '</span></span>';
 			print '</label>';
 			if (!empty($doc['linked_bank_line'])) {
@@ -1802,7 +1803,13 @@ if (!$selectedLine) {
 			}
 			print '</div>';
 			print '</div>';
-			if (!$isLocked) {
+			if (!$isLocked && $rawDocType !== 'native_bank') {
+				print '<p>' . $langs->trans('KreaBankReviewConsequence' . $documentKind) . '</p>';
+				$reviewUrl = kreabankWorkspaceUrl('matched', (int) $selectedLine['bank_account_id']) . '&line_id=' . (int) $selectedLine['rowid']
+					. '&line_source=' . (!empty($selectedLine['fk_statement']) ? 'staged' : 'native') . '&review_doc=' . rawurlencode($docKey);
+				print '<a class="button" href="' . dol_escape_htmltag($reviewUrl) . '">' . $langs->trans('KreaBankWorkspaceReviewExisting' . $documentKind) . '</a>';
+			}
+			if (!$isLocked && $rawDocType === 'native_bank') {
 				print '<input type="hidden" name="match_score[' . $docKey . ']" value="' . $score . '">';
 				print '<input type="hidden" name="match_reasons[' . $docKey . ']" value="' . dol_escape_htmltag(implode(',', $details)) . '">';
 				print '<input type="hidden" name="doc_ref[' . $docKey . ']" value="' . dol_escape_htmltag((string) $doc['ref']) . '">';
@@ -1817,10 +1824,12 @@ if (!$selectedLine) {
 		$hasSelectableDocuments = false;
 	}
 
-	print '<div class="kb-allocation" role="status" aria-live="polite" aria-atomic="true"><div><span>' . $langs->trans('KreaBankWorkspaceSelectedTotal') . '</span><strong id="kb-selected-total">' . kreabankPrice(0) . ' ' . dol_escape_htmltag($selectedLine['currency']) . '</strong></div><div><span>' . $langs->trans('KreaBankWorkspaceDifference') . '</span><strong id="kb-selection-difference">' . kreabankPrice($selectedOutstanding) . ' ' . dol_escape_htmltag($selectedLine['currency']) . '</strong></div></div>';
-	print '<p class="kb-selection-feedback" id="kb-selection-feedback" tabindex="-1" data-empty="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceSelectEntries')) . '" data-ready="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceReady')) . '" data-mismatch="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceMismatch')) . '">' . $langs->trans('KreaBankWorkspaceSelectEntries') . '</p>';
-	if ($canReconcile) {
-		print '<button type="submit" class="button kb-primary-action" id="manualReconcileButton" aria-describedby="kb-selection-feedback"' . (empty($hasSelectableDocuments) ? ' disabled' : '') . '>' . $langs->trans('KreaBankWorkspaceReconcileEntries') . '</button>';
+	if ($hasSelectableDocuments) {
+		print '<div class="kb-allocation" role="status" aria-live="polite" aria-atomic="true"><div><span>' . $langs->trans('KreaBankWorkspaceSelectedTotal') . '</span><strong id="kb-selected-total">' . kreabankPrice(0) . ' ' . dol_escape_htmltag($selectedLine['currency']) . '</strong></div><div><span>' . $langs->trans('KreaBankWorkspaceDifference') . '</span><strong id="kb-selection-difference">' . kreabankPrice($selectedOutstanding) . ' ' . dol_escape_htmltag($selectedLine['currency']) . '</strong></div></div>';
+		print '<p class="kb-selection-feedback" id="kb-selection-feedback" tabindex="-1" data-empty="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceSelectEntries')) . '" data-ready="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceReady')) . '" data-mismatch="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceMismatch')) . '">' . $langs->trans('KreaBankWorkspaceSelectEntries') . '</p>';
+		if ($canReconcile) {
+			print '<button type="submit" class="button kb-primary-action" id="manualReconcileButton" aria-describedby="kb-selection-feedback"' . (empty($hasSelectableDocuments) ? ' disabled' : '') . '>' . $langs->trans('KreaBankWorkspaceReconcileEntries') . '</button>';
+		}
 	}
 	print '</form>';
 	if ($searchOtherAccounts) { print kreabankOtherAccountMovementsHtml($otherAccountDocuments, $selectedLine, $accountMoveReviews, $openDocumentsSearch, $langs); }

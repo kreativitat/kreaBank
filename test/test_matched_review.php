@@ -181,6 +181,29 @@ $_SESSION['kreabank_matched_scan_state']=$state;
 $second=renderMatchedFixture();
 checkMatched(strpos($second['html'],'value="12"')!==false && strpos($second['html'],'KreaBankReviewPosition:2/2')!==false && strpos($second['html'],'matched.php?page=0')!==false,'Second pair has previous navigation and retains a single source');
 $fixtureService->line=$line;
+$savedRequest=$request;
+$savedScan=$_SESSION['kreabank_matched_scan_state'];
+$fixtureService->suggestions[0]['doc_type']='supplier_invoice';
+$request=array('line_id'=>11,'line_source'=>'staged','review_doc'=>'supplier_invoice__99');
+$targeted=renderMatchedFixture();
+checkMatched(strpos($targeted['html'],'name="review_signatures[11]"')!==false && strpos($targeted['html'],'KreaBankReviewConsequenceInvoice')!==false,'Targeted invoice opens the existing signed review and explains payment creation');
+checkMatched($_SESSION['kreabank_matched_scan_state']===$savedScan && strpos($targeted['html'],'"more":false')!==false,'Direct review does not scan or overwrite queue progress');
+$request['review_doc']='supplier_invoice__100';
+checkMatched(strpos(renderMatchedFixture()['html'],'id="kreaBulkMatchForm"')===false,'A changed expected document cannot display another executable pair');
+$request['review_doc']='supplier_invoice__99';$request['account_context']=102;
+try { renderMatchedFixture(); throw new LogicException('Foreign account context accepted'); }
+catch (RuntimeException $e) { checkMatched($e->getMessage()==='Forbidden','Targeted review rejects an account outside the requested scope'); }
+unset($request['account_context']);$request['line_source']='native';
+checkMatched(strpos(renderMatchedFixture()['html'],'id="kreaBulkMatchForm"')===false,'Targeted review never confuses native and staging IDs');
+$request['line_source']='staged';$fixtureService->line['status']=2;
+checkMatched(strpos(renderMatchedFixture()['html'],'id="kreaBulkMatchForm"')===false,'Already reconciled sources cannot be approved again');
+$fixtureService->line=$line;$fixtureService->accountReview=array('synthetic'=>true);
+checkMatched(strpos(renderMatchedFixture()['html'],'id="kreaBulkMatchForm"')===false,'Targeted invoice review preserves wrong-account blocking');
+$fixtureService->accountReview=null;
+$fixtureService->suggestions[]=array_merge($fixtureService->suggestions[0],array('doc_id'=>100,'score'=>100));
+checkMatched(strpos(renderMatchedFixture()['html'],'id="kreaBulkMatchForm"')===false,'Targeted review cannot bypass competing-candidate safeguards');
+$fixtureService->suggestions=$savedSuggestions;
+$request=$savedRequest;
 $_SERVER['REQUEST_METHOD']='POST';
 $request=array('action'=>'bulk_match_confirm','token'=>'synthetic-csrf','selected_line_ids'=>array(11),
 	'review_sources'=>array(11=>'staged'),'review_expires'=>dol_now()+1800);
@@ -195,6 +218,15 @@ $request['review_signatures'][11]=kreabankBulkReviewSignature($pair,'7|9|0',$req
 $fixtureService->suggestions[0]['doc_id']=100;
 $posted=renderMatchedFixture();
 checkMatched($posted['changed']===1 && count($fixtureService->executions)===1,'A changed current counterpart invalidates direct approval');
+$fixtureService->suggestions[0]['doc_type']='supplier_invoice';
+$invoicePair=$prepare($line);
+$request['review_signatures'][11]=kreabankBulkReviewSignature($invoicePair,'7|9|0',$request['review_expires'],$_SESSION['kreabank_bulk_review_secret']);
+$posted=renderMatchedFixture();
+checkMatched($posted['done']===1 && count($fixtureService->executions)===2 && $fixtureService->executions[1][1][0]['doc_type']==='supplier_invoice','Signed invoice approval reaches the shared native payment execution path');
+checkMatched($fixtureService->executions[1][2]==='bulk_manual' && $fixtureService->executions[1][7]['suggestion']['doc_id']===100,'Invoice approval preserves the reviewed pair and manual strategy');
+$request['review_expires']=dol_now()-1;
+$posted=renderMatchedFixture();
+checkMatched($posted['changed']===1 && count($fixtureService->executions)===2,'Expired invoice approval cannot execute');
 $request['token']='bad-token';
 try { renderMatchedFixture(); throw new LogicException('Invalid CSRF accepted'); }
 catch (RuntimeException $e) { checkMatched($e->getMessage()==='Forbidden','Direct confirmation still requires valid CSRF'); }

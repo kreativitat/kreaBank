@@ -99,6 +99,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	$lineId = 11;
 	$selectedLine = array('rowid'=>11,'fk_statement'=>0,'native_bank_line_id'=>0,'status'=>0,'description'=>'Pagamento a fornecedor · novembro','counterparty_name'=>'Synthetic supplier','counterparty_iban'=>'','payment_reference'=>'FIXTURE-2026-11','bank_reference'=>'SYNTHETIC-ONLY','bank_account_id'=>81,'bank_account_ref'=>'BANK-TEST','operation_date'=>'2026-11-03','amount'=>-125.50,'currency'=>'EUR','allocated_amount'=>0,'is_duplicate'=>0);
 	if ($case === 'credit') { $selectedLine['amount'] = 125.50; $selectedLine['description'] = 'Recebimento de cliente'; }
+	$selectedLine['fk_statement'] = $options['statement_id'] ?? 0;
 	$pendingLines = array($selectedLine);
 	foreach (array('Comissão bancária','Pagamento de imposto','Pagamento de salários','Transferência recebida','Compra de serviços','Liquidação de terminal','Transferência entre contas','Seguro mensal','Serviços de energia') as $i=>$description) {
 		$line = $selectedLine; $line['rowid'] = 12 + $i; $line['description'] = $description; $line['amount'] = ($i + 1) * -17.25; $line['operation_date'] = '2026-11-0' . (($i % 3) + 1); $pendingLines[] = $line;
@@ -115,6 +116,10 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	if ($case === 'locked') { $documents = array($documents[2]); }
 	if ($case === 'safe') { $autoSelectDocKeys['native_bank__103'] = true; $documents = array($documents[2]); $documents[0]['is_locked'] = false; }
 	if (isset($options['documents'])) { $documents = $options['documents']; }
+	if ($case === 'invoice') {
+		$selectedLine['fk_statement'] = 1;
+		$documents = array(array('rowid'=>242,'doc_type'=>'supplier_invoice','ref'=>'INV-SYNTHETIC','amount_open'=>125.5,'thirdparty_name'=>'Synthetic supplier','doc_date'=>'2026-11-03'));
+	}
 	if ($case === 'single') { $pendingLines = array($selectedLine); $pendingLinesTotal = 1; }
 	if ($case === 'empty') { $selectedLine = null; $pendingLines = array(); $pendingLinesTotal = 0; }
 	$selectedOutstanding = 125.5;
@@ -162,6 +167,19 @@ foreach (array('otheraccounts','debit','credit','readonly','empty','locked','noe
 	if ($case === 'error') { workspaceCheck(strpos($html, 'data-initial-workflow="create"') !== false && strpos($html, 'value="Retained label"') !== false && strpos($html, 'value="supplier_invoice" checked') !== false, 'Failed creation retains workflow, choice and inputs'); }
 	if ($case === 'success') { workspaceCheck(strpos($html, 'role="status">') !== false && strpos($html, 'Synthetic record created and reconciled') !== false, 'Persistent accessible success state'); }
 }
+$invoiceDocument = array('rowid'=>242,'doc_type'=>'supplier_invoice','ref'=>'INV-SYNTHETIC','amount_open'=>125.5,'thirdparty_name'=>'Synthetic supplier','doc_date'=>'2026-11-03');
+foreach (array('supplier_invoice', 'customer_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked') as $type) {
+	$document = array_merge($invoiceDocument, array('doc_type'=>$type));
+	$html = renderWorkspaceFixture('debit', 'pt_PT', array('documents'=>array($document), 'statement_id'=>1));
+	workspaceCheck(strpos($html, 'name="selected_docs[]"') === false && strpos($html, 'name="doc_amount[') === false, $type . ': unsupported types never enter the native checkbox controller');
+	workspaceCheck(strpos($html, 'line_id=11&amp;line_source=staged&amp;review_doc=' . $type . '__242') !== false && strpos($html, 'view=matched&amp;account_context=81') !== false, $type . ': explicit source namespace, owned account and expected document reach shared review');
+	$invoice = strpos($type, 'invoice') !== false;
+	workspaceCheck(strpos($html, $invoice ? 'Fatura existente' : 'Pagamento existente') !== false && strpos($html, 'Movimento bancário existente') === false, $type . ': actual document type displayed');
+	workspaceCheck(strpos($html, $invoice ? 'Regista um pagamento desta fatura' : 'Não cria um novo pagamento') !== false, $type . ': financial consequence precedes review');
+	workspaceCheck(strpos($html, 'id="manualReconcileButton"') === false && strpos($html, 'id="kb-selection-difference"') === false, $type . ': native-only allocation controls are omitted');
+}
+$legacyHtml = renderWorkspaceFixture('debit', 'pt_PT', array('documents'=>array($invoiceDocument)));
+workspaceCheck(strpos($legacyHtml, 'line_id=11&amp;line_source=native') !== false, 'Legacy native source namespace remains explicit');
 foreach (array(
 	array('noentries', array(), 'create'),
 	array('noentries', array('search_accounts'=>true), 'match'),

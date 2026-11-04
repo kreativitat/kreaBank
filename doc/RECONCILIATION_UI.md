@@ -35,6 +35,15 @@ existing 0.01 service tolerance. Original hidden amounts retain their precision;
 only displayed values have two decimals. Server execution still revalidates every
 submitted source and target.
 
+Invoice and payment candidates have their actual record type and consequence.
+They use **Review invoice payment and reconciliation** or **Review payment and
+reconciliation**, opening `matched.php` for the exact source namespace/account and
+expected document. They never enter the native-movement checkbox submission.
+The individual review recomputes the unique eligible suggestion, signs the pair
+and uses the existing manual approval controller. Changed, ambiguous, foreign or
+wrong-account evidence cannot produce an executable pair. Reviewing an invoice
+explains that approval records its payment; it creates no new invoice.
+
 **Create a new entry and reconcile** describes each available action:
 
 | Choice | Records and consequence |

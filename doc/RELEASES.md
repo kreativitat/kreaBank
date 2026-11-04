@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.19.12 — 2026-11-04
+
+- Identify invoice/payment candidates correctly in selected-line reconciliation.
+  Open their explicit signed individual review instead of submitting unsupported
+  native-movement checkboxes. Show the payment consequence before approval.
+- Review an explicit owned statement source without scanning the whole queue;
+  preserve shared suggestion, ambiguity, signature and execution safeguards.
+  No schema or scheduler changes.
+
 ## 1.19.11 — 2026-11-04
 
 - Preserve distinct identical-looking rows in reviewed XLSX imports through an

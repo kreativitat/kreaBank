@@ -199,6 +199,12 @@
   approval of the sole signed pair. Do not require either selection or review
   checkboxes there. Bulk selections retain their separate review checkbox.
 
+- Selected-line invoice/payment candidates open `matched.php` with explicit
+  `line_id`, `line_source`, owned account and expected `review_doc`; they never
+  enter native-movement checkbox submission. Direct review uses the same fresh
+  unique suggestion, signed approval and executor, without scanning the queue.
+  Invoice approval is labelled **Record payment and reconcile**.
+
 ## Machine learning
 
 - `KreaBankService` owns batch/supplier learning; `KreaBankParser` owns header

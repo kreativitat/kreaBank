@@ -71,6 +71,9 @@ if (!$user->hasRight('banque', 'lire')) {
 $singleReview = defined('KREABANK_MATCHED_REVIEW') && KREABANK_MATCHED_REVIEW;
 $reviewPage = $singleReview ? 'matched' : 'bulkmatch';
 $reviewTitle = $singleReview ? 'KreaBankReviewMatched' : 'KreaBankBulkMatch';
+$targetLineId = $singleReview ? max(0, GETPOSTINT('line_id')) : 0;
+$targetLineSource = (string) GETPOST('line_source', 'aZ09');
+$targetDocument = (string) GETPOST('review_doc', 'aZ09');
 
 $navigationAccountId = max(0, GETPOSTISSET('account_context') ? GETPOSTINT('account_context') : GETPOSTINT('bank_account_id'));
 $navigationAccount = kreabankNavigationAccount($navigationAccountId);
@@ -570,6 +573,25 @@ $scanScannedCount = 0;
 $scanState = array();
 
 try {
+	if ($targetLineId > 0) {
+		// Read one explicit source through the same owned-company review and executor.
+		$page = 0;
+		$offset = 0;
+		$line = $service->getBulkReviewLine($targetLineId, $targetLineSource);
+		if ($line && (int) $line['status'] === 0 && (!$navigationAccountId || (int) $line['bank_account_id'] === $navigationAccountId)) {
+			$pendingTotal = 1;
+			$row = $prepareReviewRow($line);
+			if ($row && ($targetDocument === '' || $targetDocument === $row['suggestion']['doc_type'] . '__' . (int) $row['suggestion']['doc_id'])) {
+				$rows = array($row);
+				$matchedCount = 1;
+				$preselectedCount = !empty($row['preselected']) ? 1 : 0;
+			} else {
+				setEventMessages($langs->trans('KreaBankBulkMatchReviewChanged', '1'), null, 'warnings');
+			}
+		}
+		$scanScannedCount = $pendingTotal;
+		$scanProgressPct = 100;
+	} else {
 	$pendingTotal = (int) $service->getPendingLinesCount($bulkScanFilterScope);
 	$pendingFingerprintPayload = array(
 		'pending_total' => $pendingTotal,
@@ -761,6 +783,7 @@ try {
 	if ($offset + $bulkPagerNum < $matchedCount) {
 		$bulkPagerNum = $limit + 1;
 	}
+	}
 } catch (Exception $e) {
 	if ($isScanRequest) {
 		http_response_code(500);
@@ -818,12 +841,15 @@ if ($isScanRequest) {
 	print '</div><div id="krea-bulk-results">';
 }
 
-print kreabankListSortLinks($bulkColumns, $bulkSort);
+print kreabankListSortLinks($bulkColumns, $bulkSort, $targetLineId > 0 ? array('account_context'=>$navigationAccountId, 'line_id'=>$targetLineId, 'line_source'=>$targetLineSource, 'review_doc'=>$targetDocument) : array());
 print '<form method="GET" id="kreaBulkMatchPagerForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 print kreabankNavigationHiddenFields($navigationAccountId);
 print '<input type="hidden" name="sortfield" value="' . dol_escape_htmltag($bulkSort['field']) . '"><input type="hidden" name="sortorder" value="' . $bulkSort['order'] . '">';
 print '<input type="hidden" name="mainmenu" value="bank">';
 print '<input type="hidden" name="leftmenu" value="kreabank_' . $reviewPage . '">';
+if ($targetLineId > 0) {
+	print '<input type="hidden" name="line_id" value="' . $targetLineId . '"><input type="hidden" name="line_source" value="' . dol_escape_htmltag($targetLineSource) . '"><input type="hidden" name="review_doc" value="' . dol_escape_htmltag($targetDocument) . '">';
+}
 if ($singleReview) {
 	print '<nav class="krea-bulk-summary" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankReviewMatched')) . '">';
 	if ($page > 0) {
@@ -885,7 +911,7 @@ if (empty($rows)) {
 			print '<output class="kb-review-selection" id="kb-review-selection" aria-live="polite" data-label="' . dol_escape_htmltag($langs->trans('KreaBankReviewSelectedCount')) . '"></output>';
 			print '<label class="kb-review-approval"><input type="checkbox" name="review_confirmed" value="1" required> ' . $langs->trans('KreaBankBulkMatchReviewApproval') . '</label>';
 		}
-		print '<button type="submit" class="kb-review-submit" aria-describedby="kb-review-feedback">' . $langs->trans($singleReview ? 'KreaBankConfirmCurrentMatch' : 'KreaBankReviewConfirmSelected') . '</button></div>';
+		print '<button type="submit" class="kb-review-submit" aria-describedby="kb-review-feedback">' . $langs->trans($singleReview ? (in_array($rows[0]['suggestion']['doc_type'], array('customer_invoice', 'supplier_invoice'), true) ? 'KreaBankReviewPayInvoice' : 'KreaBankConfirmCurrentMatch') : 'KreaBankReviewConfirmSelected') . '</button></div>';
 		print '<p class="kb-review-feedback" id="kb-review-feedback" role="status" data-select="' . dol_escape_htmltag($langs->trans('KreaBankReviewSelectFirst')) . '" data-approve="' . dol_escape_htmltag($langs->trans('KreaBankBulkMatchReviewRequired')) . '" data-ready="' . dol_escape_htmltag($langs->trans('KreaBankReviewReady')) . '">' . $langs->trans($singleReview ? 'KreaBankReviewSingleApproval' : 'KreaBankBulkMatchReviewRequired') . '</p>';
 	}
 	print '</form>';
