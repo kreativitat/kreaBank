@@ -1720,8 +1720,9 @@ foreach ($pendingLines as $line) {
 	$lineUrl = kreabankWorkspaceUrl('reconcile', $navigationAccountId) . '&' . http_build_query($queueParams);
 	$searchText = implode(' ', array($lineTitle, $line['counterparty_name'], $line['payment_reference'], $line['bank_reference'], $line['bank_account_ref'], $lineDate, $line['amount'], kreabankPrice($line['amount']), $line['currency']));
 	print '<a class="kb-queue-line' . ($isSelected ? ' selected' : '') . '" id="linecard-' . ((int) $line['rowid']) . '" data-queue-id="' . ((int) $line['rowid']) . '" href="' . dol_escape_htmltag($lineUrl) . '" data-search="' . dol_escape_htmltag($searchText) . '"' . ($isSelected ? ' aria-current="true"' : '') . '>';
+	print '<span class="kb-queue-summary"><span class="kb-queue-date">' . $lineDate . '</span><strong class="kb-money ' . ((float) $line['amount'] < 0 ? 'kb-debit' : 'kb-credit') . '">' . ((float) $line['amount'] > 0 ? '+' : '') . kreabankPrice($line['amount']) . ' <small>' . dol_escape_htmltag($line['currency']) . '</small></strong></span>';
 	print '<span class="kb-queue-description">' . dol_escape_htmltag($lineTitle) . '</span>';
-	print '<span class="kb-queue-meta"><span>' . dol_escape_htmltag($line['bank_account_ref']) . ' · ' . $lineDate . '</span><strong class="kb-money ' . ((float) $line['amount'] < 0 ? 'kb-debit' : 'kb-credit') . '">' . ((float) $line['amount'] > 0 ? '+' : '') . kreabankPrice($line['amount']) . ' ' . dol_escape_htmltag($line['currency']) . '</strong></span>';
+	print '<span class="kb-queue-meta">' . dol_escape_htmltag($line['bank_account_ref']) . '</span>';
 	if (!empty($line['is_duplicate'])) { print '<span class="kb-duplicate">' . $langs->trans('KreaBankDuplicate') . '</span>'; }
 	print '</a>';
 }
@@ -1859,7 +1860,7 @@ if (!$selectedLine) {
 			}
 
 			print '<div class="krea-doc-item' . ($isLocked ? ' krea-doc-item-locked' : '') . '">';
-			print '<div class="kb-candidate-date">' . dol_print_date(strtotime((string) $doc['doc_date']), 'day') . '</div>';
+			print '<div class="kb-candidate-heading"><span class="kb-candidate-date">' . dol_print_date(strtotime((string) $doc['doc_date']), 'day') . '</span><strong class="kb-candidate-amount kb-money">' . kreabankPrice((float) $doc['amount_open']) . ' <small>' . dol_escape_htmltag((string) $selectedLine['currency']) . '</small></strong></div>';
 			print '<div style="display:flex;justify-content:space-between;gap:8px">';
 			print '<div style="flex:1">';
 			print '<label style="display:flex;gap:6px;align-items:flex-start">';
@@ -1902,12 +1903,9 @@ if (!$selectedLine) {
 				print '</div>';
 			}
 			print '</div>';
-			print '<div class="krea-nowrap" style="text-align:right">';
-			print '<div><strong>' . kreabankPrice((float) $doc['amount_open']) . ' ' . dol_escape_htmltag((string) $selectedLine['currency']) . '</strong></div>';
 			if ($isLocked) {
-				print '<div style="margin-top:4px" class="krea-muted">' . $lockedStatusLabel . '</div>';
+				print '<div class="krea-nowrap krea-muted" style="text-align:right;margin-top:4px">' . $lockedStatusLabel . '</div>';
 			}
-			print '</div>';
 			print '</div>';
 			if ($isDraft) {
 				if (!empty($doc['draft_native_validation'])) {

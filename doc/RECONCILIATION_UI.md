@@ -10,6 +10,8 @@ account, date or amount, ignoring accents. It does not fetch or match on each
 keystroke. **View all pending lines** opens the full company/account-scoped pending
 view; bulk deferral remains there. The queue starts collapsed at mobile widths.
 Selecting a line is a read-only link and preserves queue search and sort state.
+Each pending item starts with a bold date and a larger right-aligned amount on
+the same row, followed by its description and account reference.
 
 **Next** (pt_PT: **Seguinte**) opens the visible line immediately after the selected
 line, wrapping at the end, and rotates the queue so that target appears first.
@@ -51,10 +53,10 @@ Read-only links from matched/bulk review may explicitly request `workflow=create
 or `workflow=match`. Creation still requires the existing write/account checks.
 
 **Match an existing entry** uses one card layout for native bank movements,
-invoices and payments: a prominent bold date at the top, followed by
-reference/type, counterparty, amount, evidence, consequence and a green action on
-the card. Ordinary native
-movements use **Reconcile this movement**, with the exact persisted signed amount
+invoices and payments: a prominent bold date and right-aligned amount on the top
+row, followed by reference/type, counterparty, evidence, consequence and a green
+action on the card. Ordinary native movements use **Reconcile this movement**,
+with the exact persisted signed amount
 and source account. They reuse the existing native movement and create no payment.
 
 Batch detection or **Search batch payments** retains multiple native checkboxes,

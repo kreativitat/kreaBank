@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.29 — 2026-11-04
+
+- Align larger candidate amounts to the right of the date on the top row. Use
+  the same prominent date/amount row above each pending sidebar description.
+
 ## 1.19.28 — 2026-11-04
 
 - Move candidate dates to the top of selected-line reconciliation cards and make

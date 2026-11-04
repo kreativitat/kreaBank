@@ -48,9 +48,12 @@
 .kb-queue-line { display:block; padding:12px 10px; margin:3px 0; border:1px solid transparent; border-left:3px solid transparent; border-radius:7px; text-decoration:none !important; color:var(--kb-ink) !important; }
 .kb-queue-line:hover { background:#eaf0ed; }
 .kb-queue-line.selected { background:#fff; border-color:#b8cec1; border-left-color:var(--kb-green); box-shadow:0 2px 5px #253f3210; }
+.kb-queue-summary { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:7px; font-size:14px; font-weight:700; line-height:1.3; font-variant-numeric:tabular-nums; }
+.kb-queue-date { white-space:nowrap; }
+.kb-queue-summary strong { margin-left:auto; text-align:right; }
+.kb-queue-summary small { font-size:10px; }
 .kb-queue-description { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; font-size:12px; font-weight:600; line-height:1.5; }
 .kb-queue-meta { display:flex; flex-wrap:wrap; justify-content:space-between; gap:5px; margin-top:7px; font-size:11px; color:var(--kb-muted); }
-.kb-queue-meta strong { font-size:12px; }
 .kb-queue-footer { border-top:1px solid var(--kb-line); padding:14px 16px; font-size:12px; }
 .kb-duplicate { display:inline-block; margin-top:6px; color:#8a4b0f; font-size:11px; }
 .kb-recon-main { min-width:0; }
@@ -83,7 +86,10 @@
 .kb-batch-link { display:inline-block; font-size:11px; margin:6px 0 12px; }
 .kb-recon .kb-list-sort { margin:10px 0; }
 .kb-recon .krea-doc-item { border:1px solid var(--kb-line); border-radius:8px; padding:14px; margin:10px 0; background:#fff; }
-.kb-recon .kb-candidate-date { margin-bottom:8px; font-size:20px; font-weight:700; line-height:1.3; color:var(--kb-ink); font-variant-numeric:tabular-nums; }
+.kb-recon .kb-candidate-heading { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-bottom:8px; font-size:18px; font-weight:700; line-height:1.3; color:var(--kb-ink); font-variant-numeric:tabular-nums; }
+.kb-recon .kb-candidate-date { white-space:nowrap; }
+.kb-recon .kb-candidate-amount { margin-left:auto; text-align:right; }
+.kb-recon .kb-candidate-amount small { font-size:12px; }
 .kb-recon .krea-doc-item.kb-selected { border-color:#9cb9a8; background:#f3f8f5; }
 .kb-recon .krea-doc-item-locked { border-style:dashed; background:#f6f7f7; }
 .kb-recon .krea-doc-item label { font-size:13px; font-weight:400; color:var(--kb-ink); }
