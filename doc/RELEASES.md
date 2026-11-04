@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.19.11 — 2026-11-04
+
+- Preserve distinct identical-looking rows in reviewed XLSX imports through an
+  explicit verified source-file checksum and original row identity. Replays skip
+  the original rows, changed identities fail closed, and older row hashes remain
+  recognized. Ordinary import duplicate checks remain unchanged. No schema change.
+
 ## 1.19.10 — 2026-11-04
 
 - Preserve a reviewed original bank file's within-day sequence, value dates and

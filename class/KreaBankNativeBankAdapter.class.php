@@ -110,6 +110,10 @@ class KreaBankNativeBankAdapter
 		$duplicatesImported = 0;
 		$duplicateDetails = array();
 		$allowDuplicateImport = !empty($options['allow_duplicate_import']);
+		$sourceFileHash = (string) ($options['source_file_sha256'] ?? '');
+		if ($sourceFileHash !== '' && ($format !== 'xlsx' || !preg_match('/^[a-f0-9]{64}$/D', $sourceFileHash) || $allowDuplicateImport)) {
+			throw new Exception('Verified file occurrences require an XLSX checksum and duplicate protection');
+		}
 		$duplicateDetailsLimit = !empty($options['duplicate_details_limit']) ? (int) $options['duplicate_details_limit'] : 300;
 		if ($duplicateDetailsLimit <= 0) {
 			$duplicateDetailsLimit = 300;
@@ -121,17 +125,38 @@ class KreaBankNativeBankAdapter
 
 		try {
 			foreach ($lines as $index => $line) {
-				$normalized = $this->normalizeImportLine($line, $statementDate, $defaultCurrency, $format !== 'fintable');
+				$normalized = $this->normalizeImportLine($line, $statementDate, $defaultCurrency, $format !== 'fintable' && $sourceFileHash === '');
 				if (abs((float) $normalized['amount']) < 0.00001) {
 					continue;
 				}
 
 				$duplicateHash = $this->buildIdempotencyHash($bankAccountId, $normalized);
+				if ($sourceFileHash !== '') {
+					if (!preg_match('/^xlsx:' . $sourceFileHash . ':row:([1-9][0-9]{0,6})$/D', $normalized['line_uid'], $sourceRow)
+						|| (int) $sourceRow[1] > 1048576 || !preg_match('/^-?[0-9]{1,16}(?:\.[0-9]{1,8})?$/D', (string) $normalized['amount'])) {
+						throw new Exception('Verified file row identity or amount is invalid');
+					}
+					$duplicateHash = hash('sha256', $this->entity . '|' . $bankAccountId . '|original-file|' . $normalized['line_uid']);
+					// Recognize exact row identities imported before occurrence hashes existed.
+					$sql = 'SELECT l.duplicate_hash,CASE WHEN l.amount=' . $normalized['amount']
+						. ' AND l.currency=' . $this->sqlText($normalized['currency']) . ' AND l.operation_date=' . $this->sqlText($normalized['operation_date'])
+						. ' AND l.value_date=' . $this->sqlText($normalized['value_date'])
+						. ' AND BINARY CONVERT(l.description USING utf8mb4)=BINARY CONVERT(' . $this->sqlText($normalized['description']) . ' USING utf8mb4) THEN 1 ELSE 0 END same_source'
+						. ' FROM ' . $this->db->prefix() . 'kreabank_statement_line l JOIN ' . $this->db->prefix() . 'kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity'
+						. ' WHERE l.entity=' . $this->entity . ' AND s.bank_account_id=' . $bankAccountId . ' AND l.line_uid=' . $this->sqlText($normalized['line_uid']);
+					$res = $this->db->query($sql);
+					if (!$res) { throw new Exception('Cannot verify the original file row identity'); }
+					$old = $this->db->fetch_object($res);
+					if ($old) {
+						if ($this->db->num_rows($res) !== 1 || (int) $old->same_source !== 1 || !$old->duplicate_hash) { throw new Exception('Original file row conflicts with its existing import'); }
+						$duplicateHash = $old->duplicate_hash;
+					}
+				}
 				$matchedDuplicateHash = $duplicateHash;
 				$duplicateSource = '';
 				$hashForStorage = $duplicateHash;
 				$isDuplicate = $this->hasHash($bankAccountId, $duplicateHash, $duplicateSource);
-				if (!$isDuplicate && $format !== 'fintable') {
+				if (!$isDuplicate && $format !== 'fintable' && $sourceFileHash === '') {
 					$legacyDuplicateHash = $this->buildLegacyIdempotencyHash($bankAccountId, $normalized);
 					if ($legacyDuplicateHash !== '' && $legacyDuplicateHash !== $duplicateHash && $this->hasHash($bankAccountId, $legacyDuplicateHash, $duplicateSource)) {
 						$isDuplicate = true;

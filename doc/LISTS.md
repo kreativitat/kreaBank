@@ -98,6 +98,12 @@ decimal amount/balance strings, currency, description and original `source_row`.
 Check the retained file bytes and independently establish the complete one-to-one
 mapping before calling this method. Indistinguishable repeated movements require
 their full original multiplicity; never collapse equal amounts/descriptions.
+When importing only independently verified missing XLSX rows, pass the
+`source_file_sha256` import option and `xlsx:<sha256>:row:<original-row>` identities.
+Verify the retained file bytes and reconcile multiplicity against all existing
+account evidence first. This explicit path preserves legitimate identical fees
+without forcing duplicates or inventing bank references. It is not enabled by
+the ordinary upload form and must never replace cross-file duplicate review.
 
 The method rechecks bank/import permissions, direct company/account ownership,
 unique staging IDs, signed amounts, descriptions and the complete balance chain
