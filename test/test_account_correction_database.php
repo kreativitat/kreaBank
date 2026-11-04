@@ -38,6 +38,17 @@ foreach (array(false,true) as $supplier) {
     checkAuto($beforeLookup===array(countAuto('bank'),countAuto($payment),countAuto('kreabank_recon_audit')),
         'Discovering a paid invoice creates no movement, payment or audit');
 }
+// Indexed range bounds retain DATEDIFF's inclusive calendar days and ignore
+// the source time of day. These records exist only in the disposable fixture.
+accountReviewFixture(80700, true);
+$db->query("UPDATE kbauto_kreabank_statement_line SET operation_date='2026-11-01 12:34:56',amount=-37.13 WHERE rowid=80700");
+$db->query('DELETE FROM kbauto_bank WHERE rowid=81700');
+foreach (array(81701=>'2026-10-28 23:59:59',81702=>'2026-10-29 00:00:00',81703=>'2026-11-04 23:59:59',81704=>'2026-11-05 00:00:00') as $id=>$date) {
+    bankAuto($id,'-37.13','BOUNDARY-'.$id,102,$date);
+}
+$bounds=$service->searchOtherAccountMovements(80700);
+checkAuto(array_map('intval',array_column($bounds,'rowid'))===array(81702,81703), 'Initial other-account search includes both complete boundary days and excludes adjacent days');
+$db->query('DELETE FROM kbauto_bank WHERE rowid BETWEEN 81701 AND 81704');
 accountReviewFixture(80000, true);
 $db->query("UPDATE kbauto_bank SET label='Synthetic correction payment' WHERE rowid=81000");
 function correctionEntry($id = 80000, $search = '') {

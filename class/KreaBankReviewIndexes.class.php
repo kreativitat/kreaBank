@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-/** Explicit online maintenance for payment lookups; never invoked by a web request. */
+/** Explicit online maintenance for reconciliation lookups; never invoked by a web request. */
 class KreaBankReviewIndexes
 {
 	private $db;
 	private $prefix;
-	private const INDEXES = array(
+	private const PAYMENT_INDEXES = array(
 		'idx_kb_payment_scope_date' => array('entity', 'datep', 'fk_bank'),
 		'idx_kb_payment_bank_scope' => array('fk_bank', 'entity'),
 	);
@@ -37,14 +37,19 @@ class KreaBankReviewIndexes
 	{
 		$version = $this->rows('SELECT VERSION() AS version')[0]['version'];
 		if (stripos($version, 'MariaDB') === false || version_compare($version, '10.3', '<')) {
-			throw new RuntimeException('Online payment index maintenance requires MariaDB 10.3 or newer');
+			throw new RuntimeException('Online reconciliation index maintenance requires MariaDB 10.3 or newer');
 		}
 		$plan = array();
-		foreach (array('paiement', 'paiementfourn') as $suffix) {
+		$definitions = array(
+			'paiement' => self::PAYMENT_INDEXES,
+			'paiementfourn' => self::PAYMENT_INDEXES,
+			'bank' => array('idx_kb_bank_amount_date_scope' => array('amount', 'dateo', 'fk_account')),
+		);
+		foreach ($definitions as $suffix => $requiredIndexes) {
 			$table = $this->prefix . $suffix;
 			$status = $this->rows("SHOW TABLE STATUS WHERE Name = '$table'");
 			if (count($status) !== 1 || strcasecmp($status[0]['Engine'], 'InnoDB') !== 0) {
-				throw new RuntimeException('Payment index maintenance requires existing InnoDB payment tables');
+				throw new RuntimeException('Payment index maintenance requires existing InnoDB lookup tables');
 			}
 			$indexes = array();
 			foreach ($this->rows("SHOW INDEX FROM `$table`") as $row) {
@@ -56,9 +61,9 @@ class KreaBankReviewIndexes
 			}
 			foreach ($indexes as &$index) { ksort($index['columns']); $index['columns'] = array_values($index['columns']); }
 			unset($index);
-			foreach (self::INDEXES as $name => $columns) {
+			foreach ($requiredIndexes as $name => $columns) {
 				if (isset($indexes[$name]) && (!$indexes[$name]['usable'] || $indexes[$name]['columns'] !== $columns)) {
-					throw new RuntimeException('Conflicting payment index definition: ' . $table . '.' . $name);
+					throw new RuntimeException('Conflicting reconciliation index definition: ' . $table . '.' . $name);
 				}
 				$existing = null;
 				foreach ($indexes as $candidate => $index) {

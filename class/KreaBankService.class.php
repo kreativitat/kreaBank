@@ -2828,7 +2828,10 @@ class KreaBankService
 		$search = trim((string) $search);
 		if ($search === '' && $bankLineId <= 0) {
 			// Empty Search finds plausible movements, including feeds with no usable reference.
-			$sql .= ' AND b.amount=l.amount AND ABS(DATEDIFF(b.dateo,l.operation_date))<=' . max(3, min(31, (int) getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE', 3)));
+			$tolerance = max(3, min(31, (int) getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE', 3)));
+			// Preserve calendar-day tolerance while allowing the amount/date index.
+			$sql .= ' AND b.amount=l.amount AND b.dateo>=DATE_SUB(DATE(l.operation_date), INTERVAL ' . $tolerance . ' DAY)'
+				. ' AND b.dateo<DATE_ADD(DATE(l.operation_date), INTERVAL ' . ($tolerance + 1) . ' DAY)';
 		}
 		if (strlen($search) > 256) { throw new Exception($this->langs->trans('KreaBankInvalidInput')); }
 		$conditions = array();

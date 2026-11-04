@@ -22,7 +22,9 @@ It is available in both workflows and to readers,
 and disabled when fewer than two lines match the queue search. The order survives
 navigation/reloads within the browser tab, scoped to user, company, account and
 sort; new lines append and removed lines disappear. Explicitly choosing another
-sort uses that sort's own queue. Next changes no pending status or financial data.
+sort uses that sort's own queue. Next changes no pending status or financial data. Initial other-account review
+uses an indexable exact-amount/calendar-day range; apply the explicit online
+[lookup maintenance](PERFORMANCE.md) when deploying 1.19.34.
 The selected-line Resolve this line later control is removed; bulk deferral
 remains in the full pending view.
 

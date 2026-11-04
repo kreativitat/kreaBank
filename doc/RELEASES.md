@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.19.34 — 2026-11-04
+
+- Speed up Next and selected-line loading with an indexable other-account
+  amount/date lookup. Keep the same calendar-day tolerance and review safeguards.
+- Extend explicit online reconciliation maintenance with a native bank
+  `(amount,dateo,fk_account)` index; web requests never apply this DDL.
+
 ## 1.19.33 — 2026-11-04
 
 - Show the selected account's Dolibarr balance, synced bank balance and bank

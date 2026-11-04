@@ -20,12 +20,12 @@ $capture = static function () use ($db, $user, $langs) {
 	return $result;
 };
 $before = $capture();
-checkAuto(count($maintenance->plan())===4 && count(array_filter($maintenance->plan(), static function ($entry) { return $entry['existing']===null; }))===4,'Plan finds the four missing indexes without applying DDL');
+checkAuto(count($maintenance->plan())===5 && count(array_filter($maintenance->plan(), static function ($entry) { return $entry['existing']===null; }))===5,'Plan finds the five missing indexes without applying DDL');
 $events = array();
 $wait = $db->query('SELECT @@SESSION.lock_wait_timeout AS timeout')->fetch_object()->timeout;
 $result = $maintenance->apply(static function ($status,$plan,$entry) use (&$events) { $events[]=$status; });
-checkAuto($events===array('planned','applying','applied','applying','applied','applying','applied','applying','applied','complete'),'Every online index is journaled before and after DDL');
-checkAuto(count(array_filter($result,static function ($entry) { return $entry['existing']!==null; }))===4,'All required indexes are verified after application');
+checkAuto($events===array('planned','applying','applied','applying','applied','applying','applied','applying','applied','applying','applied','complete'),'Every online index is journaled before and after DDL');
+checkAuto(count(array_filter($result,static function ($entry) { return $entry['existing']!==null; }))===5,'All required indexes are verified after application');
 checkAuto($capture()===$before,'Indexes preserve payment, invoice, bank and audit rows and matching/account-review results');
 checkAuto($db->query('SELECT @@SESSION.lock_wait_timeout AS timeout')->fetch_object()->timeout===$wait,'Session metadata lock timeout is restored');
 $events=array();

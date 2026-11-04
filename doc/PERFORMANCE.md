@@ -1,4 +1,4 @@
-# Reconciliation payment indexes
+# Reconciliation lookup indexes
 
 Large native payment tables without secondary indexes can make each proposal scan
 the entire customer and supplier payment history. Diagnose with read-only query
@@ -6,9 +6,13 @@ timings and `EXPLAIN` before applying this maintenance. No matching rule or cand
 limit changes are required.
 
 `scripts/optimize_reconciliation.php` is CLI-only and requires an active installation
-administrator. It plans four nonunique indexes across the existing `paiement` and
-`paiementfourn` tables: `(entity,datep,fk_bank)` for scoped date searches and
-`(fk_bank,entity)` for bank/payment joins. Equivalent active BTREE indexes are reused;
+administrator. It plans five nonunique indexes across the existing `paiement`,
+`paiementfourn` and `bank` tables: `(entity,datep,fk_bank)` for scoped date searches and
+`(fk_bank,entity)` for bank/payment joins, plus
+`(amount,dateo,fk_account)` for initial other-account movement review. The latter
+uses an exact signed amount and an inclusive calendar-day date range, avoiding a
+full bank-history scan when opening the next pending line. Equivalent active BTREE
+indexes are reused;
 conflicting definitions fail closed. The web controller never applies this DDL.
 
 ```sh
@@ -43,4 +47,5 @@ reconciliation, module reactivation or scheduler change is part of this operatio
 ```sh
 # ONLY disposable localhost:33317/kreabank_auto_test, never an installation database:
 php test/test_review_indexes_database.php
+php test/test_reconcile_navigation_performance_database.php
 ```
