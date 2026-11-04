@@ -87,22 +87,22 @@ print '<div class="div-table-responsive kb-accounts-scroll"><table class="kb-acc
 foreach ($accountColumns as $field => $label) {
 	print kreabankListHeader($langs->trans($label), $field, $accountSort, in_array($field, array('balance', 'feed_balance'), true) ? 'kb-money' : '', $params);
 }
-print '</tr>';
+print '<th scope="col" class="kb-account-actions">' . $langs->trans('Actions') . '</th></tr>';
 $count=0;
 while ($row=$db->fetch_object($rows)) {
 	if ($count++ < $paging['offset']) { continue; }
 	if ($count > $paging['offset'] + $paging['limit']) { break; }
-	print '<tr><td><a class="kb-account-name" href="' . dol_escape_htmltag(kreabankNativeEntriesUrl($row->rowid)) . '">' . dol_escape_htmltag($row->ref) . '</a> ';
-	print '<a class="kb-account-edit" href="' . dol_escape_htmltag(kreabankBankingUrl('card', $row->rowid)) . '" aria-label="' . dol_escape_htmltag($langs->trans('Modify') . ' ' . $row->ref) . '" title="' . dol_escape_htmltag($langs->trans('Modify')) . '">' . img_picto('', 'edit') . '</a>';
+	print '<tr><td><a class="kb-account-name" href="' . dol_escape_htmltag(kreabankNativeEntriesUrl($row->rowid)) . '">' . dol_escape_htmltag($row->ref) . '</a>';
 	print '<small>' . dol_escape_htmltag($row->label) . '</small></td>';
 	print '<td>' . dol_escape_htmltag($row->currency_code) . '</td>';
 	print kreabankAccountFeedCells($row);
 	print '<td class="kb-money">' . kreabankPrice($row->balance) . '</td>';
 	print '<td><a class="kb-count" href="' . dol_escape_htmltag(kreabankWorkspaceUrl('reconcile',$row->rowid)) . '">' . (int) $row->pending_count . '</a></td>';
+	print '<td class="kb-account-actions"><a class="kb-account-edit" href="' . dol_escape_htmltag(kreabankBankingUrl('card', $row->rowid)) . '" aria-label="' . dol_escape_htmltag($langs->trans('Modify') . ' ' . $row->ref) . '" title="' . dol_escape_htmltag($langs->trans('Modify')) . '">' . img_picto('', 'edit') . '</a></td>';
 	print '</tr>';
 }
 if (!$total) {
-	print '<tr><td colspan="6">' . $langs->trans('NoRecordFound') . '</td></tr>';
+	print '<tr><td colspan="' . (count($accountColumns) + 1) . '">' . $langs->trans('NoRecordFound') . '</td></tr>';
 }
 print '</table></div>';
 print dol_get_fiche_end();

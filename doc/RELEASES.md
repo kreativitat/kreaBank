@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.35 — 2026-11-04
+
+- Move account edit icons to a compact, right-aligned Actions column. Keep account
+  references linked to movements and retain accessible edit labels.
+
 ## 1.19.34 — 2026-11-04
 
 - Speed up Next and selected-line loading with an indexable other-account
