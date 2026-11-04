@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.19.37 — 2026-11-04
+
+- Isolate account action cells from theme flex styles to preserve table alignment.
+
 ## 1.19.36 — 2026-11-04
 
 - Use the module’s Actions translation for the account-table heading.
