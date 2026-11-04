@@ -632,7 +632,7 @@ KreaBankReviewReady=Selected matches reviewed. Ready to reconcile.
 KreaBankReviewSingleApproval=Reconcile this match is your explicit approval of the pair shown above.
 KreaBankReviewStatementLine=Statement line
 KreaBankWorkspaceNext=Next
-KreaBankWorkspaceNextHelp=Move the first visible pending line to the bottom and open the next line.
+KreaBankWorkspaceNextHelp=Open the next visible pending line after the selected line, returning to the first at the end.
 
 # Reviewed account correction
 KreaBankOtherAccountEntries=Movements in other accounts

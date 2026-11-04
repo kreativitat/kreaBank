@@ -95,10 +95,13 @@
         nextLine.addEventListener('click', function () {
             var visible = queue.filter(function (line) { return !line.hidden; });
             if (visible.length < 2) { return; }
-            var first = visible[0];
-            queue.splice(queue.indexOf(first), 1);
-            queue.push(first);
-            list.appendChild(first);
+            var selectedIndex = visible.indexOf(root.querySelector('.kb-queue-line.selected'));
+            var target = visible[(selectedIndex + 1) % visible.length];
+            // Keep the displayed cyclic order, starting immediately after the
+            // selected line. A restored queue need not have that line at its head.
+            var targetIndex = queue.indexOf(target);
+            queue = queue.slice(targetIndex).concat(queue.slice(0, targetIndex));
+            queue.forEach(function (line) { list.appendChild(line); });
             var ids = queue.map(function (line) { return line.dataset.queueId; });
             var carryOrder = pageUrl.searchParams.has('queue_order');
             try { window.sessionStorage.setItem(queueStorageKey, JSON.stringify(ids)); }
@@ -111,7 +114,7 @@
                     line.href = url.toString();
                 });
             }
-            visible[1].click();
+            target.click();
         });
     }
     function scrollToSelection() {

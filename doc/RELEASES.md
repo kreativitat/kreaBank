@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.19.24 — 2026-11-04
+
+- Make Next follow the selected pending line in the displayed queue, including
+  after manual selection or restoring a saved order. Preserve the cyclic order
+  and open the first visible line when search hides the current selection.
+- No financial, schema or scheduler changes.
+
 ## 1.19.23 — 2026-11-04
 
 - Show customer and supplier draft invoices in selected-line reconciliation.

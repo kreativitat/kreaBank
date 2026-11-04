@@ -11,8 +11,12 @@ keystroke. **View all pending lines** opens the full company/account-scoped pend
 view; bulk deferral remains there. The queue starts collapsed at mobile widths.
 Selecting a line is a read-only link and preserves queue search and sort state.
 
-**Next** (pt_PT: **Seguinte**) moves the first visible pending line to the bottom
-and opens the next visible line. It is available in both workflows and to readers,
+**Next** (pt_PT: **Seguinte**) opens the visible line immediately after the selected
+line, wrapping at the end, and rotates the queue so that target appears first.
+Manual selection and restored queue order must not make it jump from the queue
+head instead. If the selected line is hidden by search or absent from the loaded
+queue, Next opens the first visible line without skipping it.
+It is available in both workflows and to readers,
 and disabled when fewer than two lines match the queue search. The order survives
 navigation/reloads within the browser tab, scoped to user, company, account and
 sort; new lines append and removed lines disappear. Explicitly choosing another
@@ -138,8 +142,10 @@ Browser acceptance performed against synthetic data:
 
 - Desktop and mobile layouts; source summary and native/shared navigation.
 - Queue accent-insensitive search, empty search results and keyboard links.
-- Next rotates the first visible line, links to the new first line and restores
-  the queue after reload. Search with one match and single-line queues disable it.
+- Next follows the selected line after manual selection or restored order, wraps
+  to the first visible line and restores the rotated queue after reload. A hidden
+  or absent selection opens the first visible line. Search with one match and
+  single-line queues disable it.
 - Selection totals, remaining difference, mismatch/empty disabling and explicit
   existing-entry POST payload with original amounts.
 - Creation choices and tax Enter submission using the chosen action.

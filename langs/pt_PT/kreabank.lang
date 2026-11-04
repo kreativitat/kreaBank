@@ -631,7 +631,7 @@ KreaBankReviewReady=Correspondências selecionadas revistas. Pode confirmar a re
 KreaBankReviewSingleApproval=O botão Reconciliar esta correspondência confirma a sua aprovação do par apresentado acima.
 KreaBankReviewStatementLine=Linha de extrato
 KreaBankWorkspaceNext=Seguinte
-KreaBankWorkspaceNextHelp=Mover a primeira linha pendente visível para o fim da lista e abrir a seguinte.
+KreaBankWorkspaceNextHelp=Abrir a linha pendente visível a seguir à selecionada, voltando à primeira no fim da lista.
 
 # Reviewed account correction
 KreaBankOtherAccountEntries=Movimentos noutras contas
