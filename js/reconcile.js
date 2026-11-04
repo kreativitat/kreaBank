@@ -55,6 +55,23 @@
     mobile.addEventListener('change', queueLayout);
     var search = document.getElementById('kb-pending-search');
     var queue = Array.from(root.querySelectorAll('.kb-queue-line'));
+    var list = document.getElementById('kb-pending-list');
+    var nextLine = document.getElementById('kb-next-line');
+    var queueStorageKey = 'kreabank:pending-order:' + root.dataset.queueScope;
+    // Store IDs only, within this tab, user, company, account and chosen sort.
+    var savedOrder;
+    try { savedOrder = JSON.parse(window.sessionStorage.getItem(queueStorageKey)); } catch (_) {}
+    var pageUrl = new URL(window.location.href);
+    if (pageUrl.searchParams.has('queue_order')) { savedOrder = pageUrl.searchParams.get('queue_order').split(','); }
+    if (Array.isArray(savedOrder)) {
+        var remaining = new Map(queue.map(function (line) { return [line.dataset.queueId, line]; }));
+        var ordered = [];
+        savedOrder.slice(0, 201).forEach(function (id) {
+            if (remaining.has(id)) { ordered.push(remaining.get(id)); remaining.delete(id); }
+        });
+        queue = ordered.concat(Array.from(remaining.values()));
+        queue.forEach(function (line) { list.appendChild(line); });
+    }
     function normalize(text) { return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
     function filterQueue() {
         var terms = normalize(search.value).trim().split(/\s+/);
@@ -69,10 +86,34 @@
         });
         document.getElementById('kb-queue-empty').hidden = count > 0;
         document.getElementById('kb-queue-count').textContent = count + ' / ' + queue.length;
+        if (nextLine) { nextLine.disabled = count < 2; }
     }
     search.addEventListener('input', filterQueue);
     search.value = new URL(window.location.href).searchParams.get('queue_search') || '';
     if (queue.length) { filterQueue(); }
+    if (nextLine) {
+        nextLine.addEventListener('click', function () {
+            var visible = queue.filter(function (line) { return !line.hidden; });
+            if (visible.length < 2) { return; }
+            var first = visible[0];
+            queue.splice(queue.indexOf(first), 1);
+            queue.push(first);
+            list.appendChild(first);
+            var ids = queue.map(function (line) { return line.dataset.queueId; });
+            var carryOrder = pageUrl.searchParams.has('queue_order');
+            try { window.sessionStorage.setItem(queueStorageKey, JSON.stringify(ids)); }
+            catch (_) { carryOrder = true; }
+            if (carryOrder) {
+                // Retain navigation order when browser storage is unavailable.
+                queue.forEach(function (line) {
+                    var url = new URL(line.href);
+                    url.searchParams.set('queue_order', ids.join(','));
+                    line.href = url.toString();
+                });
+            }
+            visible[1].click();
+        });
+    }
     function scrollToSelection() {
         var selected = root.querySelector('.kb-queue-line.selected');
         if (disclosure.open && selected && !selected.hidden) {

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.19.5 — 2026-11-04
+
+- Add Next (pt_PT: Seguinte) to move the first visible pending line to the bottom
+  and open the next one. Keep queue order within the tab, company, user, account
+  and sort; pending status and financial records remain unchanged.
+- Remove the selected-line Resolve this line later control. Bulk deferral remains
+  available from pending lines. No schema or scheduler changes.
+
 ## 1.19.4 — 2026-11-03
 
 - Wrap the native bulk paging title on small screens, preserving its page-size

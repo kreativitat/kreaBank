@@ -117,8 +117,8 @@
 .kb-recon .select2-container,.kb-recon .minwidth300,.kb-recon .minwidth200 { max-width:100% !important; min-width:0 !important; }
 .kb-recon .select2-container { width:100% !important; }
 .kb-create-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:22px; }
-.kb-defer { margin:20px 0; font-size:12px; color:var(--kb-muted); }
-.kb-defer form { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:12px; }
+.kb-recon.kb-enhanced .kb-queue-actions { display:flex; justify-content:flex-end; margin:16px 0 20px; }
+.kb-queue-actions button { min-width:110px; }
 .kb-readonly { padding:12px 16px; background:#f3f5f7; border-radius:6px; color:var(--kb-muted); font-size:12px; }
 .kb-recon .krea-modal-overlay .kb-primary-action { background:var(--kb-green); }
 .kb-recon .krea-modal-dialog { max-height:calc(100dvh - 60px); overflow:auto; }

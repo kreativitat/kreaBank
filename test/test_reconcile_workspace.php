@@ -73,6 +73,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	$conf = (object) array('entity'=>7);
 	$db = new class { public function close() {} };
 	$user = new class($case) {
+		public $id = 901;
 		private $case;
 		public function __construct($case) { $this->case = $case; }
 		public function hasRight(...$path) { return $this->case !== 'readonly' || end($path) === 'read'; }
@@ -104,6 +105,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	if ($case === 'locked') { $documents = array($documents[2]); }
 	if ($case === 'safe') { $autoSelectDocKeys['native_bank__103'] = true; $documents = array($documents[2]); $documents[0]['is_locked'] = false; }
 	if (isset($options['documents'])) { $documents = $options['documents']; }
+	if ($case === 'single') { $pendingLines = array($selectedLine); $pendingLinesTotal = 1; }
 	if ($case === 'empty') { $selectedLine = null; $pendingLines = array(); $pendingLinesTotal = 0; }
 	$selectedOutstanding = 125.5;
 	if ($case === 'precision') { $selectedOutstanding = 125.5000001; $documents[0]['amount_open'] = 75.2500001; }
@@ -131,12 +133,16 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 if (($argv[1] ?? '') === '--html') { print renderWorkspaceFixture($argv[2] ?? 'debit', $argv[3] ?? 'pt_PT'); exit; }
 $checks = 0;
 function workspaceCheck($condition, $message) { global $checks; $checks++; if (!$condition) { throw new RuntimeException($message); } }
-foreach (array('debit','credit','readonly','empty','locked','noentries','safe','error','restricted','success','limited','unavailable') as $case) {
+foreach (array('debit','credit','readonly','empty','locked','noentries','safe','error','restricted','success','limited','unavailable','single') as $case) {
 	$html = renderWorkspaceFixture($case);
 	workspaceCheck(strpos($html, 'kb-queue') !== false && strpos($html, '</html>') !== false, $case . ': complete view');
 	workspaceCheck(strpos($html, 'Native banking menu') !== false && strpos($html, 'kb-primary') !== false, $case . ': native/shared navigation retained');
 	workspaceCheck(strpos($html, 'KreaBankWorkspace') === false, $case . ': workspace translations resolve');
+	workspaceCheck(strpos($html, 'kb-defer') === false && strpos($html, 'value="skip_line"') === false, $case . ': selected-line deferral removed');
 	if ($case === 'empty') { workspaceCheck(strpos($html, 'manualReconcileForm') === false, 'Empty queue must not offer financial actions'); continue; }
+	workspaceCheck(strpos($html, 'data-queue-scope="7:901:81:b.dateo:ASC"') !== false, $case . ': queue order is scoped to user/company/account/sort');
+	workspaceCheck(strpos($html, 'id="kb-next-line"') !== false && strpos($html, 'data-queue-id="11"') !== false, $case . ': read-only queue navigation available');
+	if ($case === 'single') { workspaceCheck((bool) preg_match('/id="kb-next-line"[^>]+ disabled/', $html), 'Single pending line disables Next'); }
 	workspaceCheck(strpos($html, 'data-outstanding="125.5"') !== false, $case . ': raw outstanding retained');
 	workspaceCheck(strpos($html, 'data-currency="EUR"') !== false && strpos($html, 'BANK-TEST') !== false, $case . ': source context');
 	workspaceCheck((strpos($html, 'value="tax_entry"') !== false) === !in_array($case, array('credit','readonly','restricted','limited','unavailable')), $case . ': tax direction/permission restriction');

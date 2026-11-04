@@ -1555,7 +1555,7 @@ $canReconcile = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canN
 // Keep explicit searches in matching; an empty initial candidate set opens permitted creation.
 $requestedWorkflow = GETPOST('workflow', 'aZ09');
 $initialWorkflow = ($quickEntryFailed || ($selectedLine && $canReconcile && $canCreate && ($requestedWorkflow === 'create' || ($requestedWorkflow !== 'match' && empty($documents) && $openDocumentsSearch === '' && !$forceBatchDetect)))) ? 'create' : 'match';
-print '<div class="kb-recon" data-initial-workflow="' . $initialWorkflow . '">';
+print '<div class="kb-recon" data-initial-workflow="' . $initialWorkflow . '" data-queue-scope="' . dol_escape_htmltag((int) $conf->entity . ':' . (int) $user->id . ':' . (int) $navigationAccountId . ':' . $pendingSort['field'] . ':' . $pendingSort['order']) . '">';
 print '<aside class="kb-queue" aria-labelledby="kb-queue-heading"><details class="kb-queue-disclosure" open>';
 print '<summary class="kb-queue-heading"><h2 id="kb-queue-heading">' . $langs->trans('KreaBankWorkspacePending') . '</h2><span class="kb-count">' . ((int) $pendingLinesTotal) . '</span></summary>';
 print '<div class="kb-queue-search kb-js-only"><label for="kb-pending-search">' . $langs->trans('KreaBankWorkspaceSearchQueue') . '</label><input type="search" id="kb-pending-search" autocomplete="off" aria-controls="kb-pending-list" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceSearchHint')) . '"></div>';
@@ -1571,7 +1571,7 @@ foreach ($pendingLines as $line) {
 	$queueParams = array('line_id' => (int) $line['rowid'], 'sortfield' => $pendingSort['field'], 'sortorder' => $pendingSort['order']);
 	$lineUrl = kreabankWorkspaceUrl('reconcile', $navigationAccountId) . '&' . http_build_query($queueParams);
 	$searchText = implode(' ', array($lineTitle, $line['counterparty_name'], $line['payment_reference'], $line['bank_reference'], $line['bank_account_ref'], $lineDate, $line['amount'], kreabankPrice($line['amount']), $line['currency']));
-	print '<a class="kb-queue-line' . ($isSelected ? ' selected' : '') . '" id="linecard-' . ((int) $line['rowid']) . '" href="' . dol_escape_htmltag($lineUrl) . '" data-search="' . dol_escape_htmltag($searchText) . '"' . ($isSelected ? ' aria-current="true"' : '') . '>';
+	print '<a class="kb-queue-line' . ($isSelected ? ' selected' : '') . '" id="linecard-' . ((int) $line['rowid']) . '" data-queue-id="' . ((int) $line['rowid']) . '" href="' . dol_escape_htmltag($lineUrl) . '" data-search="' . dol_escape_htmltag($searchText) . '"' . ($isSelected ? ' aria-current="true"' : '') . '>';
 	print '<span class="kb-queue-description">' . dol_escape_htmltag($lineTitle) . '</span>';
 	print '<span class="kb-queue-meta"><span>' . dol_escape_htmltag($line['bank_account_ref']) . ' · ' . $lineDate . '</span><strong class="kb-money ' . ((float) $line['amount'] < 0 ? 'kb-debit' : 'kb-credit') . '">' . ((float) $line['amount'] > 0 ? '+' : '') . kreabankPrice($line['amount']) . ' ' . dol_escape_htmltag($line['currency']) . '</strong></span>';
 	if (!empty($line['is_duplicate'])) { print '<span class="kb-duplicate">' . $langs->trans('KreaBankDuplicate') . '</span>'; }
@@ -1772,12 +1772,7 @@ if (!$selectedLine) {
 		);
 	} else { print '<p class="kb-readonly">' . $langs->trans('KreaBankWorkspaceReadOnly') . '</p>'; }
 	print '</section>';
-	if ($canReconcile) {
-		print '<details class="kb-defer"><summary>' . $langs->trans('KreaBankWorkspaceDefer') . '</summary><form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
-		print kreabankNavigationHiddenFields($navigationAccountId);
-		print '<input type="hidden" name="token" value="' . newToken() . '"><input type="hidden" name="action" value="skip_line"><input type="hidden" name="line_id" value="' . (int) $selectedLine['rowid'] . '">';
-		print '<label for="kb-defer-reason">' . $langs->trans('KreaBankReason') . '</label><input id="kb-defer-reason" name="skip_reason" type="text"><button type="submit" class="button">' . $langs->trans('KreaBankWorkspaceDeferAction') . '</button></form></details>';
-	}
+	print '<div class="kb-queue-actions kb-js-only"><button type="button" class="button" id="kb-next-line" aria-controls="kb-pending-list" title="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceNextHelp')) . '"' . (count($pendingLines) < 2 ? ' disabled' : '') . '>' . $langs->trans('KreaBankWorkspaceNext') . '</button></div>';
 
 	if (!empty($lineLinks)) {
 		print '<br><h4>' . $langs->trans('KreaBankHistory') . '</h4>';

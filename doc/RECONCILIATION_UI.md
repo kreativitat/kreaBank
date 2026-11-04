@@ -11,6 +11,15 @@ keystroke. **View all pending lines** opens the full company/account-scoped pend
 view; bulk deferral remains there. The queue starts collapsed at mobile widths.
 Selecting a line is a read-only link and preserves queue search and sort state.
 
+**Next** (pt_PT: **Seguinte**) moves the first visible pending line to the bottom
+and opens the next visible line. It is available in both workflows and to readers,
+and disabled when fewer than two lines match the queue search. The order survives
+navigation/reloads within the browser tab, scoped to user, company, account and
+sort; new lines append and removed lines disappear. Explicitly choosing another
+sort uses that sort's own queue. Next changes no pending status or financial data.
+The selected-line Resolve this line later control is removed; bulk deferral
+remains in the full pending view.
+
 When the initial candidate set is empty, the workspace opens **Create a new entry
 and reconcile** if creation is permitted. Existing candidates (including locked
 evidence), an explicit entry search or batch search keep matching visible.
@@ -35,9 +44,8 @@ submitted source and target.
 | Supplier invoice and payment | Reviews product lines, creates/validates a supplier invoice, records its payment and reconciles. Debit lines and existing supplier-invoice rights only. |
 
 Account-pair restrictions block creation. Read-only users see the source and
-candidate evidence without write controls. Deferring a line is a separate action
-below both workflows. A failed creation keeps the chosen workflow, fields,
-supplier and product lines. Native error reporting remains sanitized; successful
+candidate evidence without write controls. A failed creation keeps the chosen
+workflow, fields, supplier and product lines. Native error reporting remains sanitized; successful
 supplier/tax creation shows a persistent result with the created-record link.
 
 The page retains the shared banking header and native left menu. Workflow buttons
@@ -72,6 +80,7 @@ node --check js/reconcile.js
 node --check js/reconcile-supplier.js
 php test/test_reconcile_workspace.php
 node test/test_reconcile_workspace.cjs
+node test/test_reconcile_queue.cjs
 php test/test_reconciliation_guards.php
 php test/test_navigation.php
 php test/test_navigation_permissions.php
@@ -88,12 +97,15 @@ static directory with the module `css/` and `js/` exposed under
 contract; there is no ERP endpoint behind it.
 
 Cases: `debit`, `credit`, `readonly`, `limited`, `empty`, `locked`, `noentries`,
-`safe`, `error`, `restricted`, `unavailable`, `precision`, `success`. Inspect English and pt_PT rendering.
+`safe`, `error`, `restricted`, `unavailable`, `precision`, `success`, `single`.
+Inspect English and pt_PT rendering.
 
 Browser acceptance performed against synthetic data:
 
 - Desktop and mobile layouts; source summary and native/shared navigation.
 - Queue accent-insensitive search, empty search results and keyboard links.
+- Next rotates the first visible line, links to the new first line and restores
+  the queue after reload. Search with one match and single-line queues disable it.
 - Selection totals, remaining difference, mismatch/empty disabling and explicit
   existing-entry POST payload with original amounts.
 - Creation choices and tax Enter submission using the chosen action.
