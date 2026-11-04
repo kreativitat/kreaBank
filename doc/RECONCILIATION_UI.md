@@ -51,8 +51,9 @@ Read-only links from matched/bulk review may explicitly request `workflow=create
 or `workflow=match`. Creation still requires the existing write/account checks.
 
 **Match an existing entry** uses one card layout for native bank movements,
-invoices and payments: reference/type, date on its own line, counterparty,
-amount, evidence, consequence and a green action on the card. Ordinary native
+invoices and payments: a prominent bold date at the top, followed by
+reference/type, counterparty, amount, evidence, consequence and a green action on
+the card. Ordinary native
 movements use **Reconcile this movement**, with the exact persisted signed amount
 and source account. They reuse the existing native movement and create no payment.
 

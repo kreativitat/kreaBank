@@ -1859,6 +1859,7 @@ if (!$selectedLine) {
 			}
 
 			print '<div class="krea-doc-item' . ($isLocked ? ' krea-doc-item-locked' : '') . '">';
+			print '<div class="kb-candidate-date">' . dol_print_date(strtotime((string) $doc['doc_date']), 'day') . '</div>';
 			print '<div style="display:flex;justify-content:space-between;gap:8px">';
 			print '<div style="flex:1">';
 			print '<label style="display:flex;gap:6px;align-items:flex-start">';
@@ -1880,7 +1881,6 @@ if (!$selectedLine) {
 			$documentKind = $rawDocType === 'tax' ? 'Tax' : ($rawDocType === 'native_bank' ? 'Bank' : (in_array($rawDocType, array('customer_invoice', 'supplier_invoice'), true) ? 'Invoice' : 'Payment'));
 			print ' <span class="krea-muted">' . $langs->trans('KreaBankReviewExisting' . $documentKind) . '</span><br>';
 			if ($isDraft) { print '<span class="badge badge-status0">' . $langs->trans('KreaBankDraftInvoice') . '</span><br>'; }
-			print '<span class="krea-muted">' . dol_print_date(strtotime((string) $doc['doc_date']), 'day') . '</span><br>';
 			print '<span class="krea-muted">' . dol_escape_htmltag($displayCounterparty) . '</span></span>';
 			print '</label>';
 			if (!empty($doc['linked_bank_line'])) {

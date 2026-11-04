@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.28 — 2026-11-04
+
+- Move candidate dates to the top of selected-line reconciliation cards and make
+  them larger and bold for easier review.
+
 ## 1.19.27 — 2026-11-04
 
 - Allow signed one-by-one approval of an exact existing movement in the statement

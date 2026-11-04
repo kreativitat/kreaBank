@@ -83,6 +83,7 @@
 .kb-batch-link { display:inline-block; font-size:11px; margin:6px 0 12px; }
 .kb-recon .kb-list-sort { margin:10px 0; }
 .kb-recon .krea-doc-item { border:1px solid var(--kb-line); border-radius:8px; padding:14px; margin:10px 0; background:#fff; }
+.kb-recon .kb-candidate-date { margin-bottom:8px; font-size:20px; font-weight:700; line-height:1.3; color:var(--kb-ink); font-variant-numeric:tabular-nums; }
 .kb-recon .krea-doc-item.kb-selected { border-color:#9cb9a8; background:#f3f8f5; }
 .kb-recon .krea-doc-item-locked { border-style:dashed; background:#f6f7f7; }
 .kb-recon .krea-doc-item label { font-size:13px; font-weight:400; color:var(--kb-ink); }
