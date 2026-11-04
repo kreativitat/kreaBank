@@ -152,13 +152,13 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 		if ($case === 'invoicechoices') { $documents[] = array_merge($documents[0], array('rowid'=>243, 'ref'=>'INV-SYNTHETIC-2')); }
 		if ($case === 'draftinvoice') { $documents[0]['is_draft'] = true; $documents[0]['draft_snapshot'] = str_repeat('a', 64); }
 	}
-	if ($case === 'bank' || $case === 'bankchoices') {
+	if (in_array($case, array('bank','bankchoices','bankwarning'), true)) {
 		$selectedLine['fk_statement'] = 1;
 		$documents = array(array('rowid'=>242,'doc_type'=>'native_bank','ref'=>'(banktransfert)','amount_open'=>-125.5,'thirdparty_name'=>'(banktransfert)','doc_date'=>'2026-11-03','bank_account_id'=>81,'url_types'=>'banktransfert'));
 		if ($case === 'bankchoices') { $documents[] = array_merge($documents[0], array('rowid'=>243, 'ref'=>'BANK-SYNTHETIC-2')); }
 	}
 	$service->documents = $documents;
-	$service->accountReview = $options['account_review'] ?? array();
+	$service->accountReview = $options['account_review'] ?? ($case === 'bankwarning' ? array('candidates'=>array(array('bank_line_id'=>501))) : array());
 	$service->otherAccounts = $options['other_accounts'] ?? array();
 	if ($case === 'single') { $pendingLines = array($selectedLine); $pendingLinesTotal = 1; }
 	if ($case === 'empty') { $selectedLine = null; $pendingLines = array(); $pendingLinesTotal = 0; }
@@ -304,6 +304,16 @@ foreach (array(
 }
 $otherHtml = renderWorkspaceFixture('otheraccounts');
 workspaceCheck(strpos($otherHtml, 'Movimentos noutras contas') !== false && strpos($otherHtml, 'WRONG-BANK') !== false, 'Other account and consequence are visible');
+$manualWarningHtml = renderWorkspaceFixture('bankwarning','pt_PT');
+$manualWarningDom = new DOMDocument();
+$previousLibxmlErrors = libxml_use_internal_errors(true);
+$manualWarningDom->loadHTML($manualWarningHtml);
+libxml_clear_errors(); libxml_use_internal_errors($previousLibxmlErrors);
+$manualWarningXpath = new DOMXPath($manualWarningDom);
+workspaceCheck($manualWarningXpath->query('//button[@form="kb-document-review-native_bank__242" and not(@disabled)]')->length === 1,
+	'An existing same-account movement has an enabled signed action despite an other-account warning');
+workspaceCheck(strpos($manualWarningHtml,'mantém esse pagamento e a respetiva conta inalterados')!==false,
+	'The native card explains that approval preserves the other payment and account');
 // Initial GET must reveal an already-paid tax in another account without Search.
 $automaticTaxEntry = array('rowid'=>501,'fk_account'=>82,'label'=>'(SocialContributionPayment)',
     'account_ref'=>'WRONG-BANK','dateo'=>'2026-11-03','amount'=>'-125.50','currency_code'=>'EUR',

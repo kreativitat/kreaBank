@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.19.27 — 2026-11-04
+
+- Allow signed one-by-one approval of an exact existing movement in the statement
+  account while another-account payment warning is visible. Preserve the other
+  payment/account and retain bulk, automatic and invoice/payment creation blocks.
+- Sign the approval context and warning state, revalidate under locks and audit
+  the explicit choice. No schema or scheduler changes.
+
 ## 1.19.26 — 2026-11-04
 
 - Show possible other-account invoice payments on initial line selection using

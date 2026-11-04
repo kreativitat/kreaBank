@@ -167,6 +167,27 @@ $service->suggestions = array_reverse($service->suggestions);
 checkDirect(submitDirectReview() !== null && $service->executions[0][1][0]['fk_doc'] === 23, 'Explicit second-invoice approval survives candidate reordering');
 resetDirectReview(); $service->accountReview = array('synthetic'=>true);
 checkDirect(submitDirectReview() === null && !$service->executions, 'Wrong-account warnings block direct invoice approval');
+resetDirectReview();
+$service->accountReview = array('synthetic'=>true);
+$service->suggestions[] = array_merge($service->suggestions[0], array('doc_type'=>'native_bank', 'doc_id'=>24,
+	'amount_open'=>-47.66, 'bank_account_id'=>81));
+$callbacks = kreabankManualReviewCallbacks($service, 3, 100);
+$choices = $callbacks['prepareDocumentReviews']($service->line);
+checkDirect(array_keys($choices) === array('native_bank__24') && $choices['native_bank__24']['other_account_warning']
+	&& !$choices['native_bank__24']['preselected'], 'Other-account evidence permits only an explicit same-account native choice');
+checkDirect($callbacks['prepareReviewRow']($service->line) === null, 'Matched review remains blocked by the same warning');
+$request['review_doc'] = 'native_bank__24';
+$request['review_signature'] = kreabankBulkReviewSignature($choices['native_bank__24'], '7|9|81', $request['review_expires'], $_SESSION['kreabank_bulk_review_secret']);
+checkDirect(submitDirectReview() !== null && count($service->executions) === 1
+	&& $service->executions[0][1][0]['fk_doc'] === 24 && $service->executions[0][7]['approval_context'] === 'selected_native',
+	'Signed direct approval selects the existing same-account movement without an account-change action');
+resetDirectReview();
+$service->suggestions[0] = array_merge($service->suggestions[0], array('doc_type'=>'native_bank', 'bank_account_id'=>81, 'amount_open'=>-47.66));
+$row = kreabankManualReviewCallbacks($service,3,100)['prepareDocumentReviews']($service->line)['native_bank__22'];
+$request['review_doc'] = 'native_bank__22';
+$request['review_signature'] = kreabankBulkReviewSignature($row,'7|9|81',$request['review_expires'],$_SESSION['kreabank_bulk_review_secret']);
+$service->accountReview = array('new'=>true);
+checkDirect(submitDirectReview() === null && !$service->executions, 'A newly appearing warning requires fresh displayed review');
 resetDirectReview(); $service->owned = false;
 checkDirect(submitDirectReview() === null && !$service->executions, 'Foreign-company source cannot be approved');
 resetDirectReview(); $conf->entity = 8;
@@ -195,7 +216,7 @@ foreach (array('customer_invoice', 'payment', 'payment_supplier', 'payment_linke
 	if ($type === 'customer_invoice' || $type === 'payment' || $type === 'payment_linked') { $service->line['amount'] = 47.66; $service->line['direction'] = 1; }
 	else { $service->suggestions[0]['amount_open'] = -47.66; }
 	$callbacks = kreabankManualReviewCallbacks($service, 3, 100);
-	$row = $callbacks['prepareReviewRow']($service->line);
+	$row = $callbacks['prepareDocumentReviews']($service->line)[$type . '__22'];
 	$request['review_doc'] = $type . '__22';
 	$request['review_signature'] = kreabankBulkReviewSignature($row, '7|9|81', $request['review_expires'], $_SESSION['kreabank_bulk_review_secret']);
 	checkDirect(submitDirectReview() !== null && count($service->executions) === 1 && $service->executions[0][1][0]['doc_type'] === $type, 'Direct review retains supported payment semantics: ' . $type);

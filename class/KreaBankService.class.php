@@ -2112,12 +2112,13 @@ class KreaBankService
 	 * @param string $note
 	 * @param int $confidenceScore
 	 * @param int[]|null $automaticAccounts Non-null enforces unattended native-only checks
-	 * @param array|null $reviewedRow Exact pair authenticated by the bulk review controller
+	 * @param array|null $reviewedRow Exact pair authenticated by the manual review controller
 	 * @return int
 	 */
 	public function reconcileLine($lineId, $links, $strategy = 'manual', $isAuto = 0, $note = '', $confidenceScore = 0, $automaticAccounts = null, $reviewedRow = null)
 	{
 		$isReviewedBulk = $reviewedRow !== null;
+		$isSelectedNativeReview = ($reviewedRow['approval_context'] ?? '') === 'selected_native';
 		foreach ($links as $link) {
 			if (in_array($link['doc_type'] ?? '', array('tax', 'payment_tax'), true) && (!$isReviewedBulk || $isAuto)) {
 				throw new Exception('Tax reconciliation requires an explicitly reviewed pair');
@@ -2128,6 +2129,14 @@ class KreaBankService
 		}
 		if ($isReviewedBulk) {
 			require_once __DIR__ . '/../lib/kreabank_bulk.lib.php';
+			if (!empty($reviewedRow['approval_context']) && (!$isSelectedNativeReview
+				|| ($reviewedRow['suggestion']['doc_type'] ?? '') !== 'native_bank'
+				|| (int) ($reviewedRow['line']['bank_account_id'] ?? 0) <= 0
+				|| (int) ($reviewedRow['suggestion']['bank_account_id'] ?? 0) !== (int) $reviewedRow['line']['bank_account_id']
+				|| self::automaticDecimal($reviewedRow['suggestion']['amount_open'] ?? 0) !== self::automaticDecimal($reviewedRow['line']['amount'] ?? 0)
+				|| self::automaticDecimal($reviewedRow['allocation'] ?? 0) !== ltrim(self::automaticDecimal($reviewedRow['line']['amount'] ?? 0), '-'))) {
+				throw new Exception('Invalid selected native movement review');
+			}
 			if ($strategy !== 'bulk_manual' || (int) $isAuto !== 0 || $automaticAccounts !== null || count($links) !== 1
 				|| !$this->user->hasRight('kreabank', 'reconciliation', 'write')
 				|| (!$this->user->hasRight('banque', 'modifier') && !$this->user->hasRight('banque', 'consolidate'))
@@ -2236,7 +2245,12 @@ class KreaBankService
 					throw new Exception($this->langs->trans('KreaBankBulkMatchReviewChanged', '1'));
 				}
 				$line = $currentLine;
-				if (!empty($line['fk_statement']) && $this->getPaymentAccountReview($lineId, array($line['bank_account_id']))) {
+				$accountReview = !empty($line['fk_statement']) && $this->getPaymentAccountReview($lineId, array($line['bank_account_id']));
+				if ($isSelectedNativeReview && ((float) $line['allocated_amount'] !== 0.0
+					|| (bool) $accountReview !== !empty($reviewedRow['other_account_warning']))) {
+					throw new Exception($this->langs->trans('KreaBankBulkMatchReviewChanged', '1'));
+				}
+				if ($accountReview && !$isSelectedNativeReview) {
 					throw new Exception($this->langs->trans('KreaBankAccountReviewTitle'));
 				}
 			}
@@ -2418,7 +2432,8 @@ class KreaBankService
 				($isAutomaticNative || $isReviewedBulk) ? array(
 					'strategy' => $strategy, 'is_auto' => (int) $isAuto, 'confidence_score' => $confidenceScore,
 					'links' => $links, 'native' => 1, 'native_bank_line_id' => $nativeLineId,
-				) : null);
+				) + ($isSelectedNativeReview ? array('approval_context'=>'selected_native',
+					'other_account_warning'=>!empty($reviewedRow['other_account_warning'])) : array()) : null);
 			if (!$this->db->commit()) {
 				throw new Exception('Failed to commit bank reconciliation; inspect its status before retrying');
 			}

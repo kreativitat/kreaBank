@@ -300,13 +300,17 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 	};
 	$prepareDocumentReviews = static function ($line) use ($service, $dateTolerance, $appendLinkedFallbackSuggestions, $resolveLineBestSuggestion) {
 		$lineId = (int) $line['rowid'];
-		if ((int) $line['status'] !== 0 || (!empty($line['fk_statement']) && $service->getPaymentAccountReview($lineId, array($line['bank_account_id'])))) {
+		if ((int) $line['status'] !== 0) {
 			return array();
 		}
+		$accountReview = !empty($line['fk_statement']) && $service->getPaymentAccountReview($lineId, array($line['bank_account_id']));
 		$suggestionsByLine = $service->getSuggestionsForLines(array($line), 0, $dateTolerance, null, false);
 		$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestionsByLine[$lineId] ?? array(), $dateTolerance);
 		$rows = array();
 		foreach ($suggestions as $suggestion) {
+			// A reviewed existing movement cannot create or move the other payment.
+			// Invoice/payment creation and matched/bulk approval keep their warning gate.
+			if ($accountReview && $suggestion['doc_type'] !== 'native_bank') { continue; }
 			if (!in_array($suggestion['doc_type'], array('native_bank', 'customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked', 'tax', 'payment_tax'), true)) {
 				continue;
 			}
@@ -320,6 +324,10 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 			$key = $suggestion['doc_type'] . '__' . (int) $suggestion['doc_id'];
 			$rows[$key] = array('line'=>$line, 'suggestion'=>$suggestion, 'allocation'=>(float) $resolved['allocation'],
 				'preselected'=>false, 'is_bulk_safe'=>false, 'score'=>(int) $suggestion['score']);
+			if ($suggestion['doc_type'] === 'native_bank') {
+				$rows[$key]['approval_context'] = 'selected_native';
+				$rows[$key]['other_account_warning'] = (bool) $accountReview;
+			}
 		}
 		return $rows;
 	};

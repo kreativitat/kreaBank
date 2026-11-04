@@ -1930,6 +1930,9 @@ if (!$selectedLine) {
 				$actionLabel = $documentKind === 'Tax' ? 'KreaBankReviewPayTax' : ($documentKind === 'Bank' ? 'KreaBankWorkspaceReconcileBank' : ($documentKind === 'Invoice' ? 'KreaBankReviewPayInvoice' : 'KreaBankWorkspaceReconcilePayment'));
 				if (isset($documentReviewRows[$docKey])) {
 					$reviewRow = $documentReviewRows[$docKey];
+					if (!empty($reviewRow['other_account_warning'])) {
+						print '<p class="krea-muted">' . $langs->trans('KreaBankWorkspaceOtherAccountManualReview') . '</p>';
+					}
 					// Bind exactly the target facts rendered on this card; POST recomputes them.
 					foreach (array('ref'=>'doc_ref', 'doc_date'=>'doc_date', 'thirdparty_name'=>'thirdparty_name', 'amount_open'=>'amount_open') as $displayKey => $reviewKey) {
 						$reviewRow['suggestion'][$reviewKey] = $doc[$displayKey];

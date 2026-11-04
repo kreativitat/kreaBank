@@ -621,6 +621,7 @@ KreaBankWorkspaceReconcilePayment=Associar pagamento e reconciliar
 KreaBankWorkspaceReconcileBank=Reconciliar este movimento
 KreaBankWorkspaceMatchSingleHelp=Compare a linha de extrato com os registos apresentados. Confirme a correspondência no botão do registo escolhido.
 KreaBankWorkspaceDocumentUnavailable=Não é possível aprovar este candidato neste momento. Atualize a linha e reveja os indícios alterados ou em conflito.
+KreaBankWorkspaceOtherAccountManualReview=Existe um possível pagamento relacionado noutra conta. Reveja-o antes de confirmar este movimento. A reconciliação deste movimento mantém esse pagamento e a respetiva conta inalterados.
 KreaBankWorkspaceReviewExistingPayment=Rever pagamento e reconciliação
 KreaBankReviewAllocation=Valor a alocar
 KreaBankReviewStrongEvidence=Correspondência com indícios fortes

@@ -281,6 +281,14 @@
   See `doc/RECONCILIATION_UI.md` and the pure/disposable `test_account_correction`
   suites. Bulk account warnings retain their native correction links.
 
+- A signed one-by-one `selected_native` review may approve an exact existing
+  native movement in the statement account despite an other-account warning.
+  Sign the context and warning state; revalidate them with source/target ownership,
+  amount, currency and locks, and retain the warning in the atomic audit. This
+  changes no other-account payment or account. Bulk/matched, unattended and
+  invoice/payment creation keep their warning gate. Validate with the synthetic
+  controller/view suites and guarded `test_manual_native_account_review_database.php`.
+
 ## Existing tax reconciliation
 
 - `KreaBankTaxReconciliation` supplies tax projections and native tax payment

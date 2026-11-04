@@ -74,8 +74,16 @@ and signature, allowing an explicit user choice between equal candidates.
 Confirmation recomputes that exact target and authenticates the displayed pair
 before the service revalidates it under locks. Changing the target invalidates
 the signature; no candidate is arbitrarily selected or automatically preselected.
-Matched/bulk review retains its unique-suggestion requirement. Changed, foreign
-or wrong-account evidence cannot produce an executable pair. Success
+Matched/bulk review retains its unique-suggestion requirement. Changed or foreign
+evidence cannot produce an executable pair. An other-account warning still blocks
+matched/bulk approval and invoice/payment creation. One-by-one review may explicitly
+approve an exact existing native movement in the statement account, with a compact
+warning that the other payment/account stays unchanged. The signed `selected_native`
+context and warning state cannot be reused as ordinary bulk approval; execution
+rechecks source/target account, full signed amount, currency, permissions and locks,
+and records the reviewed warning in the atomic audit. Newly changed warning state
+requires a fresh review. This does not move or reconcile the other-account payment.
+Success
 returns to the one-by-one queue with account/sort context; failure retains the
 selected line and reports the error. No navigation through `matched.php` is needed.
 
@@ -132,6 +140,7 @@ node --check js/reconcile.js
 node --check js/reconcile-supplier.js
 php test/test_reconcile_workspace.php
 php test/test_reconcile_document.php
+php test/test_manual_native_account_review_database.php
 node test/test_reconcile_workspace.cjs
 node test/test_reconcile_queue.cjs
 php test/test_reconciliation_guards.php

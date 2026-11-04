@@ -28,6 +28,14 @@ $valid = static function ($candidate, $context = '1|7|101', $time = 1000, $confi
 	return kreabankBulkReviewIsValid($candidate, $context, $expires, $signature, $secret, $time, $confirmed, $account);
 };
 checkReview($valid($row), 'An explicitly reviewed, unchanged pair is eligible without automatic confidence');
+$selectedRow = $row + array('approval_context'=>'selected_native', 'other_account_warning'=>true);
+checkReview(!$valid($selectedRow), 'A bulk signature cannot authorize the selected-native exception');
+$selectedSignature = kreabankBulkReviewSignature($selectedRow, $scope, $expires, $secret);
+checkReview(!kreabankBulkReviewIsValid($row,$scope,$expires,$selectedSignature,$secret,1000,true,101),
+	'A selected-native signature cannot be reused as ordinary bulk approval');
+$selectedRow['other_account_warning'] = false;
+checkReview(!kreabankBulkReviewIsValid($selectedRow,$scope,$expires,$selectedSignature,$secret,1000,true,101),
+	'The displayed other-account warning state is signed');
 checkReview(!$valid($row, $scope, 1000, false), 'Checkbox selection alone is not manual approval');
 checkReview(!$valid($row, $scope, 2001), 'Expired review requires fresh approval');
 checkReview(!$valid($row, $scope, 1), 'Expiry cannot be extended beyond the review window');
