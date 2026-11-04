@@ -110,12 +110,13 @@ class ActionsKreaBank extends CommonHookActions
 					$param .= '&account_context=' . $accountId;
 				}
 			}
-			if (GETPOSTINT('kreabank_matched')) {
+			$filter = kreabankMovementFilter();
+			if ($filter !== 0) {
 				require_once __DIR__ . '/kreabankintegration.class.php';
 				$report = new KreaBankIntegration($this->db,$conf->entity);
-				$this->resprints .= $report->matchedWhereSql();
+				$this->resprints .= $filter === 1 ? $report->matchedWhereSql() : ' AND b.rappro=0';
 				if (strpos((string) $param,'kreabank_matched=') === false) {
-					$param .= '&kreabank_matched=1';
+					$param .= '&kreabank_matched=' . $filter;
 				}
 			}
 		}
@@ -129,8 +130,8 @@ class ActionsKreaBank extends CommonHookActions
 		if ($this->bankingContextAllowed() && basename($_SERVER['PHP_SELF'] ?? '') === 'bankentries_list.php') {
 			require_once __DIR__ . '/../lib/kreabank.lib.php';
 			$this->resprints = kreabankNavigationHiddenFields($this->nativeAccountId('bankentries_list.php'));
-			if (GETPOSTINT('kreabank_matched')) {
-				$this->resprints .= '<input type="hidden" name="kreabank_matched" value="1">';
+			if (kreabankMovementFilter() !== 0) {
+				$this->resprints .= '<input type="hidden" name="kreabank_matched" value="' . kreabankMovementFilter() . '">';
 			}
 		}
 		return 0;
@@ -246,6 +247,9 @@ class ActionsKreaBank extends CommonHookActions
 			$redirect = 'window.location.replace(' . json_encode(kreabankStatementUrl($accountId), JSON_HEX_TAG|JSON_HEX_AMP) . ');';
 		}
 		$html = kreabankBankingHeader($view,$account);
+		if ($page === 'bankentries_list.php' && $view === 'movements' && $accountId > 0) {
+			$html .= kreabankMovementBalances($accountId);
+		}
 		$this->resprints = '<div id="kreabank-native-context">' . $html . '</div><script nonce="' . dol_escape_htmltag(getNonce()) . '">'
 			. '(function(){document.body.classList.add("kb-native-bank");var panel=document.getElementById("kreabank-native-context"),target=document.getElementById("id-right");if(panel&&target){target.insertBefore(panel,target.firstChild);}' . $redirect . '})();</script>';
 		return 0;

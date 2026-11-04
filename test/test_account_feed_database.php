@@ -71,6 +71,24 @@ $row->feed_collected_at = null;
 $html = kreabankAccountFeedCells($row);
 checkAuto(strpos($html,'—') !== false && strpos($html,'0,00') === false && strpos($html,'KreaBankFeedState_unmapped') !== false, 'Missing snapshot never becomes a false zero');
 
+// Movement summaries use the same owned account projection, without list filters.
+$html = kreabankMovementBalances(101);
+checkAuto(strpos($html, 'KreaBankLedgerBalance') !== false && strpos($html, 'KreaBankFeedBalance') !== false && strpos($html, 'KreaBankFeedBankUpdated') !== false, 'Closed selected accounts retain both balances and bank refresh time');
+checkAuto(strpos($html, '0,00') !== false && strpos($html, 'EUR') !== false && strpos($html, 'KreaBankFeedState_failed') !== false, 'A real zero bank snapshot retains currency and failure state in movements');
+checkAuto(kreabankMovementBalances(0) === '' && kreabankMovementBalances(-1) === '' && kreabankMovementBalances(202) === '' && kreabankMovementBalances(999999) === '', 'All-account, invalid, foreign and missing contexts expose no balance summary');
+$nativeBeforeSummary = countAuto('bank');
+$db->query("UPDATE kbauto_kreabank_feed_account SET balance=-20.50,status='ready',bank_updated_at='2000-01-01T00:00:00Z' WHERE provider_account_id='acc_one'");
+$html = kreabankMovementBalances(101);
+checkAuto(strpos($html, '-20,50') !== false && strpos($html, 'KreaBankFeedState_stale') !== false, 'Movement balances preserve signed amounts and bank snapshot staleness');
+$db->query("UPDATE kbauto_bank_account SET currency_code='USD' WHERE rowid=101");
+$html = kreabankMovementBalances(101);
+checkAuto(strpos($html, '-20,50') === false && strpos($html, '—') !== false && strpos($html, 'USD') !== false, 'Movement summary does not relabel a mismatched-currency bank snapshot');
+$db->query("UPDATE kbauto_bank_account SET currency_code='EUR',courant=2 WHERE rowid=101");
+$html = kreabankMovementBalances(101);
+checkAuto(strpos($html, '-20,50') === false && strpos($html, '—') !== false, 'Cash account summary does not reuse a bank snapshot');
+$db->query("UPDATE kbauto_bank_account SET courant=1 WHERE rowid=101");
+checkAuto(countAuto('bank') === $nativeBeforeSummary, 'Reading movement balances creates no native financial records');
+
 // Default overview grouping is independent of balance and explicit column sorts.
 $db->query("UPDATE kbauto_bank_account SET ref='A_CONNECTED',clos=0 WHERE rowid=101");
 $db->query("UPDATE kbauto_bank_account SET ref='Z_CONNECTED' WHERE rowid=102");

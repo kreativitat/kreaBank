@@ -122,8 +122,8 @@ function kreabankBankingFilters($page, $accountId = 0, $kind = null)
 	if ($isAccountTool) {
 		$html .= '<input type="hidden" name="view" value="' . $page . '">';
 	}
-	if ($page === 'movements' && GETPOSTINT('kreabank_matched')) {
-		$html .= '<input type="hidden" name="kreabank_matched" value="1">';
+	if ($page === 'movements' && kreabankMovementFilter() !== 0) {
+		$html .= '<input type="hidden" name="kreabank_matched" value="' . kreabankMovementFilter() . '">';
 	}
 	$html .= '<strong class="kb-filter-title">' . $langs->trans('Filters') . '</strong>';
 	$html .= '<div class="kb-filter-field">' . kreabankAccountFilterSelect($accountId, in_array($page, array('bankstatement', 'statement'), true)) . '</div>';
@@ -182,10 +182,10 @@ function kreabankBankingHeader($page, $account = null)
 		$html .= '</div>';
 	}
 	if ($page === 'movements') {
-		$matched = (bool) GETPOSTINT('kreabank_matched');
+		$matched = kreabankMovementFilter();
 		$html .= '<div class="kb-view-switch" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankNavMovements')) . '">';
-		foreach (array(0 => 'KreaBankAllMovements', 1 => 'KreaBankReconciledMovements') as $filter => $label) {
-			$html .= '<a' . ($matched === (bool) $filter ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag(kreabankNativeEntriesUrl($accountId, (bool) $filter)) . '">' . $langs->trans($label) . '</a>';
+		foreach (array(0 => 'KreaBankAllMovements', 1 => 'KreaBankReconciledMovements', 2 => 'KreaBankUnreconciledMovements') as $filter => $label) {
+			$html .= '<a' . ($matched === $filter ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag(kreabankNativeEntriesUrl($accountId, $filter)) . '">' . $langs->trans($label) . '</a>';
 		}
 		$html .= '</div>';
 	}

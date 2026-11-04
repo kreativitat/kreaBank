@@ -18,6 +18,8 @@ body.kreabank-banking.kb-native-bank #id-right > .fiche > .tabs { display:none !
 .kb-view-switch { display:flex; gap:0; margin-top:18px; width:fit-content; border:1px solid #ccd7df; border-radius:6px; overflow:hidden; }
 .kb-view-switch a { font-size:12px; padding:7px 12px; color:#536779; text-decoration:none; }
 .kb-view-switch a.active { color:#244c38; background:#eaf2ed; font-weight:bold; }
+.kb-header .kb-view-switch { max-width:100%; overflow-x:auto; }
+.kb-header .kb-view-switch a { flex:none; white-space:nowrap; }
 .kb-page-actions { display:flex; justify-content:flex-end; margin:8px 0 18px; }
 .kb-accounts-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:16px 0 22px; }
 .kb-accounts-filters { display:flex; flex-wrap:wrap; align-items:flex-end; gap:16px; margin:0 0 22px; padding:16px; border:1px solid #dbe3e9; border-radius:8px; background:#f4f7f9; }
@@ -37,6 +39,13 @@ body.kreabank-banking.kb-native-bank #id-right > .fiche > .tabs { display:none !
 .kb-accounts-table small { display:block; margin-top:5px; color:#748391; }
 .kb-accounts-table .kb-money { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .kb-count { display:inline-block; padding:3px 9px; border-radius:20px; background:#edf3f7; color:#38536c; font-weight:600; }
+.kb-movement-balances { display:flex; flex-wrap:wrap; gap:20px 40px; margin:0 0 22px; padding:16px; border:1px solid #dbe3e9; border-radius:8px; background:#fff; color:#243649; }
+.kb-movement-balances > div { min-width:0; }
+.kb-movement-balances dt { color:#576878; font-size:12px; margin-bottom:6px; }
+.kb-movement-balances dd { margin:0; font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.kb-movement-balances .kb-balance-currency { font-size:13px; font-weight:400; }
+.kb-movement-balances .kb-balance-updated { font-size:15px; line-height:26px; font-weight:400; }
+.kb-movement-balances small { display:block; margin-top:5px; font-size:12px; line-height:1.5; font-weight:400; color:#576878; }
 @media(max-width:700px) {
  body.kreabank-banking #id-right { padding:16px 12px; }
  .kb-context { gap:12px; }

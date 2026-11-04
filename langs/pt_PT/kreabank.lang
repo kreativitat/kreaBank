@@ -511,6 +511,7 @@ KreaBankTransfer=Transferência interna
 KreaBankBankTransfer=Transferência bancária
 KreaBankAllMovements=Todos os movimentos
 KreaBankReconciledMovements=Reconciliados
+KreaBankUnreconciledMovements=Por reconciliar
 KreaBankScoreGuide=Como avaliar as sugestões
 KreaBankAssistedGuide=Como reconciliar
 

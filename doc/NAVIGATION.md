@@ -33,6 +33,18 @@ pending imported evidence. It never combines balances across currencies. Native
 account-list GETs route here for KreaBank readers. Readers without module rights
 retain the native banking interface.
 
+Selected-account Movements pages show the current Dolibarr balance, synced bank
+balance and bank refresh time above the native list. These reuse the accounts
+overview's read-only projection, currency and snapshot status, independently of
+list filters, matched view or pagination. Missing snapshots remain a dash and
+stale/failed snapshots retain their status. The all-accounts view has no combined
+balance. Deploy `lib/kreabank_integration.lib.php`, `class/actions_kreabank.class.php`
+and `css/navigation.css` together; no registration or schema update is required.
+Movements also offers **Unreconciled** (pt_PT: **Por reconciliar**), selecting native
+`b.rappro=0` rows within the same owned-account scope before counting/pagination.
+The explicit `kreabank_matched=2` view persists through account/search forms and
+native sort/page links. Existing reconciled-view semantics remain unchanged.
+
 The native Dolibarr left menu remains visible with its standard layout and
 responsive behavior. Its bank section includes a **Reconcile** shortcut
 (pt_PT: **Reconciliar**) to `reconcile.php` for internal users with both native

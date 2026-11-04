@@ -511,6 +511,7 @@ KreaBankTransfer=Internal transfer
 KreaBankBankTransfer=Bank transfer
 KreaBankAllMovements=All movements
 KreaBankReconciledMovements=Reconciled
+KreaBankUnreconciledMovements=Unreconciled
 KreaBankScoreGuide=How to assess suggestions
 KreaBankAssistedGuide=How to reconcile
 

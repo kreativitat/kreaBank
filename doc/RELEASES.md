@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.19.33 — 2026-11-04
+
+- Show the selected account's Dolibarr balance, synced bank balance and bank
+  refresh time above native movements, independently of list filters and pages.
+- Add an Unreconciled movements view using native reconciliation status, retained
+  through account selection, search, sorting and pagination.
+
 ## 1.19.32 — 2026-11-04
 
 - Show each reconciliation candidate’s recorded bank account reference on its
