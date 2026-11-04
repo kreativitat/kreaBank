@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.30 — 2026-11-04
+
+- Show a repeated payment/reference label only once on reconciliation cards.
+  Retain the counterparty line when it adds a different name.
+
 ## 1.19.29 — 2026-11-04
 
 - Align larger candidate amounts to the right of the date on the top row. Use

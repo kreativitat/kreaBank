@@ -1882,7 +1882,10 @@ if (!$selectedLine) {
 			$documentKind = $rawDocType === 'tax' ? 'Tax' : ($rawDocType === 'native_bank' ? 'Bank' : (in_array($rawDocType, array('customer_invoice', 'supplier_invoice'), true) ? 'Invoice' : 'Payment'));
 			print ' <span class="krea-muted">' . $langs->trans('KreaBankReviewExisting' . $documentKind) . '</span><br>';
 			if ($isDraft) { print '<span class="badge badge-status0">' . $langs->trans('KreaBankDraftInvoice') . '</span><br>'; }
-			print '<span class="krea-muted">' . dol_escape_htmltag($displayCounterparty) . '</span></span>';
+			if (trim($displayCounterparty) !== '' && trim($displayCounterparty) !== trim($displayReference)) {
+				print '<span class="krea-muted">' . dol_escape_htmltag($displayCounterparty) . '</span>';
+			}
+			print '</span>';
 			print '</label>';
 			if (!empty($doc['linked_bank_line'])) {
 				$linkedLineUrl = dol_buildpath('/compta/bank/line.php?rowid=' . (int) $doc['linked_bank_line'], 1);

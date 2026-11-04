@@ -58,6 +58,7 @@ row, followed by reference/type, counterparty, evidence, consequence and a green
 action on the card. Ordinary native movements use **Reconcile this movement**,
 with the exact persisted signed amount
 and source account. They reuse the existing native movement and create no payment.
+Suppress the counterparty line when it repeats the displayed reference label.
 
 Batch detection or **Search batch payments** retains multiple native checkboxes,
 the selected total/difference and the combined approval button. The combined
