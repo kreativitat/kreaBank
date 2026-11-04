@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.14 — 2026-11-04
+
+- Show candidate dates on their own line immediately below the reference and
+  record type in one-by-one reconciliation, followed by the counterparty name.
+
 ## 1.19.13 — 2026-11-04
 
 - Record an existing invoice's payment and reconcile directly in one-by-one

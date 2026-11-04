@@ -1816,7 +1816,8 @@ if (!$selectedLine) {
 			}
 			$documentKind = $rawDocType === 'native_bank' ? 'Bank' : (in_array($rawDocType, array('customer_invoice', 'supplier_invoice'), true) ? 'Invoice' : 'Payment');
 			print ' <span class="krea-muted">' . $langs->trans('KreaBankReviewExisting' . $documentKind) . '</span><br>';
-			print '<span class="krea-muted">' . dol_escape_htmltag((string) $doc['thirdparty_name']) . ' • ' . dol_print_date(strtotime((string) $doc['doc_date']), 'day') . '</span></span>';
+			print '<span class="krea-muted">' . dol_print_date(strtotime((string) $doc['doc_date']), 'day') . '</span><br>';
+			print '<span class="krea-muted">' . dol_escape_htmltag((string) $doc['thirdparty_name']) . '</span></span>';
 			print '</label>';
 			if (!empty($doc['linked_bank_line'])) {
 				$linkedLineUrl = dol_buildpath('/compta/bank/line.php?rowid=' . (int) $doc['linked_bank_line'], 1);
