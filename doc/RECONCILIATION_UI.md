@@ -57,7 +57,7 @@ returns to the one-by-one queue with account/sort context; failure retains the
 selected line and reports the error. No navigation through `matched.php` is needed.
 
 Existing unpaid taxes/social contributions also appear in matching, with
-**Record tax payment and reconcile** (pt_PT: **Registar pagamento do imposto e
+**Record payment and reconcile** (pt_PT: **Registar pagamento e
 reconciliar**). This pays the existing tax; the creation panel's Tax payment choice
 creates a new tax. Existing unbanked tax payments use **Link payment and reconcile**.
 Already banked tax payments reuse their existing native movement. See

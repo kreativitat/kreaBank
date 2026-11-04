@@ -648,4 +648,4 @@ KreaBankOtherAccountTruncated=São apresentados os primeiros 100 movimentos. Ref
 
 KreaBankReviewExistingTax=Imposto ou encargo social existente
 KreaBankReviewConsequenceTax=Regista um pagamento deste imposto ou encargo social e reconcilia a linha do extrato. Não cria um novo imposto.
-KreaBankReviewPayTax=Registar pagamento do imposto e reconciliar
+KreaBankReviewPayTax=Registar pagamento e reconciliar

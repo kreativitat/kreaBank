@@ -51,10 +51,11 @@ function kreabankPaymentAccountReviewHtml($review, $langs)
 	return $html;
 }
 
-/** Translate native transfer markers for display without changing stored evidence. */
+/** Translate native operation markers for display without changing stored evidence. */
 function kreabankNativeBankLabel($label, $langs)
 {
-	return str_replace('(banktransfert)', $langs->trans('KreaBankBankTransfer'), (string) $label);
+	return str_replace(array('(banktransfert)', '(SocialContributionPayment)'),
+		array($langs->trans('KreaBankBankTransfer'), $langs->trans('KreaBankWorkspaceChoiceTax')), (string) $label);
 }
 
 /** Review-only search results, outside the selectable same-account reconciliation form. */

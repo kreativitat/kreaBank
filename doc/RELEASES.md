@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.19.20 — 2026-11-04
+
+- Use the standard Record payment and reconcile action text for existing taxes.
+  Translate native tax payment labels through the shared bank-label renderer.
+  Keep the same candidate-card layout and controls for all reconciliation types.
+
 ## 1.19.19 — 2026-11-04
 
 - Remove the large payment-account warning banner above one-by-one reconciliation.

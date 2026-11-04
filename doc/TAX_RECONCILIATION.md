@@ -7,7 +7,7 @@ choice.
 
 | Existing record | Explicit approval |
 | --- | --- |
-| Unpaid tax with a remaining balance | Record tax payment and reconcile; create one native payment against that tax. |
+| Unpaid tax with a remaining balance | Record payment and reconcile; create one native payment against that tax. |
 | Tax payment without a bank movement | Link payment and reconcile; reuse the payment and create only its bank movement if needed. |
 | Banked tax payment in the statement account | Reconcile its existing native movement; create no tax, payment or movement. |
 | Banked tax payment in another owned account | Search and review the account correction, then reconcile the corrected movement in a separate action. |

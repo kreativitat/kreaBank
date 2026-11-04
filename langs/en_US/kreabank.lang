@@ -649,4 +649,4 @@ KreaBankOtherAccountTruncated=Showing the first 100 movements. Refine the search
 
 KreaBankReviewExistingTax=Existing tax/social contribution
 KreaBankReviewConsequenceTax=Records a payment against this existing tax/social contribution and reconciles the statement line. Does not create a new tax.
-KreaBankReviewPayTax=Record tax payment and reconcile
+KreaBankReviewPayTax=Record payment and reconcile

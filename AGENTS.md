@@ -241,6 +241,10 @@
 
 ## Selected-line reconciliation workspace
 
+- Keep the same candidate-card layout, controls and action wording for equivalent
+  reconciliation flows, including taxes. Do not introduce record-type-specific
+  layouts or oversized warning banners.
+
 - `reconcile.php` keeps the existing controller and shared service calls. Scoped
   presentation assets are `css/reconcile.css`, `js/reconcile.js` and
   `js/reconcile-supplier.js`; include all three when deploying this workspace.
