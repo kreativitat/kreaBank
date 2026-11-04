@@ -51,6 +51,12 @@ function kreabankPaymentAccountReviewHtml($review, $langs)
 	return $html;
 }
 
+/** Translate native transfer markers for display without changing stored evidence. */
+function kreabankNativeBankLabel($label, $langs)
+{
+	return str_replace('(banktransfert)', $langs->trans('KreaBankBankTransfer'), (string) $label);
+}
+
 /** Review-only search results, outside the selectable same-account reconciliation form. */
 function kreabankOtherAccountMovementsHtml($entries, $line, $reviews, $search, $langs)
 {
@@ -60,7 +66,7 @@ function kreabankOtherAccountMovementsHtml($entries, $line, $reviews, $search, $
 	foreach (array_slice($entries, 0, 100) as $entry) {
 		$url = dol_buildpath('/compta/bank/line.php?rowid=' . (int) $entry['rowid'], 1);
 		$target = dol_escape_htmltag($line['bank_account_ref']);
-		$html .= '<article class="krea-doc-item kb-other-account-entry"><div class="kb-other-account-summary"><div><strong><a href="' . dol_escape_htmltag($url) . '" target="_blank" rel="noopener">' . dol_escape_htmltag($entry['label']) . '</a></strong><br>'
+		$html .= '<article class="krea-doc-item kb-other-account-entry"><div class="kb-other-account-summary"><div><strong><a href="' . dol_escape_htmltag($url) . '" target="_blank" rel="noopener">' . dol_escape_htmltag(kreabankNativeBankLabel($entry['label'], $langs)) . '</a></strong><br>'
 			. dol_escape_htmltag($entry['account_ref']) . ' · ' . dol_escape_htmltag(substr($entry['dateo'], 0, 10))
 			. '<br><span class="krea-muted">' . dol_escape_htmltag(trim($entry['payment_refs'] . ' ' . $entry['customer_docs'] . ' ' . $entry['supplier_docs'])) . '</span></div><strong>'
 			. kreabankPrice($entry['amount']) . ' ' . dol_escape_htmltag($entry['currency_code']) . '</strong></div>';

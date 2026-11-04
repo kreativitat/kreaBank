@@ -18,6 +18,11 @@ function kreabankReviewPairHtml($row, $langs, $companyName, $resolveUrl)
 	$allocation = (float) $row['allocation'];
 	$title = trim((string) ($line['description'] ?? '')) ?: (string) ($line['counterparty_name'] ?? '');
 	$reference = kreabankBulkSuggestionReference($target);
+	$counterparty = (string) ($target['thirdparty_name'] ?? '');
+	if ($type === 'native_bank') {
+		$reference = kreabankNativeBankLabel($reference, $langs);
+		$counterparty = kreabankNativeBankLabel($counterparty, $langs);
+	}
 	$url = $resolveUrl($type, (int) $target['doc_id']);
 	$formatDisplayDate = static function ($value) {
 		$ts = strtotime((string) $value);
@@ -49,7 +54,7 @@ function kreabankReviewPairHtml($row, $langs, $companyName, $resolveUrl)
 	print '<dl class="kb-review-facts">';
 	print $fact('BankAccount', dol_escape_htmltag(trim((string) ($target['bank_account_ref'] ?? '')) ?: '—'));
 	print $fact('KreaBankDate', $formatDisplayDate($target['doc_date'] ?? ''));
-	print $fact('KreaBankCounterparty', dol_escape_htmltag((string) ($target['thirdparty_name'] ?? '')) ?: '—');
+	print $fact('KreaBankCounterparty', dol_escape_htmltag($counterparty) ?: '—');
 	print '</dl><p class="kb-review-consequence">' . $langs->trans('KreaBankReviewConsequence' . $kind) . '</p>';
 	print '</section></div>';
 	print '<div class="kb-review-allocation"><span>' . $langs->trans('KreaBankReviewAllocation') . ': <strong>' . kreabankPrice($allocation) . ' ' . $currency . '</strong></span><span>' . $langs->trans('KreaBankWorkspaceDifference') . ': <strong>' . kreabankPrice($outstanding - $allocation) . ' ' . $currency . '</strong></span></div>';

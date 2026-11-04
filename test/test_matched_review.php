@@ -113,6 +113,7 @@ if ($reviewHtmlMode) {
 	if (!in_array($fixtureCase,array('empty','unmatched','loading'),true)) {
 		$line=array('rowid'=>11,'fk_statement'=>1,'bank_account_id'=>101,'status'=>0,'direction'=>-1,'amount'=>-125.50,'allocated_amount'=>0,'operation_date'=>'2026-11-03','currency'=>'EUR','description'=>'Pagamento de serviços · novembro','bank_account_ref'=>'BANK-TEST','bank_account_label'=>'Synthetic');
 		$suggestion=array('doc_type'=>'native_bank','doc_id'=>99,'doc_ref'=>'BANK-TEST-99','doc_date'=>'2026-11-03','thirdparty_name'=>'Synthetic supplier','bank_account_id'=>101,'bank_account_ref'=>'TARGET-BANK','amount_open'=>-125.50,'score'=>180,'details'=>array('amount','ref_exact'));
+		if ($fixtureCase === 'transfer') { $suggestion['doc_ref']='(banktransfert)';$suggestion['thirdparty_name']='(banktransfert)'; }
 		if ($fixtureCase === 'invoice') { $suggestion['doc_type']='supplier_invoice';$suggestion['amount_open']=125.50;$suggestion['score']=100; }
 		$pair=array('line'=>$line,'suggestion'=>$suggestion,'allocation'=>125.50,'preselected'=>$fixtureCase!=='invoice','is_bulk_safe'=>$fixtureCase!=='invoice');
 		if ($fixtureCase === 'unsafe') { $pair['line']['description']='<img src=x onerror=alert(1)>';$pair['line']['operation_date']='not-a-date';$pair['suggestion']['doc_date']='not-a-date';$pair['suggestion']['thirdparty_name']='<script>untrusted</script>'; }

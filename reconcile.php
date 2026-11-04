@@ -1813,15 +1813,17 @@ if (!$selectedLine) {
 				print '<input type="checkbox" name="selected_docs[]" value="' . $docKey . '"' . ($shouldCheck ? ' checked' : '') . (!$canReconcile ? ' disabled' : '') . '>';
 			}
 			print '<span>';
+			$displayReference = $rawDocType === 'native_bank' ? kreabankNativeBankLabel($doc['ref'], $langs) : (string) $doc['ref'];
+			$displayCounterparty = $rawDocType === 'native_bank' ? kreabankNativeBankLabel($doc['thirdparty_name'], $langs) : (string) $doc['thirdparty_name'];
 			if ($docCardUrl !== '') {
-				print '<strong><a href="' . $docCardUrl . '" target="_blank" rel="noopener">' . dol_escape_htmltag((string) $doc['ref']) . '</a></strong>';
+				print '<strong><a href="' . $docCardUrl . '" target="_blank" rel="noopener">' . dol_escape_htmltag($displayReference) . '</a></strong>';
 			} else {
-				print '<strong>' . dol_escape_htmltag((string) $doc['ref']) . '</strong>';
+				print '<strong>' . dol_escape_htmltag($displayReference) . '</strong>';
 			}
 			$documentKind = $rawDocType === 'native_bank' ? 'Bank' : (in_array($rawDocType, array('customer_invoice', 'supplier_invoice'), true) ? 'Invoice' : 'Payment');
 			print ' <span class="krea-muted">' . $langs->trans('KreaBankReviewExisting' . $documentKind) . '</span><br>';
 			print '<span class="krea-muted">' . dol_print_date(strtotime((string) $doc['doc_date']), 'day') . '</span><br>';
-			print '<span class="krea-muted">' . dol_escape_htmltag((string) $doc['thirdparty_name']) . '</span></span>';
+			print '<span class="krea-muted">' . dol_escape_htmltag($displayCounterparty) . '</span></span>';
 			print '</label>';
 			if (!empty($doc['linked_bank_line'])) {
 				$linkedLineUrl = dol_buildpath('/compta/bank/line.php?rowid=' . (int) $doc['linked_bank_line'], 1);

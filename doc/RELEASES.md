@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.17 — 2026-11-04
+
+- Translate native `(banktransfert)` labels in reconciliation cards and movement
+  search results. Preserve stored references, signed reviews and financial data.
+
 ## 1.19.16 — 2026-11-04
 
 - Use the same per-card action layout for ordinary bank movements, invoices and

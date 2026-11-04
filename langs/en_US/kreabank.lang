@@ -508,6 +508,7 @@ KreaBankAccountList=Account list
 KreaBankAllAccountTypes=All
 KreaBankActions=Actions
 KreaBankTransfer=Internal transfer
+KreaBankBankTransfer=Bank transfer
 KreaBankAllMovements=All movements
 KreaBankReconciledMovements=Reconciled
 KreaBankScoreGuide=How to assess suggestions

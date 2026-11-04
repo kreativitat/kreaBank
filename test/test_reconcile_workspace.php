@@ -12,7 +12,7 @@ require_once $root . '/lib/kreabank_list.lib.php';
 require_once $root . '/lib/kreabank_manual_review.lib.php';
 // Load the real standalone renderer without the application's bootstrap/helpers.
 $helperSource = file_get_contents($root . '/lib/kreabank.lib.php');
-$helperStart = strpos($helperSource, 'function kreabankOtherAccountMovementsHtml(');
+$helperStart = strpos($helperSource, 'function kreabankNativeBankLabel(');
 $helperEnd = strpos($helperSource, "/**\n * Prepare admin pages header.", $helperStart);
 eval(substr($helperSource, $helperStart, $helperEnd - $helperStart));
 function dol_escape_htmltag($value, ...$args) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
@@ -139,7 +139,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	}
 	if ($case === 'bank' || $case === 'bankchoices') {
 		$selectedLine['fk_statement'] = 1;
-		$documents = array(array('rowid'=>242,'doc_type'=>'native_bank','ref'=>'BANK-SYNTHETIC','amount_open'=>-125.5,'thirdparty_name'=>'Synthetic company','doc_date'=>'2026-11-03','bank_account_id'=>81,'url_types'=>'banktransfert'));
+		$documents = array(array('rowid'=>242,'doc_type'=>'native_bank','ref'=>'(banktransfert)','amount_open'=>-125.5,'thirdparty_name'=>'(banktransfert)','doc_date'=>'2026-11-03','bank_account_id'=>81,'url_types'=>'banktransfert'));
 		if ($case === 'bankchoices') { $documents[] = array_merge($documents[0], array('rowid'=>243, 'ref'=>'BANK-SYNTHETIC-2')); }
 	}
 	$service->documents = $documents;
@@ -212,6 +212,7 @@ $bankHtml = renderWorkspaceFixture('bankchoices');
 workspaceCheck(substr_count($bankHtml, 'form="kb-document-review-native_bank__') === 2 && substr_count($bankHtml, 'name="review_signature"') === 2, 'Each native movement uses the same per-card signed submit pattern');
 workspaceCheck(strpos($bankHtml, 'name="selected_docs[]"') === false && strpos($bankHtml, 'id="manualReconcileButton"') === false && strpos($bankHtml, 'class="kb-allocation"') === false, 'Ordinary movement review has no second checkbox/allocation workflow');
 workspaceCheck(strpos($bankHtml, 'Reconciliar este movimento') !== false && strpos($bankHtml, 'Não cria uma nova fatura nem um novo pagamento') !== false, 'Bank action and consequence identify reconciliation of existing records');
+workspaceCheck(substr_count($bankHtml, 'Transferência bancária') === 3 && strpos($bankHtml, '(banktransfert)') === false, 'Native transfer reference and counterparty labels are translated for display');
 $batchHtml = renderWorkspaceFixture('batch');
 workspaceCheck(substr_count($batchHtml, 'name="selected_docs[]"') === 2 && strpos($batchHtml, 'id="manualReconcileButton"') !== false && strpos($batchHtml, 'id="kb-selected-total"') !== false, 'Batch mode retains multiple native selections and allocation controls');
 workspaceCheck(strpos($batchHtml, 'form="kb-document-review-native_bank__') === false, 'Batch rows do not mix per-card and combined submit actions');

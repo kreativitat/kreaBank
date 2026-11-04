@@ -11,12 +11,13 @@ function checkReviewWorkspace($condition, $message) {
 	$checks++;
 }
 foreach (array('single','bulk') as $mode) {
-	foreach (array('ready','invoice','unmatched','empty','loading','readonly','unsafe') as $case) {
+	foreach (array('ready','invoice','transfer','unmatched','empty','loading','readonly','unsafe') as $case) {
 		$command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/test_matched_review.php') . ' --html ' . escapeshellarg($mode) . ' ' . escapeshellarg($case);
 		exec($command, $output, $status);$html=implode("\n",$output);$output=array();
 		checkReviewWorkspace($status === 0 && strpos($html, '</html>') !== false, $mode . '/' . $case . ': complete render');
 		checkReviewWorkspace(strpos($html, 'Native banking menu') !== false && strpos($html, 'kb-primary') !== false, 'Native and shared navigation survive');
 		checkReviewWorkspace(strpos($html, 'KreaBankReview') === false, 'Workspace translations resolve');
+		if ($case === 'transfer') { checkReviewWorkspace(substr_count($html, 'Transferência bancária') >= 2 && strpos($html, '(banktransfert)') === false, 'Native transfer labels are translated in matched and bulk review'); }
 		if ($case === 'unsafe') {
 			checkReviewWorkspace(strpos($html, '<img src=x') === false && strpos($html,'&lt;img src=x') !== false && strpos($html,'<script>untrusted') === false, 'Source and target evidence cannot become markup');
 			checkReviewWorkspace(strpos($html,'1970') === false && substr_count($html,'<dd>—</dd>') >= 2, 'Invalid source and target dates render a placeholder');
