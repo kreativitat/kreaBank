@@ -19,7 +19,7 @@ function dol_syslog($message, $level = 0) {}
 function dol_string_nospecial($value) { return $value; }
 function getDolGlobalInt($key, $default = 0) { return (int) ($GLOBALS['conf']->global->$key ?? $default); }
 function getDolGlobalString($key, $default = '') { return (string) ($GLOBALS['conf']->global->$key ?? $default); }
-function isModEnabled($name) { return ($name === 'tax' && !empty($GLOBALS['taxFixtureEnabled'])) || in_array($name, array('kreabank', 'banque', 'multicompany'), true); }
+function isModEnabled($name) { return in_array($name, $GLOBALS['draftInvoiceFixtureModules'] ?? array(), true) || ($name === 'tax' && !empty($GLOBALS['taxFixtureEnabled'])) || in_array($name, array('kreabank', 'banque', 'multicompany'), true); }
 function getEntity($name) { return (string) $GLOBALS['conf']->entity; }
 function price2num($value, $round = '') { return (string) $value; }
 function dol_escape_htmltag($value) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
@@ -38,6 +38,7 @@ class DoliDB
 	}
 	public function prefix() { return MAIN_DB_PREFIX; }
 	public function escape($value) { return $this->connection->real_escape_string((string) $value); }
+	public function sanitize($value) { return preg_replace('/[^a-z0-9_]/i', '', (string) $value); }
 	public function encrypt($value) { return "'" . $this->escape($value) . "'"; }
 	public function query($sql) {
 		if ($this->fail !== '' && strpos($sql, $this->fail) === 0) { return false; }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.19.23 — 2026-11-04
+
+- Show customer and supplier draft invoices in selected-line reconciliation.
+  Expand Validate invoice and confirm before native validation; payment and
+  reconciliation remain separate explicit actions.
+- Enforce native permissions, company ownership and a single-use review of
+  unchanged invoice/source evidence. Keep drafts outside automatic and bulk
+  matching; warehouse-dependent validation opens the native invoice options.
+
 ## 1.19.22 — 2026-11-04
 
 - Reload corrected tax movements through the same projection as ordinary

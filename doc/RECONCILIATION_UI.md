@@ -157,6 +157,33 @@ re-enable is required. Use the existing production preimage/backup/atomic-file
 procedure and perform read-only acceptance in the target native shell. Roll back
 the same runtime files together. A Git push does not deploy this release.
 
+## Draft invoices
+
+The selected-line existing-record panel also shows current-company customer
+(incoming) and supplier (outgoing) drafts, with a **Draft** badge. They use the
+same date/search filters and card layout. Expand **Validate invoice…**, review
+the confirmation and choose **Confirm invoice validation**. This invokes the
+native invoice validation lifecycle only. The selected statement stays pending;
+review the newly validated invoice and approve its payment/reconciliation
+separately. Drafts never enter the shared matcher, matched queue or bulk approval.
+
+KreaBank/native bank write rights and native invoice read/validation rights are
+required, including advanced permissions when enabled. A single-use 15-minute
+session review binds the user, company, account, explicit source namespace,
+source facts and complete persisted invoice header/lines. Recheck ownership,
+status, currency and snapshots under source/invoice/line locks. Native validation
+and its audit share a transaction. Changed, repeated or expired reviews fail
+closed. Company-currency, unpaid, positive non-credit-note drafts are eligible;
+stock-on-invoice configurations use the native invoice form for warehouse options.
+
+Validate with `php test/test_draft_invoice_review.php`,
+`php test/test_reconcile_workspace.php` and
+`php test/test_draft_invoice_review_database.php`. The database suite uses only
+the guarded disposable localhost:33317/kreabank_auto_test fixture with installed
+native invoice classes. `--html draftinvoice pt_PT` renders intercepted UI checks.
+Deploy the controller, service, translations and version metadata together; no
+migration, scheduler change or module re-enable is needed.
+
 ## Searching other accounts
 
 Press **Search** in the existing-movement panel to include movements recorded in

@@ -206,6 +206,26 @@ if ($action === 'change_movement_account') {
 	} catch (Throwable $e) { $reportActionException($e, 'change_movement_account'); }
 }
 
+// Validation is a separate, single-use review; it never creates a payment or reconciles.
+if ($action === 'validate_draft_invoice') {
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !kreabankIsTokenValid()
+		|| !$user->hasRight('kreabank', 'reconciliation', 'write') || !$canNativeWrite) { accessforbidden(); }
+	$key = (string) GETPOST('draft_invoice_review', 'aZ09');
+	$review = $_SESSION['kreabank_draft_invoices'][$key] ?? null;
+	unset($_SESSION['kreabank_draft_invoices'][$key]);
+	try {
+		if (!$review || $review['expires'] < time() || $review['entity'] !== (int) $conf->entity
+			|| $review['user'] !== (int) $user->id || $review['line'] !== (int) $lineId
+			|| $review['account'] !== (int) $navigationAccountId) {
+			throw new Exception($langs->trans('KreaBankDraftInvoiceChanged'));
+		}
+		$service->validateDraftInvoice($lineId, $review['source'], $review['account'], $review['type'], $review['invoice'], $review['snapshot'], $review['line_facts']);
+		unset($_SESSION['kreabank_bulkmatch_scan_state'], $_SESSION['kreabank_matched_scan_state']);
+		$openDocumentsSearch = '';
+		setEventMessages($langs->trans('KreaBankDraftInvoiceValidated'), null, 'mesgs');
+	} catch (Throwable $e) { $reportActionException($e, 'validate_draft_invoice'); }
+}
+
 if ($action === 'confirm_document') {
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !kreabankIsTokenValid()
 		|| !$user->hasRight('kreabank', 'reconciliation', 'write') || !$canNativeWrite) {
@@ -1102,6 +1122,13 @@ if (!empty($documents)) {
 	}));
 }
 
+// Drafts are review-only and bypass matching, ranking and batch detection.
+if ($selectedLine && !$isLoteBatchLine) {
+	try {
+		$documents = array_merge($documents, $service->getDraftInvoiceDocuments($selectedLine, 120, $openDocsAnchorDate, $openDocsIntervalDays));
+	} catch (Exception $e) { $reportActionException($e, 'draft_invoice_candidates'); }
+}
+
 $documentsBeforeSearchCount = count($documents);
 if ($openDocumentsSearch !== '' && !empty($documents)) {
 	$addDateVariants = static function ($candidate, callable $pushToken) {
@@ -1639,6 +1666,10 @@ if ($selectedLine) {
 $canReconcile = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite);
 $documentReviewRows = array();
 $documentReviewForms = array();
+$draftInvoiceForms = array();
+foreach ($_SESSION['kreabank_draft_invoices'] ?? array() as $key=>$review) {
+	if ($review['expires'] < time()) { unset($_SESSION['kreabank_draft_invoices'][$key]); }
+}
 if ($selectedLine && $canReconcile && !$creationUnavailable && array_filter($documents, static function ($doc) use ($isLoteBatchLine) { return empty($doc['is_locked']) && (!$isLoteBatchLine || $doc['doc_type'] !== 'native_bank'); })) {
 	try {
 		$reviewMinScore = getDolGlobalInt('KREABANK_BULKMATCH_MIN_SCORE');
@@ -1758,17 +1789,19 @@ if (!$selectedLine) {
 			print '<div class="kb-empty"><strong>' . $langs->trans('KreaBankWorkspaceNoEntries') . '</strong><p>' . $langs->trans('KreaBankWorkspaceNoEntriesHelp') . '</p></div>';
 		}
 	} else {
-		$docCount = 0;
+		$docCounts = array('draft'=>0, 'existing'=>0);
 		$maxDocumentsToRender = ($isLoteBatchLine ? 800 : 120);
 		$hasSelectableDocuments = false;
 		foreach ($documents as $doc) {
 			if (!empty($doc['linked_bank_reconciled'])) {
 				continue;
 			}
-			if ($docCount >= $maxDocumentsToRender) {
-				break;
+			$budget = !empty($doc['is_draft']) ? 'draft' : 'existing';
+			if ($docCounts[$budget] >= $maxDocumentsToRender) {
+				continue;
 			}
 			$isLocked = !empty($doc['is_locked']);
+			$isDraft = !empty($doc['is_draft']);
 			$isLockedReconciled = ($isLocked && !empty($doc['linked_bank_reconciled']));
 			$lockedStatusLabel = $isLockedReconciled ? $langs->trans('KreaBankAlreadyConciliatedShort') : $langs->trans('KreaBankAlreadyLinkedShort');
 			if (!$isLocked && $doc['doc_type'] === 'native_bank' && $isLoteBatchLine) {
@@ -1825,6 +1858,7 @@ if (!$selectedLine) {
 			}
 			$documentKind = $rawDocType === 'tax' ? 'Tax' : ($rawDocType === 'native_bank' ? 'Bank' : (in_array($rawDocType, array('customer_invoice', 'supplier_invoice'), true) ? 'Invoice' : 'Payment'));
 			print ' <span class="krea-muted">' . $langs->trans('KreaBankReviewExisting' . $documentKind) . '</span><br>';
+			if ($isDraft) { print '<span class="badge badge-status0">' . $langs->trans('KreaBankDraftInvoice') . '</span><br>'; }
 			print '<span class="krea-muted">' . dol_print_date(strtotime((string) $doc['doc_date']), 'day') . '</span><br>';
 			print '<span class="krea-muted">' . dol_escape_htmltag($displayCounterparty) . '</span></span>';
 			print '</label>';
@@ -1854,7 +1888,23 @@ if (!$selectedLine) {
 			}
 			print '</div>';
 			print '</div>';
-			if (!$isLocked && ($rawDocType !== 'native_bank' || !$isLoteBatchLine)) {
+			if ($isDraft) {
+				if (!empty($doc['draft_native_validation'])) {
+					print '<p>' . $langs->trans('KreaBankDraftInvoiceNativeValidation') . '</p><a class="button" href="' . dol_escape_htmltag($docCardUrl) . '">' . $langs->trans('KreaBankDraftInvoiceOpen') . '</a>';
+				} elseif ($canReconcile && $canCreate && $service->canValidateDraftInvoice($rawDocType)) {
+					$key = bin2hex(random_bytes(24));
+					$_SESSION['kreabank_draft_invoices'][$key] = array('expires'=>time()+900, 'entity'=>(int) $conf->entity,
+						'user'=>(int) $user->id, 'line'=>(int) $selectedLine['rowid'], 'account'=>(int) $navigationAccountId,
+						'source'=>!empty($selectedLine['fk_statement']) ? 'staged' : 'native', 'type'=>$rawDocType,
+						'invoice'=>(int) $doc['rowid'], 'snapshot'=>$doc['draft_snapshot'], 'line_facts'=>kreabankBulkReviewLineFacts($selectedLine));
+					$formId = 'kb-draft-invoice-' . $docKey;
+					$draftInvoiceForms[$formId] = $key;
+					print '<details class="kb-account-move"><summary>' . $langs->trans('KreaBankDraftInvoiceValidate') . '</summary><p>'
+						. $langs->trans('KreaBankDraftInvoiceConfirm', dol_escape_htmltag($doc['ref'])) . '</p>'
+						. '<button type="submit" form="' . dol_escape_htmltag($formId) . '" class="button">' . $langs->trans('KreaBankDraftInvoiceConfirmAction') . '</button></details>';
+				} else { print '<p class="krea-muted">' . $langs->trans('KreaBankDraftInvoiceReviewOnly') . '</p>'; }
+			}
+			if (!$isLocked && !$isDraft && ($rawDocType !== 'native_bank' || !$isLoteBatchLine)) {
 				print '<p>' . $langs->trans('KreaBankReviewConsequence' . $documentKind) . '</p>';
 				$actionLabel = $documentKind === 'Tax' ? 'KreaBankReviewPayTax' : ($documentKind === 'Bank' ? 'KreaBankWorkspaceReconcileBank' : ($documentKind === 'Invoice' ? 'KreaBankReviewPayInvoice' : 'KreaBankWorkspaceReconcilePayment'));
 				if (isset($documentReviewRows[$docKey])) {
@@ -1879,7 +1929,7 @@ if (!$selectedLine) {
 			}
 			print '</div>';
 
-			$docCount++;
+			$docCounts[$budget]++;
 		}
 	}
 	if (!isset($hasSelectableDocuments)) {
@@ -1895,6 +1945,15 @@ if (!$selectedLine) {
 	}
 	print '</form>';
 	// Associated forms stay outside the native-movement form; no nested forms.
+	foreach ($draftInvoiceForms as $formId=>$key) {
+		print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="' . dol_escape_htmltag($formId) . '">'
+			. kreabankNavigationHiddenFields($navigationAccountId)
+			. '<input type="hidden" name="token" value="' . newToken() . '"><input type="hidden" name="action" value="validate_draft_invoice">'
+			. '<input type="hidden" name="line_id" value="' . (int) $selectedLine['rowid'] . '"><input type="hidden" name="draft_invoice_review" value="' . dol_escape_htmltag($key) . '"></form>';
+	}
+	if (count($_SESSION['kreabank_draft_invoices'] ?? array()) > 240) {
+		$_SESSION['kreabank_draft_invoices'] = array_slice($_SESSION['kreabank_draft_invoices'], -240, null, true);
+	}
 	foreach ($documentReviewForms as $formId => $reviewRow) {
 		$expires = dol_now() + 1800;
 		$scope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId;

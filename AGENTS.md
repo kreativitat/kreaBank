@@ -18,7 +18,7 @@
 - 2026-07-16: `llx_paiement_facture` and `llx_paiementfourn_facturefourn` have no independent entity scope; reconciliation scopes them through the current-entity parent invoice.
 - 2026-07-16: `llx_societe_remise_except` is entity-scoped. Remaining-balance queries filter both the discount row and its source invoice by the current entity.
 - 2026-07-16: Invoice candidate `amount_open` is `total_ttc` minus allocated payment rows and applied deposit/credit-note rows. Execution revalidates with Dolibarr `CommonInvoice::getRemainToPay()`.
-- 2026-07-16: Only validated invoices (`fk_statut = 1`) are eligible for existing-invoice matching; closed, paid, abandoned, and draft invoices are rejected again under the execution-time lock.
+- 2026-07-16: Only validated invoices (`fk_statut = 1`) are eligible for existing-invoice matching and payment execution. Selected-line draft cards use a separate, confirmed native validation action; drafts never enter the matcher or bulk approval. Closed, paid and abandoned invoices remain excluded.
 - 2026-07-16: Version 1.12.54 changes no database schema and requires no migration.
 
 ## Integration Points
@@ -291,3 +291,17 @@
 - `php test/test_tax_reconciliation_database.php` extends ONLY the guarded
   localhost:33317/kreabank_auto_test fixture with installed native tax/payment
   classes. See [tax reconciliation](doc/TAX_RECONCILIATION.md).
+
+## Draft invoice validation
+
+- Selected-line draft cards retain the standard layout and an expandable, separate
+  validation confirmation. `KreaBankService::validateDraftInvoice()` rechecks native
+  invoice/advanced rights, direct company ownership, source facts and complete
+  header/line snapshots under locks, and commits the native lifecycle with its
+  audit. Single-use session reviews expire after 15 minutes. Validation creates no
+  payment or reconciliation; require fresh ordinary approval afterward.
+- Keep drafts outside shared matching, matched/bulk review and automatic execution.
+  Credit notes and foreign-currency drafts remain excluded. Use native invoice
+  options when stock-on-invoice requires warehouse selection. Pure/controller/UI
+  checks and `test/test_draft_invoice_review_database.php` cover this flow; the
+  latter uses only the guarded disposable localhost:33317 fixture.

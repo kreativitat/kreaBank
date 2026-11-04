@@ -650,3 +650,13 @@ KreaBankOtherAccountTruncated=Showing the first 100 movements. Refine the search
 KreaBankReviewExistingTax=Existing tax/social contribution
 KreaBankReviewConsequenceTax=Records a payment against this existing tax/social contribution and reconciles the statement line. Does not create a new tax.
 KreaBankReviewPayTax=Record payment and reconcile
+
+KreaBankDraftInvoice=Draft
+KreaBankDraftInvoiceValidate=Validate invoice…
+KreaBankDraftInvoiceConfirm=Validate invoice %s? This validates the existing invoice in Dolibarr. Then review its payment and reconciliation separately.
+KreaBankDraftInvoiceConfirmAction=Confirm invoice validation
+KreaBankDraftInvoiceReviewOnly=Validate this draft before recording its payment and reconciling.
+KreaBankDraftInvoiceValidated=Invoice validated. Review the invoice before recording its payment and reconciling.
+KreaBankDraftInvoiceChanged=This draft invoice review expired or changed. Reload the statement line and review it again.
+KreaBankDraftInvoiceNativeValidation=Open the invoice to validate it with the required warehouse and stock options.
+KreaBankDraftInvoiceOpen=Validate on invoice

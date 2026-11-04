@@ -1435,9 +1435,10 @@ class KreaBankService
 	 * @param int $limit
 	 * @param string|null $anchorDate
 	 * @param int|null $intervalDays
+	 * @param bool $draftOnly Review-only drafts; ordinary matching remains validated-only
 	 * @return array<int,array<string,mixed>>
 	 */
-	protected function getOpenInvoiceDocuments($direction = 0, $limit = 250, $anchorDate = null, $intervalDays = null)
+	protected function getOpenInvoiceDocuments($direction = 0, $limit = 250, $anchorDate = null, $intervalDays = null, $draftOnly = false)
 	{
 		$documents = array();
 		$limit = max(20, (int) $limit);
@@ -1456,7 +1457,7 @@ class KreaBankService
 			$sql .= " FROM " . $this->db->prefix() . "facture as f";
 			$sql .= ' LEFT JOIN ' . $this->db->prefix() . 'societe as s ON s.rowid = f.fk_soc';
 			$sql .= ' WHERE f.entity = ' . ((int) $this->entity);
-			$sql .= ' AND f.fk_statut = 1 AND f.paye = 0';
+			$sql .= $draftOnly ? ' AND f.fk_statut = 0 AND f.paye = 0' : ' AND f.fk_statut = 1 AND f.paye = 0';
 			$sql .= ' AND f.type <> 2';
 			$sql .= ' AND ' . $customerAmountOpenSql . ' > 0.0000001';
 			if (!empty($dateRange['enabled'])) {
@@ -1503,7 +1504,7 @@ class KreaBankService
 			$sqlf .= ' FROM ' . $this->db->prefix() . 'facture_fourn as f';
 			$sqlf .= ' LEFT JOIN ' . $this->db->prefix() . 'societe as s ON s.rowid = f.fk_soc';
 			$sqlf .= ' WHERE f.entity = ' . ((int) $this->entity);
-			$sqlf .= ' AND f.fk_statut = 1 AND f.paye = 0';
+			$sqlf .= $draftOnly ? ' AND f.fk_statut = 0 AND f.paye = 0' : ' AND f.fk_statut = 1 AND f.paye = 0';
 			$sqlf .= ' AND f.type <> 2';
 			$sqlf .= ' AND ' . $supplierAmountOpenSql . ' > 0.0000001';
 			if (!empty($dateRange['enabled'])) {
@@ -1539,6 +1540,135 @@ class KreaBankService
 		}
 
 		return $documents;
+	}
+
+	/** Native invoice permissions, including advanced validation permissions. */
+	public function canValidateDraftInvoice($docType)
+	{
+		if (!empty($this->user->socid)) { return false; }
+		$advanced = (bool) getDolGlobalInt('MAIN_USE_ADVANCED_PERMS');
+		if ($docType === 'customer_invoice') {
+			return isModEnabled('invoice') && $this->user->hasRight('facture', 'lire')
+				&& ($advanced ? $this->user->hasRight('facture', 'invoice_advance', 'validate') : $this->user->hasRight('facture', 'creer'));
+		}
+		if ($docType === 'supplier_invoice') {
+			return isModEnabled('supplier_invoice') && $this->user->hasRight('fournisseur', 'facture', 'lire')
+				&& ($advanced ? $this->user->hasRight('fournisseur', 'supplier_invoice_advance', 'validate')
+					: ($this->user->hasRight('fournisseur', 'facture', 'creer') || $this->user->hasRight('supplier_invoice', 'creer')));
+		}
+		return false;
+	}
+
+	/** Fingerprint complete persisted invoice headers and lines in bounded batch reads. */
+	protected function draftInvoiceSnapshots($docType, $ids, $lock = false)
+	{
+		$p = $this->db->prefix();
+		$table = $docType === 'customer_invoice' ? 'facture' : 'facture_fourn';
+		$detail = $docType === 'customer_invoice' ? 'facturedet' : 'facture_fourn_det';
+		$parent = $docType === 'customer_invoice' ? 'fk_facture' : 'fk_facture_fourn';
+		$ids = array_map('intval', $ids);
+		if (!$ids) { return array(); }
+		$rows = array();
+		foreach (array('header'=>"SELECT f.*,s.nom AS review_thirdparty FROM {$p}{$table} f LEFT JOIN {$p}societe s ON s.rowid=f.fk_soc WHERE f.entity={$this->entity} AND f.rowid IN (" . implode(',', $ids) . ') ORDER BY f.rowid',
+			'lines'=>"SELECT d.* FROM {$p}{$detail} d JOIN {$p}{$table} f ON f.rowid=d.{$parent} WHERE f.entity={$this->entity} AND f.rowid IN (" . implode(',', $ids) . ') ORDER BY d.rowid') as $kind=>$sql) {
+			$result = $this->db->query($sql . ($lock ? ' FOR UPDATE' : ''));
+			if (!$result) { throw new Exception('Cannot read draft invoice review evidence'); }
+			while ($row = $this->db->fetch_object($result)) {
+				$id = (int) ($kind === 'header' ? $row->rowid : $row->$parent);
+				$rows[$id][$kind][] = $row;
+			}
+		}
+		$snapshots = array();
+		foreach ($rows as $id=>$facts) {
+			if (!empty($facts['header'])) { $snapshots[$id] = array('snapshot'=>hash('sha256', serialize($facts)), 'header'=>$facts['header'][0]); }
+		}
+		return $snapshots;
+	}
+
+	/** Review-only drafts; never passed to the matcher or bulk approval. */
+	public function getDraftInvoiceDocuments($line, $limit = 120, $anchorDate = null, $intervalDays = null)
+	{
+		global $conf;
+		$scope = new KreaBankReconciliationScope($this->db, $this->entity);
+		$scope->assertLine($line);
+		if ((int) $line['status'] !== 0 || !empty($this->user->socid) || (float) $line['amount'] == 0
+			|| strtoupper($line['currency']) !== strtoupper($conf->currency)) { return array(); }
+		$customer = (float) $line['amount'] > 0;
+		$read = $customer ? (isModEnabled('invoice') && $this->user->hasRight('facture', 'lire'))
+			: (isModEnabled('supplier_invoice') && $this->user->hasRight('fournisseur', 'facture', 'lire'));
+		if (!$read) { return array(); }
+		$documents = $this->getOpenInvoiceDocuments($customer ? 1 : -1, min(120, max(20, (int) $limit)), $anchorDate, $intervalDays, true);
+		$snapshots = $this->draftInvoiceSnapshots($customer ? 'customer_invoice' : 'supplier_invoice', array_column($documents, 'rowid'));
+		$review = array();
+		foreach ($documents as $doc) {
+			$facts = $snapshots[$doc['rowid']] ?? null;
+			if (!$facts) { continue; }
+			$header = $facts['header'];
+			if ((int) $header->fk_statut !== 0 || !empty($header->paye)
+				|| (!empty($header->multicurrency_code) && strtoupper($header->multicurrency_code) !== strtoupper($line['currency']))
+				|| abs((float) $doc['amount_open'] - (float) $header->total_ttc) > 0.00000001) { continue; }
+			$doc['ref'] = (string) $header->ref;
+			$doc['ref_client'] = (string) ($doc['doc_type'] === 'customer_invoice' ? $header->ref_client : $header->ref_supplier);
+			$doc['amount_open'] = (float) $header->total_ttc;
+			$doc['doc_date'] = $header->datef;
+			$doc['thirdparty_name'] = (string) $header->review_thirdparty;
+			$stockSetting = $doc['doc_type'] === 'customer_invoice' ? 'STOCK_CALCULATE_ON_BILL' : 'STOCK_CALCULATE_ON_SUPPLIER_BILL';
+			$doc['draft_native_validation'] = isModEnabled('stock') && getDolGlobalInt($stockSetting);
+			$doc['is_draft'] = true;
+			$doc['draft_snapshot'] = $facts['snapshot'];
+			$review[] = $doc;
+		}
+		return $review;
+	}
+
+	/** Validate only; payment and reconciliation require a fresh, separate approval. */
+	public function validateDraftInvoice($lineId, $source, $accountId, $docType, $invoiceId, $snapshot, $lineFacts)
+	{
+		global $conf;
+		if (!$this->canValidateDraftInvoice($docType) || !$this->user->hasRight('kreabank', 'reconciliation', 'write')
+			|| (!$this->user->hasRight('banque', 'modifier') && !$this->user->hasRight('banque', 'consolidate'))) {
+			throw new Exception('Invoice validation permission required');
+		}
+		if (!$this->db->begin()) { throw new Exception('Cannot start invoice validation'); }
+		try {
+			$line = $this->getBulkReviewLine((int) $lineId, $source);
+			if (!$line) { throw new Exception('Statement line unavailable'); }
+			$this->lockReconciliationRow(!empty($line['fk_statement']) ? 'kreabank_statement_line' : 'bank', (int) $lineId);
+			$line = $this->getBulkReviewLine((int) $lineId, $source);
+			require_once __DIR__ . '/../lib/kreabank_bulk.lib.php';
+			$scope = new KreaBankReconciliationScope($this->db, $this->entity);
+			$scope->assertLine($line);
+			if ((int) $line['status'] !== 0 || (int) $line['bank_account_id'] !== (int) $accountId
+				|| kreabankBulkReviewLineFacts($line) !== $lineFacts
+				|| ((float) $line['amount'] > 0) !== ($docType === 'customer_invoice')
+				|| (new KreaBankAccountPairs($this->db, $this->entity))->mainAccount((int) $accountId) > 0) {
+				throw new Exception('Statement review changed or account does not permit invoices');
+			}
+			$current = $this->draftInvoiceSnapshots($docType, array((int) $invoiceId), true);
+			if (empty($current[$invoiceId]) || !hash_equals($current[$invoiceId]['snapshot'], (string) $snapshot)) {
+				throw new Exception($this->langs->trans('KreaBankDraftInvoiceChanged'));
+			}
+			require_once DOL_DOCUMENT_ROOT . ($docType === 'customer_invoice' ? '/compta/facture/class/facture.class.php' : '/fourn/class/fournisseur.facture.class.php');
+			$invoice = $docType === 'customer_invoice' ? new Facture($this->db) : new FactureFournisseur($this->db);
+			if ($invoice->fetch((int) $invoiceId) <= 0 || (int) $invoice->entity !== $this->entity || (int) $invoice->status !== 0
+				|| !empty($invoice->paye) || (int) $invoice->type === 2 || (float) $invoice->total_ttc <= 0
+				|| strtoupper($line['currency']) !== strtoupper($conf->currency)
+				|| (!empty($invoice->multicurrency_code) && strtoupper($invoice->multicurrency_code) !== strtoupper($line['currency']))) {
+				throw new Exception('Invoice is no longer an eligible draft');
+			}
+			// Warehouse/lot selection belongs to the native invoice validation form.
+			$stockSetting = $docType === 'customer_invoice' ? 'STOCK_CALCULATE_ON_BILL' : 'STOCK_CALCULATE_ON_SUPPLIER_BILL';
+			if (isModEnabled('stock') && getDolGlobalInt($stockSetting)) {
+				throw new Exception($this->langs->trans('KreaBankDraftInvoiceNativeValidation'));
+			}
+			if (!$this->logAudit('invoice_validation', !empty($line['fk_statement']) ? (int) $lineId : null, null,
+				array('line_id'=>(int) $lineId, 'line_source'=>$source, 'doc_type'=>$docType, 'invoice_id'=>(int) $invoiceId, 'review_snapshot'=>$snapshot))) {
+				throw new Exception('Cannot save invoice validation audit');
+			}
+			if ($invoice->validate($this->user) <= 0) { throw new Exception($this->extractObjectErrorMessage($invoice, 'Invoice validation failed')); }
+			if (!$this->db->commit()) { throw new Exception('Cannot commit invoice validation; inspect its status before retrying'); }
+			return (int) $invoiceId;
+		} catch (Throwable $e) { $this->db->rollback(); throw $e; }
 	}
 
 	/**

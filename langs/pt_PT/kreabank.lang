@@ -649,3 +649,13 @@ KreaBankOtherAccountTruncated=São apresentados os primeiros 100 movimentos. Ref
 KreaBankReviewExistingTax=Imposto ou encargo social existente
 KreaBankReviewConsequenceTax=Regista um pagamento deste imposto ou encargo social e reconcilia a linha do extrato. Não cria um novo imposto.
 KreaBankReviewPayTax=Registar pagamento e reconciliar
+
+KreaBankDraftInvoice=Rascunho
+KreaBankDraftInvoiceValidate=Validar fatura…
+KreaBankDraftInvoiceConfirm=Validar a fatura %s? Esta ação valida a fatura existente no Dolibarr. Reveja depois o pagamento e a reconciliação em separado.
+KreaBankDraftInvoiceConfirmAction=Confirmar validação da fatura
+KreaBankDraftInvoiceReviewOnly=Valide este rascunho antes de registar o pagamento e reconciliar.
+KreaBankDraftInvoiceValidated=Fatura validada. Reveja a fatura antes de registar o pagamento e reconciliar.
+KreaBankDraftInvoiceChanged=Esta revisão da fatura em rascunho expirou ou foi alterada. Recarregue o movimento do extrato e reveja novamente.
+KreaBankDraftInvoiceNativeValidation=Abra a fatura para a validar com as opções de armazém e de stock necessárias.
+KreaBankDraftInvoiceOpen=Validar na fatura

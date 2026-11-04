@@ -94,6 +94,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 		public function searchOtherAccountMovements(...$args) { return $this->otherAccounts; }
 		public function getLinkedPaymentDocuments(...$args) { return array(); }
 		public function getSafeSuggestion(...$args) { return null; }
+		public function canValidateDraftInvoice($type) { return true; }
 		public function getSuggestionsForLines($lines, ...$args) {
 			$items = array();
 			foreach ($this->documents as $doc) {
@@ -144,10 +145,11 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 		$selectedLine['fk_statement'] = 1;
 		$documents = array(array('rowid'=>242,'doc_type'=>'tax','ref'=>'TAX-SYNTHETIC','amount_open'=>-125.5,'thirdparty_name'=>'IVA · Synthetic tax','doc_date'=>'2026-11-03','tax_id'=>242,'tax_type_id'=>1,'tax_payment_mode_id'=>1));
 	}
-	if ($case === 'invoice' || $case === 'invoicechoices') {
+	if (in_array($case, array('invoice', 'invoicechoices', 'draftinvoice'))) {
 		$selectedLine['fk_statement'] = 1;
 		$documents = array(array('rowid'=>242,'doc_type'=>'supplier_invoice','ref'=>'INV-SYNTHETIC','amount_open'=>125.5,'thirdparty_name'=>'Synthetic supplier','doc_date'=>'2026-11-03'));
 		if ($case === 'invoicechoices') { $documents[] = array_merge($documents[0], array('rowid'=>243, 'ref'=>'INV-SYNTHETIC-2')); }
+		if ($case === 'draftinvoice') { $documents[0]['is_draft'] = true; $documents[0]['draft_snapshot'] = str_repeat('a', 64); }
 	}
 	if ($case === 'bank' || $case === 'bankchoices') {
 		$selectedLine['fk_statement'] = 1;
@@ -219,6 +221,31 @@ foreach (array('supplier_invoice', 'customer_invoice', 'payment', 'payment_suppl
 }
 $legacyHtml = renderWorkspaceFixture('debit', 'pt_PT', array('documents'=>array($invoiceDocument)));
 workspaceCheck(strpos($legacyHtml, 'name="line_source" value="native"') !== false, 'Legacy native source namespace remains explicit');
+$draft = array_merge($invoiceDocument, array('is_draft'=>true, 'draft_snapshot'=>str_repeat('a', 64)));
+foreach (array('supplier_invoice', 'customer_invoice') as $type) {
+	$draft['doc_type'] = $type;
+	$html = renderWorkspaceFixture($type === 'customer_invoice' ? 'credit' : 'debit', 'pt_PT', array('documents'=>array($draft), 'statement_id'=>1));
+	workspaceCheck(strpos($html, 'Rascunho') !== false && strpos($html, '<summary>Validar fatura…</summary>') !== false && strpos($html, 'Confirmar validação da fatura') !== false, $type . ': draft uses the existing card and expandable confirmation');
+	workspaceCheck(strpos($html, 'name="action" value="validate_draft_invoice"') !== false && strpos($html, 'name="draft_invoice_review"') !== false, $type . ': validation binds a server-stored displayed review');
+	workspaceCheck(strpos($html, 'name="review_doc"') === false && strpos($html, 'name="selected_docs[]"') === false, $type . ': draft cannot submit payment or reconciliation');
+	workspaceCheck(strpos($html, 'Reveja depois o pagamento e a reconciliação em separado') !== false, $type . ': confirmation explains the separate financial approval');
+	$previous = libxml_use_internal_errors(true);
+	$dom = new DOMDocument(); $dom->loadHTML($html); $xpath = new DOMXPath($dom);
+	libxml_clear_errors(); libxml_use_internal_errors($previous);
+	workspaceCheck($xpath->query('//form//form')->length === 0 && $xpath->query('//button[starts-with(@form,"kb-draft-invoice-")]')->length === 1, $type . ': confirmation button submits an external form without nesting');
+}
+foreach (array('readonly', 'restricted', 'unavailable') as $case) {
+	$html = renderWorkspaceFixture($case, 'pt_PT', array('documents'=>array($draft)));
+	workspaceCheck(strpos($html, 'name="draft_invoice_review"') === false, $case . ': draft validation requires current write authority and an unrestricted account');
+}
+$draft['draft_native_validation'] = true;
+$html = renderWorkspaceFixture('debit', 'pt_PT', array('documents'=>array($draft)));
+workspaceCheck(strpos($html, 'Validar na fatura') !== false && strpos($html, 'name="draft_invoice_review"') === false, 'Warehouse-dependent validation uses the native invoice options');
+$many = array();
+for ($i=1; $i<=125; $i++) { $many[] = array_merge($invoiceDocument, array('rowid'=>$i)); }
+$many[] = array_merge($invoiceDocument, array('rowid'=>999, 'is_draft'=>true, 'draft_snapshot'=>str_repeat('a',64)));
+$html = renderWorkspaceFixture('debit', 'pt_PT', array('documents'=>$many));
+workspaceCheck(strpos($html, 'form="kb-draft-invoice-supplier_invoice__999"') !== false && substr_count($html, 'class="krea-doc-item"')===121, 'Existing results cannot hide drafts behind the ordinary 120-card render limit');
 $choiceHtml = renderWorkspaceFixture('invoicechoices');
 workspaceCheck(substr_count($choiceHtml, 'form="kb-document-review-supplier_invoice__') === 2 && substr_count($choiceHtml, 'name="review_signature"') === 2, 'Each equal invoice candidate has its own submit button and signed form');
 workspaceCheck(strpos($choiceHtml, 'name="review_doc" value="supplier_invoice__242"') !== false && strpos($choiceHtml, 'name="review_doc" value="supplier_invoice__243"') !== false, 'The two buttons bind different invoice identities');
