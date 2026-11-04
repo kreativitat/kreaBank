@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.19 — 2026-11-04
+
+- Remove the large payment-account warning banner above one-by-one reconciliation.
+  Keep existing other-account search/correction cards and server-side safeguards.
+
 ## 1.19.18 — 2026-11-04
 
 - Reconcile existing taxes/social contributions and unbanked tax payments through

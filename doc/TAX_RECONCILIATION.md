@@ -51,8 +51,9 @@ outer transaction, including rollback on failed paid-state or audit writes.
 A tax-like debit (for example DUC or social-tax evidence) with an exact signed
 amount/currency and nearby bank date can flag an existing tax payment in another
 owned account. Amount/date evidence is advisory and never authorizes automatic
-matching, payment creation or an account change. The warning includes locked
-movements for review and blocks unattended/manual pair approval until resolved.
+matching, payment creation or an account change. Account review blocks unattended/manual pair approval until resolved. One-by-one
+reconciliation presents correction evidence in the existing other-account search
+cards, without a separate warning banner above the workspace.
 Search additionally finds tax IDs, labels and payment references before limiting
 results. Correction requires the existing single-use session review and native
 modifier rights, tax rights, unchanged source/payment/tax facts, one coherent tax

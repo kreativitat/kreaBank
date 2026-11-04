@@ -1615,16 +1615,6 @@ if ($selectedLine && !empty($selectedLine['fk_statement']) && $searchOtherAccoun
 
 kreabankPrintWorkspaceNavigation('reconcile', $navigationAccount);
 print load_fiche_titre($langs->trans('KreaBankReconcile'), '', 'bank');
-if ($selectedLine && !empty($selectedLine['fk_statement'])) {
-	try {
-		$accountReview = $service->getPaymentAccountReview($selectedLine['rowid'], array($selectedLine['bank_account_id']));
-		if ($accountReview) { print kreabankPaymentAccountReviewHtml($accountReview, $langs); }
-	} catch (Throwable $e) {
-		print '<p class="error">' . $langs->trans('KreaBankAccountReviewUnavailable') . '</p>';
-	}
-}
-
-
 print '<link rel="stylesheet" href="' . dol_buildpath('/custom/kreabank/css/reconcile.css', 1) . '?v=' . filemtime(__DIR__ . '/css/reconcile.css') . '">';
 
 print '<details class="kb-help"><summary>' . $langs->trans('KreaBankAssistedGuide') . '</summary><p>' . $langs->trans('KreaBankAssistedReconciliationSubtitle') . '</p></details>';
