@@ -60,7 +60,9 @@ with the exact persisted signed amount
 and source account. They reuse the existing native movement and create no payment.
 Suppress the counterparty line when it repeats the displayed reference label.
 
-Batch detection or **Search batch payments** retains multiple native checkboxes,
+Automatic batch detection (description, nearby payments or learned prediction)
+is advisory and keeps the action button on every eligible card. Only explicitly
+choosing **Search batch payments** switches to multiple native checkboxes,
 the selected total/difference and the combined approval button. The combined
 allocation must balance within the existing 0.01 service tolerance. Original
 hidden amounts retain their precision; only displayed values have two decimals.

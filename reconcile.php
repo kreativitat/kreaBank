@@ -811,7 +811,9 @@ try {
 	}
 
 	if ($selectedLine) {
-		$isLoteBatchLine = ($batchDetectWasForced || kreabankIsBatchLikeLine($selectedLine, $batchHintKeywordsRaw));
+		// Detection is advisory; only the explicit batch action changes the card workflow.
+		$isLoteBatchLine = $batchDetectWasForced;
+		$batchDetectedAuto = (!$batchDetectWasForced && kreabankIsBatchLikeLine($selectedLine, $batchHintKeywordsRaw));
 		$loteBatchDate = $normalizeDateYmd(!empty($selectedLine['operation_date']) ? (string) $selectedLine['operation_date'] : (!empty($selectedLine['value_date']) ? (string) $selectedLine['value_date'] : ''));
 		$openDocsAnchorDate = !empty($selectedLine['operation_date']) ? (string) $selectedLine['operation_date'] : (!empty($selectedLine['value_date']) ? (string) $selectedLine['value_date'] : null);
 		$openDocsIntervalDays = (int) getDolGlobalInt('KREABANK_OPEN_DOC_DATE_INTERVAL_DAYS', 7);
@@ -828,29 +830,15 @@ try {
 		$documents = (array) $candidateSet['documents'];
 		$suggestions = (array) $candidateSet['suggestions'];
 		$lineLinks = $service->getLineLinks((int) $selectedLine['rowid']);
-		if (!$isLoteBatchLine) {
+		if (!$isLoteBatchLine && !$batchDetectedAuto) {
 			$batchMlPrediction = $service->predictBatchMl($selectedLine, $documents);
 			if (!empty($batchMlPrediction['enabled']) && !empty($batchMlPrediction['is_batch'])) {
 				$batchDetectedMl = true;
 				$batchMlProbabilityPct = (int) (isset($batchMlPrediction['probability_pct']) ? $batchMlPrediction['probability_pct'] : 0);
-				$isLoteBatchLine = true;
-				if ($openDocsLimit < 2000) {
-					$openDocsLimit = 2000;
-					$candidateSet = $loadLineCandidates($selectedLine, $openDocsLimit, $openDocsIntervalDays, $openDocsAnchorDate);
-					$documents = (array) $candidateSet['documents'];
-					$suggestions = (array) $candidateSet['suggestions'];
-				}
 			}
 		}
-		if (!$isLoteBatchLine && $shouldAutoDetectBatchFromDocuments($selectedLine, $documents)) {
+		if (!$isLoteBatchLine && !$batchDetectedAuto && !$batchDetectedMl && $shouldAutoDetectBatchFromDocuments($selectedLine, $documents)) {
 			$batchDetectedAuto = true;
-			$isLoteBatchLine = true;
-			if ($openDocsLimit < 2000) {
-				$openDocsLimit = 2000;
-				$candidateSet = $loadLineCandidates($selectedLine, $openDocsLimit, $openDocsIntervalDays, $openDocsAnchorDate);
-				$documents = (array) $candidateSet['documents'];
-				$suggestions = (array) $candidateSet['suggestions'];
-			}
 		}
 		if (empty($documents) && empty($suggestions) && $openDocsIntervalDays < 3650) {
 			$historicalOpenDocsLimit = max($openDocsLimit, 2000);

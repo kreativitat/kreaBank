@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.19.31 — 2026-11-04
+
+- Keep individual reconciliation buttons when automatic batch detection finds
+  nearby payments, description hints or a learned batch prediction. Checkbox
+  allocation requires the explicit Search batch payments action.
+
 ## 1.19.30 — 2026-11-04
 
 - Show a repeated payment/reference label only once on reconciliation cards.

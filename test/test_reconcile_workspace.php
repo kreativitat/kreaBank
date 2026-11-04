@@ -16,6 +16,9 @@ $helperSource = file_get_contents($root . '/lib/kreabank.lib.php');
 $helperStart = strpos($helperSource, 'function kreabankNativeBankLabel(');
 $helperEnd = strpos($helperSource, "/**\n * Prepare admin pages header.", $helperStart);
 eval(substr($helperSource, $helperStart, $helperEnd - $helperStart));
+$batchHelperStart = strpos($helperSource, 'function kreabankGetBatchHintKeywords(');
+$batchHelperEnd = strpos($helperSource, 'function kreabankIsTokenValid(', $batchHelperStart);
+eval(substr($helperSource, $batchHelperStart, $batchHelperEnd - $batchHelperStart));
 function dol_escape_htmltag($value, ...$args) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
 function dol_buildpath($path, $absolute = 0) { return $path; }
 function price2num($value, $mode = '') { return (float) $value; }
@@ -91,6 +94,11 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 		public $documents = array();
 		public $accountReview = array();
 		public $otherAccounts = array();
+		public $batchPrediction = array();
+		public function getOpenDocuments(...$args) { return $this->documents; }
+		public function getSuggestionsForLine(...$args) { return $this->getSuggestionsForLines(array(array('rowid'=>11, 'bank_account_id'=>81)))[11]; }
+		public function getLineLinks(...$args) { return array(); }
+		public function predictBatchMl(...$args) { return $this->batchPrediction; }
 		public function getPaymentAccountReview(...$args) { return $this->accountReview; }
 		public function searchOtherAccountMovements(...$args) { return $this->otherAccounts; }
 		public function getLinkedPaymentDocuments(...$args) { return array(); }
@@ -192,6 +200,29 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	$loteSubsetSuggestion = array(); $lineLinks = array(); $safeScore = 150; $dateTolerance = 3;
 	$_SERVER['PHP_SELF'] = '/synthetic-reconcile';
 	$source = file_get_contents(dirname(__DIR__) . '/reconcile.php');
+	if (in_array($case, array('batchauto', 'batchml', 'batchkeyword', 'batchforced'), true)) {
+		$selectedLine['fk_statement'] = 1;
+		$service->documents = array();
+		foreach (array(-125.50, -1.04, -1.04, -35.31, -17.68) as $i=>$amount) {
+			$service->documents[] = array('rowid'=>242+$i, 'doc_type'=>'native_bank', 'ref'=>'PAY-SYNTHETIC-'.($i+1),
+				'amount_open'=>$amount, 'thirdparty_name'=>'Synthetic supplier', 'doc_date'=>'2026-11-03', 'bank_account_id'=>81, 'url_types'=>'payment_supplier');
+		}
+		$service->documents[] = array('rowid'=>300, 'doc_type'=>'supplier_invoice', 'ref'=>'INV-SYNTHETIC',
+			'amount_open'=>125.50, 'thirdparty_name'=>'Synthetic supplier', 'doc_date'=>'2026-11-02');
+		if ($case === 'batchkeyword') { $selectedLine['description'] = 'LOTE SYNTHETIC'; }
+		if ($case === 'batchml') { $service->batchPrediction = array('enabled'=>1, 'is_batch'=>1, 'probability_pct'=>95); }
+		$forceBatchDetect = $case === 'batchforced' ? 1 : 0;
+		$batchHintKeywordsRaw = 'lote'; $batchDetectMinCandidates = 4; $batchDetectMinCoveragePct = 90;
+		$definitions = strpos($source, '$documents = array();' . "\n" . '$suggestions = array();');
+		$definitionsEnd = strpos($source, "\ntry {\n\t\$requestedLineId =", $definitions);
+		$discovery = strpos($source, "\n\tif (\$selectedLine) {", $definitionsEnd);
+		$discoveryEnd = strpos($source, "\n} catch (Exception \$e)", $discovery);
+		if ($definitions === false || $definitionsEnd === false || $discovery === false || $discoveryEnd === false) { throw new LogicException('Review candidate discovery boundaries'); }
+		eval(substr($source, $definitions, $definitionsEnd - $definitions));
+		eval(substr($source, $discovery, $discoveryEnd - $discovery));
+		$suggestionByKey = array();
+		foreach ($suggestions as $suggestion) { $suggestionByKey[$suggestion['doc_type'].'__'.$suggestion['doc_id']] = $suggestion; }
+	}
 	$start = strpos($source, '$queueNavigationFields =');
 	if ($start === false) { throw new RuntimeException('Review reconciliation render boundary'); }
 	$view = str_replace('__DIR__', var_export(dirname(__DIR__), true), substr($source, $start));
@@ -275,6 +306,18 @@ workspaceCheck(substr_count($bankHtml, 'Transferência bancária') === 2 && strp
 $batchHtml = renderWorkspaceFixture('batch');
 workspaceCheck(substr_count($batchHtml, 'name="selected_docs[]"') === 2 && strpos($batchHtml, 'id="manualReconcileButton"') !== false && strpos($batchHtml, 'id="kb-selected-total"') !== false, 'Batch mode retains multiple native selections and allocation controls');
 workspaceCheck(strpos($batchHtml, 'form="kb-document-review-native_bank__') === false, 'Batch rows do not mix per-card and combined submit actions');
+foreach (array('batchauto', 'batchml', 'batchkeyword') as $case) {
+	$html = renderWorkspaceFixture($case);
+	workspaceCheck(substr_count($html, '>Reconciliar este movimento</button>') === 5, $case . ': detected batches retain the action on each native card');
+	workspaceCheck(substr_count($html, 'form="kb-document-review-native_bank__') === 1, $case . ': only the exact signed movement is executable');
+	workspaceCheck(strpos($html, $langs->trans($case === 'batchml' ? 'KreaBankBatchDetectedMl' : 'KreaBankBatchDetectedAuto', '95')) !== false, $case . ': the actual detector ran and remains advisory');
+	workspaceCheck(strpos($html, 'name="selected_docs[]"') === false && strpos($html, 'id="kb-selected-total"') === false, $case . ': detection cannot replace buttons with checkbox allocation');
+	workspaceCheck(strpos($html, 'form="kb-document-review-supplier_invoice__300"') !== false, $case . ': detection cannot hide other dates or document types');
+	workspaceCheck(strpos($html, 'force_batch_detect=1') !== false, $case . ': explicit batch action remains available');
+}
+$forcedBatchHtml = renderWorkspaceFixture('batchforced');
+workspaceCheck(substr_count($forcedBatchHtml, 'name="selected_docs[]"') === 5 && strpos($forcedBatchHtml, 'id="manualReconcileButton"') !== false, 'Explicit batch discovery retains checkbox allocation');
+workspaceCheck(strpos($forcedBatchHtml, 'form="kb-document-review-native_bank__') === false && strpos($forcedBatchHtml, 'INV-SYNTHETIC') === false, 'Explicit batch discovery retains its native same-day scope');
 $restrictedBank = array('rowid'=>242,'doc_type'=>'native_bank','ref'=>'TRANSFER-SYNTHETIC','amount_open'=>-125.5,'thirdparty_name'=>'Synthetic company','doc_date'=>'2026-11-03','bank_account_id'=>81,'allowed_transfer'=>true);
 workspaceCheck(strpos(renderWorkspaceFixture('restricted', 'pt_PT', array('documents'=>array($restrictedBank))), 'form="kb-document-review-native_bank__242"') !== false, 'Restricted accounts retain allowed existing-transfer reconciliation without permitting creation');
 foreach (array('readonly', 'restricted', 'unavailable') as $case) {

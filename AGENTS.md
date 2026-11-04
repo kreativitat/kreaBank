@@ -207,6 +207,8 @@
   mode exposes native-movement checkboxes and combined allocation controls.
   Native per-card approval requires the exact signed amount and source account;
   restricted accounts still permit their eligible existing transfer movements.
+  Automatic batch detection is advisory and must retain per-card actions; only
+  the explicit Search batch payments action enables checkbox/allocation mode.
   `lib/kreabank_manual_review.lib.php`
   shares candidate eligibility and execution with matched/bulk review. One-by-one
   cards allow an explicitly signed choice among competing records;
