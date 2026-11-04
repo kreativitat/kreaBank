@@ -18,6 +18,10 @@ foreach ($fixtures as $id=>$f) {
 	$lines[$id] = array('staged_id'=>$id,'operation_date'=>$f[1],'value_date'=>$id===1003?'2026-07-30':$f[1],
 		'amount'=>$f[0],'running_balance'=>$f[2],'currency'=>'EUR','description'=>'Received EVIDENCE','source_row'=>1005-$id);
 }
+$db->connection->set_charset('utf8mb4');
+$db->query("UPDATE kbauto_kreabank_statement_line SET description='Comissão de manutenção' WHERE rowid=1001");
+$lines[1001]['description']='Comissão de manutenção';
+$db->query('ALTER TABLE kbauto_kreabank_statement_line MODIFY description TEXT CHARACTER SET latin1 COLLATE latin1_swedish_ci');
 bankAuto(1001,'5.00','EVIDENCE',120);
 $db->query("UPDATE kbauto_bank SET rappro=1,num_releve='ST-1001' WHERE rowid=1001");
 $db->query('UPDATE kbauto_kreabank_statement_line SET status=2,fk_native_bank_line=1001 WHERE rowid=1001');
@@ -44,6 +48,7 @@ checkAuto(array_column($descending,'rowid')===array_reverse(array_column($ascend
 checkAuto(array_column($ascending,'display_balance')===array('7.00000000','12.00000000','10.00000000','14.00000000'),'Original debit and credit balances remain continuous');
 checkAuto(array_column($read('ASC',2,2),'rowid')===array('1003','1004'),'Pagination applies after the complete original order');
 checkAuto($ascending[2]->value_date==='2026-07-30' && (int)$ascending[2]->balance_calculated===0,'Shows original value dates and supplied balances without changing feed data');
+checkAuto($ascending[1]->description==='Comissão de manutenção' && (int)$ascending[1]->statement_sequence===2,'Legacy latin1 source columns and UTF-8 evidence retain accents and exact identity');
 checkAuto($filtered(array('value_to'=>'2026-07-30'))[0]===1,'Header filters use original file value dates');
 checkAuto($service->recordStatementEvidence($statementId,$proof)['already_recorded'] && countAuto('kreabank_recon_audit')===$audit+1,'Retry is idempotent without duplicate rows or audits');
 $user->allowed=false;

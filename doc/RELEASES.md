@@ -8,6 +8,8 @@
 - Attach source checksum and row evidence atomically to existing statement
   metadata. Keep feed identities, staged amounts/statuses, native movements,
   payments and reconciliation receipts unchanged. No schema or scheduler change.
+- Normalize description encodings in the read projection for legacy latin1
+  databases; preserve UTF-8 accents without changing stored source columns.
 
 ## 1.19.9 — 2026-11-04
 
