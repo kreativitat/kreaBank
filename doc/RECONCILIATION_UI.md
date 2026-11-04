@@ -59,6 +59,9 @@ action on the card. Ordinary native movements use **Reconcile this movement**,
 with the exact persisted signed amount
 and source account. They reuse the existing native movement and create no payment.
 Suppress the counterparty line when it repeats the displayed reference label.
+Each card shows its recorded bank account reference below the counterparty.
+An em dash indicates that no bank account is recorded on the candidate; never
+substitute the selected statement account for an unbanked invoice or payment.
 
 Automatic batch detection (description, nearby payments or learned prediction)
 is advisory and keeps the action button on every eligible card. Only explicitly

@@ -90,6 +90,7 @@
 .kb-recon .kb-candidate-date { white-space:nowrap; }
 .kb-recon .kb-candidate-amount { margin-left:auto; text-align:right; }
 .kb-recon .kb-candidate-amount small { font-size:12px; }
+.kb-recon .kb-candidate-account { margin-top:6px; overflow-wrap:anywhere; }
 .kb-recon .krea-doc-item.kb-selected { border-color:#9cb9a8; background:#f3f8f5; }
 .kb-recon .krea-doc-item-locked { border-style:dashed; background:#f6f7f7; }
 .kb-recon .krea-doc-item label { font-size:13px; font-weight:400; color:var(--kb-ink); }

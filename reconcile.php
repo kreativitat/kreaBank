@@ -1875,6 +1875,8 @@ if (!$selectedLine) {
 			}
 			print '</span>';
 			print '</label>';
+			$documentAccountRef = trim((string) ($doc['bank_account_ref'] ?? ''));
+			print '<div class="kb-candidate-account krea-muted">' . $langs->trans('BankAccount') . ': <strong>' . dol_escape_htmltag($documentAccountRef !== '' ? $documentAccountRef : '—') . '</strong></div>';
 			if (!empty($doc['linked_bank_line'])) {
 				$linkedLineUrl = dol_buildpath('/compta/bank/line.php?rowid=' . (int) $doc['linked_bank_line'], 1);
 				$linkedLineDate = !empty($doc['linked_bank_date']) ? dol_print_date(strtotime((string) $doc['linked_bank_date']), 'day') : '';

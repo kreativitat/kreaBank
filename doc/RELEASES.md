@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.32 — 2026-11-04
+
+- Show each reconciliation candidate’s recorded bank account reference on its
+  card, retaining individual approval buttons and using a dash for unbanked records.
+
 ## 1.19.31 — 2026-11-04
 
 - Keep individual reconciliation buttons when automatic batch detection finds
