@@ -51,6 +51,36 @@ function kreabankPaymentAccountReviewHtml($review, $langs)
 	return $html;
 }
 
+/** Review-only search results, outside the selectable same-account reconciliation form. */
+function kreabankOtherAccountMovementsHtml($entries, $line, $reviews, $search, $langs)
+{
+	$html = '<section class="kb-other-accounts" aria-labelledby="kb-other-accounts-title"><h4 id="kb-other-accounts-title">' . $langs->trans('KreaBankOtherAccountEntries') . '</h4>';
+	$html .= '<p>' . $langs->trans('KreaBankOtherAccountHelp') . '</p>';
+	if (!$entries) { return $html . '<p class="kb-empty">' . $langs->trans('KreaBankOtherAccountEmpty') . '</p></section>'; }
+	foreach (array_slice($entries, 0, 100) as $entry) {
+		$url = dol_buildpath('/compta/bank/line.php?rowid=' . (int) $entry['rowid'], 1);
+		$target = dol_escape_htmltag($line['bank_account_ref']);
+		$html .= '<article class="krea-doc-item kb-other-account-entry"><div class="kb-other-account-summary"><div><strong><a href="' . dol_escape_htmltag($url) . '" target="_blank" rel="noopener">' . dol_escape_htmltag($entry['label']) . '</a></strong><br>'
+			. dol_escape_htmltag($entry['account_ref']) . ' · ' . dol_escape_htmltag(substr($entry['dateo'], 0, 10))
+			. '<br><span class="krea-muted">' . dol_escape_htmltag(trim($entry['payment_refs'] . ' ' . $entry['customer_docs'] . ' ' . $entry['supplier_docs'])) . '</span></div><strong>'
+			. kreabankPrice($entry['amount']) . ' ' . dol_escape_htmltag($entry['currency_code']) . '</strong></div>';
+		$html .= '<p class="krea-muted">' . $langs->trans('KreaBankAccountMoveSelectionBlocked') . '</p>';
+		if (!empty($reviews[(int) $entry['rowid']]) && !empty($entry['can_move'])) {
+			$html .= '<details class="kb-account-move"><summary>' . $langs->trans('KreaBankAccountMoveTo', $target) . '</summary><p>'
+				. $langs->trans('KreaBankAccountMoveConfirm', dol_escape_htmltag($entry['account_ref']), $target) . '</p>';
+			$html .= '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">'
+				. kreabankNavigationHiddenFields((int) $line['bank_account_id'])
+				. '<input type="hidden" name="token" value="' . newToken() . '"><input type="hidden" name="action" value="change_movement_account">'
+				. '<input type="hidden" name="line_id" value="' . (int) $line['rowid'] . '"><input type="hidden" name="account_move_review" value="' . dol_escape_htmltag($reviews[(int) $entry['rowid']]) . '">'
+				. '<input type="hidden" name="open_doc_search" value="' . dol_escape_htmltag($search) . '"><input type="hidden" name="search_accounts" value="1">'
+				. '<button type="submit" class="button">' . $langs->trans('KreaBankAccountMoveAction') . '</button></form></details>';
+		} elseif (empty($entry['can_move'])) { $html .= '<p>' . $langs->trans('KreaBankAccountMoveLocked') . '</p>'; }
+		$html .= '</article>';
+	}
+	if (count($entries) > 100) { $html .= '<p>' . $langs->trans('KreaBankOtherAccountTruncated') . '</p>'; }
+	return $html . '</section>';
+}
+
 /**
  * Prepare admin pages header.
  *

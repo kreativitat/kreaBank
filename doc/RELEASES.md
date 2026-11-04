@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.19.9 — 2026-11-04
+
+- Search existing movements in other owned accounts from selected-line reconciliation.
+  Keep these results unselectable until an explicit, reviewed account correction.
+- Preserve native movements, payments and invoice allocations. Recheck ownership,
+  currency, source facts, accounting/reconciliation locks and protected operations
+  under locks; commit the account-only change and its audit atomically.
+  Reconciliation remains a separate action. No schema or scheduler changes.
+
 ## 1.19.8 — 2026-11-04
 
 - Keep reconciliation primary-button text white on hover, keyboard focus and

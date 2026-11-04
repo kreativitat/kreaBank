@@ -161,3 +161,13 @@
 @media(max-width:760px) {
  .kb-recon .krea-product-line-row td[data-label]::before { content:attr(data-label); display:block; font-size:11px; color:#566a74; margin-bottom:5px; text-align:left; }
 }
+
+/* Other-account evidence remains outside the selectable reconciliation form. */
+.kb-recon .kb-other-accounts { margin-top: 24px; border-top: 1px solid #d7e3e6; padding-top: 16px; }
+.kb-recon .kb-other-account-summary { display: flex; justify-content: space-between; gap: 12px; overflow-wrap: anywhere; }
+.kb-recon .kb-other-account-summary > div { min-width: 0; }
+.kb-recon .kb-other-account-summary > strong { flex-shrink: 0; }
+.kb-recon .kb-account-move summary { cursor: pointer; color: #285b46; font-weight: 600; }
+.kb-recon .kb-account-move form { margin-top: 12px; }
+.kb-recon .kb-account-move button { white-space: normal; height: auto; max-width: 100%; }
+@media (max-width: 480px) { .kb-recon .kb-other-account-summary { flex-direction: column; gap: 6px; } }

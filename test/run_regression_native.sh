@@ -25,6 +25,8 @@ php_files=(
   "class/parser/KreaBankDelimitedTextParseStrategy.class.php"
   "core/modules/modKreaBank.class.php"
   "test/test_reconciliation_guards.php"
+  "test/test_account_correction.php"
+  "test/test_account_correction_database.php"
   "test/test_machine_learning.php"
   "test/test_machine_learning_database.php"
   "test/test_machine_learning_render.php"
@@ -95,6 +97,7 @@ php "${ROOT_DIR}/test/test_format_consistency.php"
 
 echo "[6/7] Reconciliation guard checks"
 php "${ROOT_DIR}/test/test_reconciliation_guards.php"
+php "${ROOT_DIR}/test/test_account_correction.php"
 
 echo "[7/7] Manual checklist"
 cat <<'EOF'

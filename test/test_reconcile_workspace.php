@@ -9,6 +9,11 @@ error_reporting(E_ALL);
 set_error_handler(static function ($severity, $message, $file, $line) { throw new RuntimeException($message . ' at ' . $file . ':' . $line); });
 $root = dirname(__DIR__);
 require_once $root . '/lib/kreabank_list.lib.php';
+// Load the real standalone renderer without the application's bootstrap/helpers.
+$helperSource = file_get_contents($root . '/lib/kreabank.lib.php');
+$helperStart = strpos($helperSource, 'function kreabankOtherAccountMovementsHtml(');
+$helperEnd = strpos($helperSource, "/**\n * Prepare admin pages header.", $helperStart);
+eval(substr($helperSource, $helperStart, $helperEnd - $helperStart));
 function dol_escape_htmltag($value, ...$args) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
 function dol_buildpath($path, $absolute = 0) { return $path; }
 function price2num($value, $mode = '') { return (float) $value; }
@@ -81,6 +86,11 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	$service = new class { public function getPaymentAccountReview(...$args) { return array(); } };
 	$form = new WorkspaceFixtureForm();
 	$navigationAccountId = 81; $navigationAccount = null;
+	$searchOtherAccounts = $case === 'otheraccounts' || !empty($options['search_accounts']); $otherAccountDocuments = array(); $accountMoveReviews = array(); $correctedBankLineId = 0;
+	if ($case === 'otheraccounts') {
+		$otherAccountDocuments = array(array('rowid'=>501,'label'=>'Pagamento de fatura · Exemplo','account_ref'=>'WRONG-BANK','dateo'=>'2026-11-03','amount'=>'-125.50','currency_code'=>'EUR','payment_refs'=>'PAY-EXAMPLE','customer_docs'=>'','supplier_docs'=>'Fatura de Exemplo','can_move'=>true));
+		$accountMoveReviews = array(501=>'synthetic-account-review');
+	}
 	$forceBatchDetect = $options['force_batch_detect'] ?? 0; $openDocumentsSearch = $options['search'] ?? '';
 	$pendingColumns = array('b.dateo'=>'KreaBankDate','m.description'=>'KreaBankDescription','b.amount'=>'KreaBankAmount');
 	$pendingSort = array('field'=>'b.dateo','order'=>'ASC','prefix'=>'','sortfield_param'=>'sortfield','sortorder_param'=>'sortorder');
@@ -133,7 +143,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 if (($argv[1] ?? '') === '--html') { print renderWorkspaceFixture($argv[2] ?? 'debit', $argv[3] ?? 'pt_PT'); exit; }
 $checks = 0;
 function workspaceCheck($condition, $message) { global $checks; $checks++; if (!$condition) { throw new RuntimeException($message); } }
-foreach (array('debit','credit','readonly','empty','locked','noentries','safe','error','restricted','success','limited','unavailable','single') as $case) {
+foreach (array('otheraccounts','debit','credit','readonly','empty','locked','noentries','safe','error','restricted','success','limited','unavailable','single') as $case) {
 	$html = renderWorkspaceFixture($case);
 	workspaceCheck(strpos($html, 'kb-queue') !== false && strpos($html, '</html>') !== false, $case . ': complete view');
 	workspaceCheck(strpos($html, 'Native banking menu') !== false && strpos($html, 'kb-primary') !== false, $case . ': native/shared navigation retained');
@@ -154,6 +164,7 @@ foreach (array('debit','credit','readonly','empty','locked','noentries','safe','
 }
 foreach (array(
 	array('noentries', array(), 'create'),
+	array('noentries', array('search_accounts'=>true), 'match'),
 	array('credit', array('documents'=>array()), 'create'),
 	array('noentries', array('search'=>'MISSING-REFERENCE'), 'match'),
 	array('noentries', array('force_batch_detect'=>1), 'match'),
@@ -174,6 +185,16 @@ foreach (array(
 	workspaceCheck(strpos($html, 'data-initial-workflow="' . $expected . '"') !== false, $case . ': appropriate initial workflow');
 	workspaceCheck(strpos($html, 'id="kb-tab-' . $expected . '" aria-controls="kb-panel-' . $expected . '" aria-selected="true" tabindex="0"') !== false, $case . ': initial tab selection and keyboard focus agree');
 }
+$otherHtml = renderWorkspaceFixture('otheraccounts');
+workspaceCheck(strpos($otherHtml, 'Movimentos noutras contas') !== false && strpos($otherHtml, 'WRONG-BANK') !== false, 'Other account and consequence are visible');
+$libxmlPrevious = libxml_use_internal_errors(true);
+$dom = new DOMDocument(); $dom->loadHTML($otherHtml);
+libxml_clear_errors(); libxml_use_internal_errors($libxmlPrevious);
+$xpath = new DOMXPath($dom);
+workspaceCheck($xpath->query('//form[@id="manualReconcileForm"]//input[@name="account_move_review"]')->length === 0, 'Account correction is outside reconciliation form');
+workspaceCheck($xpath->query('//article[contains(@class,"kb-other-account-entry")]//input[@name="selected_docs[]"]')->length === 0, 'Wrong-account results offer no reconciliation selection');
+workspaceCheck($xpath->query('//input[@name="action" and @value="change_movement_account"]/../input[@name="token"]')->length === 1, 'Correction has its own CSRF and explicit action');
+workspaceCheck($xpath->query('//details[contains(@class,"kb-account-move")]//button')->length === 1, 'Correction has a separate explicit confirmation');
 workspaceCheck(strpos(renderWorkspaceFixture('precision'), 'value="75.2500001"') !== false, 'Native amount precision survives rendering');
 workspaceCheck(strpos(renderWorkspaceFixture('precision'), 'data-outstanding="125.5000001"') !== false, 'Outstanding precision survives rendering');
 // Untrusted source evidence is escaped in search metadata and in rendered content.

@@ -66,6 +66,10 @@ if (!$user->hasRight('banque', 'lire')) {
 $action = GETPOST('action', 'aZ09');
 $lineId = GETPOSTINT('line_id');
 $openDocumentsSearch = trim((string) GETPOST('open_doc_search', 'restricthtml'));
+$searchOtherAccounts = (GETPOSTINT('search_accounts') === 1 || $openDocumentsSearch !== '' || $action === 'change_movement_account');
+$otherAccountDocuments = array();
+$accountMoveReviews = array();
+$correctedBankLineId = 0;
 $forceBatchDetect = (GETPOSTINT('force_batch_detect') > 0 ? 1 : 0);
 $navigationAccountId = max(0, GETPOSTINT('account_context'));
 $navigationAccount = kreabankNavigationAccount($navigationAccountId);
@@ -181,6 +185,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	if (!kreabankIsTokenValid()) {
 		accessforbidden('Invalid token');
 	}
+}
+
+// Account correction is separate from reconciliation and requires unexpired displayed evidence.
+if ($action === 'change_movement_account') {
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !$user->hasRight('kreabank', 'reconciliation', 'write') || !$user->hasRight('banque', 'modifier')) { accessforbidden(); }
+	$reviewKey = (string) GETPOST('account_move_review', 'aZ09');
+	$review = $_SESSION['kreabank_account_moves'][$reviewKey] ?? null;
+	unset($_SESSION['kreabank_account_moves'][$reviewKey]);
+	try {
+		if (!$review || $review['expires'] < time() || $review['entity'] !== (int) $conf->entity || $review['user'] !== (int) $user->id
+			|| $review['line'] !== (int) $lineId || $review['target'] !== (int) $navigationAccountId) {
+			throw new Exception($langs->trans('KreaBankAccountMoveChanged'));
+		}
+		$service->changeMovementAccount($lineId, $review['bank_line'], $review['snapshot'], $review['old'], $review['target']);
+		$correctedBankLineId = (int) $review['bank_line'];
+		$openDocumentsSearch = '';
+		setEventMessages($langs->trans('KreaBankAccountMoveDone'), null, 'mesgs');
+	} catch (Throwable $e) { $reportActionException($e, 'change_movement_account'); }
 }
 
 if ($action === 'batch_safe' && $user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite) {
@@ -1189,6 +1211,19 @@ if ($openDocumentsSearch !== '' && !empty($documents)) {
 	}
 }
 
+if ($correctedBankLineId > 0 && $selectedLine) {
+	try {
+		$corrected = $service->getCorrectedAccountMovement((int) $selectedLine['rowid'], $correctedBankLineId);
+		if ($corrected) {
+			$documents = array_values(array_filter($documents, static function ($doc) use ($correctedBankLineId) {
+				return $doc['doc_type'] !== 'native_bank' || (int) $doc['rowid'] !== $correctedBankLineId;
+			}));
+			array_unshift($documents, $corrected);
+			unset($autoSelectDocKeys['native_bank__' . $correctedBankLineId]);
+		}
+	} catch (Throwable $e) { $reportActionException($e, 'reload_corrected_movement'); }
+}
+
 if ($isLoteBatchLine && $selectedLine && !empty($documents)) {
 	$loteOutstanding = max(0.0, abs((float) $selectedLine['amount']) - abs((float) $selectedLine['allocated_amount']));
 	if ($loteOutstanding <= 0.00001) {
@@ -1525,6 +1560,27 @@ if (!empty($quickCreateSuccessAlert['enabled']) && !empty($quickCreateSuccessAle
 	print '</div>';
 }
 
+if ($selectedLine && !empty($selectedLine['fk_statement']) && $searchOtherAccounts) {
+	try {
+		$otherAccountDocuments = $service->searchOtherAccountMovements((int) $selectedLine['rowid'], $openDocumentsSearch);
+		if ($user->hasRight('kreabank', 'reconciliation', 'write') && $user->hasRight('banque', 'modifier')) {
+			if (empty($_SESSION['kreabank_account_moves'])) { $_SESSION['kreabank_account_moves'] = array(); }
+			foreach ($_SESSION['kreabank_account_moves'] as $key => $saved) {
+				if ($saved['expires'] < time()) { unset($_SESSION['kreabank_account_moves'][$key]); }
+			}
+			foreach (array_slice($otherAccountDocuments, 0, 100) as $entry) {
+				if (!$entry['can_move']) { continue; }
+				$key = bin2hex(random_bytes(24));
+				$_SESSION['kreabank_account_moves'][$key] = array('expires'=>time()+900, 'entity'=>(int) $conf->entity,
+					'user'=>(int) $user->id, 'line'=>(int) $selectedLine['rowid'], 'bank_line'=>(int) $entry['rowid'],
+					'old'=>(int) $entry['fk_account'], 'target'=>(int) $selectedLine['bank_account_id'], 'snapshot'=>$entry['snapshot']);
+				$accountMoveReviews[(int) $entry['rowid']] = $key;
+			}
+			while (count($_SESSION['kreabank_account_moves']) > 300) { array_shift($_SESSION['kreabank_account_moves']); }
+		}
+	} catch (Throwable $e) { $reportActionException($e, 'search_other_accounts', $langs->trans('KreaBankAccountReviewUnavailable')); }
+}
+
 kreabankPrintWorkspaceNavigation('reconcile', $navigationAccount);
 print load_fiche_titre($langs->trans('KreaBankReconcile'), '', 'bank');
 if ($selectedLine && !empty($selectedLine['fk_statement'])) {
@@ -1553,13 +1609,13 @@ if ($selectedLine) {
 }
 $canReconcile = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite);
 // Keep explicit searches in matching; an empty initial candidate set opens permitted creation.
-$requestedWorkflow = GETPOST('workflow', 'aZ09');
+$requestedWorkflow = $searchOtherAccounts ? 'match' : GETPOST('workflow', 'aZ09');
 $initialWorkflow = ($quickEntryFailed || ($selectedLine && $canReconcile && $canCreate && ($requestedWorkflow === 'create' || ($requestedWorkflow !== 'match' && empty($documents) && $openDocumentsSearch === '' && !$forceBatchDetect)))) ? 'create' : 'match';
 print '<div class="kb-recon" data-initial-workflow="' . $initialWorkflow . '" data-queue-scope="' . dol_escape_htmltag((int) $conf->entity . ':' . (int) $user->id . ':' . (int) $navigationAccountId . ':' . $pendingSort['field'] . ':' . $pendingSort['order']) . '">';
 print '<aside class="kb-queue" aria-labelledby="kb-queue-heading"><details class="kb-queue-disclosure" open>';
 print '<summary class="kb-queue-heading"><h2 id="kb-queue-heading">' . $langs->trans('KreaBankWorkspacePending') . '</h2><span class="kb-count">' . ((int) $pendingLinesTotal) . '</span></summary>';
 print '<div class="kb-queue-search kb-js-only"><label for="kb-pending-search">' . $langs->trans('KreaBankWorkspaceSearchQueue') . '</label><input type="search" id="kb-pending-search" autocomplete="off" aria-controls="kb-pending-list" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceSearchHint')) . '"></div>';
-$reconciliationSortParams = array_merge(kreabankListParameters(), array('account_context' => $navigationAccountId, 'line_id' => $lineId));
+$reconciliationSortParams = array_merge(kreabankListParameters(), array('account_context' => $navigationAccountId, 'line_id' => $lineId, 'search_accounts' => $searchOtherAccounts ? 1 : 0));
 print kreabankListSortLinks($pendingColumns, $pendingSort, $reconciliationSortParams);
 print '<nav id="kb-pending-list" class="kb-pending-list" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankWorkspacePending')) . '">';
 foreach ($pendingLines as $line) {
@@ -1611,6 +1667,7 @@ if (!$selectedLine) {
 	print kreabankNavigationHiddenFields($navigationAccountId);
 	print '<input type="hidden" name="line_id" value="' . (int) $selectedLine['rowid'] . '">';
 	if ($forceBatchDetect) { print '<input type="hidden" name="force_batch_detect" value="1">'; }
+	print '<input type="hidden" name="search_accounts" value="1"><input type="hidden" name="workflow" value="match">';
 	print '<label for="kb-document-search">' . $langs->trans('KreaBankWorkspaceSearchEntries') . '</label><div><input id="kb-document-search" type="search" name="open_doc_search" value="' . dol_escape_htmltag($openDocumentsSearch) . '"><button type="submit" class="button">' . $langs->trans('Search') . '</button></div></form>';
 	if (!$isLoteBatchLine) { print '<a class="kb-batch-link" href="' . dol_escape_htmltag($forceBatchUrl) . '">' . $langs->trans('KreaBankBatchDetectForce') . '</a>'; }
 	if ($batchDetectedAuto) {
@@ -1637,7 +1694,7 @@ if (!$selectedLine) {
 	print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="manualReconcileForm" data-outstanding="' . dol_escape_htmltag((string) $selectedOutstanding) . '" data-currency="' . dol_escape_htmltag($selectedLine['currency']) . '" data-locale="' . dol_escape_htmltag(str_replace('_', '-', $langs->defaultlang)) . '">';
 	print kreabankNavigationHiddenFields($navigationAccountId);
 	print '<input type="hidden" name="token" value="' . newToken() . '">';
-	print '<input type="hidden" name="action" value="reconcile">';
+	print '<input type="hidden" name="action" value="reconcile"><input type="hidden" name="search_accounts" value="' . ($searchOtherAccounts ? '1' : '0') . '">';
 	print '<input type="hidden" name="line_id" value="' . ((int) $selectedLine['rowid']) . '">';
 	print '<input type="hidden" name="open_doc_search" value="' . dol_escape_htmltag($openDocumentsSearch) . '">';
 	if ((int) $forceBatchDetect > 0) {
@@ -1649,6 +1706,11 @@ if (!$selectedLine) {
 		if ($field === 'suggestion') { return (int) ($suggestionByKey[$doc['doc_type'] . '__' . $doc['rowid']]['score'] ?? 0); }
 		return $doc[$field] ?? '';
 	});
+	if ($correctedBankLineId > 0) {
+		usort($documents, static function ($a, $b) use ($correctedBankLineId) {
+			return (int) ($b['doc_type'] === 'native_bank' && (int) $b['rowid'] === $correctedBankLineId) - (int) ($a['doc_type'] === 'native_bank' && (int) $a['rowid'] === $correctedBankLineId);
+		});
+	}
 	if (empty($documents)) {
 		print '<div class="kb-empty"><strong>' . $langs->trans('KreaBankWorkspaceNoEntries') . '</strong><p>' . $langs->trans('KreaBankWorkspaceNoEntriesHelp') . '</p></div>';
 	} else {
@@ -1702,6 +1764,7 @@ if (!$selectedLine) {
 				print '<span class="badge ' . ($isLockedReconciled ? 'badge-status4' : 'badge-status7') . '">' . $lockedStatusLabel . '</span>';
 			} else {
 				$shouldCheck = !empty($autoSelectDocKeys[$docKey]);
+				if ($rawDocType === 'native_bank' && (int) $doc['rowid'] === $correctedBankLineId) { $shouldCheck = false; }
 				print '<input type="checkbox" name="selected_docs[]" value="' . $docKey . '"' . ($shouldCheck ? ' checked' : '') . (!$canReconcile ? ' disabled' : '') . '>';
 			}
 			print '<span>';
@@ -1759,7 +1822,9 @@ if (!$selectedLine) {
 	if ($canReconcile) {
 		print '<button type="submit" class="button kb-primary-action" id="manualReconcileButton" aria-describedby="kb-selection-feedback"' . (empty($hasSelectableDocuments) ? ' disabled' : '') . '>' . $langs->trans('KreaBankWorkspaceReconcileEntries') . '</button>';
 	}
-	print '</form></section>';
+	print '</form>';
+	if ($searchOtherAccounts) { print kreabankOtherAccountMovementsHtml($otherAccountDocuments, $selectedLine, $accountMoveReviews, $openDocumentsSearch, $langs); }
+	print '</section>';
 	print '<section class="kb-workflow-panel kb-create-panel" id="kb-panel-create" aria-labelledby="kb-create-heading"><h3 id="kb-create-heading">' . $langs->trans('KreaBankWorkspaceCreate') . '</h3><p class="kb-panel-intro">' . $langs->trans('KreaBankWorkspaceCreateHelp') . '</p>';
 	if (!$canCreate) { print '<p class="kb-readonly">' . $langs->trans($creationUnavailable ? 'KreaBankWorkspaceCreationUnavailable' : 'KreaBankWorkspaceRestrictedCreation') . '</p>'; }
 	elseif ($canReconcile) {

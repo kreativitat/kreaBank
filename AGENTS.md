@@ -174,7 +174,7 @@
   with a complete payment/check reference or, when the bank reference is absent,
   the complete name of the single fully allocated invoice counterparty. Names are
   review evidence only, never strong identity for unattended matching. Suspected
-  errors block automatic-native and TPA execution and bulk approval. Review/correction uses the existing native
+  errors block automatic-native and TPA execution and bulk approval. Bulk review/correction uses the existing native
   bank movement form; preserve payment allocations, accounting and reconciliation
   locks. Recompute warnings after correction, never cache approval of a move.
 - `test/test_payment_account_review.php` is pure; its database counterpart extends
@@ -233,3 +233,14 @@
   bootstrap or database. Its `--html <case> [locale]` output intercepts every
   submission for browser checks. `node test/test_reconcile_workspace.cjs` checks
   exact allocation boundaries. See `doc/RECONCILIATION_UI.md`.
+
+- Selected-line Search includes review-only movements from other current-company
+  accounts. `searchOtherAccountMovements()` never feeds the matcher. The explicit
+  `changeMovementAccount()` path requires a single-use session review and native
+  modifier rights, revalidates the exact displayed snapshot under locks, changes
+  only the native account through the adapter and commits its audit atomically.
+  Keep wrong-account results outside the selectable reconciliation form; reload
+  corrected movements unchecked. Never move imported/mapped, reconciled,
+  accounting-posted, cheque-deposit, transfer or restricted-account movements.
+  See `doc/RECONCILIATION_UI.md` and the pure/disposable `test_account_correction`
+  suites. Bulk account warnings retain their native correction links.

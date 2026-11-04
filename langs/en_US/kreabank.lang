@@ -625,3 +625,16 @@ KreaBankReviewSingleApproval=Reconcile this match is your explicit approval of t
 KreaBankReviewStatementLine=Statement line
 KreaBankWorkspaceNext=Next
 KreaBankWorkspaceNextHelp=Move the first visible pending line to the bottom and open the next line.
+
+# Reviewed account correction
+KreaBankOtherAccountEntries=Movements in other accounts
+KreaBankOtherAccountHelp=These movements belong to another account in this company. Review and change the recorded account before selecting a movement for reconciliation.
+KreaBankOtherAccountEmpty=No matching movements found in other accounts.
+KreaBankAccountMoveSelectionBlocked=Cannot be selected until its recorded bank account is corrected.
+KreaBankAccountMoveTo=Change account to %s
+KreaBankAccountMoveConfirm=Change the recorded account from %s to %s? This preserves the movement, payment and invoice allocations. Reconciliation is a separate action.
+KreaBankAccountMoveAction=Confirm account change
+KreaBankAccountMoveLocked=Account change unavailable: this movement is reconciled, posted to accounting, included in a cheque deposit or linked to another protected operation. Open the movement to review it.
+KreaBankAccountMoveDone=Bank account changed. Review and select the movement in the existing-entry list to reconcile it.
+KreaBankAccountMoveChanged=The movement or statement has changed, is locked, or the review has expired. Search again and review the current details.
+KreaBankOtherAccountTruncated=Showing the first 100 movements. Refine the search to see other results.

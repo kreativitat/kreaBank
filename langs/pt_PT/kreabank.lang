@@ -624,3 +624,16 @@ KreaBankReviewSingleApproval=O botão Reconciliar esta correspondência confirma
 KreaBankReviewStatementLine=Linha de extrato
 KreaBankWorkspaceNext=Seguinte
 KreaBankWorkspaceNextHelp=Mover a primeira linha pendente visível para o fim da lista e abrir a seguinte.
+
+# Reviewed account correction
+KreaBankOtherAccountEntries=Movimentos noutras contas
+KreaBankOtherAccountHelp=Estes movimentos estão registados noutra conta desta empresa. Confirme e altere a conta registada antes de selecionar um movimento para reconciliação.
+KreaBankOtherAccountEmpty=Não foram encontrados movimentos correspondentes noutras contas.
+KreaBankAccountMoveSelectionBlocked=Só pode ser selecionado depois de corrigir a conta bancária registada.
+KreaBankAccountMoveTo=Alterar conta para %s
+KreaBankAccountMoveConfirm=Alterar a conta registada de %s para %s? O movimento, o pagamento e as afetações às faturas são preservados. A reconciliação é uma ação separada.
+KreaBankAccountMoveAction=Confirmar alteração de conta
+KreaBankAccountMoveLocked=Alteração de conta indisponível: o movimento está reconciliado, lançado na contabilidade, incluído num depósito de cheques ou associado a outra operação protegida. Abra o movimento para o verificar.
+KreaBankAccountMoveDone=Conta bancária alterada. Confirme e selecione o movimento na lista de movimentos existentes para o reconciliar.
+KreaBankAccountMoveChanged=O movimento ou o extrato foi alterado, está bloqueado ou a revisão expirou. Pesquise novamente e confirme os dados atuais.
+KreaBankOtherAccountTruncated=São apresentados os primeiros 100 movimentos. Refine a pesquisa para ver outros resultados.

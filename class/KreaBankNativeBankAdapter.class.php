@@ -908,6 +908,25 @@ class KreaBankNativeBankAdapter
 		return (int) $line->update_conciliation($this->user, 0, 0);
 	}
 
+	/** Account-only equivalent of the native bank form; caller holds account/source/native locks. */
+	public function changeBankLineAccount($bankLineId, $oldAccountId, $targetAccountId)
+	{
+		$line = new AccountLine($this->db);
+		if ($line->fetch((int) $bankLineId) <= 0 || (int) $line->fk_account !== (int) $oldAccountId
+			|| !empty($line->rappro) || !empty($line->fk_bordereau) || (int) $line->getVentilExportCompta() !== 0) {
+			throw new Exception('Bank movement is locked or changed');
+		}
+		// AccountLine::update() updates amount/dates only in supported Dolibarr versions.
+		// Like the native controller, change fk_account alone, preserving every linked payment and optional field.
+		$sql = 'UPDATE ' . $this->db->prefix() . 'bank SET fk_account=' . (int) $targetAccountId
+			. ' WHERE rowid=' . (int) $bankLineId . ' AND fk_account=' . (int) $oldAccountId . ' AND rappro=0'
+			. ' AND fk_account IN (SELECT rowid FROM ' . $this->db->prefix() . 'bank_account WHERE entity=' . $this->entity . ')'
+			. ' AND EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'bank_account target WHERE target.rowid=' . (int) $targetAccountId . ' AND target.entity=' . $this->entity . ' AND target.clos=0)';
+		if (!$this->db->query($sql)) { throw new Exception('Cannot change bank movement account'); }
+		$check = $this->db->query('SELECT fk_account FROM ' . $this->db->prefix() . 'bank WHERE rowid=' . (int) $bankLineId);
+		if (!$check || (int) $this->db->fetch_object($check)->fk_account !== (int) $targetAccountId) { throw new Exception('Bank movement account changed concurrently'); }
+	}
+
 	/**
 	 * Add a native bank_url link to a bank line.
 	 *

@@ -122,3 +122,36 @@ normal module version metadata. No migration, scheduler change or module
 re-enable is required. Use the existing production preimage/backup/atomic-file
 procedure and perform read-only acceptance in the target native shell. Roll back
 the same runtime files together. A Git push does not deploy this release.
+
+## Searching other accounts
+
+Press **Search** in the existing-movement panel to include movements recorded in
+other open, reconcilable accounts owned by the current company, with the same
+currency/direction and an amount no greater than the statement line. An empty
+search uses the exact amount and nearby booking dates; text searches cover native
+labels/references, payment/invoice references, full invoice counterparties, dates
+and amounts before the 100-result display limit. Restricted transfer-only accounts
+and imported/mapped statement evidence are excluded.
+
+These results have no reconciliation checkbox. Expand **Change account to…**,
+review the old and statement accounts, then choose **Confirm account change**.
+The correction changes only the existing movement's recorded bank account,
+preserves payment/invoice allocations, and creates an audit. It does not reconcile.
+The corrected entry is immediately shown in the ordinary list, unchecked; select
+it and reconcile normally. Native movement links remain available for inspection.
+
+Only a current native bank modifier with KreaBank write rights can correct an
+account. POST/CSRF and a single-use, 15-minute session review bind the user,
+company, staging source, exact native movement and both accounts. The service
+rechecks persisted evidence and ownership under account/source/movement/payment/
+allocation/bookkeeping locks. Reconciled, accounting-posted, cheque-deposit,
+transfer and unsupported protected-operation movements cannot be moved here.
+Changed evidence, lost permissions and repeated/stale submissions fail closed.
+
+Validate the controller with `php test/test_account_correction.php` and the native
+write/rollback/isolation behavior with `php test/test_account_correction_database.php`.
+The latter extends only the guarded disposable localhost:33317 fixture. Never run
+it against an installation database. The workspace fixture's `otheraccounts` case
+exercises the real renderer with intercepted submissions for desktop/mobile checks.
+Deploy `reconcile.php`, the service, native adapter, shared library, workspace CSS,
+translations and version metadata together. No migration or scheduler change.

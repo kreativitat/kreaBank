@@ -990,7 +990,7 @@ class KreaBankService
 	 * @param int $bankAccountId
 	 * @return array<int,array<string,mixed>>
 	 */
-	protected function getOpenNativeBankDocuments($direction = 0, $limit = 250, $anchorDate = null, $intervalDays = null, $excludeBankLineId = 0, $bankAccountId = 0)
+	protected function getOpenNativeBankDocuments($direction = 0, $limit = 250, $anchorDate = null, $intervalDays = null, $excludeBankLineId = 0, $bankAccountId = 0, $onlyBankLineId = 0)
 	{
 		$limit = max(20, (int) $limit);
 		$excludeBankLineId = (int) $excludeBankLineId;
@@ -1024,6 +1024,7 @@ class KreaBankService
 		if ($excludeBankLineId > 0) {
 			$sql .= ' AND b.rowid <> ' . $excludeBankLineId;
 		}
+		if ($onlyBankLineId > 0) { $sql .= ' AND b.rowid = ' . (int) $onlyBankLineId; }
 		// Keep reconciliation focused on imported-vs-native matching, not imported-vs-imported duplicates.
 		$sql .= " AND (m.source_type IS NULL OR m.source_type = '')";
 		if ($direction > 0) {
@@ -2514,6 +2515,146 @@ class KreaBankService
 		// A truncated search is itself a review condition; never assume there are no conflicts.
 		return $candidates || count($payments) >= 101
 			? array('line'=>$line,'candidates'=>$candidates,'truncated'=>count($payments) >= 101) : null;
+	}
+
+	/** Reload a corrected movement through the ordinary same-account candidate projection. */
+	public function getCorrectedAccountMovement($stagingId, $bankLineId)
+	{
+		$this->assertAutomaticActor(true);
+		$line = $this->native->getStatementLineById((int) $stagingId);
+		if (!$line) { return null; }
+		$scope = new KreaBankReconciliationScope($this->db, $this->entity);
+		$scope->assertLine($line);
+		$scope->assertDocument('native_bank', (int) $bankLineId, (int) $line['bank_account_id']);
+		$rows = $this->getOpenNativeBankDocuments((int) $line['direction'], 20, null, 0, 0, (int) $line['bank_account_id'], (int) $bankLineId);
+		return $rows ? $rows[0] : null;
+	}
+
+	/** Search other owned accounts for review only; never pass these rows to the matcher. */
+	public function searchOtherAccountMovements($stagingId, $search = '', $bankLineId = 0)
+	{
+		$this->assertAutomaticActor(true);
+		$p = $this->db->prefix();
+		$id = (int) $stagingId;
+		$line = $this->native->getStatementLineById($id);
+		if (!$line) { return array(); }
+		(new KreaBankReconciliationScope($this->db, $this->entity))->assertLine($line);
+		$policy = new KreaBankAccountPairs($this->db, $this->entity);
+		if ($policy->mainAccount((int) $line['bank_account_id'])) { return array(); }
+		$sql = "SELECT b.rowid,b.fk_account,b.amount,b.dateo,b.datev,b.label,b.num_chq,b.rappro,b.fk_bordereau,b.fk_type,"
+			. " ba.ref AS account_ref,ba.currency_code,l.amount AS source_amount,l.operation_date AS source_date,l.currency AS source_currency,"
+			. " l.description AS source_description,l.payment_reference AS source_reference,l.bank_reference AS source_bank_reference,l.counterparty_name AS source_counterparty,"
+			. " (SELECT GROUP_CONCAT(CONCAT_WS(' ',u.label,cp.ref,cp.num_paiement,sp.ref,sp.num_paiement) SEPARATOR ' ')"
+			. " FROM {$p}bank_url u LEFT JOIN {$p}paiement cp ON u.type='payment' AND cp.rowid=u.url_id AND cp.entity=ba.entity AND cp.fk_bank=b.rowid"
+			. " LEFT JOIN {$p}paiementfourn sp ON u.type='payment_supplier' AND sp.rowid=u.url_id AND sp.entity=ba.entity AND sp.fk_bank=b.rowid"
+			. " WHERE u.fk_bank=b.rowid) AS payment_refs,"
+			. " (SELECT GROUP_CONCAT(DISTINCT CONCAT_WS(' ',f.ref,soc.nom) SEPARATOR ' ') FROM {$p}paiement cp"
+			. " JOIN {$p}paiement_facture pf ON pf.fk_paiement=cp.rowid JOIN {$p}facture f ON f.rowid=pf.fk_facture AND f.entity=ba.entity"
+			. " LEFT JOIN {$p}societe soc ON soc.rowid=f.fk_soc WHERE cp.fk_bank=b.rowid AND cp.entity=ba.entity) AS customer_docs,"
+			. " (SELECT GROUP_CONCAT(DISTINCT CONCAT_WS(' ',f.ref,f.ref_supplier,soc.nom) SEPARATOR ' ') FROM {$p}paiementfourn sp"
+			. " JOIN {$p}paiementfourn_facturefourn pf ON pf.fk_paiementfourn=sp.rowid JOIN {$p}facture_fourn f ON f.rowid=pf.fk_facturefourn AND f.entity=ba.entity"
+			. " LEFT JOIN {$p}societe soc ON soc.rowid=f.fk_soc WHERE sp.fk_bank=b.rowid AND sp.entity=ba.entity) AS supplier_docs,"
+			. " EXISTS (SELECT 1 FROM {$p}bank_url u WHERE u.fk_bank=b.rowid AND u.type NOT IN ('payment','payment_supplier','company')) AS special_links"
+			. " FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account"
+			. " JOIN {$p}kreabank_statement_line l ON l.rowid=$id AND l.entity=" . $this->entity
+			. " JOIN {$p}kreabank_statement st ON st.rowid=l.fk_statement AND st.entity=l.entity"
+			. " JOIN {$p}bank_account target ON target.rowid=st.bank_account_id AND target.entity=l.entity"
+			. " WHERE ba.entity=l.entity AND ba.rowid<>target.rowid AND ba.clos=0 AND ba.rappro=1 AND ba.courant<>2"
+			. " AND target.clos=0 AND target.rappro=1 AND target.courant<>2 AND ba.currency_code=l.currency AND target.currency_code=l.currency"
+			. " AND l.status=0 AND l.is_duplicate=0 AND l.allocated_amount=0 AND l.fk_native_bank_line IS NULL"
+			. " AND b.amount*l.amount>0 AND ABS(b.amount)<=ABS(l.amount) AND COALESCE(b.fk_type,'')<>'SOLD'"
+			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_bankmeta m WHERE m.fk_bank_line=b.rowid)"
+			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement_line mapped WHERE mapped.fk_native_bank_line=b.rowid)";
+		// A foreign/missing parent is never made visible through an owned native bank row.
+		foreach (array(array('paiement','paiement_facture','facture','fk_paiement','fk_facture','payment'),
+			array('paiementfourn','paiementfourn_facturefourn','facture_fourn','fk_paiementfourn','fk_facturefourn','payment_supplier')) as $tables) {
+			list($pay,$alloc,$invoice,$payKey,$invoiceKey,$type) = $tables;
+			$sql .= " AND NOT EXISTS (SELECT 1 FROM {$p}{$pay} pay WHERE pay.fk_bank=b.rowid AND (pay.entity<>ba.entity"
+				. " OR NOT EXISTS (SELECT 1 FROM {$p}{$alloc} a WHERE a.{$payKey}=pay.rowid)"
+				. " OR EXISTS (SELECT 1 FROM {$p}{$alloc} a LEFT JOIN {$p}{$invoice} f ON f.rowid=a.{$invoiceKey}"
+				. " WHERE a.{$payKey}=pay.rowid AND (f.rowid IS NULL OR f.entity<>ba.entity OR f.type=2))))"
+				. " AND NOT EXISTS (SELECT 1 FROM {$p}bank_url u LEFT JOIN {$p}{$pay} pay ON pay.rowid=u.url_id"
+				. " WHERE u.fk_bank=b.rowid AND u.type='$type' AND (pay.rowid IS NULL OR pay.entity<>ba.entity OR pay.fk_bank<>b.rowid))";
+		}
+		$restrictedIds = array_map('intval', array_keys($policy->pairs()));
+		if ($restrictedIds) { $sql .= ' AND ba.rowid NOT IN (' . implode(',', $restrictedIds) . ')'; }
+		if ($bankLineId > 0) { $sql .= ' AND b.rowid=' . (int) $bankLineId; }
+		$search = trim((string) $search);
+		if ($search === '' && $bankLineId <= 0) {
+			// Empty Search finds plausible movements, including feeds with no usable reference.
+			$sql .= ' AND b.amount=l.amount AND ABS(DATEDIFF(b.dateo,l.operation_date))<=' . max(3, min(31, (int) getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE', 3)));
+		}
+		if (strlen($search) > 256) { throw new Exception($this->langs->trans('KreaBankInvalidInput')); }
+		$conditions = array();
+		foreach (preg_split('/\s+/u', $search, -1, PREG_SPLIT_NO_EMPTY) as $token) {
+			$needle = str_replace(array('!', '%', '_'), array('!!', '!%', '!_'), $token);
+			$condition = "CONCAT_WS(' ',b.label,b.num_chq,ba.ref,DATE_FORMAT(b.dateo,'%Y-%m-%d'),DATE_FORMAT(b.dateo,'%d/%m/%Y')) LIKE " . $this->sqlText('%' . $needle . '%') . " ESCAPE '!'";
+			$condition .= " OR EXISTS (SELECT 1 FROM {$p}bank_url u WHERE u.fk_bank=b.rowid AND u.label LIKE " . $this->sqlText('%' . $needle . '%') . " ESCAPE '!')";
+			// Search raw invoice allocations: GROUP_CONCAT is display evidence and may be truncated.
+			foreach (array(array('paiement','paiement_facture','facture','fk_paiement','fk_facture'),
+				array('paiementfourn','paiementfourn_facturefourn','facture_fourn','fk_paiementfourn','fk_facturefourn')) as $tables) {
+				list($pay,$alloc,$invoice,$payKey,$invoiceKey) = $tables;
+				$supplierRef = $pay === 'paiementfourn' ? ',f.ref_supplier' : '';
+				$condition .= " OR EXISTS (SELECT 1 FROM {$p}{$pay} pay JOIN {$p}{$alloc} a ON a.{$payKey}=pay.rowid"
+					. " JOIN {$p}{$invoice} f ON f.rowid=a.{$invoiceKey} AND f.entity=ba.entity LEFT JOIN {$p}societe soc ON soc.rowid=f.fk_soc"
+					. " WHERE pay.fk_bank=b.rowid AND pay.entity=ba.entity AND CONCAT_WS(' ',pay.ref,pay.num_paiement,f.ref,soc.nom{$supplierRef}) LIKE "
+					. $this->sqlText('%' . $needle . '%') . " ESCAPE '!')";
+			}
+			$number = str_replace(',', '.', ltrim($token, '+-'));
+			if (preg_match('/^[0-9]+(?:\.[0-9]{1,8})?$/D', $number)) { $condition .= ' OR ABS(b.amount)=' . self::automaticDecimal($number); }
+			$conditions[] = '(' . $condition . ')';
+		}
+		if ($conditions) { $sql .= ' AND ' . implode(' AND ', $conditions); }
+		$sql .= ' ORDER BY ABS(DATEDIFF(b.dateo,l.operation_date)),b.dateo,b.rowid' . $this->db->plimit(101);
+		$rows = array();
+		foreach ($this->transferRows($sql) as $row) {
+			$entry = (array) $row;
+			$native = new AccountLine($this->db);
+			$entry['can_move'] = !(int) $row->rappro && !(int) $row->fk_bordereau && !(int) $row->special_links
+				&& $native->fetch((int) $row->rowid) > 0 && (int) $native->getVentilExportCompta() === 0;
+			$entry['source_id'] = $id;
+			$entry['target_account_id'] = (int) $line['bank_account_id'];
+			$entry['snapshot'] = hash('sha256', json_encode($entry));
+			$rows[] = $entry;
+		}
+		return $rows;
+	}
+
+	/** Explicit reviewed correction only. Reconciliation remains a separate same-account action. */
+	public function changeMovementAccount($stagingId, $bankLineId, $expectedSnapshot, $oldAccountId, $targetAccountId)
+	{
+		$this->assertAutomaticActor();
+		$p = $this->db->prefix();
+		if (!$this->db->begin()) { throw new Exception('Cannot start bank account correction'); }
+		try {
+			$ids = array_unique(array((int) $oldAccountId, (int) $targetAccountId));
+			sort($ids, SORT_NUMERIC);
+			$accounts = $this->transferRows("SELECT rowid FROM {$p}bank_account WHERE entity=" . $this->entity . ' AND rowid IN (' . implode(',', $ids) . ') ORDER BY rowid FOR UPDATE');
+			if (count($accounts) !== 2) { throw new Exception('Bank account correction requires two current-company accounts'); }
+			$this->lockReconciliationRow('kreabank_statement_line', (int) $stagingId);
+			$this->lockReconciliationRow('bank', (int) $bankLineId);
+			$this->transferRows("SELECT rowid FROM {$p}bank_url WHERE fk_bank=" . (int) $bankLineId . ' FOR UPDATE');
+			$this->transferRows("SELECT rowid FROM {$p}accounting_bookkeeping WHERE doc_type='bank' AND fk_doc=" . (int) $bankLineId . ' FOR UPDATE');
+			foreach (array(array('paiement','paiement_facture','facture','fk_paiement','fk_facture'),
+				array('paiementfourn','paiementfourn_facturefourn','facture_fourn','fk_paiementfourn','fk_facturefourn')) as $tables) {
+				list($pay,$alloc,$invoice,$payKey,$invoiceKey) = $tables;
+				$this->transferRows("SELECT pay.rowid FROM {$p}{$pay} pay WHERE pay.fk_bank=" . (int) $bankLineId . ' FOR UPDATE');
+				$this->transferRows("SELECT a.rowid,f.rowid AS invoice_id FROM {$p}{$alloc} a JOIN {$p}{$pay} pay ON pay.rowid=a.{$payKey}"
+					. " LEFT JOIN {$p}{$invoice} f ON f.rowid=a.{$invoiceKey} WHERE pay.fk_bank=" . (int) $bankLineId . ' FOR UPDATE');
+			}
+			$fresh = $this->searchOtherAccountMovements($stagingId, '', (int) $bankLineId);
+			if (count($fresh) !== 1 || !$fresh[0]['can_move'] || (int) $fresh[0]['fk_account'] !== (int) $oldAccountId
+				|| (int) $fresh[0]['target_account_id'] !== (int) $targetAccountId || !hash_equals($fresh[0]['snapshot'], (string) $expectedSnapshot)) {
+				throw new Exception($this->langs->trans('KreaBankAccountMoveChanged'));
+			}
+			$this->native->changeBankLineAccount((int) $bankLineId, (int) $oldAccountId, (int) $targetAccountId);
+			if (!$this->logAudit('account_correction', (int) $stagingId, null, array('bank_line_id'=>(int) $bankLineId,
+				'from_account'=>(int) $oldAccountId,'to_account'=>(int) $targetAccountId,'snapshot'=>$expectedSnapshot))) {
+				throw new Exception('Cannot save bank account correction audit');
+			}
+			if (!$this->db->commit()) { throw new Exception('Cannot commit bank account correction'); }
+			return true;
+		} catch (Throwable $e) { $this->db->rollback(); throw $e; }
 	}
 
 	/** Shared company boundary; read-only account reviews require both native and module read rights. */
