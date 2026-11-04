@@ -24,6 +24,10 @@ When the initial candidate set is empty, the workspace opens **Create a new entr
 and reconcile** if creation is permitted. Existing candidates (including locked
 evidence), an explicit entry search or batch search keep matching visible.
 Users can always switch workflows; opening creation never submits a record.
+When an existing payment is flagged in another owned account, its standard
+review/correction card loads on initial selection. Keep matching visible and
+suppress the empty-results message when those records exist; no separate banner
+or Search click is needed.
 Read-only links from matched/bulk review may explicitly request `workflow=create`
 or `workflow=match`. Creation still requires the existing write/account checks.
 

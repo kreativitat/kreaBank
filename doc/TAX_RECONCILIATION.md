@@ -53,7 +53,10 @@ amount/currency and nearby bank date can flag an existing tax payment in another
 owned account. Amount/date evidence is advisory and never authorizes automatic
 matching, payment creation or an account change. Account review blocks unattended/manual pair approval until resolved. One-by-one
 reconciliation presents correction evidence in the existing other-account search
-cards, without a separate warning banner above the workspace.
+cards, without a separate warning banner above the workspace. When account-review
+evidence is present, load these cards on initial selection and open matching;
+no Search click is required. Existing other-account records suppress the ordinary
+empty-results message and automatic creation routing.
 Search additionally finds tax IDs, labels and payment references before limiting
 results. Correction requires the existing single-use session review and native
 modifier rights, tax rights, unchanged source/payment/tax facts, one coherent tax

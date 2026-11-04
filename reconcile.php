@@ -1592,7 +1592,14 @@ if (!empty($quickCreateSuccessAlert['enabled']) && !empty($quickCreateSuccessAle
 	print '</div>';
 }
 
-if ($selectedLine && !empty($selectedLine['fk_statement']) && $searchOtherAccounts) {
+$automaticAccountReview = false;
+if ($selectedLine && !empty($selectedLine['fk_statement']) && !$searchOtherAccounts) {
+	try {
+		$automaticAccountReview = (bool) $service->getPaymentAccountReview($selectedLine['rowid'], array($selectedLine['bank_account_id']));
+	} catch (Throwable $e) { $reportActionException($e, 'prepare_account_review', $langs->trans('KreaBankAccountReviewUnavailable')); }
+}
+
+if ($selectedLine && !empty($selectedLine['fk_statement']) && ($searchOtherAccounts || $automaticAccountReview)) {
 	try {
 		$otherAccountDocuments = $service->searchOtherAccountMovements((int) $selectedLine['rowid'], $openDocumentsSearch);
 		if ($user->hasRight('kreabank', 'reconciliation', 'write') && $user->hasRight('banque', 'modifier')) {
@@ -1645,7 +1652,7 @@ if ($selectedLine && $canReconcile && !$creationUnavailable && array_filter($doc
 }
 // Keep explicit searches in matching; an empty initial candidate set opens permitted creation.
 $requestedWorkflow = $searchOtherAccounts ? 'match' : GETPOST('workflow', 'aZ09');
-$initialWorkflow = ($quickEntryFailed || ($selectedLine && $canReconcile && $canCreate && ($requestedWorkflow === 'create' || ($requestedWorkflow !== 'match' && empty($documents) && $openDocumentsSearch === '' && !$forceBatchDetect)))) ? 'create' : 'match';
+$initialWorkflow = ($quickEntryFailed || ($selectedLine && $canReconcile && $canCreate && ($requestedWorkflow === 'create' || ($requestedWorkflow !== 'match' && empty($documents) && empty($otherAccountDocuments) && $openDocumentsSearch === '' && !$forceBatchDetect)))) ? 'create' : 'match';
 print '<div class="kb-recon" data-initial-workflow="' . $initialWorkflow . '" data-queue-scope="' . dol_escape_htmltag((int) $conf->entity . ':' . (int) $user->id . ':' . (int) $navigationAccountId . ':' . $pendingSort['field'] . ':' . $pendingSort['order']) . '">';
 print '<aside class="kb-queue" aria-labelledby="kb-queue-heading"><details class="kb-queue-disclosure" open>';
 print '<summary class="kb-queue-heading"><h2 id="kb-queue-heading">' . $langs->trans('KreaBankWorkspacePending') . '</h2><span class="kb-count">' . ((int) $pendingLinesTotal) . '</span></summary>';
@@ -1747,7 +1754,9 @@ if (!$selectedLine) {
 		});
 	}
 	if (empty($documents)) {
-		print '<div class="kb-empty"><strong>' . $langs->trans('KreaBankWorkspaceNoEntries') . '</strong><p>' . $langs->trans('KreaBankWorkspaceNoEntriesHelp') . '</p></div>';
+		if (empty($otherAccountDocuments)) {
+			print '<div class="kb-empty"><strong>' . $langs->trans('KreaBankWorkspaceNoEntries') . '</strong><p>' . $langs->trans('KreaBankWorkspaceNoEntriesHelp') . '</p></div>';
+		}
 	} else {
 		$docCount = 0;
 		$maxDocumentsToRender = ($isLoteBatchLine ? 800 : 120);
@@ -1900,7 +1909,7 @@ if (!$selectedLine) {
 		}
 		print '</form>';
 	}
-	if ($searchOtherAccounts) { print kreabankOtherAccountMovementsHtml($otherAccountDocuments, $selectedLine, $accountMoveReviews, $openDocumentsSearch, $langs); }
+	if ($searchOtherAccounts || !empty($otherAccountDocuments)) { print kreabankOtherAccountMovementsHtml($otherAccountDocuments, $selectedLine, $accountMoveReviews, $openDocumentsSearch, $langs); }
 	print '</section>';
 	print '<section class="kb-workflow-panel kb-create-panel" id="kb-panel-create" aria-labelledby="kb-create-heading"><h3 id="kb-create-heading">' . $langs->trans('KreaBankWorkspaceCreate') . '</h3><p class="kb-panel-intro">' . $langs->trans('KreaBankWorkspaceCreateHelp') . '</p>';
 	if (!$canCreate) { print '<p class="kb-readonly">' . $langs->trans($creationUnavailable ? 'KreaBankWorkspaceCreationUnavailable' : 'KreaBankWorkspaceRestrictedCreation') . '</p>'; }

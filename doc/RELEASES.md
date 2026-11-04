@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.19.21 — 2026-11-04
+
+- Show existing tax/invoice payments flagged in another account immediately in
+  the normal matching panel, without pressing Search. Keep their standard cards,
+  reviewed account correction and reconciliation safeguards; do not show an
+  empty-results message or default to creation when those records are present.
+
 ## 1.19.20 — 2026-11-04
 
 - Use the standard Record payment and reconcile action text for existing taxes.

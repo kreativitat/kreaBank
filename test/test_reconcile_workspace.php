@@ -88,7 +88,10 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	};
 	$service = new class {
 		public $documents = array();
-		public function getPaymentAccountReview(...$args) { return array(); }
+		public $accountReview = array();
+		public $otherAccounts = array();
+		public function getPaymentAccountReview(...$args) { return $this->accountReview; }
+		public function searchOtherAccountMovements(...$args) { return $this->otherAccounts; }
 		public function getLinkedPaymentDocuments(...$args) { return array(); }
 		public function getSafeSuggestion(...$args) { return null; }
 		public function getSuggestionsForLines($lines, ...$args) {
@@ -152,6 +155,8 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 		if ($case === 'bankchoices') { $documents[] = array_merge($documents[0], array('rowid'=>243, 'ref'=>'BANK-SYNTHETIC-2')); }
 	}
 	$service->documents = $documents;
+	$service->accountReview = $options['account_review'] ?? array();
+	$service->otherAccounts = $options['other_accounts'] ?? array();
 	if ($case === 'single') { $pendingLines = array($selectedLine); $pendingLinesTotal = 1; }
 	if ($case === 'empty') { $selectedLine = null; $pendingLines = array(); $pendingLinesTotal = 0; }
 	$selectedOutstanding = 125.5;
@@ -256,6 +261,26 @@ foreach (array(
 }
 $otherHtml = renderWorkspaceFixture('otheraccounts');
 workspaceCheck(strpos($otherHtml, 'Movimentos noutras contas') !== false && strpos($otherHtml, 'WRONG-BANK') !== false, 'Other account and consequence are visible');
+// Initial GET must reveal an already-paid tax in another account without Search.
+$automaticTaxEntry = array('rowid'=>501,'fk_account'=>82,'label'=>'(SocialContributionPayment)',
+    'account_ref'=>'WRONG-BANK','dateo'=>'2026-11-03','amount'=>'-125.50','currency_code'=>'EUR',
+    'payment_refs'=>'','customer_docs'=>'','supplier_docs'=>'','tax_docs'=>'IVA · Synthetic tax #242',
+    'target_account_id'=>81,'snapshot'=>'synthetic-snapshot','can_move'=>true);
+foreach (array('tax','invoice') as $kind) {
+    $entry = $automaticTaxEntry;
+    if ($kind === 'invoice') { $entry['label']='Existing invoice payment'; $entry['tax_docs']=''; $entry['supplier_docs']='INV-242'; }
+    $initialOtherHtml = renderWorkspaceFixture('noentries','pt_PT',array('statement_id'=>1,
+        'account_review'=>array('candidates'=>array(array('bank_line_id'=>501))), 'other_accounts'=>array($entry)));
+    workspaceCheck(strpos($initialOtherHtml,'WRONG-BANK')!==false, $kind.': initial GET discovers the existing other-account payment without Search');
+    workspaceCheck(strpos($initialOtherHtml,'data-initial-workflow="match"')!==false, $kind.': existing payment opens the normal matching panel');
+    workspaceCheck(strpos($initialOtherHtml,'Não foram encontrados movimentos existentes')===false, $kind.': found payment suppresses the contradictory empty state');
+    workspaceCheck(strpos($initialOtherHtml,'class="warning kb-account-review"')===false, $kind.': no oversized banner is restored');
+    workspaceCheck(strpos($initialOtherHtml,'value="change_movement_account"')!==false
+        && strpos($initialOtherHtml,'name="selected_docs[]"')===false, $kind.': existing reviewed correction stays separate from reconciliation');
+}
+$unrelatedOtherHtml = renderWorkspaceFixture('noentries','pt_PT',array('statement_id'=>1,'other_accounts'=>array($automaticTaxEntry)));
+workspaceCheck(strpos($unrelatedOtherHtml,'WRONG-BANK')===false && strpos($unrelatedOtherHtml,'data-initial-workflow="create"')!==false,
+    'Without account-review evidence, initial GET retains ordinary lookup and creation routing');
 $libxmlPrevious = libxml_use_internal_errors(true);
 $dom = new DOMDocument(); $dom->loadHTML($otherHtml);
 libxml_clear_errors(); libxml_use_internal_errors($libxmlPrevious);
