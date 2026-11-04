@@ -10,6 +10,7 @@ set_error_handler(static function ($severity, $message, $file, $line) { throw ne
 $root = dirname(__DIR__);
 require_once $root . '/lib/kreabank_list.lib.php';
 require_once $root . '/lib/kreabank_manual_review.lib.php';
+require_once $root . '/lib/kreabank_reconcile_queue.lib.php';
 // Load the real standalone renderer without the application's bootstrap/helpers.
 $helperSource = file_get_contents($root . '/lib/kreabank.lib.php');
 $helperStart = strpos($helperSource, 'function kreabankNativeBankLabel(');
@@ -161,6 +162,20 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	$service->otherAccounts = $options['other_accounts'] ?? array();
 	if ($case === 'single') { $pendingLines = array($selectedLine); $pendingLinesTotal = 1; }
 	if ($case === 'empty') { $selectedLine = null; $pendingLines = array(); $pendingLinesTotal = 0; }
+	$queueOrder = kreabankReconcileQueueIds($options['queue_order'] ?? '');
+	$queueNext = kreabankReconcileQueueIds($options['queue_next'] ?? '');
+	$queueSearch = $options['queue_search'] ?? ''; $queueContinue = !empty($options['queue_continue']);
+	if (!empty($options['omit_lines'])) {
+		$pendingLines = array_values(array_filter($pendingLines, static function ($line) use ($options) { return !in_array($line['rowid'], $options['omit_lines'], true); }));
+		$pendingLinesTotal = count($pendingLines);
+	}
+	$queueState = kreabankReconcileQueueState($pendingLines, $queueOrder, $queueNext, $queueContinue);
+	$pendingLines = $queueState['lines'];
+	if ($queueContinue || isset($options['selected_line_id'])) {
+		$lineId = $queueContinue ? $queueState['line_id'] : (int) $options['selected_line_id'];
+		$selectedLine = null;
+		foreach ($pendingLines as $line) { if ($line['rowid'] === $lineId) { $selectedLine = $line; break; } }
+	}
 	$selectedOutstanding = 125.5;
 	if ($case === 'precision') { $selectedOutstanding = 125.5000001; $documents[0]['amount_open'] = -75.2500001; }
 	$quickSupplierProductLineSlots = 6;
@@ -177,14 +192,14 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	$loteSubsetSuggestion = array(); $lineLinks = array(); $safeScore = 150; $dateTolerance = 3;
 	$_SERVER['PHP_SELF'] = '/synthetic-reconcile';
 	$source = file_get_contents(dirname(__DIR__) . '/reconcile.php');
-	$start = strpos($source, '$renderQuickEntryForm =');
+	$start = strpos($source, '$queueNavigationFields =');
 	if ($start === false) { throw new RuntimeException('Review reconciliation render boundary'); }
 	$view = str_replace('__DIR__', var_export(dirname(__DIR__), true), substr($source, $start));
 	ob_start();
 	try { eval($view); return ob_get_contents(); }
 	finally { ob_end_clean(); }
 }
-if (($argv[1] ?? '') === '--html') { print renderWorkspaceFixture($argv[2] ?? 'debit', $argv[3] ?? 'pt_PT'); exit; }
+if (($argv[1] ?? '') === '--html') { print renderWorkspaceFixture($argv[2] ?? 'debit', $argv[3] ?? 'pt_PT', json_decode($argv[4] ?? '{}', true, 512, JSON_THROW_ON_ERROR)); exit; }
 $checks = 0;
 function workspaceCheck($condition, $message) { global $checks; $checks++; if (!$condition) { throw new RuntimeException($message); } }
 foreach (array('otheraccounts','debit','credit','readonly','empty','locked','noentries','safe','error','restricted','success','limited','unavailable','single','bank','bankchoices','batch') as $case) {
@@ -196,6 +211,7 @@ foreach (array('otheraccounts','debit','credit','readonly','empty','locked','noe
 	if ($case === 'empty') { workspaceCheck(strpos($html, 'manualReconcileForm') === false, 'Empty queue must not offer financial actions'); continue; }
 	workspaceCheck(strpos($html, 'data-queue-scope="7:901:81:b.dateo:ASC"') !== false, $case . ': queue order is scoped to user/company/account/sort');
 	workspaceCheck(strpos($html, 'id="kb-next-line"') !== false && strpos($html, 'data-queue-id="11"') !== false, $case . ': read-only queue navigation available');
+	if ($case !== 'readonly') { workspaceCheck(strpos($html, 'name="queue_order" value="11,12,13,14,15,16,17,18,19,20"') !== false || $case === 'single' || $case === 'restricted' || $case === 'unavailable', $case . ': financial forms retain a no-JavaScript queue continuation'); }
 	if ($case === 'single') { workspaceCheck((bool) preg_match('/id="kb-next-line"[^>]+ disabled/', $html), 'Single pending line disables Next'); }
 	workspaceCheck(strpos($html, 'data-outstanding="125.5"') !== false, $case . ': raw outstanding retained');
 	workspaceCheck(strpos($html, 'data-currency="EUR"') !== false && strpos($html, 'BANK-TEST') !== false, $case . ': source context');

@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync(require.resolve('../js/reconcile.js'), 'utf8');
 const storage = new Map();
 let checks = 0;
-function boot({ids = ['11', '12', '13'], scope = '7:901:81:b.dateo:ASC', url = 'https://example.test/reconcile.php', selected = new URL(url).searchParams.get('line_id') || ids[0], blocked = false} = {}) {
+function boot({ids = ['11', '12', '13'], scope = '7:901:81:b.dateo:ASC', url = 'https://example.test/reconcile.php', selected = new URL(url).searchParams.get('line_id') || ids[0], blocked = false, serverOrder, serverSearch} = {}) {
     const events = () => ({addEventListener(name, handler) { this[name] = handler; }});
     let navigation;
     const queue = ids.map(id => ({dataset: {queueId: id, search: id === '12' ? 'Comissão' : 'Pagamento'}, href: `https://example.test/reconcile.php?account_context=81&line_id=${id}&sortfield=b.dateo&sortorder=ASC`, click() { navigation = this.href; }}));
@@ -15,17 +15,24 @@ function boot({ids = ['11', '12', '13'], scope = '7:901:81:b.dateo:ASC', url = '
     const next = {...events(), disabled: ids.length < 2};
     const search = {...events(), value: ''};
     const disclosure = {...events(), open: true};
+    const fields = new Map();
+    const attributes = new Map();
+    const writeForm = {...events(), querySelector(selector) { return fields.get(selector.match(/name="([^"]+)"/)[1]); }, appendChild(input) { fields.set(input.name, input); }, getAttribute(name) { return attributes.get(name); }, setAttribute(name, value) { attributes.set(name, value); }};
     const elements = {'kb-pending-search': search, 'kb-pending-list': list, 'kb-next-line': next, 'kb-queue-empty': {}, 'kb-queue-count': {}};
-    const root = {dataset: {queueScope: scope}, classList: {add() {}}, querySelectorAll(selector) { return selector === '.kb-queue-line' ? queue : []; }, querySelector(selector) {
+    const dataset = {queueScope: scope};
+    if (typeof serverOrder === 'string') { dataset.queueOrder = serverOrder; }
+    if (typeof serverSearch === 'string') { dataset.queueSearch = serverSearch; }
+    const root = {dataset, classList: {add() {}}, querySelectorAll(selector) { return selector === '.kb-queue-line' ? queue : (selector === 'form[method=POST],form.kb-document-search' ? [writeForm] : []); }, querySelector(selector) {
         if (selector === '.kb-queue-disclosure') { return disclosure; }
         if (selector === '.kb-queue-line.selected') { return queue.find(line => line.dataset.queueId === selected) || null; }
         return null;
     }};
     vm.runInNewContext(source, {
-        URL, document: {querySelector() { return root; }, getElementById(id) { return elements[id]; }},
+        URL, document: {querySelector() { return root; }, getElementById(id) { return elements[id]; }, createElement() { return {}; }},
         window: {location: {href: url}, matchMedia() { return {...events(), matches: false}; }, sessionStorage: {getItem(key) { if (blocked) { throw Error('Storage denied'); } return storage.get(key) || null; }, setItem(key, value) { if (blocked) { throw Error('Storage denied'); } storage.set(key, value); }}}
     });
-    return {order: () => list.children.map(line => line.dataset.queueId), next: () => next.click(), search(value) { search.value = value; search.input(); }, nextButton: next, navigation: () => navigation};
+    return {order: () => list.children.map(line => line.dataset.queueId), next: () => next.click(), search(value) { search.value = value; search.input(); }, nextButton: next, navigation: () => navigation,
+        submit() { writeForm.submit({defaultPrevented:false}); return Object.fromEntries(Array.from(fields, ([key, input]) => [key, input.value])); }};
 }
 function check(actual, expected) { assert.deepEqual(actual, expected); checks++; }
 let page = boot();
@@ -99,4 +106,28 @@ page = boot({selected: '999', blocked: true}); // Removed/out-of-window selectio
 page.next();
 check(new URL(page.navigation()).searchParams.get('line_id'), '11');
 check(new URL(page.navigation()).searchParams.get('queue_order'), '11,12,13');
+storage.clear();
+storage.set('kreabank:pending-order:7:901:81:b.dateo:ASC', JSON.stringify(['13', '11', '12']));
+page = boot({selected:'11'});
+let submission = page.submit();
+check(submission, {queue_order:'13,11,12', queue_next:'12,13', queue_search:'', sortfield:'b.dateo', sortorder:'ASC'});
+check(page.order(), ['13','11','12']); // Submitting does not advance before success.
+page = boot({selected:'11'});
+page.search('pagamento');
+submission = page.submit();
+check(submission.queue_next, '13'); // The commission is hidden; keep visible cyclic order.
+check(submission.queue_search, 'pagamento');
+page = boot({selected:'12'});
+page.search('pagamento');
+check(page.submit().queue_next, '13,11'); // Hidden selection starts with the first visible row.
+// Successful server continuation wins over stale browser storage and URL order,
+// then persists for subsequent read-only selection, reloads and Next.
+page = boot({ids:['12','13'], selected:'12', serverOrder:'12,13', serverSearch:'pagamento', url:'https://example.test/reconcile.php?queue_order=13,11,12'});
+check(page.order(), ['12','13']);
+check(page.submit().queue_search, 'pagamento');
+check(boot({ids:['12','13']}).order(), ['12','13']);
+page = boot({ids:['12','13'], selected:'12', serverOrder:'12,13', blocked:true});
+check(page.submit().queue_order, '12,13');
+page.next();
+check(new URL(page.navigation()).searchParams.get('queue_order'), '13,12');
 console.log(`OK: ${checks} pending queue navigation checks (no ERP writes)`);

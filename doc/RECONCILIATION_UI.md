@@ -24,6 +24,18 @@ sort uses that sort's own queue. Next changes no pending status or financial dat
 The selected-line Resolve this line later control is removed; bulk deferral
 remains in the full pending view.
 
+Successful reconciliation continues with the next **displayed** pending line,
+including signed per-card approval, native batch allocation and all three creation
+choices. Forms carry bounded queue order, visible successors, search and sort;
+these identities control navigation only. The server selects a successor only
+from a fresh company/account-scoped pending population, skips removed successors
+and rotates the queue before loading the selected line's candidates. The returned
+queue updates this tab's saved order. Failed actions and partial allocations stay
+on the current line. If a completed search has no pending result left, clear that
+search and resume the remaining queue. No-JavaScript forms retain server-order
+continuation defaults. Deploy `lib/kreabank_reconcile_queue.lib.php` with the
+controller and `js/reconcile.js`.
+
 When the initial candidate set is empty, the workspace opens **Create a new entry
 and reconcile** if creation is permitted. Existing candidates (including locked
 evidence), an explicit entry search or batch search keep matching visible.
@@ -146,6 +158,9 @@ Browser acceptance performed against synthetic data:
   to the first visible line and restores the rotated queue after reload. A hidden
   or absent selection opens the first visible line. Search with one match and
   single-line queues disable it.
+- Successful synthetic approvals and creation flows continue in the displayed
+  queue through POST/redirect/GET, retain search/sort and ignore removed or foreign
+  successor identities. Failures and partial allocations retain the current line.
 - Selection totals, remaining difference, mismatch/empty disabling and explicit
   existing-entry POST payload with original amounts.
 - Creation choices and tax Enter submission using the chosen action.

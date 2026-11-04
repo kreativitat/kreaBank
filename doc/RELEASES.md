@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.19.25 — 2026-11-04
+
+- Continue successful one-by-one reconciliation in the displayed pending order
+  instead of restarting at the first database row. Preserve search and sort
+  across signed approval, native allocation and bank/tax/invoice creation.
+- Revalidate continuation against current company/account pending rows. Keep
+  failed or partial actions on the selected line; financial execution is unchanged.
+
 ## 1.19.24 — 2026-11-04
 
 - Make Next follow the selected pending line in the displayed queue, including

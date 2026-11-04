@@ -46,6 +46,7 @@ if (!$res) {
 
 require_once __DIR__ . '/lib/kreabank.lib.php';
 require_once __DIR__ . '/lib/kreabank_manual_review.lib.php';
+require_once __DIR__ . '/lib/kreabank_reconcile_queue.lib.php';
 require_once __DIR__ . '/class/KreaBankService.class.php';
 require_once DOL_DOCUMENT_ROOT . '/core/class/html.form.class.php';
 
@@ -76,6 +77,11 @@ $navigationAccountId = max(0, GETPOSTINT('account_context'));
 $navigationAccount = kreabankNavigationAccount($navigationAccountId);
 $pendingColumns = array('b.dateo' => 'KreaBankDate', 'm.description' => 'KreaBankDescription', 'b.amount' => 'KreaBankAmount');
 $pendingSort = kreabankListSort($pendingColumns, 'b.dateo');
+$queueOrder = kreabankReconcileQueueIds(GETPOST('queue_order', 'alphanohtml'));
+$queueNext = kreabankReconcileQueueIds(GETPOST('queue_next', 'alphanohtml'));
+$queueSearchInput = GETPOST('queue_search', 'restricthtml');
+$queueSearch = is_string($queueSearchInput) ? mb_substr($queueSearchInput, 0, 200, 'UTF-8') : '';
+$queueContinue = ($_SERVER['REQUEST_METHOD'] === 'GET' && GETPOSTINT('queue_continue') === 1);
 $documentColumns = array('suggestion' => 'KreaBankBulkMatchSuggested', 'ref' => 'Ref', 'doc_date' => 'KreaBankDate', 'thirdparty_name' => 'KreaBankCounterparty', 'amount_open' => 'KreaBankAmount');
 $documentSort = kreabankListSort($documentColumns, 'suggestion', 'DESC', 'doc_');
 $service = new KreaBankService($db, $user, $langs);
@@ -250,6 +256,7 @@ if ($action === 'confirm_document') {
 		unset($_SESSION['kreabank_bulkmatch_scan_state'], $_SESSION['kreabank_matched_scan_state']);
 		setEventMessages($langs->trans('KreaBankReconcileDone'), null, 'mesgs');
 		$redirectUrl = kreabankWorkspaceUrl('reconcile', $navigationAccountId) . '&sortfield=' . rawurlencode($pendingSort['field']) . '&sortorder=' . $pendingSort['order'];
+		$redirectUrl .= '&' . http_build_query(kreabankReconcileQueueParameters($queueOrder, $queueNext, $queueSearch), '', '&', PHP_QUERY_RFC3986);
 		header('Location: ' . $redirectUrl);
 		exit;
 	} catch (Exception $e) {
@@ -360,6 +367,7 @@ if ($action === 'reconcile' && $user->hasRight('kreabank', 'reconciliation', 'wr
 				$maxScore = max($maxScore, (int) $l['match_score']);
 			}
 			$service->reconcileLine($lineId, $links, 'manual', 0, '', $maxScore);
+			$queueContinue = true;
 			setEventMessages($langs->trans('KreaBankReconcileDone'), null, 'mesgs');
 		} catch (Exception $e) {
 			$reportActionException($e, 'reconcile');
@@ -391,6 +399,7 @@ if ($action === 'quick_assign' && $user->hasRight('kreabank', 'reconciliation', 
 				'match_score' => $matchScore,
 				'match_reasons' => $matchReasons ? explode(',', $matchReasons) : array('drag_drop'),
 			)), 'drag_drop', 0, '', $matchScore);
+			$queueContinue = true;
 			setEventMessages($langs->trans('KreaBankReconcileDone'), null, 'mesgs');
 		} catch (Exception $e) {
 			$reportActionException($e, 'quick_assign');
@@ -470,6 +479,7 @@ if ($action === 'quick_entry' && $user->hasRight('kreabank', 'reconciliation', '
 			try {
 				$service->skipLine($lineId, $skipReason);
 				setEventMessages($langs->trans('KreaBankSkipDone'), null, 'mesgs');
+				$queueContinue = true;
 				$lineId = 0;
 			} catch (Exception $e) {
 				$reportActionException($e, 'quick_entry_skip_line');
@@ -521,6 +531,7 @@ if ($action === 'quick_entry' && $user->hasRight('kreabank', 'reconciliation', '
 				$service->createQuickEntryAndReconcile($lineId, $entryType ?: 'expense', $label, $amount, $fkSoc, $note);
 				setEventMessages($langs->trans('KreaBankQuickEntryDone'), null, 'mesgs');
 			}
+			$queueContinue = true;
 		} catch (Exception $e) {
 			$quickEntryFailed = true;
 			$quickEntryFormState = array(
@@ -547,6 +558,7 @@ if ($action === 'skip_line' && $user->hasRight('kreabank', 'reconciliation', 'wr
 		try {
 			$service->skipLine($lineId, $skipReason);
 			setEventMessages($langs->trans('KreaBankSkipDone'), null, 'mesgs');
+			$queueContinue = true;
 			$lineId = 0; // Continue with next pending line after skipping current one
 		} catch (Exception $e) {
 			$reportActionException($e, 'skip_line');
@@ -753,7 +765,7 @@ try {
 			$requestedLine = null;
 			$lineId = 0;
 			$requestedLineId = 0;
-		} elseif ($navigationAccountId === 0) {
+		} elseif ($navigationAccountId === 0 && !$queueOrder && !$queueContinue) {
 			$navigationAccountId = (int) $requestedLine['bank_account_id'];
 			$navigationAccount = kreabankNavigationAccount($navigationAccountId);
 		}
@@ -763,6 +775,15 @@ try {
 	$pendingLinesTotal = $service->getPendingLinesCount(array('bank_account_id' => $navigationAccountId));
 	if ($pendingLinesTotal <= 0) {
 		$pendingLinesTotal = count($pendingLines);
+	}
+	$advanceQueue = $queueContinue && (!$requestedLine || in_array((int) $requestedLine['status'], array(2, 3), true));
+	$queueState = kreabankReconcileQueueState($pendingLines, $queueOrder, $queueNext, $advanceQueue);
+	$pendingLines = $queueState['lines'];
+	if ($advanceQueue) {
+		$lineId = $queueState['line_id'];
+		$requestedLineId = $lineId;
+		$requestedLine = null;
+		if (!$queueState['visible_next']) { $queueSearch = ''; }
 	}
 	$pendingLineIds = array();
 	foreach ($pendingLines as $pendingLine) {
@@ -1449,7 +1470,8 @@ if ($selectedLine) {
 	}
 }
 $quickSupplierProductLineSlots = 6;
-$renderQuickEntryForm = static function ($line, $openDocSearch, $prefillLabel, $prefillAmount, $prefillNote, $supplierLookupPrefill = '', $supplierRefPrefill = '', $supplierPredictedSocid = 0, $supplierPrediction = array(), $showSupplierInvoiceButton = false, $showTaxEntryButton = false) use ($navigationAccountId, $langs, $forceBatchDetect, $form, $quickSupplierProductLineSlots, $decodeHtmlEntitiesRecursive, $quickEntryFormState) {
+$queueNavigationFields = kreabankReconcileQueueHiddenFields($pendingLines, $lineId, $pendingSort, $queueSearch ?? '');
+$renderQuickEntryForm = static function ($line, $openDocSearch, $prefillLabel, $prefillAmount, $prefillNote, $supplierLookupPrefill = '', $supplierRefPrefill = '', $supplierPredictedSocid = 0, $supplierPrediction = array(), $showSupplierInvoiceButton = false, $showTaxEntryButton = false) use ($navigationAccountId, $langs, $forceBatchDetect, $form, $quickSupplierProductLineSlots, $decodeHtmlEntitiesRecursive, $quickEntryFormState, $queueNavigationFields) {
 	if (empty($line)) {
 		return;
 	}
@@ -1480,6 +1502,7 @@ $renderQuickEntryForm = static function ($line, $openDocSearch, $prefillLabel, $
 	}
 	print '<form id="' . $formDomId . '" method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" data-locale="' . dol_escape_htmltag(str_replace('_', '-', $langs->defaultlang)) . '" data-initial-lines="' . dol_escape_htmltag(json_encode($quickEntryFormState['lines'] ?? array())) . '">';
 	print kreabankNavigationHiddenFields($navigationAccountId);
+	print $queueNavigationFields;
 	print '<input type="hidden" name="token" value="' . newToken() . '">';
 	print '<input type="hidden" name="action" value="quick_entry">';
 	print '<input type="hidden" name="line_id" value="' . $lineIdValue . '">';
@@ -1684,7 +1707,8 @@ if ($selectedLine && $canReconcile && !$creationUnavailable && array_filter($doc
 // Keep explicit searches in matching; an empty initial candidate set opens permitted creation.
 $requestedWorkflow = $searchOtherAccounts ? 'match' : GETPOST('workflow', 'aZ09');
 $initialWorkflow = ($quickEntryFailed || ($selectedLine && $canReconcile && $canCreate && ($requestedWorkflow === 'create' || ($requestedWorkflow !== 'match' && empty($documents) && empty($otherAccountDocuments) && $openDocumentsSearch === '' && !$forceBatchDetect)))) ? 'create' : 'match';
-print '<div class="kb-recon" data-initial-workflow="' . $initialWorkflow . '" data-queue-scope="' . dol_escape_htmltag((int) $conf->entity . ':' . (int) $user->id . ':' . (int) $navigationAccountId . ':' . $pendingSort['field'] . ':' . $pendingSort['order']) . '">';
+print '<div class="kb-recon" data-initial-workflow="' . $initialWorkflow . '" data-queue-scope="' . dol_escape_htmltag((int) $conf->entity . ':' . (int) $user->id . ':' . (int) $navigationAccountId . ':' . $pendingSort['field'] . ':' . $pendingSort['order']) . '" data-queue-search="' . dol_escape_htmltag($queueSearch ?? '') . '"'
+	. ((!empty($queueOrder) || !empty($queueContinue)) ? ' data-queue-order="' . implode(',', array_column($pendingLines, 'rowid')) . '"' : '') . '>';
 print '<aside class="kb-queue" aria-labelledby="kb-queue-heading"><details class="kb-queue-disclosure" open>';
 print '<summary class="kb-queue-heading"><h2 id="kb-queue-heading">' . $langs->trans('KreaBankWorkspacePending') . '</h2><span class="kb-count">' . ((int) $pendingLinesTotal) . '</span></summary>';
 print '<div class="kb-queue-search kb-js-only"><label for="kb-pending-search">' . $langs->trans('KreaBankWorkspaceSearchQueue') . '</label><input type="search" id="kb-pending-search" autocomplete="off" aria-controls="kb-pending-list" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceSearchHint')) . '"></div>';
@@ -1738,6 +1762,7 @@ if (!$selectedLine) {
 	print '<section class="kb-workflow-panel" id="kb-panel-match" aria-labelledby="kb-match-heading"><h3 id="kb-match-heading">' . $langs->trans('KreaBankWorkspaceMatch') . '</h3><p class="kb-panel-intro">' . $langs->trans($isLoteBatchLine ? 'KreaBankWorkspaceMatchHelp' : 'KreaBankWorkspaceMatchSingleHelp') . '</p>';
 	print '<form class="kb-document-search" method="GET" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 	print kreabankNavigationHiddenFields($navigationAccountId);
+	print $queueNavigationFields;
 	print '<input type="hidden" name="line_id" value="' . (int) $selectedLine['rowid'] . '">';
 	if ($forceBatchDetect) { print '<input type="hidden" name="force_batch_detect" value="1">'; }
 	print '<input type="hidden" name="search_accounts" value="1"><input type="hidden" name="workflow" value="match">';
@@ -1766,6 +1791,7 @@ if (!$selectedLine) {
 
 	print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="manualReconcileForm" data-outstanding="' . dol_escape_htmltag((string) $selectedOutstanding) . '" data-currency="' . dol_escape_htmltag($selectedLine['currency']) . '" data-locale="' . dol_escape_htmltag(str_replace('_', '-', $langs->defaultlang)) . '">';
 	print kreabankNavigationHiddenFields($navigationAccountId);
+	print $queueNavigationFields;
 	print '<input type="hidden" name="token" value="' . newToken() . '">';
 	print '<input type="hidden" name="action" value="reconcile"><input type="hidden" name="search_accounts" value="' . ($searchOtherAccounts ? '1' : '0') . '">';
 	print '<input type="hidden" name="line_id" value="' . ((int) $selectedLine['rowid']) . '">';
@@ -1960,10 +1986,11 @@ if (!$selectedLine) {
 		$signature = kreabankBulkReviewSignature($reviewRow, $scope, $expires, $_SESSION['kreabank_bulk_review_secret']);
 		print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="' . dol_escape_htmltag($formId) . '">';
 		print kreabankNavigationHiddenFields($navigationAccountId);
+		print $queueNavigationFields;
 		foreach (array('token'=>newToken(), 'action'=>'confirm_document', 'line_id'=>(int) $selectedLine['rowid'],
 			'line_source'=>!empty($selectedLine['fk_statement']) ? 'staged' : 'native',
 			'review_doc'=>$reviewRow['suggestion']['doc_type'] . '__' . (int) $reviewRow['suggestion']['doc_id'],
-			'review_expires'=>$expires, 'review_signature'=>$signature, 'sortfield'=>$pendingSort['field'], 'sortorder'=>$pendingSort['order']) as $name => $value) {
+			'review_expires'=>$expires, 'review_signature'=>$signature) as $name => $value) {
 			print '<input type="hidden" name="' . $name . '" value="' . dol_escape_htmltag((string) $value) . '">';
 		}
 		print '</form>';

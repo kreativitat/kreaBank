@@ -63,6 +63,7 @@
     try { savedOrder = JSON.parse(window.sessionStorage.getItem(queueStorageKey)); } catch (_) {}
     var pageUrl = new URL(window.location.href);
     if (pageUrl.searchParams.has('queue_order')) { savedOrder = pageUrl.searchParams.get('queue_order').split(','); }
+    if (typeof root.dataset.queueOrder === 'string') { savedOrder = root.dataset.queueOrder.split(','); }
     if (Array.isArray(savedOrder)) {
         var remaining = new Map(queue.map(function (line) { return [line.dataset.queueId, line]; }));
         var ordered = [];
@@ -71,6 +72,19 @@
         });
         queue = ordered.concat(Array.from(remaining.values()));
         queue.forEach(function (line) { list.appendChild(line); });
+    }
+    function carryQueueOrder(ids) {
+        queue.forEach(function (line) {
+            var url = new URL(line.href);
+            url.searchParams.set('queue_order', ids.join(','));
+            line.href = url.toString();
+        });
+    }
+    if (typeof root.dataset.queueOrder === 'string') {
+        // A successful action has already selected and scoped the continuation.
+        var restoredIds = queue.map(function (line) { return line.dataset.queueId; });
+        try { window.sessionStorage.setItem(queueStorageKey, JSON.stringify(restoredIds)); }
+        catch (_) { carryQueueOrder(restoredIds); }
     }
     function normalize(text) { return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
     function filterQueue() {
@@ -89,7 +103,7 @@
         if (nextLine) { nextLine.disabled = count < 2; }
     }
     search.addEventListener('input', filterQueue);
-    search.value = new URL(window.location.href).searchParams.get('queue_search') || '';
+    search.value = typeof root.dataset.queueSearch === 'string' ? root.dataset.queueSearch : (pageUrl.searchParams.get('queue_search') || '');
     if (queue.length) { filterQueue(); }
     if (nextLine) {
         nextLine.addEventListener('click', function () {
@@ -108,11 +122,7 @@
             catch (_) { carryOrder = true; }
             if (carryOrder) {
                 // Retain navigation order when browser storage is unavailable.
-                queue.forEach(function (line) {
-                    var url = new URL(line.href);
-                    url.searchParams.set('queue_order', ids.join(','));
-                    line.href = url.toString();
-                });
+                carryQueueOrder(ids);
             }
             target.click();
         });
@@ -182,11 +192,28 @@
             }
         });
     });
-    root.querySelectorAll('form[method=POST]').forEach(function (writeForm) {
-        writeForm.addEventListener('submit', function (event) {
+    root.querySelectorAll('form[method=POST],form.kb-document-search').forEach(function (workspaceForm) {
+        workspaceForm.addEventListener('submit', function (event) {
             if (event.defaultPrevented) { return; }
-            if (writeForm.getAttribute('aria-busy') === 'true') { event.preventDefault(); return; }
-            writeForm.setAttribute('aria-busy', 'true');
+            if (workspaceForm.getAttribute('aria-busy') === 'true') { event.preventDefault(); return; }
+            var visible = queue.filter(function (line) { return !line.hidden; });
+            var selectedIndex = visible.indexOf(root.querySelector('.kb-queue-line.selected'));
+            var following = visible.slice(selectedIndex + 1).concat(visible.slice(0, Math.max(0, selectedIndex)));
+            var sort = root.dataset.queueScope.split(':').slice(-2);
+            var navigation = {
+                queue_order: queue.map(function (line) { return line.dataset.queueId; }).join(','),
+                queue_next: following.map(function (line) { return line.dataset.queueId; }).join(','),
+                queue_search: search.value, sortfield: sort[0], sortorder: sort[1]
+            };
+            Object.keys(navigation).forEach(function (name) {
+                var input = workspaceForm.querySelector('input[name="' + name + '"]');
+                if (!input) {
+                    input = document.createElement('input'); input.type = 'hidden'; input.name = name;
+                    workspaceForm.appendChild(input);
+                }
+                input.value = navigation[name];
+            });
+            workspaceForm.setAttribute('aria-busy', 'true');
         });
     });
 })();
