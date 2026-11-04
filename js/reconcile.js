@@ -124,7 +124,7 @@
     disclosure.addEventListener('toggle', scrollToSelection);
     scrollToSelection();
     var form = document.getElementById('manualReconcileForm');
-    if (form) {
+    if (form && form.querySelector('.kb-allocation')) {
         var selectors = Array.from(form.querySelectorAll('input[name="selected_docs[]"]'));
         var button = document.getElementById('manualReconcileButton');
         var feedback = document.getElementById('kb-selection-feedback');

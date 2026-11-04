@@ -9,6 +9,7 @@ error_reporting(E_ALL);
 set_error_handler(static function ($severity, $message, $file, $line) { throw new RuntimeException($message . ' at ' . $file . ':' . $line); });
 $root = dirname(__DIR__);
 require_once $root . '/lib/kreabank_list.lib.php';
+require_once $root . '/lib/kreabank_manual_review.lib.php';
 // Load the real standalone renderer without the application's bootstrap/helpers.
 $helperSource = file_get_contents($root . '/lib/kreabank.lib.php');
 $helperStart = strpos($helperSource, 'function kreabankOtherAccountMovementsHtml(');
@@ -19,6 +20,8 @@ function dol_buildpath($path, $absolute = 0) { return $path; }
 function price2num($value, $mode = '') { return (float) $value; }
 function kreabankPrice($value) { return number_format((float) $value, 2, ',', ' '); }
 function newToken() { return 'synthetic-token'; }
+function dol_now() { return 1800000000; }
+function getDolGlobalInt($key) { return 0; }
 function getNonce() { return 'synthetic-nonce'; }
 function dol_print_date($timestamp, $format = '') { return date('d/m/Y', $timestamp); }
 function kreabankStatusLabel($status, $langs) { return $langs->trans('KreaBankStatusPending'); }
@@ -83,7 +86,20 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 		public function __construct($case) { $this->case = $case; }
 		public function hasRight(...$path) { return $this->case !== 'readonly' || end($path) === 'read'; }
 	};
-	$service = new class { public function getPaymentAccountReview(...$args) { return array(); } };
+	$service = new class {
+		public $documents = array();
+		public function getPaymentAccountReview(...$args) { return array(); }
+		public function getLinkedPaymentDocuments(...$args) { return array(); }
+		public function getSafeSuggestion(...$args) { return null; }
+		public function getSuggestionsForLines($lines, ...$args) {
+			$items = array();
+			foreach ($this->documents as $doc) {
+				if (!empty($doc['is_locked']) || in_array($GLOBALS['fixtureCase'], array('restricted', 'unavailable'), true)) { continue; }
+				$items[] = array_merge($doc, array('doc_id'=>$doc['rowid'], 'doc_ref'=>$doc['ref'], 'score'=>100, 'details'=>array('amount', 'date')));
+			}
+			return array($lines[0]['rowid']=>$items);
+		}
+	};
 	$form = new WorkspaceFixtureForm();
 	$navigationAccountId = 81; $navigationAccount = null;
 	$searchOtherAccounts = $case === 'otheraccounts' || !empty($options['search_accounts']); $otherAccountDocuments = array(); $accountMoveReviews = array(); $correctedBankLineId = 0;
@@ -120,6 +136,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 		$selectedLine['fk_statement'] = 1;
 		$documents = array(array('rowid'=>242,'doc_type'=>'supplier_invoice','ref'=>'INV-SYNTHETIC','amount_open'=>125.5,'thirdparty_name'=>'Synthetic supplier','doc_date'=>'2026-11-03'));
 	}
+	$service->documents = $documents;
 	if ($case === 'single') { $pendingLines = array($selectedLine); $pendingLinesTotal = 1; }
 	if ($case === 'empty') { $selectedLine = null; $pendingLines = array(); $pendingLinesTotal = 0; }
 	$selectedOutstanding = 125.5;
@@ -135,7 +152,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	$canNativeWrite = $case !== 'readonly'; $canQuickSupplierInvoice = $case !== 'limited'; $canQuickTaxEntry = $case !== 'limited';
 	$selectedLineDirection = $case === 'credit' ? 1 : -1;
 	$batchDetectedAuto = false; $batchDetectedMl = false; $batchDetectWasForced = false; $isLoteBatchLine = false;
-	$loteSubsetSuggestion = array(); $lineLinks = array(); $safeScore = 150;
+	$loteSubsetSuggestion = array(); $lineLinks = array(); $safeScore = 150; $dateTolerance = 3;
 	$_SERVER['PHP_SELF'] = '/synthetic-reconcile';
 	$source = file_get_contents(dirname(__DIR__) . '/reconcile.php');
 	$start = strpos($source, '$renderQuickEntryForm =');
@@ -170,16 +187,22 @@ foreach (array('otheraccounts','debit','credit','readonly','empty','locked','noe
 $invoiceDocument = array('rowid'=>242,'doc_type'=>'supplier_invoice','ref'=>'INV-SYNTHETIC','amount_open'=>125.5,'thirdparty_name'=>'Synthetic supplier','doc_date'=>'2026-11-03');
 foreach (array('supplier_invoice', 'customer_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked') as $type) {
 	$document = array_merge($invoiceDocument, array('doc_type'=>$type));
-	$html = renderWorkspaceFixture('debit', 'pt_PT', array('documents'=>array($document), 'statement_id'=>1));
+	if (strpos($type, 'invoice') === false) { $document['amount_open'] = -125.5; }
+	$html = renderWorkspaceFixture($type === 'customer_invoice' ? 'credit' : 'debit', 'pt_PT', array('documents'=>array($document), 'statement_id'=>1));
 	workspaceCheck(strpos($html, 'name="selected_docs[]"') === false && strpos($html, 'name="doc_amount[') === false, $type . ': unsupported types never enter the native checkbox controller');
-	workspaceCheck(strpos($html, 'line_id=11&amp;line_source=staged&amp;review_doc=' . $type . '__242') !== false && strpos($html, 'view=matched&amp;account_context=81') !== false, $type . ': explicit source namespace, owned account and expected document reach shared review');
+	workspaceCheck(strpos($html, 'name="line_source" value="staged"') !== false && strpos($html, 'name="review_doc" value="' . $type . '__242"') !== false && strpos($html, 'name="review_signature"') !== false, $type . ': signed direct submission preserves the exact source namespace and expected document');
+	workspaceCheck(strpos($html, 'action="/synthetic-reconcile" id="kb-document-review-') !== false && strpos($html, 'form="kb-document-review-' . $type . '__242"') !== false && strpos($html, 'view=matched') === false, $type . ': button submits its external form on the one-by-one page');
 	$invoice = strpos($type, 'invoice') !== false;
 	workspaceCheck(strpos($html, $invoice ? 'Fatura existente' : 'Pagamento existente') !== false && strpos($html, 'Movimento bancário existente') === false, $type . ': actual document type displayed');
 	workspaceCheck(strpos($html, $invoice ? 'Regista um pagamento desta fatura' : 'Não cria um novo pagamento') !== false, $type . ': financial consequence precedes review');
 	workspaceCheck(strpos($html, 'id="manualReconcileButton"') === false && strpos($html, 'id="kb-selection-difference"') === false, $type . ': native-only allocation controls are omitted');
 }
 $legacyHtml = renderWorkspaceFixture('debit', 'pt_PT', array('documents'=>array($invoiceDocument)));
-workspaceCheck(strpos($legacyHtml, 'line_id=11&amp;line_source=native') !== false, 'Legacy native source namespace remains explicit');
+workspaceCheck(strpos($legacyHtml, 'name="line_source" value="native"') !== false, 'Legacy native source namespace remains explicit');
+foreach (array('readonly', 'restricted', 'unavailable') as $case) {
+	$html = renderWorkspaceFixture($case, 'pt_PT', array('documents'=>array($invoiceDocument)));
+	workspaceCheck(strpos($html, 'name="review_signature"') === false && strpos($html, 'form="kb-document-review-') === false, $case . ': no invoice approval action');
+}
 foreach (array(
 	array('noentries', array(), 'create'),
 	array('noentries', array('search_accounts'=>true), 'match'),

@@ -199,11 +199,14 @@
   approval of the sole signed pair. Do not require either selection or review
   checkboxes there. Bulk selections retain their separate review checkbox.
 
-- Selected-line invoice/payment candidates open `matched.php` with explicit
-  `line_id`, `line_source`, owned account and expected `review_doc`; they never
-  enter native-movement checkbox submission. Direct review uses the same fresh
-  unique suggestion, signed approval and executor, without scanning the queue.
-  Invoice approval is labelled **Record payment and reconcile**.
+- Selected-line invoice/payment candidates submit directly to `reconcile.php`
+  with explicit `line_id`, `line_source`, owned account and a signed displayed
+  `review_doc`; successful approval returns to the one-by-one queue. They never
+  enter native-movement checkbox submission. `lib/kreabank_manual_review.lib.php`
+  shares fresh unique-suggestion preparation and execution with matched/bulk
+  review. Invoice approval is labelled **Record payment and reconcile**.
+  Associated forms stay outside the native-movement form. Validate with the
+  synthetic `test/test_reconcile_document.php` controller suite.
 
 ## Machine learning
 

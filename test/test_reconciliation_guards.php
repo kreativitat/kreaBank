@@ -69,6 +69,7 @@ try {
 	$serviceSource = $readFile($serviceFile);
 	$nativeSource = $readFile($nativeFile);
 	$bulkSource = $readFile($bulkFile);
+	$manualReviewSource = $readFile($rootDir . '/lib/kreabank_manual_review.lib.php');
 	$reviewViewSource = $readFile($rootDir . '/lib/kreabank_review_view.lib.php');
 	$bulkScanSource = $readFile($rootDir.'/lib/kreabank_bulk.lib.php');
 	$reconcileSource = $readFile($reconcileFile);
@@ -358,8 +359,8 @@ $assertContains($bulkScanSource, "'doc_id' => (int) (!empty(\$suggestion['doc_id
 $assertContains($bulkScanSource, "'score' => (int) (!empty(\$suggestion['score']) ? \$suggestion['score'] : 0)", 'bulkmatch scan cache should persist compact score in cache', $errors);
 $assertContains($bulkSource, 'kreabankBulkReviewIsValid(', 'manual bulk confirmation must authenticate the exact displayed pair and explicit approval', $errors);
 $assertContains($bulkSource, 'KreaBankBulkMatchReviewChanged', 'bulkmatch must report changed or expired reviewed pairs instead of silently skipping them', $errors);
-$assertContains($bulkSource, '$safeSuggestion = $service->getSafeSuggestion($orderedSuggestions, $bulkMatchMinScore);', 'bulkmatch should use the shared identity, amount, and score-gap safety contract', $errors);
-if (strpos($bulkSource, "'is_bulk_safe' => (\$matchScore >= \$bulkMatchMinScore)") !== false) {
+$assertContains($manualReviewSource, '$safeSuggestion = $service->getSafeSuggestion($orderedSuggestions, $bulkMatchMinScore);', 'manual review should use the shared identity, amount, and score-gap safety contract', $errors);
+if (strpos($bulkSource . $manualReviewSource, "'is_bulk_safe' => (\$matchScore >= \$bulkMatchMinScore)") !== false) {
 	$errors[] = 'bulkmatch should not classify amount-and-date-only suggestions as safe by score alone';
 }
 $assertContains($bulkSource, 'reload_count', 'bulkmatch should track bounded auto-refresh attempts in scan state', $errors);
@@ -524,7 +525,7 @@ $assertContains($reconcileSource, "entry_submit_action\" value=\"supplier_invoic
 $assertContains($reconcileSource, '$safeSuggestion = $service->getSafeSuggestion($suggestions, $safeScore);', 'manual reconciliation should use the shared automatic-match safety contract', $errors);
 $assertContains($reconcileSource, '$shouldCheck = !empty($autoSelectDocKeys[$docKey]);', 'manual reconciliation should preselect only explicitly safe or batch-selected documents', $errors);
 
-$bulkBatchCalls = substr_count($bulkSource, 'getSuggestionsForLines(');
+$bulkBatchCalls = substr_count($bulkSource . $manualReviewSource, 'getSuggestionsForLines(');
 if ($bulkBatchCalls < 2) {
 	$errors[] = 'bulkmatch should call getSuggestionsForLines in confirm and scan flows';
 }

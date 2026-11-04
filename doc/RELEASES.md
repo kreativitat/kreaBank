@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.19.13 — 2026-11-04
+
+- Record an existing invoice's payment and reconcile directly in one-by-one
+  review. Submit a signed displayed pair on the same page and return to its queue;
+  preserve account/sort context and retain the line on failure.
+- Share manual review preparation/execution with matched and bulk review. Keep
+  CSRF, permissions, ownership, ambiguity and execution safeguards unchanged.
+  Prevent native allocation scripts from intercepting document-only approval.
+  No schema or scheduler changes.
+
 ## 1.19.12 — 2026-11-04
 
 - Identify invoice/payment candidates correctly in selected-line reconciliation.

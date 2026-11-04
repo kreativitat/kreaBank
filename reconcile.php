@@ -45,6 +45,7 @@ if (!$res) {
 }
 
 require_once __DIR__ . '/lib/kreabank.lib.php';
+require_once __DIR__ . '/lib/kreabank_manual_review.lib.php';
 require_once __DIR__ . '/class/KreaBankService.class.php';
 require_once DOL_DOCUMENT_ROOT . '/core/class/html.form.class.php';
 
@@ -203,6 +204,36 @@ if ($action === 'change_movement_account') {
 		$openDocumentsSearch = '';
 		setEventMessages($langs->trans('KreaBankAccountMoveDone'), null, 'mesgs');
 	} catch (Throwable $e) { $reportActionException($e, 'change_movement_account'); }
+}
+
+if ($action === 'confirm_document') {
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !kreabankIsTokenValid()
+		|| !$user->hasRight('kreabank', 'reconciliation', 'write') || !$canNativeWrite) {
+		accessforbidden();
+	}
+	try {
+		$source = (string) GETPOST('line_source', 'aZ09');
+		$documentKey = (string) GETPOST('review_doc', 'aZ09');
+		$line = $service->getBulkReviewLine($lineId, $source);
+		$reviewMinScore = getDolGlobalInt('KREABANK_BULKMATCH_MIN_SCORE');
+		$callbacks = kreabankManualReviewCallbacks($service, $dateTolerance, $reviewMinScore > 0 ? min(1000, $reviewMinScore) : 100);
+		$row = $line && (int) $line['status'] === 0 ? $callbacks['prepareReviewRow']($line) : null;
+		$scope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId;
+		if (!$row || !in_array($row['suggestion']['doc_type'], array('customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked'), true)
+			|| $documentKey !== $row['suggestion']['doc_type'] . '__' . (int) $row['suggestion']['doc_id']
+			|| !kreabankBulkReviewIsValid($row, $scope, GETPOSTINT('review_expires'), GETPOST('review_signature', 'aZ09'),
+				$_SESSION['kreabank_bulk_review_secret'] ?? '', dol_now(), true, $navigationAccountId)) {
+			throw new Exception($langs->trans('KreaBankBulkMatchReviewChanged', '1'));
+		}
+		kreabankExecuteManualReview($service, $row);
+		unset($_SESSION['kreabank_bulkmatch_scan_state'], $_SESSION['kreabank_matched_scan_state']);
+		setEventMessages($langs->trans('KreaBankReconcileDone'), null, 'mesgs');
+		$redirectUrl = kreabankWorkspaceUrl('reconcile', $navigationAccountId) . '&sortfield=' . rawurlencode($pendingSort['field']) . '&sortorder=' . $pendingSort['order'];
+		header('Location: ' . $redirectUrl);
+		exit;
+	} catch (Exception $e) {
+		$reportActionException($e, 'confirm_document');
+	}
 }
 
 if ($action === 'batch_safe' && $user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite) {
@@ -1608,6 +1639,16 @@ if ($selectedLine) {
 	}
 }
 $canReconcile = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite);
+$documentReviewRow = null;
+$documentReviewForms = array();
+if ($selectedLine && $canReconcile && $canCreate && array_filter($documents, static function ($doc) { return $doc['doc_type'] !== 'native_bank' && empty($doc['is_locked']); })) {
+	try {
+		$reviewMinScore = getDolGlobalInt('KREABANK_BULKMATCH_MIN_SCORE');
+		$callbacks = kreabankManualReviewCallbacks($service, $dateTolerance, $reviewMinScore > 0 ? min(1000, $reviewMinScore) : 100);
+		$documentReviewRow = $callbacks['prepareReviewRow']($selectedLine);
+		if (empty($_SESSION['kreabank_bulk_review_secret'])) { $_SESSION['kreabank_bulk_review_secret'] = bin2hex(random_bytes(32)); }
+	} catch (Exception $e) { $reportActionException($e, 'prepare_document_review', $langs->trans('KreaBankAccountReviewUnavailable')); }
+}
 // Keep explicit searches in matching; an empty initial candidate set opens permitted creation.
 $requestedWorkflow = $searchOtherAccounts ? 'match' : GETPOST('workflow', 'aZ09');
 $initialWorkflow = ($quickEntryFailed || ($selectedLine && $canReconcile && $canCreate && ($requestedWorkflow === 'create' || ($requestedWorkflow !== 'match' && empty($documents) && $openDocumentsSearch === '' && !$forceBatchDetect)))) ? 'create' : 'match';
@@ -1805,9 +1846,18 @@ if (!$selectedLine) {
 			print '</div>';
 			if (!$isLocked && $rawDocType !== 'native_bank') {
 				print '<p>' . $langs->trans('KreaBankReviewConsequence' . $documentKind) . '</p>';
-				$reviewUrl = kreabankWorkspaceUrl('matched', (int) $selectedLine['bank_account_id']) . '&line_id=' . (int) $selectedLine['rowid']
-					. '&line_source=' . (!empty($selectedLine['fk_statement']) ? 'staged' : 'native') . '&review_doc=' . rawurlencode($docKey);
-				print '<a class="button" href="' . dol_escape_htmltag($reviewUrl) . '">' . $langs->trans('KreaBankWorkspaceReviewExisting' . $documentKind) . '</a>';
+				if ($documentReviewRow && $docKey === $documentReviewRow['suggestion']['doc_type'] . '__' . (int) $documentReviewRow['suggestion']['doc_id']) {
+					$reviewRow = $documentReviewRow;
+					// Bind exactly the target facts rendered on this card; POST recomputes them.
+					foreach (array('ref'=>'doc_ref', 'doc_date'=>'doc_date', 'thirdparty_name'=>'thirdparty_name', 'amount_open'=>'amount_open') as $displayKey => $reviewKey) {
+						$reviewRow['suggestion'][$reviewKey] = $doc[$displayKey];
+					}
+					$formId = 'kb-document-review-' . $docKey;
+					$documentReviewForms[$formId] = $reviewRow;
+					print '<button type="submit" form="' . dol_escape_htmltag($formId) . '" class="button kb-primary-action">' . $langs->trans($documentKind === 'Invoice' ? 'KreaBankReviewPayInvoice' : 'KreaBankWorkspaceReconcilePayment') . '</button>';
+				} elseif ($canReconcile) {
+					print '<p class="krea-muted">' . $langs->trans('KreaBankWorkspaceDocumentUnavailable') . '</p>';
+				}
 			}
 			if (!$isLocked && $rawDocType === 'native_bank') {
 				print '<input type="hidden" name="match_score[' . $docKey . ']" value="' . $score . '">';
@@ -1832,6 +1882,21 @@ if (!$selectedLine) {
 		}
 	}
 	print '</form>';
+	// Associated forms stay outside the native-movement form; no nested forms.
+	foreach ($documentReviewForms as $formId => $reviewRow) {
+		$expires = dol_now() + 1800;
+		$scope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId;
+		$signature = kreabankBulkReviewSignature($reviewRow, $scope, $expires, $_SESSION['kreabank_bulk_review_secret']);
+		print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="' . dol_escape_htmltag($formId) . '">';
+		print kreabankNavigationHiddenFields($navigationAccountId);
+		foreach (array('token'=>newToken(), 'action'=>'confirm_document', 'line_id'=>(int) $selectedLine['rowid'],
+			'line_source'=>!empty($selectedLine['fk_statement']) ? 'staged' : 'native',
+			'review_doc'=>$reviewRow['suggestion']['doc_type'] . '__' . (int) $reviewRow['suggestion']['doc_id'],
+			'review_expires'=>$expires, 'review_signature'=>$signature, 'sortfield'=>$pendingSort['field'], 'sortorder'=>$pendingSort['order']) as $name => $value) {
+			print '<input type="hidden" name="' . $name . '" value="' . dol_escape_htmltag((string) $value) . '">';
+		}
+		print '</form>';
+	}
 	if ($searchOtherAccounts) { print kreabankOtherAccountMovementsHtml($otherAccountDocuments, $selectedLine, $accountMoveReviews, $openDocumentsSearch, $langs); }
 	print '</section>';
 	print '<section class="kb-workflow-panel kb-create-panel" id="kb-panel-create" aria-labelledby="kb-create-heading"><h3 id="kb-create-heading">' . $langs->trans('KreaBankWorkspaceCreate') . '</h3><p class="kb-panel-intro">' . $langs->trans('KreaBankWorkspaceCreateHelp') . '</p>';

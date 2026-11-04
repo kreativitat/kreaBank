@@ -36,13 +36,17 @@ only displayed values have two decimals. Server execution still revalidates ever
 submitted source and target.
 
 Invoice and payment candidates have their actual record type and consequence.
-They use **Review invoice payment and reconciliation** or **Review payment and
-reconciliation**, opening `matched.php` for the exact source namespace/account and
-expected document. They never enter the native-movement checkbox submission.
-The individual review recomputes the unique eligible suggestion, signs the pair
-and uses the existing manual approval controller. Changed, ambiguous, foreign or
-wrong-account evidence cannot produce an executable pair. Reviewing an invoice
-explains that approval records its payment; it creates no new invoice.
+They use **Record payment and reconcile** or **Link payment and reconcile** on
+the one-by-one page itself. Each button submits its own associated POST form to
+`reconcile.php`, outside the native-movement form, with the exact source namespace,
+account, expected document and expiring signed review. Invoice approval records
+a payment against the existing invoice; it creates no new invoice.
+`lib/kreabank_manual_review.lib.php` shares unique-suggestion preparation and
+execution with matched/bulk review. Confirmation recomputes and authenticates the
+displayed pair before the service revalidates it under locks. Changed, ambiguous,
+foreign or wrong-account evidence cannot produce an executable pair. Success
+returns to the one-by-one queue with account/sort context; failure retains the
+selected line and reports the error. No navigation through `matched.php` is needed.
 
 **Create a new entry and reconcile** describes each available action:
 
@@ -88,6 +92,7 @@ php -l reconcile.php
 node --check js/reconcile.js
 node --check js/reconcile-supplier.js
 php test/test_reconcile_workspace.php
+php test/test_reconcile_document.php
 node test/test_reconcile_workspace.cjs
 node test/test_reconcile_queue.cjs
 php test/test_reconciliation_guards.php
