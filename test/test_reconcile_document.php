@@ -125,9 +125,10 @@ foreach (array('GET', 'token', 'write', 'native') as $denied) {
 }
 resetDirectReview(); $service->fail = true;
 checkDirect(submitDirectReview() === null && !$service->executions && $events[0][1] === 'Synthetic rollback', 'Service failure stays on the current line with an error');
-foreach (array('customer_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked') as $type) {
+foreach (array('customer_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked', 'native_bank') as $type) {
 	resetDirectReview();
 	$service->suggestions[0]['doc_type'] = $type;
+	if ($type === 'native_bank') { $service->suggestions[0]['bank_account_id'] = 81; }
 	if ($type === 'customer_invoice' || $type === 'payment' || $type === 'payment_linked') { $service->line['amount'] = 47.66; $service->line['direction'] = 1; }
 	else { $service->suggestions[0]['amount_open'] = -47.66; }
 	$callbacks = kreabankManualReviewCallbacks($service, 3, 100);
@@ -135,5 +136,15 @@ foreach (array('customer_invoice', 'payment', 'payment_supplier', 'payment_linke
 	$request['review_doc'] = $type . '__22';
 	$request['review_signature'] = kreabankBulkReviewSignature($row, '7|9|81', $request['review_expires'], $_SESSION['kreabank_bulk_review_secret']);
 	checkDirect(submitDirectReview() !== null && count($service->executions) === 1 && $service->executions[0][1][0]['doc_type'] === $type, 'Direct review retains supported payment semantics: ' . $type);
+}
+foreach (array(array('bank_account_id',82), array('amount_open',47.66), array('amount_open',-48.00)) as $change) {
+	resetDirectReview();
+	$service->suggestions[0] = array_merge($service->suggestions[0], array('doc_type'=>'native_bank', 'bank_account_id'=>81, 'amount_open'=>-47.66));
+	$callbacks = kreabankManualReviewCallbacks($service, 3, 100);
+	$row = $callbacks['prepareDocumentReviews']($service->line)['native_bank__22'];
+	$request['review_doc'] = 'native_bank__22';
+	$request['review_signature'] = kreabankBulkReviewSignature($row, '7|9|81', $request['review_expires'], $_SESSION['kreabank_bulk_review_secret']);
+	$service->suggestions[0][$change[0]] = $change[1];
+	checkDirect(submitDirectReview() === null && !$service->executions, 'Native movement account, sign and full persisted amount are revalidated: ' . $change[0]);
 }
 echo 'OK: ' . $checks . " direct one-by-one approval checks (synthetic, no database)\n";

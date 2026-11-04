@@ -305,11 +305,16 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 		$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestionsByLine[$lineId] ?? array(), $dateTolerance);
 		$rows = array();
 		foreach ($suggestions as $suggestion) {
-			if (!in_array($suggestion['doc_type'], array('customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked'), true)) {
+			if (!in_array($suggestion['doc_type'], array('native_bank', 'customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked'), true)) {
+				continue;
+			}
+			if ($suggestion['doc_type'] === 'native_bank' && ((int) ($suggestion['bank_account_id'] ?? 0) !== (int) $line['bank_account_id']
+				|| abs((float) $suggestion['amount_open'] - (float) $line['amount']) > 0.00000001)) {
 				continue;
 			}
 			$resolved = $resolveLineBestSuggestion($line, array($suggestion), true);
 			if (empty($resolved['suggestion'])) { continue; }
+			if ($suggestion['doc_type'] === 'native_bank' && abs((float) $resolved['allocation'] - abs((float) $line['amount'])) > 0.00000001) { continue; }
 			$key = $suggestion['doc_type'] . '__' . (int) $suggestion['doc_id'];
 			$rows[$key] = array('line'=>$line, 'suggestion'=>$suggestion, 'allocation'=>(float) $resolved['allocation'],
 				'preselected'=>false, 'is_bulk_safe'=>false, 'score'=>(int) $suggestion['score']);

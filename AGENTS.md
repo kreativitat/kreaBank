@@ -199,12 +199,17 @@
   approval of the sole signed pair. Do not require either selection or review
   checkboxes there. Bulk selections retain their separate review checkbox.
 
-- Selected-line invoice/payment candidates submit directly to `reconcile.php`
+- Selected-line bank movement, invoice and payment candidates submit directly to
+  `reconcile.php`
   with explicit `line_id`, `line_source`, owned account and a signed displayed
-  `review_doc`; successful approval returns to the one-by-one queue. They never
-  enter native-movement checkbox submission. `lib/kreabank_manual_review.lib.php`
+  `review_doc`; successful approval returns to the one-by-one queue. Ordinary
+  review uses the same per-card action layout for every record type. Only batch
+  mode exposes native-movement checkboxes and combined allocation controls.
+  Native per-card approval requires the exact signed amount and source account;
+  restricted accounts still permit their eligible existing transfer movements.
+  `lib/kreabank_manual_review.lib.php`
   shares candidate eligibility and execution with matched/bulk review. One-by-one
-  cards allow an explicitly signed choice among competing invoices/payments;
+  cards allow an explicitly signed choice among competing records;
   never rank or preselect that choice automatically. Matched/bulk review retains
   its unique-suggestion requirement. Invoice approval is labelled **Record
   payment and reconcile**.

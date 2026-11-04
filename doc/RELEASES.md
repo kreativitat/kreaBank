@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.19.16 — 2026-11-04
+
+- Use the same per-card action layout for ordinary bank movements, invoices and
+  payments in one-by-one review. Native movements use signed approval of their
+  exact persisted amount and account through the existing service.
+- Keep multiple native selections and allocation controls in batch mode.
+  No schema or scheduler changes.
+
 ## 1.19.15 — 2026-11-04
 
 - Give each eligible one-by-one invoice/payment candidate its own signed action,

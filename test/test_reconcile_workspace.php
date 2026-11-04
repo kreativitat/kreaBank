@@ -94,8 +94,8 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 		public function getSuggestionsForLines($lines, ...$args) {
 			$items = array();
 			foreach ($this->documents as $doc) {
-				if (!empty($doc['is_locked']) || in_array($GLOBALS['fixtureCase'], array('restricted', 'unavailable'), true)) { continue; }
-				$items[] = array_merge($doc, array('doc_id'=>$doc['rowid'], 'doc_ref'=>$doc['ref'], 'score'=>100, 'details'=>array('amount', 'date')));
+				if (!empty($doc['is_locked']) || $GLOBALS['fixtureCase'] === 'unavailable' || ($GLOBALS['fixtureCase'] === 'restricted' && ($doc['doc_type'] !== 'native_bank' || empty($doc['allowed_transfer'])))) { continue; }
+				$items[] = array_merge($doc, array('doc_id'=>$doc['rowid'], 'doc_ref'=>$doc['ref'], 'bank_account_id'=>$doc['bank_account_id'] ?? $lines[0]['bank_account_id'], 'score'=>100, 'details'=>array('amount', 'date')));
 			}
 			return array($lines[0]['rowid']=>$items);
 		}
@@ -125,7 +125,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	$documents = array(); $suggestionByKey = array(); $autoSelectDocKeys = array();
 	foreach (array('PAY-TEST-001'=>75.25,'PAY-TEST-002'=>50.25,'PAY-LOCKED'=>125.5) as $ref=>$value) {
 		$id = 101 + count($documents);
-		$documents[] = array('rowid'=>$id,'doc_type'=>'native_bank','ref'=>$ref,'amount_open'=>$value,'thirdparty_name'=>'Synthetic supplier','doc_date'=>'2026-11-03','is_locked'=>$ref==='PAY-LOCKED','linked_bank_reconciled'=>false,'url_types'=>'payment_supplier');
+		$documents[] = array('rowid'=>$id,'doc_type'=>'native_bank','ref'=>$ref,'amount_open'=>$case === 'credit' ? $value : -$value,'thirdparty_name'=>'Synthetic supplier','doc_date'=>'2026-11-03','is_locked'=>$ref==='PAY-LOCKED','linked_bank_reconciled'=>false,'url_types'=>'payment_supplier');
 		$suggestionByKey['native_bank__' . $id] = array('score'=>110,'details'=>array('amount'));
 	}
 	if (in_array($case, array('noentries', 'empty'))) { $documents = array(); }
@@ -137,11 +137,16 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 		$documents = array(array('rowid'=>242,'doc_type'=>'supplier_invoice','ref'=>'INV-SYNTHETIC','amount_open'=>125.5,'thirdparty_name'=>'Synthetic supplier','doc_date'=>'2026-11-03'));
 		if ($case === 'invoicechoices') { $documents[] = array_merge($documents[0], array('rowid'=>243, 'ref'=>'INV-SYNTHETIC-2')); }
 	}
+	if ($case === 'bank' || $case === 'bankchoices') {
+		$selectedLine['fk_statement'] = 1;
+		$documents = array(array('rowid'=>242,'doc_type'=>'native_bank','ref'=>'BANK-SYNTHETIC','amount_open'=>-125.5,'thirdparty_name'=>'Synthetic company','doc_date'=>'2026-11-03','bank_account_id'=>81,'url_types'=>'banktransfert'));
+		if ($case === 'bankchoices') { $documents[] = array_merge($documents[0], array('rowid'=>243, 'ref'=>'BANK-SYNTHETIC-2')); }
+	}
 	$service->documents = $documents;
 	if ($case === 'single') { $pendingLines = array($selectedLine); $pendingLinesTotal = 1; }
 	if ($case === 'empty') { $selectedLine = null; $pendingLines = array(); $pendingLinesTotal = 0; }
 	$selectedOutstanding = 125.5;
-	if ($case === 'precision') { $selectedOutstanding = 125.5000001; $documents[0]['amount_open'] = 75.2500001; }
+	if ($case === 'precision') { $selectedOutstanding = 125.5000001; $documents[0]['amount_open'] = -75.2500001; }
 	$quickSupplierProductLineSlots = 6;
 	$decodeHtmlEntitiesRecursive = static function ($value) { return html_entity_decode($value, ENT_QUOTES, 'UTF-8'); };
 	$quickEntryFailed = $case === 'error'; $quickEntryFormState = array();
@@ -152,7 +157,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	$quickSupplierPredictedSocid = 0; $quickSupplierPrediction = array();
 	$canNativeWrite = $case !== 'readonly'; $canQuickSupplierInvoice = $case !== 'limited'; $canQuickTaxEntry = $case !== 'limited';
 	$selectedLineDirection = $case === 'credit' ? 1 : -1;
-	$batchDetectedAuto = false; $batchDetectedMl = false; $batchDetectWasForced = false; $isLoteBatchLine = false;
+	$batchDetectedAuto = false; $batchDetectedMl = false; $batchDetectWasForced = false; $isLoteBatchLine = in_array($case, array('batch', 'precision'), true);
 	$loteSubsetSuggestion = array(); $lineLinks = array(); $safeScore = 150; $dateTolerance = 3;
 	$_SERVER['PHP_SELF'] = '/synthetic-reconcile';
 	$source = file_get_contents(dirname(__DIR__) . '/reconcile.php');
@@ -166,7 +171,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 if (($argv[1] ?? '') === '--html') { print renderWorkspaceFixture($argv[2] ?? 'debit', $argv[3] ?? 'pt_PT'); exit; }
 $checks = 0;
 function workspaceCheck($condition, $message) { global $checks; $checks++; if (!$condition) { throw new RuntimeException($message); } }
-foreach (array('otheraccounts','debit','credit','readonly','empty','locked','noentries','safe','error','restricted','success','limited','unavailable','single') as $case) {
+foreach (array('otheraccounts','debit','credit','readonly','empty','locked','noentries','safe','error','restricted','success','limited','unavailable','single','bank','bankchoices','batch') as $case) {
 	$html = renderWorkspaceFixture($case);
 	workspaceCheck(strpos($html, 'kb-queue') !== false && strpos($html, '</html>') !== false, $case . ': complete view');
 	workspaceCheck(strpos($html, 'Native banking menu') !== false && strpos($html, 'kb-primary') !== false, $case . ': native/shared navigation retained');
@@ -203,6 +208,15 @@ workspaceCheck(strpos($legacyHtml, 'name="line_source" value="native"') !== fals
 $choiceHtml = renderWorkspaceFixture('invoicechoices');
 workspaceCheck(substr_count($choiceHtml, 'form="kb-document-review-supplier_invoice__') === 2 && substr_count($choiceHtml, 'name="review_signature"') === 2, 'Each equal invoice candidate has its own submit button and signed form');
 workspaceCheck(strpos($choiceHtml, 'name="review_doc" value="supplier_invoice__242"') !== false && strpos($choiceHtml, 'name="review_doc" value="supplier_invoice__243"') !== false, 'The two buttons bind different invoice identities');
+$bankHtml = renderWorkspaceFixture('bankchoices');
+workspaceCheck(substr_count($bankHtml, 'form="kb-document-review-native_bank__') === 2 && substr_count($bankHtml, 'name="review_signature"') === 2, 'Each native movement uses the same per-card signed submit pattern');
+workspaceCheck(strpos($bankHtml, 'name="selected_docs[]"') === false && strpos($bankHtml, 'id="manualReconcileButton"') === false && strpos($bankHtml, 'class="kb-allocation"') === false, 'Ordinary movement review has no second checkbox/allocation workflow');
+workspaceCheck(strpos($bankHtml, 'Reconciliar este movimento') !== false && strpos($bankHtml, 'Não cria uma nova fatura nem um novo pagamento') !== false, 'Bank action and consequence identify reconciliation of existing records');
+$batchHtml = renderWorkspaceFixture('batch');
+workspaceCheck(substr_count($batchHtml, 'name="selected_docs[]"') === 2 && strpos($batchHtml, 'id="manualReconcileButton"') !== false && strpos($batchHtml, 'id="kb-selected-total"') !== false, 'Batch mode retains multiple native selections and allocation controls');
+workspaceCheck(strpos($batchHtml, 'form="kb-document-review-native_bank__') === false, 'Batch rows do not mix per-card and combined submit actions');
+$restrictedBank = array('rowid'=>242,'doc_type'=>'native_bank','ref'=>'TRANSFER-SYNTHETIC','amount_open'=>-125.5,'thirdparty_name'=>'Synthetic company','doc_date'=>'2026-11-03','bank_account_id'=>81,'allowed_transfer'=>true);
+workspaceCheck(strpos(renderWorkspaceFixture('restricted', 'pt_PT', array('documents'=>array($restrictedBank))), 'form="kb-document-review-native_bank__242"') !== false, 'Restricted accounts retain allowed existing-transfer reconciliation without permitting creation');
 foreach (array('readonly', 'restricted', 'unavailable') as $case) {
 	$html = renderWorkspaceFixture($case, 'pt_PT', array('documents'=>array($invoiceDocument)));
 	workspaceCheck(strpos($html, 'name="review_signature"') === false && strpos($html, 'form="kb-document-review-') === false, $case . ': no invoice approval action');

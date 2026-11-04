@@ -27,13 +27,17 @@ Users can always switch workflows; opening creation never submits a record.
 Read-only links from matched/bulk review may explicitly request `workflow=create`
 or `workflow=match`. Creation still requires the existing write/account checks.
 
-**Match an existing entry** offers existing native bank movements using the
-existing candidate loader, search, batch detection and shared safe preselection.
-Selecting a checkbox updates the selected total and remaining difference. The
-button requires at least one selection and a balanced allocation within the
-existing 0.01 service tolerance. Original hidden amounts retain their precision;
-only displayed values have two decimals. Server execution still revalidates every
-submitted source and target.
+**Match an existing entry** uses one card layout for native bank movements,
+invoices and payments: reference/type, date on its own line, counterparty,
+amount, evidence, consequence and a green action on the card. Ordinary native
+movements use **Reconcile this movement**, with the exact persisted signed amount
+and source account. They reuse the existing native movement and create no payment.
+
+Batch detection or **Search batch payments** retains multiple native checkboxes,
+the selected total/difference and the combined approval button. The combined
+allocation must balance within the existing 0.01 service tolerance. Original
+hidden amounts retain their precision; only displayed values have two decimals.
+Server execution still revalidates every submitted source and target.
 
 Invoice and payment candidates have their actual record type and consequence.
 They use **Record payment and reconcile** or **Link payment and reconcile** on
@@ -42,7 +46,7 @@ the one-by-one page itself. Each button submits its own associated POST form to
 account, expected document and expiring signed review. Invoice approval records
 a payment against the existing invoice; it creates no new invoice.
 `lib/kreabank_manual_review.lib.php` shares candidate eligibility and execution
-with matched/bulk review. Each eligible invoice/payment card has its own button
+with matched/bulk review. Each eligible card has its own button
 and signature, allowing an explicit user choice between equal candidates.
 Confirmation recomputes that exact target and authenticates the displayed pair
 before the service revalidates it under locks. Changing the target invalidates

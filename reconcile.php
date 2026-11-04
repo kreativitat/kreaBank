@@ -220,7 +220,7 @@ if ($action === 'confirm_document') {
 		$reviewRows = $line && (int) $line['status'] === 0 ? $callbacks['prepareDocumentReviews']($line) : array();
 		$row = $reviewRows[$documentKey] ?? null;
 		$scope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId;
-		if (!$row || !in_array($row['suggestion']['doc_type'], array('customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked'), true)
+		if (!$row || !in_array($row['suggestion']['doc_type'], array('native_bank', 'customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked'), true)
 			|| $documentKey !== $row['suggestion']['doc_type'] . '__' . (int) $row['suggestion']['doc_id']
 			|| !kreabankBulkReviewIsValid($row, $scope, GETPOSTINT('review_expires'), GETPOST('review_signature', 'aZ09'),
 				$_SESSION['kreabank_bulk_review_secret'] ?? '', dol_now(), true, $navigationAccountId)) {
@@ -1642,11 +1642,14 @@ if ($selectedLine) {
 $canReconcile = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite);
 $documentReviewRows = array();
 $documentReviewForms = array();
-if ($selectedLine && $canReconcile && $canCreate && array_filter($documents, static function ($doc) { return $doc['doc_type'] !== 'native_bank' && empty($doc['is_locked']); })) {
+if ($selectedLine && $canReconcile && !$creationUnavailable && array_filter($documents, static function ($doc) use ($isLoteBatchLine) { return empty($doc['is_locked']) && (!$isLoteBatchLine || $doc['doc_type'] !== 'native_bank'); })) {
 	try {
 		$reviewMinScore = getDolGlobalInt('KREABANK_BULKMATCH_MIN_SCORE');
 		$callbacks = kreabankManualReviewCallbacks($service, $dateTolerance, $reviewMinScore > 0 ? min(1000, $reviewMinScore) : 100);
 		$documentReviewRows = $callbacks['prepareDocumentReviews']($selectedLine);
+		if (!$canCreate) {
+			$documentReviewRows = array_filter($documentReviewRows, static function ($row) { return $row['suggestion']['doc_type'] === 'native_bank'; });
+		}
 		if (empty($_SESSION['kreabank_bulk_review_secret'])) { $_SESSION['kreabank_bulk_review_secret'] = bin2hex(random_bytes(32)); }
 	} catch (Exception $e) { $reportActionException($e, 'prepare_document_review', $langs->trans('KreaBankAccountReviewUnavailable')); }
 }
@@ -1704,7 +1707,7 @@ if (!$selectedLine) {
 		print '<button type="button" role="tab" id="kb-tab-' . $workflow . '" aria-controls="kb-panel-' . $workflow . '" aria-selected="' . ($workflow === $initialWorkflow ? 'true' : 'false') . '" tabindex="' . ($workflow === $initialWorkflow ? '0' : '-1') . '">' . $langs->trans($label) . '</button>';
 	}
 	print '</div>';
-	print '<section class="kb-workflow-panel" id="kb-panel-match" aria-labelledby="kb-match-heading"><h3 id="kb-match-heading">' . $langs->trans('KreaBankWorkspaceMatch') . '</h3><p class="kb-panel-intro">' . $langs->trans('KreaBankWorkspaceMatchHelp') . '</p>';
+	print '<section class="kb-workflow-panel" id="kb-panel-match" aria-labelledby="kb-match-heading"><h3 id="kb-match-heading">' . $langs->trans('KreaBankWorkspaceMatch') . '</h3><p class="kb-panel-intro">' . $langs->trans($isLoteBatchLine ? 'KreaBankWorkspaceMatchHelp' : 'KreaBankWorkspaceMatchSingleHelp') . '</p>';
 	print '<form class="kb-document-search" method="GET" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 	print kreabankNavigationHiddenFields($navigationAccountId);
 	print '<input type="hidden" name="line_id" value="' . (int) $selectedLine['rowid'] . '">';
@@ -1769,7 +1772,7 @@ if (!$selectedLine) {
 			$isLocked = !empty($doc['is_locked']);
 			$isLockedReconciled = ($isLocked && !empty($doc['linked_bank_reconciled']));
 			$lockedStatusLabel = $isLockedReconciled ? $langs->trans('KreaBankAlreadyConciliatedShort') : $langs->trans('KreaBankAlreadyLinkedShort');
-			if (!$isLocked && $doc['doc_type'] === 'native_bank') {
+			if (!$isLocked && $doc['doc_type'] === 'native_bank' && $isLoteBatchLine) {
 				$hasSelectableDocuments = true;
 			}
 			$docKey = $doc['doc_type'] . '__' . $doc['rowid'];
@@ -1804,7 +1807,7 @@ if (!$selectedLine) {
 			print '<label style="display:flex;gap:6px;align-items:flex-start">';
 			if ($isLocked) {
 				print '<span class="badge ' . ($isLockedReconciled ? 'badge-status4' : 'badge-status7') . '">' . $lockedStatusLabel . '</span>';
-			} elseif ($rawDocType === 'native_bank') {
+			} elseif ($rawDocType === 'native_bank' && $isLoteBatchLine) {
 				$shouldCheck = !empty($autoSelectDocKeys[$docKey]);
 				if ($rawDocType === 'native_bank' && (int) $doc['rowid'] === $correctedBankLineId) { $shouldCheck = false; }
 				print '<input type="checkbox" name="selected_docs[]" value="' . $docKey . '"' . ($shouldCheck ? ' checked' : '') . (!$canReconcile ? ' disabled' : '') . '>';
@@ -1846,8 +1849,9 @@ if (!$selectedLine) {
 			}
 			print '</div>';
 			print '</div>';
-			if (!$isLocked && $rawDocType !== 'native_bank') {
+			if (!$isLocked && ($rawDocType !== 'native_bank' || !$isLoteBatchLine)) {
 				print '<p>' . $langs->trans('KreaBankReviewConsequence' . $documentKind) . '</p>';
+				$actionLabel = $documentKind === 'Bank' ? 'KreaBankWorkspaceReconcileBank' : ($documentKind === 'Invoice' ? 'KreaBankReviewPayInvoice' : 'KreaBankWorkspaceReconcilePayment');
 				if (isset($documentReviewRows[$docKey])) {
 					$reviewRow = $documentReviewRows[$docKey];
 					// Bind exactly the target facts rendered on this card; POST recomputes them.
@@ -1856,13 +1860,13 @@ if (!$selectedLine) {
 					}
 					$formId = 'kb-document-review-' . $docKey;
 					$documentReviewForms[$formId] = $reviewRow;
-					print '<button type="submit" form="' . dol_escape_htmltag($formId) . '" class="button kb-primary-action">' . $langs->trans($documentKind === 'Invoice' ? 'KreaBankReviewPayInvoice' : 'KreaBankWorkspaceReconcilePayment') . '</button>';
+					print '<button type="submit" form="' . dol_escape_htmltag($formId) . '" class="button kb-primary-action">' . $langs->trans($actionLabel) . '</button>';
 				} elseif ($canReconcile) {
-					print '<button type="button" class="button kb-primary-action" disabled>' . $langs->trans($documentKind === 'Invoice' ? 'KreaBankReviewPayInvoice' : 'KreaBankWorkspaceReconcilePayment') . '</button>';
+					print '<button type="button" class="button kb-primary-action" disabled>' . $langs->trans($actionLabel) . '</button>';
 					print '<p class="krea-muted">' . $langs->trans('KreaBankWorkspaceDocumentUnavailable') . '</p>';
 				}
 			}
-			if (!$isLocked && $rawDocType === 'native_bank') {
+			if (!$isLocked && $rawDocType === 'native_bank' && $isLoteBatchLine) {
 				print '<input type="hidden" name="match_score[' . $docKey . ']" value="' . $score . '">';
 				print '<input type="hidden" name="match_reasons[' . $docKey . ']" value="' . dol_escape_htmltag(implode(',', $details)) . '">';
 				print '<input type="hidden" name="doc_ref[' . $docKey . ']" value="' . dol_escape_htmltag((string) $doc['ref']) . '">';
