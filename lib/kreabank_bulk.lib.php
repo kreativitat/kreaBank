@@ -54,6 +54,9 @@ function kreabankBulkReviewSignature($row, $scope, $expires, $secret)
 	foreach (array('doc_type', 'doc_ref', 'doc_date', 'thirdparty_name', 'bank_account_ref', 'payment_ref') as $key) {
 		$document[$key] = (string) ($suggestion[$key] ?? '');
 	}
+	if (in_array($suggestion['doc_type'] ?? '', array('tax', 'payment_tax'), true)) {
+		foreach (array('tax_id','tax_type_id','tax_payment_mode_id') as $key) { $document[$key] = (int) ($suggestion[$key] ?? 0); }
+	}
 	$document['amount_open'] = number_format((float) ($suggestion['amount_open'] ?? 0), 8, '.', '');
 	$payload = json_encode(array($scope, (int) $expires, kreabankBulkReviewLineFacts($row['line'] ?? array()),
 		$document, number_format((float) ($row['allocation'] ?? 0), 8, '.', '')));

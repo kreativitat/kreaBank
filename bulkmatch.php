@@ -170,6 +170,8 @@ $resolveSuggestionCardUrl = static function ($docType, $docId) {
 	if ($docType === 'payment_supplier' || $docType === 'payment_supplier_linked') {
 		return dol_buildpath('/fourn/paiement/card.php?id=' . $docId, 1);
 	}
+	if ($docType === 'tax') { return dol_buildpath('/compta/sociales/card.php?id=' . $docId, 1); }
+	if ($docType === 'payment_tax') { return dol_buildpath('/compta/payment_sc/card.php?id=' . $docId, 1); }
 	if ($docType === 'customer_invoice') {
 		return dol_buildpath('/compta/facture/card.php?facid=' . $docId, 1);
 	}

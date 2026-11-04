@@ -10,7 +10,7 @@ It is designed to accelerate bank operations without creating a parallel account
 - Lets the user confirm field mapping before import.
 - Detects reusable import layouts per bank/export format.
 - Prevents duplicate imports with contextual idempotency checks.
-- Suggests matching customer and supplier documents for reconciliation.
+- Suggests matching customer, supplier and existing tax/social contribution records for reconciliation. See [tax reconciliation](doc/TAX_RECONCILIATION.md).
 - Optionally reconciles exact, unambiguous existing bank movements automatically, with previews and per-company account selection. See [automatic reconciliation](doc/AUTOMATIC_RECONCILIATION.md).
 - Persists reconciliation through native Dolibarr bank/payment links and native reconciliation status.
 - Provides pending, reconciliation, and history workspaces on top of the native bank module.

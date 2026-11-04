@@ -125,7 +125,7 @@ foreach (array('GET', 'token', 'write', 'native') as $denied) {
 }
 resetDirectReview(); $service->fail = true;
 checkDirect(submitDirectReview() === null && !$service->executions && $events[0][1] === 'Synthetic rollback', 'Service failure stays on the current line with an error');
-foreach (array('customer_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked', 'native_bank') as $type) {
+foreach (array('customer_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked', 'native_bank', 'tax', 'payment_tax') as $type) {
 	resetDirectReview();
 	$service->suggestions[0]['doc_type'] = $type;
 	if ($type === 'native_bank') { $service->suggestions[0]['bank_account_id'] = 81; }
@@ -146,5 +146,14 @@ foreach (array(array('bank_account_id',82), array('amount_open',47.66), array('a
 	$request['review_signature'] = kreabankBulkReviewSignature($row, '7|9|81', $request['review_expires'], $_SESSION['kreabank_bulk_review_secret']);
 	$service->suggestions[0][$change[0]] = $change[1];
 	checkDirect(submitDirectReview() === null && !$service->executions, 'Native movement account, sign and full persisted amount are revalidated: ' . $change[0]);
+}
+foreach (array('tax_id','tax_type_id','tax_payment_mode_id') as $field) {
+    resetDirectReview();
+    $service->suggestions[0] = array_merge($service->suggestions[0], array('doc_type'=>'tax','amount_open'=>-47.66,'tax_id'=>22,'tax_type_id'=>1,'tax_payment_mode_id'=>1));
+    $row = kreabankManualReviewCallbacks($service,3,100)['prepareDocumentReviews']($service->line)['tax__22'];
+    $request['review_doc']='tax__22';
+    $request['review_signature']=kreabankBulkReviewSignature($row,'7|9|81',$request['review_expires'],$_SESSION['kreabank_bulk_review_secret']);
+    $service->suggestions[0][$field]++;
+    checkDirect(submitDirectReview()===null && !$service->executions, 'Tax identity and payment method are signed: '.$field);
 }
 echo 'OK: ' . $checks . " direct one-by-one approval checks (synthetic, no database)\n";

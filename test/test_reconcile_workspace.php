@@ -102,9 +102,14 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	};
 	$form = new WorkspaceFixtureForm();
 	$navigationAccountId = 81; $navigationAccount = null;
-	$searchOtherAccounts = $case === 'otheraccounts' || !empty($options['search_accounts']); $otherAccountDocuments = array(); $accountMoveReviews = array(); $correctedBankLineId = 0;
-	if ($case === 'otheraccounts') {
+	$searchOtherAccounts = in_array($case, array('otheraccounts','taxotheraccounts'), true) || !empty($options['search_accounts']); $otherAccountDocuments = array(); $accountMoveReviews = array(); $correctedBankLineId = 0;
+	if (in_array($case, array('otheraccounts','taxotheraccounts'), true)) {
 		$otherAccountDocuments = array(array('rowid'=>501,'label'=>'Pagamento de fatura · Exemplo','account_ref'=>'WRONG-BANK','dateo'=>'2026-11-03','amount'=>'-125.50','currency_code'=>'EUR','payment_refs'=>'PAY-EXAMPLE','customer_docs'=>'','supplier_docs'=>'Fatura de Exemplo','can_move'=>true));
+		if ($case === 'taxotheraccounts') {
+			$otherAccountDocuments[0]['label']='Pagamento de imposto';
+			$otherAccountDocuments[0]['supplier_docs']='';
+			$otherAccountDocuments[0]['tax_docs']='IVA · Synthetic tax #242';
+		}
 		$accountMoveReviews = array(501=>'synthetic-account-review');
 	}
 	$forceBatchDetect = $options['force_batch_detect'] ?? 0; $openDocumentsSearch = $options['search'] ?? '';
@@ -132,6 +137,10 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	if ($case === 'locked') { $documents = array($documents[2]); }
 	if ($case === 'safe') { $autoSelectDocKeys['native_bank__103'] = true; $documents = array($documents[2]); $documents[0]['is_locked'] = false; }
 	if (isset($options['documents'])) { $documents = $options['documents']; }
+	if ($case === 'tax') {
+		$selectedLine['fk_statement'] = 1;
+		$documents = array(array('rowid'=>242,'doc_type'=>'tax','ref'=>'TAX-SYNTHETIC','amount_open'=>-125.5,'thirdparty_name'=>'IVA · Synthetic tax','doc_date'=>'2026-11-03','tax_id'=>242,'tax_type_id'=>1,'tax_payment_mode_id'=>1));
+	}
 	if ($case === 'invoice' || $case === 'invoicechoices') {
 		$selectedLine['fk_statement'] = 1;
 		$documents = array(array('rowid'=>242,'doc_type'=>'supplier_invoice','ref'=>'INV-SYNTHETIC','amount_open'=>125.5,'thirdparty_name'=>'Synthetic supplier','doc_date'=>'2026-11-03'));
@@ -191,7 +200,7 @@ foreach (array('otheraccounts','debit','credit','readonly','empty','locked','noe
 	if ($case === 'success') { workspaceCheck(strpos($html, 'role="status">') !== false && strpos($html, 'Synthetic record created and reconciled') !== false, 'Persistent accessible success state'); }
 }
 $invoiceDocument = array('rowid'=>242,'doc_type'=>'supplier_invoice','ref'=>'INV-SYNTHETIC','amount_open'=>125.5,'thirdparty_name'=>'Synthetic supplier','doc_date'=>'2026-11-03');
-foreach (array('supplier_invoice', 'customer_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked') as $type) {
+foreach (array('supplier_invoice', 'customer_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked', 'tax', 'payment_tax') as $type) {
 	$document = array_merge($invoiceDocument, array('doc_type'=>$type));
 	if (strpos($type, 'invoice') === false) { $document['amount_open'] = -125.5; }
 	$html = renderWorkspaceFixture($type === 'customer_invoice' ? 'credit' : 'debit', 'pt_PT', array('documents'=>array($document), 'statement_id'=>1));
@@ -199,8 +208,8 @@ foreach (array('supplier_invoice', 'customer_invoice', 'payment', 'payment_suppl
 	workspaceCheck(strpos($html, 'name="line_source" value="staged"') !== false && strpos($html, 'name="review_doc" value="' . $type . '__242"') !== false && strpos($html, 'name="review_signature"') !== false, $type . ': signed direct submission preserves the exact source namespace and expected document');
 	workspaceCheck(strpos($html, 'action="/synthetic-reconcile" id="kb-document-review-') !== false && strpos($html, 'form="kb-document-review-' . $type . '__242"') !== false && strpos($html, 'view=matched') === false, $type . ': button submits its external form on the one-by-one page');
 	$invoice = strpos($type, 'invoice') !== false;
-	workspaceCheck(strpos($html, $invoice ? 'Fatura existente' : 'Pagamento existente') !== false && strpos($html, 'Movimento bancário existente') === false, $type . ': actual document type displayed');
-	workspaceCheck(strpos($html, $invoice ? 'Regista um pagamento desta fatura' : 'Não cria um novo pagamento') !== false, $type . ': financial consequence precedes review');
+	workspaceCheck(strpos($html, $type === 'tax' ? 'Imposto ou encargo social existente' : ($invoice ? 'Fatura existente' : 'Pagamento existente')) !== false && strpos($html, 'Movimento bancário existente') === false, $type . ': actual document type displayed');
+	workspaceCheck(strpos($html, $type === 'tax' ? 'Não cria um novo imposto' : ($invoice ? 'Regista um pagamento desta fatura' : 'Não cria um novo pagamento')) !== false, $type . ': financial consequence precedes review');
 	workspaceCheck(strpos($html, 'id="manualReconcileButton"') === false && strpos($html, 'id="kb-selection-difference"') === false, $type . ': native-only allocation controls are omitted');
 }
 $legacyHtml = renderWorkspaceFixture('debit', 'pt_PT', array('documents'=>array($invoiceDocument)));

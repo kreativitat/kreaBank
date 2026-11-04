@@ -537,7 +537,7 @@ KreaBankTpaPaymentMode=Modo de pagamento dos recebimentos de TPA (obrigatório)
 KreaBankLedgerBalance=Saldo Dolibarr
 
 KreaBankAccountReviewTitle=Verifique a conta bancária do pagamento
-KreaBankAccountReviewHelp=Foi encontrado um possível pagamento de fatura registado noutra conta bancária. Verifique o pagamento e a conta indicada no extrato antes de corrigir o movimento bancário existente. Esta linha fica pendente; a conta não é alterada automaticamente. Atualize a reconciliação após a correção.
+KreaBankAccountReviewHelp=Foi encontrado um possível pagamento de fatura ou imposto registado noutra conta bancária. Verifique o pagamento e a conta indicada no extrato antes de corrigir o movimento bancário existente. Esta linha fica pendente; a conta não é alterada automaticamente. Atualize a reconciliação após a correção.
 KreaBankAccountReviewStatementAccount=Conta do extrato bancário a verificar
 KreaBankAccountReviewRecordedAccount=Conta registada no pagamento
 KreaBankAccountReviewOpen=Verificar / corrigir conta bancária
@@ -645,3 +645,7 @@ KreaBankAccountMoveLocked=Alteração de conta indisponível: o movimento está 
 KreaBankAccountMoveDone=Conta bancária alterada. Confirme e selecione o movimento na lista de movimentos existentes para o reconciliar.
 KreaBankAccountMoveChanged=O movimento ou o extrato foi alterado, está bloqueado ou a revisão expirou. Pesquise novamente e confirme os dados atuais.
 KreaBankOtherAccountTruncated=São apresentados os primeiros 100 movimentos. Refine a pesquisa para ver outros resultados.
+
+KreaBankReviewExistingTax=Imposto ou encargo social existente
+KreaBankReviewConsequenceTax=Regista um pagamento deste imposto ou encargo social e reconcilia a linha do extrato. Não cria um novo imposto.
+KreaBankReviewPayTax=Registar pagamento do imposto e reconciliar

@@ -4,6 +4,7 @@
  */
 
 require_once __DIR__ . '/KreaBankAccountPairs.class.php';
+require_once __DIR__ . '/KreaBankTaxReconciliation.class.php';
 
 /** Deterministic owner-company and account boundaries for the existing reconciliation path. */
 class KreaBankReconciliationScope
@@ -48,6 +49,11 @@ class KreaBankReconciliationScope
 		}
 		if ($type === 'native_bank') {
 			$sql = "SELECT b.rowid FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account WHERE ba.entity=$e AND ba.rowid=$a AND b.rowid=$id";
+			$sql .= KreaBankTaxReconciliation::bankOwnershipSql($p);
+		} elseif ($type === 'tax') {
+			$sql = "SELECT rowid FROM {$p}chargesociales WHERE rowid=$id AND entity=$e";
+		} elseif ($type === 'payment_tax') {
+			$sql = "SELECT pc.rowid FROM {$p}paiementcharge pc JOIN {$p}chargesociales t ON t.rowid=pc.fk_charge WHERE pc.rowid=$id AND t.entity=$e AND COALESCE(pc.fk_bank,0)=0";
 		} elseif (in_array($type, array('payment', 'payment_linked', 'payment_supplier', 'payment_supplier_linked'), true)) {
 			$supplier = in_array($type, array('payment_supplier', 'payment_supplier_linked'), true);
 			$table = $supplier ? 'paiementfourn' : 'paiement';

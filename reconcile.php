@@ -220,7 +220,7 @@ if ($action === 'confirm_document') {
 		$reviewRows = $line && (int) $line['status'] === 0 ? $callbacks['prepareDocumentReviews']($line) : array();
 		$row = $reviewRows[$documentKey] ?? null;
 		$scope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId;
-		if (!$row || !in_array($row['suggestion']['doc_type'], array('native_bank', 'customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked'), true)
+		if (!$row || !in_array($row['suggestion']['doc_type'], array('native_bank', 'customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked', 'tax', 'payment_tax'), true)
 			|| $documentKey !== $row['suggestion']['doc_type'] . '__' . (int) $row['suggestion']['doc_id']
 			|| !kreabankBulkReviewIsValid($row, $scope, GETPOSTINT('review_expires'), GETPOST('review_signature', 'aZ09'),
 				$_SESSION['kreabank_bulk_review_secret'] ?? '', dol_now(), true, $navigationAccountId)) {
@@ -1797,6 +1797,10 @@ if (!$selectedLine) {
 				$docCardUrl = dol_buildpath('/fourn/paiement/card.php?id=' . (int) $doc['rowid'], 1);
 			} elseif ($rawDocType === 'customer_invoice') {
 				$docCardUrl = dol_buildpath('/compta/facture/card.php?facid=' . (int) $doc['rowid'], 1);
+			} elseif ($rawDocType === 'tax') {
+				$docCardUrl = dol_buildpath('/compta/sociales/card.php?id=' . (int) $doc['rowid'], 1);
+			} elseif ($rawDocType === 'payment_tax') {
+				$docCardUrl = dol_buildpath('/compta/payment_sc/card.php?id=' . (int) $doc['rowid'], 1);
 			} elseif ($rawDocType === 'supplier_invoice') {
 				$docCardUrl = dol_buildpath('/fourn/facture/card.php?facid=' . (int) $doc['rowid'], 1);
 			}
@@ -1820,7 +1824,7 @@ if (!$selectedLine) {
 			} else {
 				print '<strong>' . dol_escape_htmltag($displayReference) . '</strong>';
 			}
-			$documentKind = $rawDocType === 'native_bank' ? 'Bank' : (in_array($rawDocType, array('customer_invoice', 'supplier_invoice'), true) ? 'Invoice' : 'Payment');
+			$documentKind = $rawDocType === 'tax' ? 'Tax' : ($rawDocType === 'native_bank' ? 'Bank' : (in_array($rawDocType, array('customer_invoice', 'supplier_invoice'), true) ? 'Invoice' : 'Payment'));
 			print ' <span class="krea-muted">' . $langs->trans('KreaBankReviewExisting' . $documentKind) . '</span><br>';
 			print '<span class="krea-muted">' . dol_print_date(strtotime((string) $doc['doc_date']), 'day') . '</span><br>';
 			print '<span class="krea-muted">' . dol_escape_htmltag($displayCounterparty) . '</span></span>';
@@ -1853,7 +1857,7 @@ if (!$selectedLine) {
 			print '</div>';
 			if (!$isLocked && ($rawDocType !== 'native_bank' || !$isLoteBatchLine)) {
 				print '<p>' . $langs->trans('KreaBankReviewConsequence' . $documentKind) . '</p>';
-				$actionLabel = $documentKind === 'Bank' ? 'KreaBankWorkspaceReconcileBank' : ($documentKind === 'Invoice' ? 'KreaBankReviewPayInvoice' : 'KreaBankWorkspaceReconcilePayment');
+				$actionLabel = $documentKind === 'Tax' ? 'KreaBankReviewPayTax' : ($documentKind === 'Bank' ? 'KreaBankWorkspaceReconcileBank' : ($documentKind === 'Invoice' ? 'KreaBankReviewPayInvoice' : 'KreaBankWorkspaceReconcilePayment'));
 				if (isset($documentReviewRows[$docKey])) {
 					$reviewRow = $documentReviewRows[$docKey];
 					// Bind exactly the target facts rendered on this card; POST recomputes them.

@@ -35,7 +35,7 @@ function kreabankPaymentAccountReviewHtml($review, $langs)
 		. $langs->trans('KreaBankAccountReviewRecordedAccount') . '</th><th scope="col">' . $langs->trans('KreaBankDocument')
 		. '</th><th scope="col">' . $langs->trans('KreaBankDate') . '</th><th scope="col">' . $langs->trans('KreaBankAction') . '</th></tr>';
 	foreach ($review['candidates'] as $candidate) {
-		$paymentPath = $candidate['payment_type'] === 'payment_supplier' ? '/fourn/paiement/card.php?id=' : '/compta/paiement/card.php?id=';
+		$paymentPath = $candidate['payment_type'] === 'payment_tax' ? '/compta/payment_sc/card.php?id=' : ($candidate['payment_type'] === 'payment_supplier' ? '/fourn/paiement/card.php?id=' : '/compta/paiement/card.php?id=');
 		$html .= '<tr class="oddeven"><td>' . dol_escape_htmltag(trim($candidate['account_ref'] . ' — ' . $candidate['account_label']))
 			. '</td><td><a href="' . dol_escape_htmltag(dol_buildpath($paymentPath . (int) $candidate['payment_id'], 1)) . '">'
 			. dol_escape_htmltag($candidate['payment_ref']) . '</a><br>' . dol_escape_htmltag($candidate['reference'])
@@ -68,7 +68,7 @@ function kreabankOtherAccountMovementsHtml($entries, $line, $reviews, $search, $
 		$target = dol_escape_htmltag($line['bank_account_ref']);
 		$html .= '<article class="krea-doc-item kb-other-account-entry"><div class="kb-other-account-summary"><div><strong><a href="' . dol_escape_htmltag($url) . '" target="_blank" rel="noopener">' . dol_escape_htmltag(kreabankNativeBankLabel($entry['label'], $langs)) . '</a></strong><br>'
 			. dol_escape_htmltag($entry['account_ref']) . ' · ' . dol_escape_htmltag(substr($entry['dateo'], 0, 10))
-			. '<br><span class="krea-muted">' . dol_escape_htmltag(trim($entry['payment_refs'] . ' ' . $entry['customer_docs'] . ' ' . $entry['supplier_docs'])) . '</span></div><strong>'
+			. '<br><span class="krea-muted">' . dol_escape_htmltag(trim($entry['payment_refs'] . ' ' . $entry['customer_docs'] . ' ' . $entry['supplier_docs'] . ' ' . ($entry['tax_docs'] ?? ''))) . '</span></div><strong>'
 			. kreabankPrice($entry['amount']) . ' ' . dol_escape_htmltag($entry['currency_code']) . '</strong></div>';
 		$html .= '<p class="krea-muted">' . $langs->trans('KreaBankAccountMoveSelectionBlocked') . '</p>';
 		if (!empty($reviews[(int) $entry['rowid']]) && !empty($entry['can_move'])) {

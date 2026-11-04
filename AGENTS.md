@@ -268,3 +268,22 @@
   accounting-posted, cheque-deposit, transfer or restricted-account movements.
   See `doc/RECONCILIATION_UI.md` and the pure/disposable `test_account_correction`
   suites. Bulk account warnings retain their native correction links.
+
+## Existing tax reconciliation
+
+- `KreaBankTaxReconciliation` supplies tax projections and native tax payment
+  lifecycle calls within `KreaBankService::reconcileLine()`. Existing unpaid taxes
+  and unbanked tax payments require signed manual review and native tax read/write
+  rights. Keep these targets out of unattended approval and pattern learning.
+- `paiementcharge` has no entity column; its `chargesociales` parent and any native
+  bank account must belong directly to the current company. Subtract all native
+  tax payments with DECIMAL arithmetic; lock the tax and payments before approval.
+  Preserve the configured active native payment mode, parent identity, source
+  currency, partial-payment status and atomic reconciliation audit.
+- Banked tax payments remain native-movement candidates. Other-account tax search
+  and correction reuse the existing reviewed correction path and its financial
+  locks; never change the tax, its default account or its payment allocations.
+  Tax-like amount/date warnings are advisory and block approval pending review.
+- `php test/test_tax_reconciliation_database.php` extends ONLY the guarded
+  localhost:33317/kreabank_auto_test fixture with installed native tax/payment
+  classes. See [tax reconciliation](doc/TAX_RECONCILIATION.md).

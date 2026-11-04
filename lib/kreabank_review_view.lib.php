@@ -10,7 +10,7 @@ function kreabankReviewPairHtml($row, $langs, $companyName, $resolveUrl)
 	$target = $row['suggestion'];
 	$type = (string) $target['doc_type'];
 	$invoice = in_array($type, array('supplier_invoice', 'customer_invoice'), true);
-	$kind = $type === 'native_bank' ? 'Bank' : ($invoice ? 'Invoice' : 'Payment');
+	$kind = $type === 'tax' ? 'Tax' : ($type === 'native_bank' ? 'Bank' : ($invoice ? 'Invoice' : 'Payment'));
 	$currency = dol_escape_htmltag((string) $line['currency']);
 	$sourceAmount = (float) $line['amount'];
 	$outstanding = max(0, abs($sourceAmount) - abs((float) ($line['allocated_amount'] ?? 0)));

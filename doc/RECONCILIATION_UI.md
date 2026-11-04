@@ -56,6 +56,14 @@ or wrong-account evidence cannot produce an executable pair. Success
 returns to the one-by-one queue with account/sort context; failure retains the
 selected line and reports the error. No navigation through `matched.php` is needed.
 
+Existing unpaid taxes/social contributions also appear in matching, with
+**Record tax payment and reconcile** (pt_PT: **Registar pagamento do imposto e
+reconciliar**). This pays the existing tax; the creation panel's Tax payment choice
+creates a new tax. Existing unbanked tax payments use **Link payment and reconcile**.
+Already banked tax payments reuse their existing native movement. See
+[tax reconciliation](TAX_RECONCILIATION.md) for ownership, account-correction and
+validation rules.
+
 **Create a new entry and reconcile** describes each available action:
 
 | Choice | Records and consequence |

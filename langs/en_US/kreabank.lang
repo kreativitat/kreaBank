@@ -538,7 +538,7 @@ KreaBankTpaPaymentMode=Payment mode for TPA receipts (required)
 KreaBankLedgerBalance=Dolibarr balance
 
 KreaBankAccountReviewTitle=Verify the payment bank account
-KreaBankAccountReviewHelp=A possible invoice payment was recorded in another bank account. Verify the payment and the account shown on the bank statement before correcting its existing bank movement. This line stays pending; no account is changed automatically. Refresh reconciliation after the correction.
+KreaBankAccountReviewHelp=A possible invoice or tax payment was recorded in another bank account. Verify the payment and the account shown on the bank statement before correcting its existing bank movement. This line stays pending; no account is changed automatically. Refresh reconciliation after the correction.
 KreaBankAccountReviewStatementAccount=Bank statement account to verify
 KreaBankAccountReviewRecordedAccount=Account recorded on the payment
 KreaBankAccountReviewOpen=Verify / correct bank account
@@ -646,3 +646,7 @@ KreaBankAccountMoveLocked=Account change unavailable: this movement is reconcile
 KreaBankAccountMoveDone=Bank account changed. Review and select the movement in the existing-entry list to reconcile it.
 KreaBankAccountMoveChanged=The movement or statement has changed, is locked, or the review has expired. Search again and review the current details.
 KreaBankOtherAccountTruncated=Showing the first 100 movements. Refine the search to see other results.
+
+KreaBankReviewExistingTax=Existing tax/social contribution
+KreaBankReviewConsequenceTax=Records a payment against this existing tax/social contribution and reconciles the statement line. Does not create a new tax.
+KreaBankReviewPayTax=Record tax payment and reconcile

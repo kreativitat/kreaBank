@@ -19,7 +19,7 @@ function dol_syslog($message, $level = 0) {}
 function dol_string_nospecial($value) { return $value; }
 function getDolGlobalInt($key, $default = 0) { return (int) ($GLOBALS['conf']->global->$key ?? $default); }
 function getDolGlobalString($key, $default = '') { return (string) ($GLOBALS['conf']->global->$key ?? $default); }
-function isModEnabled($name) { return in_array($name, array('kreabank', 'banque', 'multicompany'), true); }
+function isModEnabled($name) { return ($name === 'tax' && !empty($GLOBALS['taxFixtureEnabled'])) || in_array($name, array('kreabank', 'banque', 'multicompany'), true); }
 function getEntity($name) { return (string) $GLOBALS['conf']->entity; }
 function price2num($value, $round = '') { return (string) $value; }
 function dol_escape_htmltag($value) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
@@ -48,6 +48,7 @@ class DoliDB
 	public function num_rows($result) { return $result->num_rows; }
 	public function plimit($limit, $offset = 0) { return ' LIMIT ' . (int) $offset . ',' . (int) $limit; }
 	public function last_insert_id($table = '') { return $this->connection->insert_id; }
+	public function error() { return $this->lasterror(); }
 	public function lasterror() { return $this->connection->error; }
 	public function idate($time) { return gmdate('Y-m-d H:i:s', is_numeric($time) ? $time : strtotime($time)); }
 	public function jdate($time) { return $time ? strtotime($time) : null; }
@@ -80,7 +81,7 @@ $db = new DoliDB();
 foreach ($db->query('SHOW TABLES')->fetch_all() as $table) {
 	if (strpos($table[0], MAIN_DB_PREFIX) === 0) { $db->query('DROP TABLE `' . $table[0] . '`'); }
 }
-foreach (array('bank_account','bank','bank_url','const','cronjob','paiement','paiement_facture','facture','paiementfourn','paiementfourn_facturefourn','facture_fourn','societe','societe_rib','societe_remise_except') as $table) {
+foreach (array('bank_account','bank','bank_url','const','cronjob','paiement','paiement_facture','facture','paiementfourn','paiementfourn_facturefourn','facture_fourn','societe','societe_rib','societe_remise_except','chargesociales','paiementcharge','c_chargesociales') as $table) {
 	$sql = file_get_contents(DOL_DOCUMENT_ROOT . '/install/mysql/tables/llx_' . $table . '.sql');
 	$sql = preg_replace('/--[^\n]*/', '', $sql);
 	foreach (explode(';', str_replace('llx_', MAIN_DB_PREFIX, $sql)) as $statement) {

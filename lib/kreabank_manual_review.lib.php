@@ -62,6 +62,8 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 			'payment_supplier_linked' => 1,
 			'customer_invoice' => 1,
 			'supplier_invoice' => 1,
+			'tax' => 1,
+			'payment_tax' => 1,
 		);
 
 		$validCandidates = array();
@@ -305,7 +307,7 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 		$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestionsByLine[$lineId] ?? array(), $dateTolerance);
 		$rows = array();
 		foreach ($suggestions as $suggestion) {
-			if (!in_array($suggestion['doc_type'], array('native_bank', 'customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked'), true)) {
+			if (!in_array($suggestion['doc_type'], array('native_bank', 'customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked', 'tax', 'payment_tax'), true)) {
 				continue;
 			}
 			if ($suggestion['doc_type'] === 'native_bank' && ((int) ($suggestion['bank_account_id'] ?? 0) !== (int) $line['bank_account_id']

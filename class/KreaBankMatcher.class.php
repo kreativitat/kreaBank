@@ -87,6 +87,9 @@ class KreaBankMatcher
 				'amount_open' => (float) $document['amount_open'],
 				'supplier_payment_id' => (int) (!empty($document['supplier_payment_id']) ? $document['supplier_payment_id'] : 0),
 				'customer_payment_id' => (int) (!empty($document['customer_payment_id']) ? $document['customer_payment_id'] : 0),
+				'tax_id' => (int) ($document['tax_id'] ?? 0),
+				'tax_type_id' => (int) ($document['tax_type_id'] ?? 0),
+				'tax_payment_mode_id' => (int) ($document['tax_payment_mode_id'] ?? 0),
 				'score' => (int) $scoreData['score'],
 				'details' => $scoreData['details'],
 				'strategy_level' => $scoreData['strategy_level'],
@@ -129,7 +132,7 @@ class KreaBankMatcher
 		$epsilon = 0.01;
 		$docType = ($document['doc_type'] ?? '');
 		$isNativeBankDocument = ($docType === 'native_bank');
-		$isInvoiceDocument = in_array($docType, array('customer_invoice', 'supplier_invoice'), true);
+		$allowsPartialPayment = in_array($docType, array('customer_invoice', 'supplier_invoice', 'tax'), true);
 		$isLoteBatchLine = $this->isLoteBatchLine($line);
 		$hasStrongReferenceMatch = false;
 		$dateOutsideTolerance = false;
@@ -149,8 +152,8 @@ class KreaBankMatcher
 			$score += 70;
 			$details[] = 'amount';
 			$strategyLevel = max($strategyLevel, 1);
-		} elseif ($isInvoiceDocument && $docAmount > 0 && $lineAmount < $docAmount + $epsilon) {
-			// Partial amount matching is valid only for invoices (partial payment scenarios).
+		} elseif ($allowsPartialPayment && $docAmount > 0 && $lineAmount < $docAmount + $epsilon) {
+			// Existing invoices and taxes may receive an identity-supported partial payment.
 			$score += 40;
 			$details[] = 'amount_pending';
 		}

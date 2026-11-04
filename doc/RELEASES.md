@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.19.18 — 2026-11-04
+
+- Reconcile existing taxes/social contributions and unbanked tax payments through
+  signed manual review. Compute remaining balances from native payments; use the
+  configured active payment method and native paid/partial-payment lifecycle.
+- Reuse banked tax movements without duplicate candidates or financial records.
+  Include tax evidence in other-account search and reviewed account correction;
+  flag possible misposted DUC/social-tax payments before approval or automation.
+- Recheck parent-company ownership, reviewed tax identity/method, currency and
+  current balances under locks. Commit payments, links, reconciliation and audit
+  atomically. No schema or scheduler change.
+
 ## 1.19.17 — 2026-11-04
 
 - Translate native `(banktransfert)` labels in reconciliation cards and movement

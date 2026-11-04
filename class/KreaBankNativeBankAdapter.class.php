@@ -522,9 +522,10 @@ class KreaBankNativeBankAdapter
 	 * @param bool $isTransfer Use the explicit native transfer operation code
 	 * @param bool $cardReceipt Use the selected native mode for a validated positive TPA receipt
 	 * @param string $receiptOperationCode Explicit active native payment code for TPA receipts
+	 * @param string $paymentOperationCode Explicit active method for a reviewed native payment
 	 * @return int
 	 */
-	public function ensureNativeLineForStatementLine($lineId, $isTransfer = false, $cardReceipt = false, $receiptOperationCode = '')
+	public function ensureNativeLineForStatementLine($lineId, $isTransfer = false, $cardReceipt = false, $receiptOperationCode = '', $paymentOperationCode = '')
 	{
 		$this->ensureMetaTable();
 		$this->ensureStagingTables();
@@ -559,7 +560,10 @@ class KreaBankNativeBankAdapter
 		if ($cardReceipt && !array_key_exists((string) $receiptOperationCode, self::activePaymentModes($this->db, true))) {
 			throw new Exception('Select an active native payment mode for card receipts');
 		}
-		$operationCode = $cardReceipt ? (string) $receiptOperationCode : ($isTransfer ? 'VIR' : $this->guessOperationCode($amount));
+		if ($paymentOperationCode !== '' && ($isTransfer || $cardReceipt || !array_key_exists($paymentOperationCode, self::activePaymentModes($this->db, true)))) {
+			throw new Exception('Select an active native payment mode for this payment');
+		}
+		$operationCode = $paymentOperationCode !== '' ? $paymentOperationCode : ($cardReceipt ? (string) $receiptOperationCode : ($isTransfer ? 'VIR' : $this->guessOperationCode($amount)));
 		$label = $this->buildLabel($line);
 		$numChq = (string) (!empty($line['payment_reference']) ? $line['payment_reference'] : $line['bank_reference']);
 		$statementRef = !empty($line['statement_ref']) ? (string) $line['statement_ref'] : '';

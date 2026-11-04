@@ -384,7 +384,7 @@ class KreaBankQuickFlowTaxServiceStub extends KreaBankService
 		return ($socialTypeId > 0 ? $socialTypeId : 1);
 	}
 
-	protected function resolveNativeLineIdFromStatementLine($line, $createIfMissing = true)
+	protected function resolveNativeLineIdFromStatementLine($line, $createIfMissing = true, $paymentOperationCode = '')
 	{
 		return 321;
 	}
