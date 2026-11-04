@@ -87,7 +87,7 @@ print '<div class="div-table-responsive kb-accounts-scroll"><table class="kb-acc
 foreach ($accountColumns as $field => $label) {
 	print kreabankListHeader($langs->trans($label), $field, $accountSort, in_array($field, array('balance', 'feed_balance'), true) ? 'kb-money' : '', $params);
 }
-print '<th scope="col" class="kb-account-actions">' . $langs->trans('Actions') . '</th></tr>';
+print '<th scope="col" class="kb-account-actions">' . $langs->trans('KreaBankActions') . '</th></tr>';
 $count=0;
 while ($row=$db->fetch_object($rows)) {
 	if ($count++ < $paging['offset']) { continue; }

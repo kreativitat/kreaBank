@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.19.36 — 2026-11-04
+
+- Use the module’s Actions translation for the account-table heading.
+
 ## 1.19.35 — 2026-11-04
 
 - Move account edit icons to a compact, right-aligned Actions column. Keep account
