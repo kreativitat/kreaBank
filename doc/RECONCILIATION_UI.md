@@ -40,8 +40,11 @@ When the initial candidate set is empty, the workspace opens **Create a new entr
 and reconcile** if creation is permitted. Existing candidates (including locked
 evidence), an explicit entry search or batch search keep matching visible.
 Users can always switch workflows; opening creation never submits a record.
-When an existing payment is flagged in another owned account, its standard
-review/correction card loads on initial selection. Keep matching visible and
+Other-account movements with the exact signed amount and nearby booking date
+load in the standard review/correction cards on initial selection, including
+paid invoices whose bank narrative has no payment reference or full supplier name.
+These are possible matches for explicit manual review; the stronger wrong-account
+warning used by automation is unchanged. Keep matching visible and
 suppress the empty-results message when those records exist; no separate banner
 or Search click is needed.
 Read-only links from matched/bulk review may explicitly request `workflow=create`
@@ -207,13 +210,16 @@ migration, scheduler change or module re-enable is needed.
 
 ## Searching other accounts
 
-Press **Search** in the existing-movement panel to include movements recorded in
+The initial selected-line view also searches movements recorded in
 other open, reconcilable accounts owned by the current company, with the same
 currency/direction and an amount no greater than the statement line. An empty
 search uses the exact amount and nearby booking dates; text searches cover native
 labels/references, payment/invoice references, full invoice counterparties, dates
 and amounts before the 100-result display limit. Restricted transfer-only accounts
 and imported/mapped statement evidence are excluded.
+Press **Search** to refine these results by invoice, supplier, payment or movement
+evidence. A paid invoice is shown through its existing banked payment; it never
+becomes an unpaid-invoice candidate or authorizes a second payment.
 
 These results have no reconciliation checkbox. Expand **Change account to…**,
 review the old and statement accounts, then choose **Confirm account change**.

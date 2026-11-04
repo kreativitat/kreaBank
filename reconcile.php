@@ -1642,14 +1642,9 @@ if (!empty($quickCreateSuccessAlert['enabled']) && !empty($quickCreateSuccessAle
 	print '</div>';
 }
 
-$automaticAccountReview = false;
-if ($selectedLine && !empty($selectedLine['fk_statement']) && !$searchOtherAccounts) {
-	try {
-		$automaticAccountReview = (bool) $service->getPaymentAccountReview($selectedLine['rowid'], array($selectedLine['bank_account_id']));
-	} catch (Throwable $e) { $reportActionException($e, 'prepare_account_review', $langs->trans('KreaBankAccountReviewUnavailable')); }
-}
-
-if ($selectedLine && !empty($selectedLine['fk_statement']) && ($searchOtherAccounts || $automaticAccountReview)) {
+// Manual review also needs amount/date candidates when the bank narrative lacks
+// a payment reference or supplier name. Keep the stronger automation gate separate.
+if ($selectedLine && !empty($selectedLine['fk_statement'])) {
 	try {
 		$otherAccountDocuments = $service->searchOtherAccountMovements((int) $selectedLine['rowid'], $openDocumentsSearch);
 		if ($user->hasRight('kreabank', 'reconciliation', 'write') && $user->hasRight('banque', 'modifier')) {

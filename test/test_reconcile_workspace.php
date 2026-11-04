@@ -321,9 +321,31 @@ foreach (array('tax','invoice') as $kind) {
     workspaceCheck(strpos($initialOtherHtml,'value="change_movement_account"')!==false
         && strpos($initialOtherHtml,'name="selected_docs[]"')===false, $kind.': existing reviewed correction stays separate from reconciliation');
 }
-$unrelatedOtherHtml = renderWorkspaceFixture('noentries','pt_PT',array('statement_id'=>1,'other_accounts'=>array($automaticTaxEntry)));
-workspaceCheck(strpos($unrelatedOtherHtml,'WRONG-BANK')===false && strpos($unrelatedOtherHtml,'data-initial-workflow="create"')!==false,
-    'Without account-review evidence, initial GET retains ordinary lookup and creation routing');
+// Amount/date review must also discover paid invoices whose bank narrative has no
+// invoice/payment reference or complete supplier name (for example a TPA rental).
+$genericPaymentEntry = $automaticTaxEntry;
+$genericPaymentEntry['label'] = 'Existing supplier invoice payment';
+$genericPaymentEntry['tax_docs'] = '';
+$genericPaymentEntry['supplier_docs'] = 'INV-SYNTHETIC-242 · Synthetic supplier';
+foreach (array('noentries','debit','readonly') as $case) {
+    $genericOtherHtml = renderWorkspaceFixture($case,'pt_PT',array('statement_id'=>1,'other_accounts'=>array($genericPaymentEntry)));
+    workspaceCheck(strpos($genericOtherHtml,'INV-SYNTHETIC-242')!==false && strpos($genericOtherHtml,'WRONG-BANK')!==false,
+        $case.': initial GET shows other-account invoice evidence without a strong identity warning');
+    workspaceCheck(strpos($genericOtherHtml,'data-initial-workflow="match"')!==false,
+        $case.': possible existing payment keeps matching visible');
+    workspaceCheck(strpos($genericOtherHtml,'Não foram encontrados movimentos existentes')===false,
+        $case.': possible existing payment suppresses the empty state');
+    if ($case === 'readonly') {
+        workspaceCheck(strpos($genericOtherHtml,'value="change_movement_account"')===false,
+            'Read-only initial lookup exposes evidence without account correction authority');
+    }
+}
+$noOtherHtml = renderWorkspaceFixture('noentries','pt_PT',array('statement_id'=>1));
+workspaceCheck(strpos($noOtherHtml,'data-initial-workflow="create"')!==false,
+    'An empty scoped other-account lookup retains ordinary creation routing');
+$nativeOtherHtml = renderWorkspaceFixture('noentries','pt_PT',array('other_accounts'=>array($genericPaymentEntry)));
+workspaceCheck(strpos($nativeOtherHtml,'WRONG-BANK')===false,
+    'A native source is not resolved through the staging-only account lookup');
 $libxmlPrevious = libxml_use_internal_errors(true);
 $dom = new DOMDocument(); $dom->loadHTML($otherHtml);
 libxml_clear_errors(); libxml_use_internal_errors($libxmlPrevious);

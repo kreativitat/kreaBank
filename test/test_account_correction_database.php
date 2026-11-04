@@ -11,6 +11,33 @@ $sql = preg_replace('/--[^\n]*/', '', $sql);
 foreach (explode(';', str_replace('llx_', MAIN_DB_PREFIX, $sql)) as $statement) {
     if (trim($statement) !== '') { $db->query($statement); }
 }
+// Paid invoices can have a generic statement narrative with neither a shared
+// payment reference nor the invoice counterparty's name. They remain discoverable
+// for manual review without becoming strong wrong-account warnings or new bills.
+foreach (array(false,true) as $supplier) {
+    $id = $supplier ? 80601 : 80600;
+    $bankId = $id+1000;
+    $signed = $supplier ? '-9.23' : '9.23';
+    $payment = $supplier ? 'paiementfourn' : 'paiement';
+    $invoice = $supplier ? 'facture_fourn' : 'facture';
+    $allocation = $supplier ? 'paiementfourn_facturefourn' : 'paiement_facture';
+    $paymentKey = $supplier ? 'fk_paiementfourn' : 'fk_paiement';
+    accountReviewFixture($id,$supplier);
+    $db->query("UPDATE kbauto_kreabank_statement_line SET amount=$signed,payment_reference='',description='Monthly terminal rental',counterparty_name='' WHERE rowid=$id");
+    $db->query("UPDATE kbauto_bank SET amount=$signed,num_chq='',label='Existing invoice payment' WHERE rowid=$bankId");
+    $db->query("UPDATE kbauto_$payment SET amount=9.23,num_paiement='' WHERE rowid=$id");
+    $db->query("UPDATE kbauto_$invoice SET total_ttc=9.23,fk_statut=2,paye=1 WHERE rowid=$id");
+    $db->query("UPDATE kbauto_$allocation SET amount=9.23 WHERE $paymentKey=$id");
+    $beforeLookup = array(countAuto('bank'),countAuto($payment),countAuto('kreabank_recon_audit'));
+    checkAuto($service->getPaymentAccountReview($id,array(101))===null, 'Generic narrative does not relax strong wrong-account warning criteria');
+    $possible = $service->searchOtherAccountMovements($id);
+    checkAuto(count($possible)===1 && (int)$possible[0]['rowid']===$bankId && $possible[0]['can_move'],
+        'Amount/date lookup finds the existing paid '.($supplier?'supplier':'customer').' invoice payment for explicit account correction');
+    checkAuto(strpos($possible[0][$supplier?'supplier_docs':'customer_docs'],'INVOICE-'.$id)!==false,
+        'The paid invoice remains visible through its original payment allocations');
+    checkAuto($beforeLookup===array(countAuto('bank'),countAuto($payment),countAuto('kreabank_recon_audit')),
+        'Discovering a paid invoice creates no movement, payment or audit');
+}
 accountReviewFixture(80000, true);
 $db->query("UPDATE kbauto_bank SET label='Synthetic correction payment' WHERE rowid=81000");
 function correctionEntry($id = 80000, $search = '') {

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.19.26 — 2026-11-04
+
+- Show possible other-account invoice payments on initial line selection using
+  exact amount and nearby booking dates, even without a matching bank reference
+  or full supplier name. Retain explicit reviewed account correction and separate
+  reconciliation; automatic matching and financial execution are unchanged.
+
 ## 1.19.25 — 2026-11-04
 
 - Continue successful one-by-one reconciliation in the displayed pending order
