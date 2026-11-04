@@ -101,8 +101,8 @@
 .kb-allocation.kb-balanced { background:#eaf4ee; color:#29563c; }
 .kb-selection-feedback { font-size:12px; color:var(--kb-muted); line-height:1.5; min-height:18px; }
 .kb-selection-feedback.kb-mismatch { color:#8c3d35; }
-.kb-recon .kb-primary-action { display:inline-block; background:var(--kb-green); border:1px solid var(--kb-green); border-radius:6px; color:#fff; padding:12px 18px; margin:0; font-size:12px; font-weight:600; text-transform:none; line-height:1.5; white-space:normal; height:auto; }
-.kb-recon .kb-primary-action:hover:not(:disabled) { background:#284b3a; }
+.kb-recon .button.kb-primary-action { display:inline-block; background:var(--kb-green); border:1px solid var(--kb-green); border-radius:6px; color:#fff; padding:12px 18px; margin:0; font-size:12px; font-weight:600; text-transform:none; line-height:1.5; white-space:normal; height:auto; }
+.kb-recon .button.kb-primary-action:hover:not(:disabled),.kb-recon .button.kb-primary-action:focus-visible:not(:disabled),.kb-recon .button.kb-primary-action:active:not(:disabled) { background:#284b3a; border-color:#284b3a; color:#fff; }
 .kb-recon form[aria-busy=true] { opacity:.7; }
 .kb-create-choices { padding:0; margin:0 0 22px; border:0; }
 .kb-create-choices legend { font-size:12px; font-weight:600; margin-bottom:10px; }

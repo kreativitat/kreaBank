@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.19.8 — 2026-11-04
+
+- Keep reconciliation primary-button text white on hover, keyboard focus and
+  press. Match the native theme selector specificity so the theme's dark text cannot
+  override the green button style. Financial actions remain unchanged.
+
 ## 1.19.7 — 2026-11-04
 
 - Allow one daily Fintable collection across all active companies, defaulting to
