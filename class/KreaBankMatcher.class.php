@@ -20,6 +20,29 @@ class KreaBankMatcher
 	 */
 	const STRONG_REFERENCE_MIN_LENGTH = 8;
 
+	/** Complete payee name evidence for manual review only; never a strong reference. */
+	public function hasCompleteCounterpartyNameMatch($line, $name)
+	{
+		// Display names may start with an internal code, such as AB42 - Legal Name.
+		$name = preg_replace('/^\s*[a-z]{1,8}[0-9]{1,6}\s+[-–—:]\s+/iu', '', (string) $name);
+		$words = static function ($text) {
+			if (function_exists('dol_string_unaccent')) { $text = dol_string_unaccent((string) $text); }
+			elseif (function_exists('iconv')) {
+				$folded = iconv('UTF-8', 'ASCII//TRANSLIT', (string) $text);
+				if ($folded !== false && strpos($folded, '?') === false) { $text = $folded; }
+			}
+			$text = function_exists('mb_strtolower') ? mb_strtolower((string) $text, 'UTF-8') : strtolower((string) $text);
+			return preg_split('/[^\p{L}\p{N}]+/u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: array();
+		};
+		$nameWords = $words($name);
+		$phrase = implode(' ', $nameWords);
+		if (count($nameWords) < 2 || strlen($phrase) < 8) { return false; }
+		foreach (array('counterparty_name', 'description') as $field) {
+			if (strpos(' ' . implode(' ', $words($line[$field] ?? '')) . ' ', ' ' . $phrase . ' ') !== false) { return true; }
+		}
+		return false;
+	}
+
 	/** Recognize complete terminal/settlement identities, never the generic word TPA alone. */
 	public static function tpaSettlementIdentity($description)
 	{
@@ -191,11 +214,7 @@ class KreaBankMatcher
 		if ($lineName === '' && $docName !== '' && $isNativeBankDocument) {
 			// Bank exports often provide the payee only inside the transaction description.
 			// Require a complete multi-word name; free-text evidence never authorizes automation.
-			$nameWords = preg_split('/[^\p{L}\p{N}]+/u', $docName, -1, PREG_SPLIT_NO_EMPTY) ?: array();
-			$descriptionWords = preg_split('/[^\p{L}\p{N}]+/u', kreabankNormalizeText($line['description'] ?? ''), -1, PREG_SPLIT_NO_EMPTY) ?: array();
-			$namePhrase = implode(' ', $nameWords);
-			if (count($nameWords) >= 2 && strlen($namePhrase) >= 8
-				&& strpos(' ' . implode(' ', $descriptionWords) . ' ', ' ' . $namePhrase . ' ') !== false) {
+			if ($this->hasCompleteCounterpartyNameMatch($line, $docNameSource)) {
 				$score += 25;
 				$details[] = 'name_description';
 				$strategyLevel = max($strategyLevel, 2);

@@ -138,4 +138,43 @@ checkAuto($service->getPaymentAccountReview(70000,array(101))===null, 'Warning d
 checkAuto($service->getAutomaticNativeSuggestion(70000,array(101))!==null, 'Corrected payment resumes ordinary safe same-account matching');
 checkAuto($service->reconcileAutomaticNativeLine(70000,array(101))===true, 'Corrected native payment reconciles through the existing executor');
 checkAuto(countAuto('bank')===$before[0]+1 && countAuto('paiement')===$before[1]+1, 'Correction and reconciliation do not duplicate the existing payment or bank movement');
+// A feed with no remittance reference still needs an actionable account warning.
+accountReviewFixture(70003, true);
+$db->query("INSERT INTO kbauto_societe (rowid,entity,nom,fournisseur) VALUES (11001,1,'AC42 - Fábrica Exemplo, Lda.',1),(11002,1,'Outra Empresa, Lda.',1)");
+$db->query('UPDATE kbauto_facture_fourn SET fk_soc=11001 WHERE rowid=70003');
+$db->query("UPDATE kbauto_kreabank_statement_line SET payment_reference=NULL,counterparty_name=NULL,description='Trf imediata FABRICA EXEMPLO LDA' WHERE rowid=70003");
+$db->query("UPDATE kbauto_paiementfourn SET num_paiement='' WHERE rowid=70003");
+$db->query('UPDATE kbauto_bank SET num_chq=NULL WHERE rowid=71003');
+$beforeNames = array(countAuto('bank'),countAuto('paiementfourn'),countAuto('kreabank_recon_audit'));
+$review = $service->getPaymentAccountReview(70003,array(101));
+checkAuto($review && count($review['candidates'])===1 && $review['candidates'][0]['payment_id']===70003 && $review['candidates'][0]['bank_account_id']===102, 'Reference-less feed detects the exact-amount/date payment through its complete invoice counterparty');
+checkAuto($service->getAutomaticNativeSuggestion(70003,array(101))===null, 'Name evidence remains review-only and cannot authorize cross-account matching');
+checkAuto($beforeNames===array(countAuto('bank'),countAuto('paiementfourn'),countAuto('kreabank_recon_audit')), 'Name detection changes no ledger records, payments or audits');
+foreach (array('FABRICA','FABRICA EXEMPLO2 LDA','UNRELATED SUPPLIER LDA') as $description) {
+	$db->query("UPDATE kbauto_kreabank_statement_line SET description='$description' WHERE rowid=70003");
+	checkAuto($service->getPaymentAccountReview(70003,array(101))===null, 'Partial and unrelated payee names do not generate a warning');
+}
+$db->query("UPDATE kbauto_kreabank_statement_line SET description='Trf imediata FABRICA EXEMPLO LDA',payment_reference='DIFFERENT-REFERENCE-123456' WHERE rowid=70003");
+checkAuto($service->getPaymentAccountReview(70003,array(101))===null, 'Name evidence cannot override a conflicting explicit bank payment reference');
+$db->query("UPDATE kbauto_kreabank_statement_line SET description='',payment_reference=NULL,counterparty_name='Fábrica Exemplo, Lda.' WHERE rowid=70003");
+checkAuto($service->getPaymentAccountReview(70003,array(101))!==null, 'The complete structured counterparty name also identifies review evidence');
+foreach (array("amount=-231.48", "operation_date='2026-09-01'", "currency='USD'") as $change) {
+	$db->query("UPDATE kbauto_kreabank_statement_line SET $change WHERE rowid=70003");
+	checkAuto($service->getPaymentAccountReview(70003,array(101))===null, 'Name evidence retains exact amount, currency and date scope');
+	$db->query("UPDATE kbauto_kreabank_statement_line SET amount=-231.47,operation_date='2026-11-01',currency='EUR' WHERE rowid=70003");
+}
+$db->query("UPDATE kbauto_paiementfourn_facturefourn SET amount=231.46 WHERE fk_paiementfourn=70003");
+checkAuto($service->getPaymentAccountReview(70003,array(101))===null, 'Incomplete invoice allocation totals cannot supply counterparty evidence');
+$db->query("UPDATE kbauto_paiementfourn_facturefourn SET amount=231.47 WHERE fk_paiementfourn=70003");
+$db->query("INSERT INTO kbauto_facture_fourn (rowid,ref,ref_supplier,entity,fk_soc,datec,total_ttc,fk_statut,paye,type) VALUES (70004,'SYNTHETIC-OTHER','OTHER',1,11002,NOW(),1,1,1,0)");
+$db->query('INSERT INTO kbauto_paiementfourn_facturefourn (fk_paiementfourn,fk_facturefourn,amount) VALUES (70003,70004,0)');
+checkAuto($service->getPaymentAccountReview(70003,array(101))===null, 'Mixed invoice counterparties cannot infer a payment identity');
+$db->query('DELETE FROM kbauto_paiementfourn_facturefourn WHERE fk_paiementfourn=70003 AND fk_facturefourn=70004');
+$db->query('UPDATE kbauto_facture_fourn SET entity=2 WHERE rowid=70003');
+checkAuto($service->getPaymentAccountReview(70003,array(101))===null, 'Name evidence cannot disclose foreign invoice parents');
+$db->query('UPDATE kbauto_facture_fourn SET entity=1 WHERE rowid=70003');
+$db->query('UPDATE kbauto_bank SET fk_account=202 WHERE rowid=71003');
+checkAuto($service->getPaymentAccountReview(70003,array(101))===null, 'Name evidence cannot disclose foreign bank accounts');
+$db->query('UPDATE kbauto_bank SET fk_account=102,rappro=1 WHERE rowid=71003');
+checkAuto($service->getPaymentAccountReview(70003,array(101))['candidates'][0]['reconciled'], 'Name-based warnings preserve existing reconciliation locks');
 echo 'OK: '.($checks-$initialChecks)." payment account review database checks\n";

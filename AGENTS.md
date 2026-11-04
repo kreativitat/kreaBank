@@ -170,9 +170,11 @@
 - `KreaBankService::getPaymentAccountReview()` accepts explicit staging IDs and
   checks current-company invoice payments in other owned accounts. It returns
   review evidence only; never feed these records into cross-account execution.
-- Exact signed persisted amount/currency, nearby booking dates and a complete
-  payment/check reference are required. Suspected errors block automatic-native
-  and TPA execution and bulk approval. Review/correction uses the existing native
+- Exact signed persisted amount/currency and nearby booking dates are required,
+  with a complete payment/check reference or, when the bank reference is absent,
+  the complete name of the single fully allocated invoice counterparty. Names are
+  review evidence only, never strong identity for unattended matching. Suspected
+  errors block automatic-native and TPA execution and bulk approval. Review/correction uses the existing native
   bank movement form; preserve payment allocations, accounting and reconciliation
   locks. Recompute warnings after correction, never cache approval of a move.
 - `test/test_payment_account_review.php` is pure; its database counterpart extends

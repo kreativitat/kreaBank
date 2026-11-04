@@ -6,6 +6,7 @@
  */
 require_once __DIR__ . '/../lib/kreabank.lib.php';
 require_once __DIR__ . '/../lib/kreabank_bulk.lib.php';
+require_once __DIR__ . '/../class/KreaBankMatcher.class.php';
 function dol_buildpath($path, $absolute = 0) { return $path; }
 function dol_escape_htmltag($value) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
 function price($value, ...$options) { return number_format((float) $value, 2, ',', ' '); }
@@ -27,6 +28,15 @@ $review = array('line'=>array('rowid'=>17,'bank_account_id'=>101,'bank_account_r
 $html = kreabankPaymentAccountReviewHtml($review,$langs);
 $checks = 0;
 function checkReview($condition, $message) { global $checks; if (!$condition) { throw new RuntimeException($message); } $checks++; }
+$matcher = new KreaBankMatcher();
+checkReview($matcher->hasCompleteCounterpartyNameMatch(array('description'=>'Trf imediata FABRICA EXEMPLO LDA'), 'AC42 - Fábrica Exemplo, Lda.'), 'Full legal name ignores accents, punctuation and a display code');
+checkReview($matcher->hasCompleteCounterpartyNameMatch(array('counterparty_name'=>'Fábrica Exemplo, Lda.'), 'Fabrica Exemplo Lda'), 'Structured counterparty evidence can supply the full name');
+checkReview($matcher->hasCompleteCounterpartyNameMatch(array('description'=>'TRANSFER 東京 商事'), '東京 商事'), 'Complete Unicode names retain matching coverage');
+foreach (array('FABRICA', 'FABRICA EXEMPLO2 LDA', 'XFABRICA EXEMPLO LDA', 'FABRICA EXEMPLO LDAX') as $text) {
+	checkReview(!$matcher->hasCompleteCounterpartyNameMatch(array('description'=>$text), 'Fábrica Exemplo, Lda.'), 'Partial names and prefixes cannot imply an account mismatch');
+}
+checkReview(!$matcher->hasCompleteCounterpartyNameMatch(array('description'=>'TRANSFER'), 'Transfer'), 'Generic single-word labels cannot identify a counterparty');
+checkReview($matcher->getSafeSuggestion(array(array('score'=>200,'details'=>array('amount','date','name_description'))), 150) === null, 'Even a high name-only score cannot authorize unattended matching');
 checkReview(strpos($html,'Banco A')!==false && strpos($html,'Banco B')!==false, 'Both account names appear in the warning');
 checkReview(strpos($html,'/fourn/paiement/card.php?id=701')!==false && strpos($html,'/compta/bank/line.php?rowid=801')!==false, 'Supplier payment and native correction links preserve identity');
 checkReview(strpos($html,'account_context=101')!==false && strpos($html,'-231,47 EUR')!==false, 'Statement context and signed localized amount are visible');

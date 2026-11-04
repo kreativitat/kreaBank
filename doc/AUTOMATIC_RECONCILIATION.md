@@ -126,8 +126,14 @@ company. The statement's signed persisted amount and currency must agree with
 the payment's native movement; its booking date must be within the configured
 automatic tolerance. A complete payment/check reference with at least eight
 alphanumeric characters and a digit must occur in the statement reference or
-description. Amount/date or payee name alone does not establish an account error;
-missing reference evidence means the mistake may remain undetected.
+description. Since 1.19.6, a missing statement payment reference can instead use
+the complete name of the single invoice counterparty, with all invoice allocations
+accounting exactly for the payment amount. Name evidence ignores accents,
+punctuation and an internal display-code prefix (such as `AB42 -`). It requires
+a complete multi-word name in the statement description or counterparty field;
+partial/fuzzy names, amount/date alone, mixed counterparties and conflicting
+statement references do not qualify. This flags a possible account mismatch for
+review; it does not establish an error or qualify as unattended matching identity.
 
 These are possible mistakes for human verification. Multiple candidates are
 shown together; reaching the 101-payment search limit also requires review.

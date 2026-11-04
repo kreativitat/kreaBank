@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.19.6 — 2026-11-04
+
+- Flag possible invoice payments recorded in another owned account when the bank
+  omits a payment reference but supplies the complete counterparty name, with the
+  exact signed amount/currency and a nearby date. Require one invoice counterparty;
+  normalize accents, punctuation and internal display codes for name evidence.
+- Keep name evidence advisory: no cross-account reconciliation, account changes
+  or relaxation of unattended matching. No schema or scheduler changes.
+
 ## 1.19.5 — 2026-11-04
 
 - Add Next (pt_PT: Seguinte) to move the first visible pending line to the bottom

@@ -2469,6 +2469,9 @@ class KreaBankService
 		$invoiceKey = $supplier ? 'fk_facturefourn' : 'fk_facture';
 		$sql = "SELECT b.rowid,b.fk_account,b.amount,b.dateo,b.rappro,b.label,b.num_chq,"
 			. ' ba.ref AS account_ref,ba.label AS account_label,p.rowid AS payment_id,p.ref AS payment_ref,p.num_paiement'
+			. ", (SELECT CASE WHEN COUNT(DISTINCT f.fk_soc)=1 AND SUM(pf.amount)=p.amount AND COUNT(soc.rowid)=COUNT(*) THEN MIN(soc.nom) ELSE NULL END"
+			. " FROM {$p}{$linkTable} pf JOIN {$p}{$invoiceTable} f ON f.rowid=pf.{$invoiceKey} AND f.entity=p.entity"
+			. " LEFT JOIN {$p}societe soc ON soc.rowid=f.fk_soc WHERE pf.{$paymentKey}=p.rowid) AS thirdparty_name"
 			. " FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account"
 			. " JOIN {$p}{$paymentTable} p ON p.fk_bank=b.rowid AND p.entity=ba.entity"
 			. ' WHERE ba.entity=' . $this->entity . ' AND b.fk_account<>' . (int) $line['bank_account_id']
@@ -2494,6 +2497,12 @@ class KreaBankService
 					'amount_open'=>(float) $payment->amount,'doc_date'=>$payment->dateo,'description'=>$payment->label);
 				$score = $this->matcher->scoreLineToDocument($line, $document, array(), $tolerance);
 				if (in_array('date', $score['details'], true) && in_array('amount', $score['details'], true)) { $reference = $possible; break; }
+			}
+			if ($reference === '' && trim((string) $line['payment_reference']) === ''
+				&& $this->matcher->hasCompleteCounterpartyNameMatch($line, $payment->thirdparty_name)) {
+				// Missing bank references must not hide a possible misposted payment.
+				// Exact persisted amount/date scope and invoice ownership are enforced above.
+				$reference = (string) $payment->thirdparty_name;
 			}
 			if ($reference === '') { continue; }
 			$candidates[] = array('bank_line_id'=>(int) $payment->rowid,'bank_account_id'=>(int) $payment->fk_account,
