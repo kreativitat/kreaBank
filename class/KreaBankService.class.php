@@ -2618,6 +2618,7 @@ class KreaBankService
 		$scope->assertLine($line);
 		$scope->assertDocument('native_bank', (int) $bankLineId, (int) $line['bank_account_id']);
 		$rows = $this->getOpenNativeBankDocuments((int) $line['direction'], 20, null, 0, 0, (int) $line['bank_account_id'], (int) $bankLineId);
+		$rows = (new KreaBankTaxReconciliation($this->db, $this->user, $this->entity))->decorateMovements($rows);
 		return $rows ? $rows[0] : null;
 	}
 

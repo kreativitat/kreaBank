@@ -63,6 +63,8 @@ modifier rights, tax rights, unchanged source/payment/tax facts, one coherent ta
 payment, and the existing accounting/reconciliation/deposit/transfer restrictions.
 It changes only the native movement's account. Tax defaults, tax/payment identity,
 amounts and paid state remain unchanged. Reconciliation is a separate action.
+Reload corrected movements through the same tax projection used by normal
+candidates, so their displayed facts and the recomputed review signature agree.
 
 ## Validation and delivery
 

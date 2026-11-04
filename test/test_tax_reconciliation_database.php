@@ -123,6 +123,21 @@ checkAuto($paymentBefore===(array)$db->query('SELECT * FROM kbauto_paiementcharg
     && $taxBefore===(array)$db->query('SELECT * FROM kbauto_chargesociales WHERE rowid=90005')->fetch_object(), 'Correction preserves tax and payment identities and amounts');
 checkAuto($service->getPaymentAccountReview(90005,array(101))===null, 'Tax account warning is recomputed after correction');
 $row=taxReviewFixture(90005,'native_bank',92005);
+// The correction response renders this targeted reload; confirmation recomputes
+// the ordinary candidate. Their exact displayed/signed facts must agree.
+$corrected=$service->getCorrectedAccountMovement(90005,92005);
+$renderedRow=$row;
+foreach (array('ref'=>'doc_ref','doc_date'=>'doc_date','thirdparty_name'=>'thirdparty_name','amount_open'=>'amount_open') as $displayKey=>$reviewKey) {
+    $renderedRow['suggestion'][$reviewKey]=$corrected[$displayKey];
+}
+$expires=dol_now()+900;$scope='1|7|101';$secret=str_repeat('tax-review-secret-',3);
+$signature=kreabankBulkReviewSignature($renderedRow,$scope,$expires,$secret);
+$freshRow=taxReviewFixture(90005,'native_bank',92005);
+checkAuto(kreabankBulkReviewIsValid($freshRow,$scope,$expires,$signature,$secret,dol_now(),true,101),
+    'First approval after account correction authenticates the exact displayed tax movement');
+$changedRow=$freshRow;$changedRow['suggestion']['thirdparty_name'].=' changed';
+checkAuto(!kreabankBulkReviewIsValid($changedRow,$scope,$expires,$signature,$secret,dol_now(),true,101),
+    'Changed tax display evidence still invalidates the signed review');
 $before=array(countAuto('bank'),countAuto('paiementcharge'));
 checkAuto($row && applyTaxReview($row)===90005 && $before===array(countAuto('bank'),countAuto('paiementcharge')), 'Reconcile corrected tax movement without creating a payment or movement');
 // Currency, permissions, inactive modes and paid state fail closed.

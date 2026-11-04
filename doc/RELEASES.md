@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.19.22 — 2026-11-04
+
+- Reload corrected tax movements through the same projection as ordinary
+  candidates. Keep displayed tax details and the signed approval identical so
+  the first reconciliation attempt after account correction is accepted.
+- Preserve exact review validation; changed records still require a new review.
+
 ## 1.19.21 — 2026-11-04
 
 - Show existing tax/invoice payments flagged in another account immediately in
