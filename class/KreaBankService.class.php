@@ -11,6 +11,7 @@ require_once __DIR__ . '/KreaBankParser.class.php';
 require_once __DIR__ . '/KreaBankMatcher.class.php';
 require_once __DIR__ . '/KreaBankNativeBankAdapter.class.php';
 require_once __DIR__ . '/KreaBankReconciliationScope.class.php';
+require_once __DIR__ . '/KreaBankStatementEvidence.class.php';
 require_once __DIR__ . '/../lib/kreabank.lib.php';
 
 /**
@@ -747,6 +748,66 @@ class KreaBankService
 			'bank_line_ids' => !empty($result['bank_line_ids']) ? (array) $result['bank_line_ids'] : array(),
 			'duplicates_details' => !empty($result['duplicates_details']) ? (array) $result['duplicates_details'] : array(),
 		);
+	}
+
+	/** Attach a reviewed original file to existing staging identities without financial writes. */
+	public function recordStatementEvidence($statementId, $evidence)
+	{
+		if (empty($this->user->statut) || !empty($this->user->socid) || !isModEnabled('banque') || !isModEnabled('kreabank') || !$this->user->hasRight('banque', 'modifier')
+			|| !$this->user->hasRight('kreabank', 'reconciliation', 'write')) {
+			throw new Exception('Statement import permission required');
+		}
+		$proof = KreaBankStatementEvidence::normalize($evidence);
+		$p = $this->db->prefix(); $e = $this->entity; $statementId = (int) $statementId;
+		if (!$this->db->begin()) { throw new Exception('Cannot start statement evidence transaction'); }
+		try {
+			$res = $this->db->query("SELECT s.* FROM {$p}kreabank_statement s JOIN {$p}bank_account a ON a.rowid=s.bank_account_id"
+				. " AND a.entity=s.entity WHERE s.entity=$e AND s.rowid=$statementId FOR UPDATE");
+			$statement = $res ? $this->db->fetch_object($res) : null;
+			if (!$statement) { throw new Exception('Statement does not belong to this company'); }
+			$ids = array_column($proof['lines'], 'staged_id');
+			$res = $this->db->query("SELECT l.* FROM {$p}kreabank_statement_line l JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
+				. " WHERE l.entity=$e AND s.bank_account_id=" . (int) $statement->bank_account_id . ' AND l.rowid IN (' . implode(',', $ids) . ') ORDER BY l.rowid FOR UPDATE');
+			if (!$res) { throw new Exception('Cannot lock imported statement evidence'); }
+			$stored = array(); while ($row = $this->db->fetch_object($res)) { $stored[(int) $row->rowid] = $row; }
+			foreach ($proof['lines'] as &$line) {
+				$row = $stored[$line['staged_id']] ?? null;
+				if (!$row || (int) $row->is_duplicate !== 0 || $row->operation_date !== $line['operation_date']
+					|| KreaBankStatementEvidence::decimal((string) $row->amount) !== $line['amount'] || $row->currency !== $line['currency']
+					|| KreaBankStatementEvidence::description($row->description) !== KreaBankStatementEvidence::description($line['description'])) {
+					throw new Exception('Original statement does not match its existing imported movement');
+				}
+				$line['line_uid'] = (string) $row->line_uid;
+				$line['expected_description'] = (string) $row->description;
+			}
+			unset($line);
+			// Compare the complete file's adjacent balances using exact database decimals.
+			$values = array();
+			foreach ($proof['lines'] as $line) {
+				$values[] = 'SELECT ' . $line['sequence'] . ' n,CAST(\'' . $line['amount'] . '\' AS DECIMAL(24,8)) amount,CAST(\'' . $line['running_balance'] . '\' AS DECIMAL(24,8)) balance';
+			}
+			$values = '(' . implode(' UNION ALL ', $values) . ')';
+			$res = $this->db->query("SELECT COUNT(*) n FROM $values current_line JOIN $values previous_line ON current_line.n=previous_line.n+1"
+				. ' WHERE current_line.balance<>previous_line.balance+current_line.amount');
+			if (!$res || (int) $this->db->fetch_object($res)->n !== 0) { throw new Exception('Original statement balance chain is inconsistent'); }
+			$payload = $statement->import_payload === null ? array() : json_decode($statement->import_payload, true);
+			if (!is_array($payload)) { throw new Exception('Existing statement metadata cannot be overwritten'); }
+			if (isset($payload['bank_statement_evidence'])) {
+				if ($payload['bank_statement_evidence'] !== $proof) { throw new Exception('Original statement evidence already exists; review the existing source'); }
+				$this->db->commit(); return array('statement_id'=>$statementId, 'lines'=>count($ids), 'already_recorded'=>true);
+			}
+			$payload['bank_statement_evidence'] = $proof;
+			$json = json_encode($payload, JSON_UNESCAPED_UNICODE);
+			if ($json === false || !$this->db->query("UPDATE {$p}kreabank_statement SET import_payload='" . $this->db->escape($json) . "' WHERE entity=$e AND rowid=$statementId")) {
+				throw new Exception('Original statement evidence was not saved');
+			}
+			if (!$this->logAudit('statement_evidence', null, null, array('statement_id'=>$statementId,
+				'bank_account_id'=>(int) $statement->bank_account_id, 'source_sha256'=>$proof['sha256'], 'lines'=>count($ids)))) {
+				throw new Exception('Statement evidence audit was not saved');
+			}
+			if (!$this->db->commit()) { throw new Exception('Statement evidence commit failed'); }
+			return array('statement_id'=>$statementId, 'lines'=>count($ids), 'already_recorded'=>false);
+		} catch (Throwable $error) { $this->db->rollback(); throw $error; }
 	}
 
 	/**

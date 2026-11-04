@@ -85,9 +85,7 @@ $total = (int) $db->fetch_object($report->query('SELECT COUNT(*) nb FROM ' . $so
 if ($page * $limit >= $total) {
 	$page = 0;
 }
-$order = $orderField . ' IS NULL ASC,' . $orderField . ' ' . $sort['order']
-	. ',h.operation_date ' . $sort['order'] . ',h.bank_account_id,h.statement_id ' . $sort['order']
-	. ',h.line_rank ' . $sort['order'] . ',h.rowid ' . $sort['order'] . ',h.source_storage';
+$order = kreabankStatementListOrder($sort['order'], $orderField);
 $result = $report->query('SELECT h.* FROM ' . $source . $where . ' ORDER BY ' . $order . $db->plimit($limit + 1, $page * $limit));
 $num = $db->num_rows($result);
 $params = array('mainmenu'=>'bank', 'leftmenu'=>'kreabank_bankstatement', 'account_context'=>$accountId, 'limit'=>$limit);
@@ -147,7 +145,11 @@ while ($shown < $limit && ($row = $db->fetch_object($result))) {
 	print '<td class="right nowrap"' . ($row->balance_calculated ? ' title="' . dol_escape_htmltag($langs->trans('KreaBankCalculatedBalanceHelp', $row->balance_updated_at)) . '"' : '') . '>'
 		. ($row->display_balance !== null ? kreabankPrice($row->display_balance) : '—') . '</td>';
 	print '<td>' . dol_escape_htmltag($row->currency) . '</td><td>' . dol_escape_htmltag($row->bank_account_ref) . '</td>';
-	print '<td><a href="' . dol_escape_htmltag(kreabankStatementUrl($row->bank_account_id, $row->statement_ref)) . '">' . dol_escape_htmltag($row->statement_ref) . '</a></td>';
+	print '<td><a href="' . dol_escape_htmltag(kreabankStatementUrl($row->bank_account_id, $row->statement_ref)) . '">' . dol_escape_htmltag($row->statement_ref) . '</a>';
+	if (!empty($row->evidence_statement_ref) && $row->evidence_statement_ref !== $row->statement_ref) {
+		print '<br><small><a href="' . dol_escape_htmltag(kreabankStatementUrl($row->bank_account_id, $row->evidence_statement_ref)) . '">' . dol_escape_htmltag($row->evidence_statement_ref) . '</a></small>';
+	}
+	print '</td>';
 	print '<td' . ($state === 'KreaBankLinkNeedsReview' ? ' class="warning"' : '') . '>' . $langs->trans($state);
 	if ((int) $row->is_duplicate > 0) {
 		print '<br><span class="warning">' . $langs->trans('KreaBankDuplicate') . '</span>';

@@ -142,6 +142,13 @@
 
 ## List sorting
 
+- Original bank file order is independent of import/feed batch order. Reviewed
+  `KreaBankService::recordStatementEvidence()` metadata retains file checksum,
+  exact existing staging identities, chronological sequence, value dates and
+  balances in `kreabank_statement.import_payload`. Never rewrite feed rows or
+  native financial records to repair display order. The combined projection
+  validates each live identity/amount/currency/date and sorts before pagination.
+  Use only the guarded disposable `test_statement_evidence_database.php` suite.
 - Combined statement header filters and native pagination are owned by
   `bankstatement.php` and `lib/kreabank_statement_list.lib.php`. Apply identical
   filters to counts and rows after the complete scoped balance projection; never

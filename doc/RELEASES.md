@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.19.10 — 2026-11-04
+
+- Preserve a reviewed original bank file's within-day sequence, value dates and
+  running balances across import batches and duplicate-skipped feed movements.
+  Date sorting reverses that sequence before pagination and header filtering.
+- Attach source checksum and row evidence atomically to existing statement
+  metadata. Keep feed identities, staged amounts/statuses, native movements,
+  payments and reconciliation receipts unchanged. No schema or scheduler change.
+
 ## 1.19.9 — 2026-11-04
 
 - Search existing movements in other owned accounts from selected-line reconciliation.

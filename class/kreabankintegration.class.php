@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+require_once __DIR__ . '/KreaBankStatementEvidence.class.php';
+
 /** Read-only projection of imported evidence and its native ledger links. */
 class KreaBankIntegration
 {
@@ -154,16 +156,19 @@ class KreaBankIntegration
 		$p = $this->db->prefix();
 		$e = $this->entity;
 		$account = (int) $accountId > 0 ? ' AND ba.rowid=' . (int) $accountId : '';
+		$evidence = KreaBankStatementEvidence::projectionSql($this->db, $e, $accountId);
 		return "SELECT l.rowid,l.line_rank,s.rowid statement_id,s.ref statement_ref,ba.rowid bank_account_id,ba.ref bank_account_ref,ba.label bank_account_label,"
-			. " l.operation_date,l.value_date,l.description,l.payment_reference,l.bank_reference,l.amount,l.currency,l.running_balance,l.status,l.is_duplicate,"
-			. " b.rowid native_id,b.amount native_amount,b.rappro,b.num_releve,l.fk_native_bank_line expected_native_id,ba.currency_code native_currency,'staging' source_storage,s.source_type"
+			. " l.operation_date,COALESCE(ev.value_date,l.value_date) value_date,COALESCE(ev.description,l.description) description,l.payment_reference,l.bank_reference,l.amount,l.currency,COALESCE(ev.running_balance,l.running_balance) running_balance,l.status,l.is_duplicate,"
+			. " b.rowid native_id,b.amount native_amount,b.rappro,b.num_releve,l.fk_native_bank_line expected_native_id,ba.currency_code native_currency,'staging' source_storage,s.source_type,ev.statement_sequence,ev.evidence_statement_ref"
 			. " FROM {$p}kreabank_statement s JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=$e"
 			. " JOIN {$p}kreabank_statement_line l ON l.fk_statement=s.rowid AND l.entity=s.entity"
 			. " LEFT JOIN {$p}bank b ON b.rowid=l.fk_native_bank_line AND b.fk_account=ba.rowid"
+			. " LEFT JOIN ($evidence) ev ON ev.staged_id=l.rowid AND ev.bank_account_id=ba.rowid AND ev.operation_date=l.operation_date"
+			. " AND ev.amount=l.amount AND ev.currency=l.currency AND BINARY ev.line_uid=BINARY COALESCE(l.line_uid,'') AND BINARY ev.expected_description=BINARY l.description AND l.is_duplicate=0"
 			. " WHERE s.entity=$e$account"
 			. " UNION ALL SELECT b.rowid,b.rowid,0,b.num_releve,ba.rowid,ba.ref,ba.label,"
 			. " COALESCE(m.operation_date,b.dateo),COALESCE(m.value_date,b.datev),COALESCE(m.description,b.label),m.payment_reference,m.bank_reference,"
-			. " b.amount,ba.currency_code,m.running_balance,COALESCE(m.status,0),0,b.rowid,b.amount,b.rappro,b.num_releve,b.rowid,ba.currency_code,'legacy_native',m.source_type"
+			. " b.amount,ba.currency_code,m.running_balance,COALESCE(m.status,0),0,b.rowid,b.amount,b.rappro,b.num_releve,b.rowid,ba.currency_code,'legacy_native',m.source_type,NULL,NULL"
 			. " FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account AND ba.entity=$e"
 			. " LEFT JOIN {$p}kreabank_bankmeta m ON m.fk_bank_line=b.rowid AND m.entity=$e"
 			. " WHERE COALESCE(b.num_releve,'')<>''$account"

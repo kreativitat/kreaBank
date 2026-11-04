@@ -10,6 +10,15 @@ function kreabankStatementListStatusOptions()
 		'skipped'=>'KreaBankSkipped', 'duplicate'=>'KreaBankDuplicate');
 }
 
+/** Reverse the original within-day sequence with the chosen date direction. */
+function kreabankStatementListOrder($order, $expression)
+{
+	$order = strtoupper($order) === 'ASC' ? 'ASC' : 'DESC';
+	return $expression . ' IS NULL ASC,' . $expression . ' ' . $order
+		. ',h.operation_date ' . $order . ',h.bank_account_id,h.statement_sequence ' . $order
+		. ',h.statement_id ' . $order . ',h.line_rank ' . $order . ',h.rowid ' . $order . ',h.source_storage';
+}
+
 /** Normalize only read-only list state; native search/reset buttons start at page one. */
 function kreabankStatementListState($request, $defaultLimit)
 {

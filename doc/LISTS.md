@@ -83,6 +83,41 @@ balance projection; filtering never changes the feed anchor or recomputes a bala
 from the reduced result. Native/staged row order stays deterministic across pages.
 The read path creates no bank movements, payments, source rows or audits.
 
+### Original bank sequence
+
+Import time, provider row order and bank reference suffixes do not establish the
+bank's within-day sequence. An original file may be newest-first, and overlapping
+feed movements may already exist in other import batches. Never manufacture
+transaction timestamps from those dates or order by the displayed balance.
+
+For an explicitly reviewed original file, `KreaBankService::recordStatementEvidence()`
+stores versioned `bank_statement_evidence` in the owning import's existing
+`import_payload`. Supply the file SHA-256, filename, explicit `ASC`/`DESC` source
+order and complete contiguous rows with `staged_id`, operation/value dates, exact
+decimal amount/balance strings, currency, description and original `source_row`.
+Check the retained file bytes and independently establish the complete one-to-one
+mapping before calling this method. Indistinguishable repeated movements require
+their full original multiplicity; never collapse equal amounts/descriptions.
+
+The method rechecks bank/import permissions, direct company/account ownership,
+unique staging IDs, signed amounts, descriptions and the complete balance chain
+under locks. It retains existing metadata, refuses conflicting replacement,
+records immutable feed identities and commits its audit atomically. Retrying the
+same attachment is a no-op. It creates no movements or reconciliations and does
+not change feed payloads or staging rows. No schema migration is required.
+
+The combined view reads this evidence through `KreaBankStatementEvidence`; a
+changed live identity, date, amount or currency cannot reuse its overlay. Original
+value dates and balances drive header filters. Same-day sequence reverses with
+the selected date direction before pagination. The original import link remains,
+with a second link to the reviewed file import where different. Imports without
+reviewed file evidence retain their deterministic existing fallback order.
+
+```sh
+# ONLY the guarded disposable localhost:33317/kreabank_auto_test fixture:
+php test/test_statement_evidence_database.php
+```
+
 ## Native pagination throughout the lists
 
 Accounts, imported statements and statement details, connections and the feed
