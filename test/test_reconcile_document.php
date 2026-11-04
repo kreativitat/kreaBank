@@ -95,7 +95,16 @@ foreach (array('doc_ref'=>'OTHER', 'amount_open'=>47.67, 'thirdparty_name'=>'Dif
 	checkDirect(submitDirectReview() === null && !$service->executions, 'Changed target is rejected: ' . $field);
 }
 resetDirectReview(); $service->suggestions[] = array_merge($service->suggestions[0], array('doc_id'=>23));
-checkDirect(submitDirectReview() === null && !$service->executions, 'Competing equal candidates remain pending');
+checkDirect(submitDirectReview() !== null && $service->executions[0][1][0]['fk_doc'] === 22, 'An explicit signed card selects its own invoice among equal candidates');
+resetDirectReview(); $service->suggestions[] = array_merge($service->suggestions[0], array('doc_id'=>23));
+$callbacks = kreabankManualReviewCallbacks($service, 3, 100);
+$choices = $callbacks['prepareDocumentReviews']($service->line);
+checkDirect(count($choices) === 2 && !$choices['supplier_invoice__22']['preselected'] && !$choices['supplier_invoice__23']['is_bulk_safe'], 'Equal candidates have separate manual reviews and no automatic preselection');
+$request['review_doc'] = 'supplier_invoice__23';
+checkDirect(submitDirectReview() === null && !$service->executions, 'A card cannot reuse the other invoice signature');
+$request['review_signature'] = kreabankBulkReviewSignature($choices['supplier_invoice__23'], '7|9|81', $request['review_expires'], $_SESSION['kreabank_bulk_review_secret']);
+$service->suggestions = array_reverse($service->suggestions);
+checkDirect(submitDirectReview() !== null && $service->executions[0][1][0]['fk_doc'] === 23, 'Explicit second-invoice approval survives candidate reordering');
 resetDirectReview(); $service->accountReview = array('synthetic'=>true);
 checkDirect(submitDirectReview() === null && !$service->executions, 'Wrong-account warnings block direct invoice approval');
 resetDirectReview(); $service->owned = false;

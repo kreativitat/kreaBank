@@ -203,8 +203,11 @@
   with explicit `line_id`, `line_source`, owned account and a signed displayed
   `review_doc`; successful approval returns to the one-by-one queue. They never
   enter native-movement checkbox submission. `lib/kreabank_manual_review.lib.php`
-  shares fresh unique-suggestion preparation and execution with matched/bulk
-  review. Invoice approval is labelled **Record payment and reconcile**.
+  shares candidate eligibility and execution with matched/bulk review. One-by-one
+  cards allow an explicitly signed choice among competing invoices/payments;
+  never rank or preselect that choice automatically. Matched/bulk review retains
+  its unique-suggestion requirement. Invoice approval is labelled **Record
+  payment and reconcile**.
   Associated forms stay outside the native-movement form. Validate with the
   synthetic `test/test_reconcile_document.php` controller suite.
 

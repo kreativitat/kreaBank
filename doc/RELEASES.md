@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.19.15 — 2026-11-04
+
+- Give each eligible one-by-one invoice/payment candidate its own signed action,
+  including equal candidates. Confirm exactly the clicked card after revalidation;
+  reject signatures from another card. Keep unsafe actions visibly disabled.
+- Preserve matched/bulk ambiguity safeguards and unattended matching rules.
+  No schema or scheduler changes.
+
 ## 1.19.14 — 2026-11-04
 
 - Show candidate dates on their own line immediately below the reference and

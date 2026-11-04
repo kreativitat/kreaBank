@@ -217,7 +217,8 @@ if ($action === 'confirm_document') {
 		$line = $service->getBulkReviewLine($lineId, $source);
 		$reviewMinScore = getDolGlobalInt('KREABANK_BULKMATCH_MIN_SCORE');
 		$callbacks = kreabankManualReviewCallbacks($service, $dateTolerance, $reviewMinScore > 0 ? min(1000, $reviewMinScore) : 100);
-		$row = $line && (int) $line['status'] === 0 ? $callbacks['prepareReviewRow']($line) : null;
+		$reviewRows = $line && (int) $line['status'] === 0 ? $callbacks['prepareDocumentReviews']($line) : array();
+		$row = $reviewRows[$documentKey] ?? null;
 		$scope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId;
 		if (!$row || !in_array($row['suggestion']['doc_type'], array('customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked'), true)
 			|| $documentKey !== $row['suggestion']['doc_type'] . '__' . (int) $row['suggestion']['doc_id']
@@ -1639,13 +1640,13 @@ if ($selectedLine) {
 	}
 }
 $canReconcile = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite);
-$documentReviewRow = null;
+$documentReviewRows = array();
 $documentReviewForms = array();
 if ($selectedLine && $canReconcile && $canCreate && array_filter($documents, static function ($doc) { return $doc['doc_type'] !== 'native_bank' && empty($doc['is_locked']); })) {
 	try {
 		$reviewMinScore = getDolGlobalInt('KREABANK_BULKMATCH_MIN_SCORE');
 		$callbacks = kreabankManualReviewCallbacks($service, $dateTolerance, $reviewMinScore > 0 ? min(1000, $reviewMinScore) : 100);
-		$documentReviewRow = $callbacks['prepareReviewRow']($selectedLine);
+		$documentReviewRows = $callbacks['prepareDocumentReviews']($selectedLine);
 		if (empty($_SESSION['kreabank_bulk_review_secret'])) { $_SESSION['kreabank_bulk_review_secret'] = bin2hex(random_bytes(32)); }
 	} catch (Exception $e) { $reportActionException($e, 'prepare_document_review', $langs->trans('KreaBankAccountReviewUnavailable')); }
 }
@@ -1847,8 +1848,8 @@ if (!$selectedLine) {
 			print '</div>';
 			if (!$isLocked && $rawDocType !== 'native_bank') {
 				print '<p>' . $langs->trans('KreaBankReviewConsequence' . $documentKind) . '</p>';
-				if ($documentReviewRow && $docKey === $documentReviewRow['suggestion']['doc_type'] . '__' . (int) $documentReviewRow['suggestion']['doc_id']) {
-					$reviewRow = $documentReviewRow;
+				if (isset($documentReviewRows[$docKey])) {
+					$reviewRow = $documentReviewRows[$docKey];
 					// Bind exactly the target facts rendered on this card; POST recomputes them.
 					foreach (array('ref'=>'doc_ref', 'doc_date'=>'doc_date', 'thirdparty_name'=>'thirdparty_name', 'amount_open'=>'amount_open') as $displayKey => $reviewKey) {
 						$reviewRow['suggestion'][$reviewKey] = $doc[$displayKey];
@@ -1857,6 +1858,7 @@ if (!$selectedLine) {
 					$documentReviewForms[$formId] = $reviewRow;
 					print '<button type="submit" form="' . dol_escape_htmltag($formId) . '" class="button kb-primary-action">' . $langs->trans($documentKind === 'Invoice' ? 'KreaBankReviewPayInvoice' : 'KreaBankWorkspaceReconcilePayment') . '</button>';
 				} elseif ($canReconcile) {
+					print '<button type="button" class="button kb-primary-action" disabled>' . $langs->trans($documentKind === 'Invoice' ? 'KreaBankReviewPayInvoice' : 'KreaBankWorkspaceReconcilePayment') . '</button>';
 					print '<p class="krea-muted">' . $langs->trans('KreaBankWorkspaceDocumentUnavailable') . '</p>';
 				}
 			}

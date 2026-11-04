@@ -132,9 +132,10 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	if ($case === 'locked') { $documents = array($documents[2]); }
 	if ($case === 'safe') { $autoSelectDocKeys['native_bank__103'] = true; $documents = array($documents[2]); $documents[0]['is_locked'] = false; }
 	if (isset($options['documents'])) { $documents = $options['documents']; }
-	if ($case === 'invoice') {
+	if ($case === 'invoice' || $case === 'invoicechoices') {
 		$selectedLine['fk_statement'] = 1;
 		$documents = array(array('rowid'=>242,'doc_type'=>'supplier_invoice','ref'=>'INV-SYNTHETIC','amount_open'=>125.5,'thirdparty_name'=>'Synthetic supplier','doc_date'=>'2026-11-03'));
+		if ($case === 'invoicechoices') { $documents[] = array_merge($documents[0], array('rowid'=>243, 'ref'=>'INV-SYNTHETIC-2')); }
 	}
 	$service->documents = $documents;
 	if ($case === 'single') { $pendingLines = array($selectedLine); $pendingLinesTotal = 1; }
@@ -199,6 +200,9 @@ foreach (array('supplier_invoice', 'customer_invoice', 'payment', 'payment_suppl
 }
 $legacyHtml = renderWorkspaceFixture('debit', 'pt_PT', array('documents'=>array($invoiceDocument)));
 workspaceCheck(strpos($legacyHtml, 'name="line_source" value="native"') !== false, 'Legacy native source namespace remains explicit');
+$choiceHtml = renderWorkspaceFixture('invoicechoices');
+workspaceCheck(substr_count($choiceHtml, 'form="kb-document-review-supplier_invoice__') === 2 && substr_count($choiceHtml, 'name="review_signature"') === 2, 'Each equal invoice candidate has its own submit button and signed form');
+workspaceCheck(strpos($choiceHtml, 'name="review_doc" value="supplier_invoice__242"') !== false && strpos($choiceHtml, 'name="review_doc" value="supplier_invoice__243"') !== false, 'The two buttons bind different invoice identities');
 foreach (array('readonly', 'restricted', 'unavailable') as $case) {
 	$html = renderWorkspaceFixture($case, 'pt_PT', array('documents'=>array($invoiceDocument)));
 	workspaceCheck(strpos($html, 'name="review_signature"') === false && strpos($html, 'form="kb-document-review-') === false, $case . ': no invoice approval action');

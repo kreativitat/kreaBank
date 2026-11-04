@@ -41,10 +41,14 @@ the one-by-one page itself. Each button submits its own associated POST form to
 `reconcile.php`, outside the native-movement form, with the exact source namespace,
 account, expected document and expiring signed review. Invoice approval records
 a payment against the existing invoice; it creates no new invoice.
-`lib/kreabank_manual_review.lib.php` shares unique-suggestion preparation and
-execution with matched/bulk review. Confirmation recomputes and authenticates the
-displayed pair before the service revalidates it under locks. Changed, ambiguous,
-foreign or wrong-account evidence cannot produce an executable pair. Success
+`lib/kreabank_manual_review.lib.php` shares candidate eligibility and execution
+with matched/bulk review. Each eligible invoice/payment card has its own button
+and signature, allowing an explicit user choice between equal candidates.
+Confirmation recomputes that exact target and authenticates the displayed pair
+before the service revalidates it under locks. Changing the target invalidates
+the signature; no candidate is arbitrarily selected or automatically preselected.
+Matched/bulk review retains its unique-suggestion requirement. Changed, foreign
+or wrong-account evidence cannot produce an executable pair. Success
 returns to the one-by-one queue with account/sort context; failure retains the
 selected line and reports the error. No navigation through `matched.php` is needed.
 

@@ -40,7 +40,7 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 
 		return 0;
 	};
-	$resolveLineBestSuggestion = static function ($line, $suggestions) use ($service, $resolveLineDirection, $resolveSuggestionDirection, $bulkMatchMinScore) {
+	$resolveLineBestSuggestion = static function ($line, $suggestions, $explicitDocument = false) use ($service, $resolveLineDirection, $resolveSuggestionDirection, $bulkMatchMinScore) {
 		$outstanding = max(0.0, abs((float) $line['amount']) - abs((float) $line['allocated_amount']));
 		if ($outstanding <= 0.00001) {
 			$outstanding = abs((float) $line['amount']);
@@ -101,6 +101,14 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 				'is_bulk_safe' => false,
 			);
 			$validCandidates[] = $candidate;
+		}
+
+		// Explicit per-card approval validates one chosen target without ranking it.
+		// It never marks that choice safe for unattended or bulk preselection.
+		if ($explicitDocument) {
+			return count($validCandidates) === 1 ? $validCandidates[0] : array(
+				'suggestion'=>null, 'allocation'=>0.0, 'outstanding'=>$outstanding, 'is_bulk_safe'=>false,
+			);
 		}
 
 		if (!empty($validCandidates)) {
@@ -288,7 +296,27 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 			'preselected' => !empty($resolved['is_bulk_safe']), 'is_bulk_safe' => !empty($resolved['is_bulk_safe']),
 			'score' => (int) $resolved['suggestion']['score']);
 	};
-	return compact('resolveLineBestSuggestion', 'buildLinkedFallbackSuggestions', 'appendLinkedFallbackSuggestions', 'prepareReviewRow');
+	$prepareDocumentReviews = static function ($line) use ($service, $dateTolerance, $appendLinkedFallbackSuggestions, $resolveLineBestSuggestion) {
+		$lineId = (int) $line['rowid'];
+		if ((int) $line['status'] !== 0 || (!empty($line['fk_statement']) && $service->getPaymentAccountReview($lineId, array($line['bank_account_id'])))) {
+			return array();
+		}
+		$suggestionsByLine = $service->getSuggestionsForLines(array($line), 0, $dateTolerance, null, false);
+		$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestionsByLine[$lineId] ?? array(), $dateTolerance);
+		$rows = array();
+		foreach ($suggestions as $suggestion) {
+			if (!in_array($suggestion['doc_type'], array('customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked'), true)) {
+				continue;
+			}
+			$resolved = $resolveLineBestSuggestion($line, array($suggestion), true);
+			if (empty($resolved['suggestion'])) { continue; }
+			$key = $suggestion['doc_type'] . '__' . (int) $suggestion['doc_id'];
+			$rows[$key] = array('line'=>$line, 'suggestion'=>$suggestion, 'allocation'=>(float) $resolved['allocation'],
+				'preselected'=>false, 'is_bulk_safe'=>false, 'score'=>(int) $suggestion['score']);
+		}
+		return $rows;
+	};
+	return compact('resolveLineBestSuggestion', 'buildLinkedFallbackSuggestions', 'appendLinkedFallbackSuggestions', 'prepareReviewRow', 'prepareDocumentReviews');
 }
 
 /** Execute one authenticated displayed pair through the existing service. */
