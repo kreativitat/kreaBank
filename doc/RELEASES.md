@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.19.7 — 2026-11-04
+
+- Allow one daily Fintable collection across all active companies, defaulting to
+  08:45 Europe/Lisbon. Retain support for existing two-slot schedules, slot
+  idempotency, retry bounds and the single native scheduler. No schema change.
+
 ## 1.19.6 — 2026-11-04
 
 - Flag possible invoice payments recorded in another owned account when the bank

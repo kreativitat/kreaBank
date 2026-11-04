@@ -22,9 +22,10 @@ it eligible on the next collection, once its native IBAN mapping exists.
 ## Schedule and freshness
 
 The existing Dolibarr scheduler checks one global job every 15 minutes. An
-installation lock and unique wall-clock slots allow two collections per day,
-by default at 08:45 and 20:45 in Europe/Lisbon. The timezone handles daylight
-saving changes; a missed morning run can catch up before the evening slot.
+installation lock and unique wall-clock slots allow one collection per day,
+by default at 08:45 in Europe/Lisbon, across all active companies with KreaBank
+enabled. The timezone handles daylight saving changes; a missed morning run
+can catch up later that day. Existing two-slot schedules remain supported.
 Each failed slot has at most three attempts. There is no new host cron or daemon.
 
 Read-only access collects the data already stored in Fintable. The separate
@@ -102,7 +103,10 @@ module files. Keep imported staging rows and source identities together; deletin
 identities while retaining statements can undermine retry protection. Do not
 delete bank, payment or reconciliation data as a rollback shortcut.
 
-Run `php test/test_fintable.php` for pure contract checks and
+Run `php test/test_fintable.php` for pure contract checks,
+`php test/test_fintable_schedule.php` for daily/twice-daily configuration and
+installation-wide permissions with installed native helpers and a synthetic
+database (no application bootstrap), and
 `php test/test_fintable_database.php` against the disposable local MariaDB test
 instance described by that test. Production acceptance additionally requires a
 successful collection, a duplicate-free replay and unchanged financial tables.

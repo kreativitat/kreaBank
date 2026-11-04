@@ -58,7 +58,7 @@
 
 - Source: `KreaBankFintableClient`, `KreaBankFintableMapper`, `KreaBankFintableSync`; operational page `feed.php`, global settings `admin/fintable.php`.
 - Use `KreaBankService::importStatementFromParsed()` with format `fintable`. Feed source identities must survive retries, and structured amounts must bypass file-mapping repairs on both write and read paths.
-- One global native Cronjob checks two timezone-aware slots daily. A database lock prevents overlap. Never install another host scheduler or turn on legacy feed jobs.
+- One global native Cronjob checks one timezone-aware slot daily by default (existing two-slot schedules remain supported). A database lock prevents overlap. Never install another host scheduler or turn on legacy feed jobs.
 - Match only a unique checksum-valid IBAN to an open bank account in an active owner entity with KreaBank enabled; currencies must match. Do not infer ownership from names or suffixes.
 - Keep the API token encrypted in the native credential configuration. Never embed credentials, company records or production mapping IDs in this public repository.
 - `php test/test_fintable.php` runs pure API contract checks. `php test/test_fintable_database.php` requires disposable local MariaDB on port 33316; never point it at a real installation. See `doc/FINTABLE.md` for operational deployment and rollback.

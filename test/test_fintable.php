@@ -43,6 +43,10 @@ foreach (array('2026-03-29T08:50:00+01:00', '2026-10-25T08:50:00+00:00') as $dat
 	checkFeed(substr(KreaBankFintableMapper::slot(strtotime($date), '08:45,20:45', 'Europe/Lisbon'), -5) === '08:45', 'DST keeps local wall-clock slot');
 }
 checkFeed(KreaBankFintableMapper::slot(strtotime('2026-11-01T08:00:00Z'), '08:45,20:45', 'Europe/Lisbon') === null, 'No collection before first slot');
+foreach (array('2026-03-29T08:50:00+01:00', '2026-10-25T08:50:00+00:00', '2026-11-01T21:00:00Z') as $date) {
+	checkFeed(substr(KreaBankFintableMapper::slot(strtotime($date), '08:45', 'Europe/Lisbon'), -5) === '08:45', 'Daily schedule retains the same slot through evening and DST');
+}
+checkFeed(KreaBankFintableMapper::slot(strtotime('2026-11-02T08:00:00Z'), '08:45', 'Europe/Lisbon') === null, 'Daily schedule waits for the next morning');
 $requests = array();
 $client = new KreaBankFintableClient(str_repeat('x', 32), 'ws_fixture', static function ($method, $url) use (&$requests) {
 	$requests[] = $url;

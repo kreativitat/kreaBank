@@ -48,10 +48,11 @@ class KreaBankFintableSync
 		require_once DOL_DOCUMENT_ROOT . '/core/lib/admin.lib.php';
 		$workspace = trim((string) ($values['workspace'] ?? ''));
 		KreaBankFintableClient::assertId($workspace, 'ws_');
-		$times = trim((string) ($values['times'] ?? '08:45,20:45'));
-		if (count(array_unique(explode(',', $times))) !== 2) {
-			throw new RuntimeException('Choose two distinct collection times');
+		$slots = array_map('trim', explode(',', (string) ($values['times'] ?? '08:45')));
+		if (count($slots) > 2 || count(array_unique($slots)) !== count($slots)) {
+			throw new RuntimeException('Choose one or two distinct collection times');
 		}
+		$times = implode(',', $slots);
 		$timezone = trim((string) ($values['timezone'] ?? 'Europe/Lisbon'));
 		KreaBankFintableMapper::slot(time(), $times, $timezone);
 		$settings = array('WORKSPACE' => $workspace, 'TIMES' => $times, 'TIMEZONE' => $timezone,
@@ -117,7 +118,7 @@ class KreaBankFintableSync
 				$this->output = 'Fintable automatic collection is disabled';
 				return 0;
 			}
-			$slot = KreaBankFintableMapper::slot(time(), $this->setting('KREABANK_FINTABLE_TIMES', '08:45,20:45'), $this->setting('KREABANK_FINTABLE_TIMEZONE', 'Europe/Lisbon'));
+			$slot = KreaBankFintableMapper::slot(time(), $this->setting('KREABANK_FINTABLE_TIMES', '08:45'), $this->setting('KREABANK_FINTABLE_TIMEZONE', 'Europe/Lisbon'));
 			if ($slot === null) {
 				$this->output = 'No Fintable collection is due';
 				return 0;

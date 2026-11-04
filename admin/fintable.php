@@ -44,7 +44,7 @@ print '<p>' . $langs->trans('KreaBankFeedAdminPurpose') . ' <a href="https://fin
 print '<form method="post" autocomplete="off"><input type="hidden" name="token" value="' . newToken() . '"><input type="hidden" name="action" value="save">';
 print '<table class="border centpercent">';
 $fields = array('workspace' => array('KreaBankFeedWorkspace', $sync->setting('KREABANK_FINTABLE_WORKSPACE')),
-	'times' => array('KreaBankFeedSchedule', $sync->setting('KREABANK_FINTABLE_TIMES', '08:45,20:45')),
+	'times' => array('KreaBankFeedSchedule', $sync->setting('KREABANK_FINTABLE_TIMES', '08:45')),
 	'timezone' => array('KreaBankFeedTimezone', $sync->setting('KREABANK_FINTABLE_TIMEZONE', 'Europe/Lisbon')),
 	'alert_email' => array('KreaBankFeedAlertEmail', $sync->setting('KREABANK_FINTABLE_ALERT_EMAIL')));
 foreach ($fields as $name => $field) {
