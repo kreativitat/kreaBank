@@ -13,16 +13,11 @@ function kreabankReconcileQueueIds($value)
 	return array_values($ids);
 }
 
-/** Order only the already company/account-scoped pending rows, then continue. */
-function kreabankReconcileQueueState($lines, $order, $next, $advance)
+/** Continue within fresh scoped rows without changing their selected sort order. */
+function kreabankReconcileQueueState($lines, $next, $advance)
 {
-	$remaining = array();
-	foreach ($lines as $line) { $remaining[(int) $line['rowid']] = $line; }
 	$ordered = array();
-	foreach ($order as $id) {
-		if (isset($remaining[$id])) { $ordered[$id] = $remaining[$id]; unset($remaining[$id]); }
-	}
-	$ordered += $remaining;
+	foreach ($lines as $line) { $ordered[(int) $line['rowid']] = $line; }
 	$target = 0;
 	$visibleNext = false;
 	if ($advance) {
@@ -30,11 +25,6 @@ function kreabankReconcileQueueState($lines, $order, $next, $advance)
 			if (isset($ordered[$id])) { $target = $id; $visibleNext = true; break; }
 		}
 		if (!$target && $ordered) { $target = (int) key($ordered); }
-		if ($target) {
-			$ids = array_keys($ordered);
-			$offset = array_search($target, $ids, true);
-			$ordered = array_slice($ordered, $offset, null, true) + array_slice($ordered, 0, $offset, true);
-		}
 	}
 	return array('lines'=>array_values($ordered), 'line_id'=>$target, 'visible_next'=>$visibleNext);
 }

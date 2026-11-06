@@ -136,7 +136,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	$selectedLine['fk_statement'] = $options['statement_id'] ?? 0;
 	$pendingLines = array($selectedLine);
 	foreach (array('Comissão bancária','Pagamento de imposto','Pagamento de salários','Transferência recebida','Compra de serviços','Liquidação de terminal','Transferência entre contas','Seguro mensal','Serviços de energia') as $i=>$description) {
-		$line = $selectedLine; $line['rowid'] = 12 + $i; $line['description'] = $description; $line['amount'] = ($i + 1) * -17.25; $line['operation_date'] = '2026-11-0' . (($i % 3) + 1); $pendingLines[] = $line;
+		$line = $selectedLine; $line['rowid'] = 12 + $i; $line['description'] = $description; $line['amount'] = ($i + 1) * -17.25; $line['operation_date'] = sprintf('2026-11-%02d', $i + 4); $pendingLines[] = $line;
 	}
 	$pendingLines[1]['payment_reference'] = '"><img src=x onerror=alert(1)>';
 	$pendingLinesTotal = count($pendingLines);
@@ -177,7 +177,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 		$pendingLines = array_values(array_filter($pendingLines, static function ($line) use ($options) { return !in_array($line['rowid'], $options['omit_lines'], true); }));
 		$pendingLinesTotal = count($pendingLines);
 	}
-	$queueState = kreabankReconcileQueueState($pendingLines, $queueOrder, $queueNext, $queueContinue);
+	$queueState = kreabankReconcileQueueState($pendingLines, $queueNext, $queueContinue);
 	$pendingLines = $queueState['lines'];
 	if ($queueContinue || isset($options['selected_line_id'])) {
 		$lineId = $queueContinue ? $queueState['line_id'] : (int) $options['selected_line_id'];

@@ -35,99 +35,79 @@ function boot({ids = ['11', '12', '13'], scope = '7:901:81:b.dateo:ASC', url = '
         submit() { writeForm.submit({defaultPrevented:false}); return Object.fromEntries(Array.from(fields, ([key, input]) => [key, input.value])); }};
 }
 function check(actual, expected) { assert.deepEqual(actual, expected); checks++; }
+// The IDs represent increasing dates. Navigation must never rotate that order.
 let page = boot();
 page.next();
-check(page.order(), ['12', '13', '11']);
+check(page.order(), ['11', '12', '13']);
 check(new URL(page.navigation()).searchParams.get('line_id'), '12');
 check(new URL(page.navigation()).searchParams.get('account_context'), '81');
-page = boot({url: page.navigation()}); // Real navigation re-renders in server sort order; restore this tab's queue.
-check(page.order(), ['12', '13', '11']);
-page.next();
-check(page.order(), ['13', '11', '12']);
+check(new URL(page.navigation()).searchParams.get('sortorder'), 'ASC');
 page = boot({url: page.navigation()});
 page.next();
+check(new URL(page.navigation()).searchParams.get('line_id'), '13');
 check(page.order(), ['11', '12', '13']);
-check(boot({ids: ['12', '13', '14']}).order(), ['12', '13', '14']); // Removed/new IDs.
-check(boot({scope: '8:901:81:b.dateo:ASC'}).order(), ['11', '12', '13']);
-check(boot({scope: '7:902:81:b.dateo:ASC'}).order(), ['11', '12', '13']);
-check(boot({scope: '7:901:82:b.dateo:ASC'}).order(), ['11', '12', '13']);
-check(boot({scope: '7:901:81:b.dateo:DESC'}).order(), ['11', '12', '13']);
+page = boot({url: page.navigation()});
+page.next();
+check(new URL(page.navigation()).searchParams.get('line_id'), '11');
+check(page.order(), ['11', '12', '13']);
+check(boot({ids: ['12', '13', '14']}).order(), ['12', '13', '14']);
+// Legacy browser/URL state must not override a fresh sorted population.
+storage.set('kreabank:pending-order:7:901:81:b.dateo:ASC', JSON.stringify(['999', '13', '13', '12', '11']));
+check(boot().order(), ['11', '12', '13']);
+page = boot({url:'https://example.test/reconcile.php?queue_order=13,11,12', serverOrder:'12,13,11'});
+check(page.order(), ['11', '12', '13']);
+page.next();
+check(new URL(page.navigation()).searchParams.get('queue_order'), null);
+check(new URL(page.navigation()).searchParams.get('action'), null);
+page = boot({blocked:true, selected:'12'});
+page.next();
+check(new URL(page.navigation()).searchParams.get('line_id'), '13');
+check(page.order(), ['11', '12', '13']);
+// Explicit reverse sorting is retained, including submitted continuation state.
+page = boot({ids:['13','12','11'], selected:'12', scope:'7:901:81:b.dateo:DESC'});
+page.next();
+check(page.order(), ['13','12','11']);
+check(new URL(page.navigation()).searchParams.get('line_id'), '11');
+check(page.submit().sortorder, 'DESC');
 page = boot();
 page.search('pagamento');
 page.next();
-check(page.order(), ['13', '11', '12']); // Keep cyclic order with the visible target first.
+check(page.order(), ['11', '12', '13']);
 check(new URL(page.navigation()).searchParams.get('line_id'), '13');
 check(new URL(page.navigation()).searchParams.get('queue_search'), 'pagamento');
 page.search('comissao');
 check(page.nextButton.disabled, true);
 page.search('missing');
 check(page.nextButton.disabled, true);
-check(boot({ids: ['11']}).nextButton.disabled, true);
-check(boot({ids: []}).nextButton.disabled, true);
-storage.set('kreabank:pending-order:7:901:81:b.dateo:ASC', '{invalid');
-check(boot().order(), ['11', '12', '13']);
-storage.set('kreabank:pending-order:7:901:81:b.dateo:ASC', JSON.stringify(['999', '13', '13', '12', '11']));
-check(boot().order(), ['13', '12', '11']);
-page = boot({blocked: true});
-page.next();
-check(page.order(), ['12', '13', '11']);
-page = boot({blocked: true, url: page.navigation()});
-check(page.order(), ['12', '13', '11']);
-page.next();
-check(new URL(page.navigation()).searchParams.get('queue_order'), '13,11,12');
-check(new URL(page.navigation()).searchParams.get('action'), null);
-// Manual selection, sort changes and server defaults can select a row away from
-// the restored queue head. Next must follow that selected row, not the head.
-storage.clear();
-page = boot({selected: '12'});
-page.next();
-check(new URL(page.navigation()).searchParams.get('line_id'), '13');
-check(page.order(), ['13', '11', '12']);
-page = boot({url: page.navigation()});
-check(page.order(), ['13', '11', '12']);
-page.next();
-check(new URL(page.navigation()).searchParams.get('line_id'), '11');
-storage.set('kreabank:pending-order:7:901:81:b.dateo:ASC', JSON.stringify(['13', '11', '12']));
-page = boot({selected: '11'});
-page.next();
-check(new URL(page.navigation()).searchParams.get('line_id'), '12');
-check(page.order(), ['12', '13', '11']);
-page = boot({selected: '13'});
-page.search('pagamento');
-page.next();
-check(new URL(page.navigation()).searchParams.get('line_id'), '11');
-check(page.order(), ['11', '12', '13']);
-page = boot({selected: '12'}); // The selected commission is hidden by the search.
-page.search('pagamento');
-page.next();
-check(new URL(page.navigation()).searchParams.get('line_id'), '11');
-check(page.order(), ['11', '12', '13']);
-page = boot({selected: '999', blocked: true}); // Removed/out-of-window selection.
-page.next();
-check(new URL(page.navigation()).searchParams.get('line_id'), '11');
-check(new URL(page.navigation()).searchParams.get('queue_order'), '11,12,13');
-storage.clear();
-storage.set('kreabank:pending-order:7:901:81:b.dateo:ASC', JSON.stringify(['13', '11', '12']));
+check(boot({ids:['11']}).nextButton.disabled, true);
+check(boot({ids:[]}).nextButton.disabled, true);
+// Hidden/removed selections resume with the first visible sorted row.
+for (const selected of ['12', '999']) {
+    page = boot({selected});
+    page.search('pagamento');
+    page.next();
+    check(new URL(page.navigation()).searchParams.get('line_id'), '11');
+    check(page.order(), ['11','12','13']);
+}
 page = boot({selected:'11'});
+check(page.submit(), {queue_order:'11,12,13', queue_next:'12,13', queue_search:'', sortfield:'b.dateo', sortorder:'ASC'});
+check(page.order(), ['11','12','13']); // Submission advances only after success.
+page = boot({selected:'11'});
+page.search('pagamento');
 let submission = page.submit();
-check(submission, {queue_order:'13,11,12', queue_next:'12,13', queue_search:'', sortfield:'b.dateo', sortorder:'ASC'});
-check(page.order(), ['13','11','12']); // Submitting does not advance before success.
-page = boot({selected:'11'});
-page.search('pagamento');
-submission = page.submit();
-check(submission.queue_next, '13'); // The commission is hidden; keep visible cyclic order.
+check(submission.queue_next, '13');
 check(submission.queue_search, 'pagamento');
 page = boot({selected:'12'});
 page.search('pagamento');
-check(page.submit().queue_next, '13,11'); // Hidden selection starts with the first visible row.
-// Successful server continuation wins over stale browser storage and URL order,
-// then persists for subsequent read-only selection, reloads and Next.
-page = boot({ids:['12','13'], selected:'12', serverOrder:'12,13', serverSearch:'pagamento', url:'https://example.test/reconcile.php?queue_order=13,11,12'});
+check(page.submit().queue_next, '11,13');
+page = boot({ids:['12','13'], selected:'12', serverSearch:'pagamento', url:'https://example.test/reconcile.php?queue_order=13,11,12'});
 check(page.order(), ['12','13']);
-check(page.submit().queue_search, 'pagamento');
-check(boot({ids:['12','13']}).order(), ['12','13']);
-page = boot({ids:['12','13'], selected:'12', serverOrder:'12,13', blocked:true});
-check(page.submit().queue_order, '12,13');
+submission = page.submit();
+check(submission.queue_search, 'pagamento');
+check(submission.queue_order, '12,13');
+check(page.nextButton.disabled, true);
+page = boot({ids:['12','13'], selected:'12'});
 page.next();
-check(new URL(page.navigation()).searchParams.get('queue_order'), '13,12');
+check(new URL(page.navigation()).searchParams.get('line_id'), '13');
+check(page.order(), ['12','13']);
 console.log(`OK: ${checks} pending queue navigation checks (no ERP writes)`);

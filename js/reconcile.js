@@ -55,37 +55,9 @@
     mobile.addEventListener('change', queueLayout);
     var search = document.getElementById('kb-pending-search');
     var queue = Array.from(root.querySelectorAll('.kb-queue-line'));
-    var list = document.getElementById('kb-pending-list');
     var nextLine = document.getElementById('kb-next-line');
-    var queueStorageKey = 'kreabank:pending-order:' + root.dataset.queueScope;
-    // Store IDs only, within this tab, user, company, account and chosen sort.
-    var savedOrder;
-    try { savedOrder = JSON.parse(window.sessionStorage.getItem(queueStorageKey)); } catch (_) {}
+    // Keep the server's scoped sort, including oldest-first dates, across navigation.
     var pageUrl = new URL(window.location.href);
-    if (pageUrl.searchParams.has('queue_order')) { savedOrder = pageUrl.searchParams.get('queue_order').split(','); }
-    if (typeof root.dataset.queueOrder === 'string') { savedOrder = root.dataset.queueOrder.split(','); }
-    if (Array.isArray(savedOrder)) {
-        var remaining = new Map(queue.map(function (line) { return [line.dataset.queueId, line]; }));
-        var ordered = [];
-        savedOrder.slice(0, 201).forEach(function (id) {
-            if (remaining.has(id)) { ordered.push(remaining.get(id)); remaining.delete(id); }
-        });
-        queue = ordered.concat(Array.from(remaining.values()));
-        queue.forEach(function (line) { list.appendChild(line); });
-    }
-    function carryQueueOrder(ids) {
-        queue.forEach(function (line) {
-            var url = new URL(line.href);
-            url.searchParams.set('queue_order', ids.join(','));
-            line.href = url.toString();
-        });
-    }
-    if (typeof root.dataset.queueOrder === 'string') {
-        // A successful action has already selected and scoped the continuation.
-        var restoredIds = queue.map(function (line) { return line.dataset.queueId; });
-        try { window.sessionStorage.setItem(queueStorageKey, JSON.stringify(restoredIds)); }
-        catch (_) { carryQueueOrder(restoredIds); }
-    }
     function normalize(text) { return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
     function filterQueue() {
         var terms = normalize(search.value).trim().split(/\s+/);
@@ -111,19 +83,6 @@
             if (visible.length < 2) { return; }
             var selectedIndex = visible.indexOf(root.querySelector('.kb-queue-line.selected'));
             var target = visible[(selectedIndex + 1) % visible.length];
-            // Keep the displayed cyclic order, starting immediately after the
-            // selected line. A restored queue need not have that line at its head.
-            var targetIndex = queue.indexOf(target);
-            queue = queue.slice(targetIndex).concat(queue.slice(0, targetIndex));
-            queue.forEach(function (line) { list.appendChild(line); });
-            var ids = queue.map(function (line) { return line.dataset.queueId; });
-            var carryOrder = pageUrl.searchParams.has('queue_order');
-            try { window.sessionStorage.setItem(queueStorageKey, JSON.stringify(ids)); }
-            catch (_) { carryOrder = true; }
-            if (carryOrder) {
-                // Retain navigation order when browser storage is unavailable.
-                carryQueueOrder(ids);
-            }
             target.click();
         });
     }

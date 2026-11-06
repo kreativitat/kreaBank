@@ -246,7 +246,9 @@
 - Successful selected-line reconciliation must continue in the displayed queue,
   not restart at the first SQL-sorted row. `lib/kreabank_reconcile_queue.lib.php`
   carries bounded navigation state only; choose targets from freshly scoped
-  pending rows. Preserve search/sort, stay on failed or partial actions, and deploy
+  pending rows. Keep the default oldest-first booking-date order through Next and
+  completion; never rotate or restore a saved order over the active server sort.
+  Preserve search/sort, stay on failed or partial actions, and deploy
   the helper with `reconcile.php` and `js/reconcile.js`. Synthetic controller and
   queue suites cover the POST/redirect/GET contract; never reconcile live data to
   test navigation.

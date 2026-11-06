@@ -4,7 +4,8 @@
 original description, signed amount, currency and remaining allocation. Reference
 and counterparty evidence is available under Statement details and references.
 
-The queue displays the existing bounded population (up to 200 loaded lines).
+The queue displays the existing bounded population (up to 200 loaded lines),
+ordered by booking date from oldest to newest by default.
 Search filters those loaded lines by description, counterparty, reference,
 account, date or amount, ignoring accents. It does not fetch or match on each
 keystroke. **View all pending lines** opens the full company/account-scoped pending
@@ -14,15 +15,15 @@ Each pending item starts with a bold date and a larger right-aligned amount on
 the same row, followed by its description and account reference.
 
 **Next** (pt_PT: **Seguinte**) opens the visible line immediately after the selected
-line, wrapping at the end, and rotates the queue so that target appears first.
-Manual selection and restored queue order must not make it jump from the queue
-head instead. If the selected line is hidden by search or absent from the loaded
+line, wrapping at the end, while keeping the queue in its selected sort order.
+Manual selection must not make it jump from the queue head instead.
+If the selected line is hidden by search or absent from the loaded
 queue, Next opens the first visible line without skipping it.
 It is available in both workflows and to readers,
-and disabled when fewer than two lines match the queue search. The order survives
-navigation/reloads within the browser tab, scoped to user, company, account and
-sort; new lines append and removed lines disappear. Explicitly choosing another
-sort uses that sort's own queue. Next changes no pending status or financial data. Initial other-account review
+and disabled when fewer than two lines match the queue search. Each request uses
+fresh company/account-scoped rows in the selected sort order; saved browser order
+and legacy `queue_order` parameters cannot override it. Explicitly choosing another
+sort retains that order through navigation. Next changes no pending status or financial data. Initial other-account review
 uses an indexable exact-amount/calendar-day range; apply the explicit online
 [lookup maintenance](PERFORMANCE.md) when deploying 1.19.34.
 The selected-line Resolve this line later control is removed; bulk deferral
@@ -33,8 +34,8 @@ including signed per-card approval, native batch allocation and all three creati
 choices. Forms carry bounded queue order, visible successors, search and sort;
 these identities control navigation only. The server selects a successor only
 from a fresh company/account-scoped pending population, skips removed successors
-and rotates the queue before loading the selected line's candidates. The returned
-queue updates this tab's saved order. Failed actions and partial allocations stay
+without moving it to the top of the queue before loading its candidates.
+Failed actions and partial allocations stay
 on the current line. If a completed search has no pending result left, clear that
 search and resume the remaining queue. No-JavaScript forms retain server-order
 continuation defaults. Deploy `lib/kreabank_reconcile_queue.lib.php` with the
@@ -177,8 +178,8 @@ Browser acceptance performed against synthetic data:
 
 - Desktop and mobile layouts; source summary and native/shared navigation.
 - Queue accent-insensitive search, empty search results and keyboard links.
-- Next follows the selected line after manual selection or restored order, wraps
-  to the first visible line and restores the rotated queue after reload. A hidden
+- Next follows the selected line after manual selection, wraps
+  to the first visible line and keeps chronological order after reload. A hidden
   or absent selection opens the first visible line. Search with one match and
   single-line queues disable it.
 - Successful synthetic approvals and creation flows continue in the displayed

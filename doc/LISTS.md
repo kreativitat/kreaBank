@@ -14,6 +14,9 @@ active order. Action and selection columns are not sortable.
 - Connections order their complete current-company/account result using raw
   values. Missing values stay last in either direction.
 - Reconciliation exposes sort links above the statement and document cards.
+  Pending transactions default to oldest booking date first. Next and successful
+  reconciliation select a successor without rotating the sorted queue; saved
+  browser order cannot override the active sort.
   Sorting changes presentation only; candidate eligibility, scoring and selection
   rules remain in the existing reconciliation service.
 - Bulk review orders compact scan results before page hydration. Requests carry

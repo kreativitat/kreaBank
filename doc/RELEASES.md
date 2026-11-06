@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.19.38 — 2026-11-06
+
+- Keep the reconciliation queue oldest first through Next and successful
+  reconciliation. Ignore saved queue rotations while retaining explicit sorting,
+  search and continuation to the next displayed pending transaction.
+
 ## 1.19.37 — 2026-11-04
 
 - Isolate account action cells from theme flex styles to preserve table alignment.

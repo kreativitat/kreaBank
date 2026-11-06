@@ -777,7 +777,7 @@ try {
 		$pendingLinesTotal = count($pendingLines);
 	}
 	$advanceQueue = $queueContinue && (!$requestedLine || in_array((int) $requestedLine['status'], array(2, 3), true));
-	$queueState = kreabankReconcileQueueState($pendingLines, $queueOrder, $queueNext, $advanceQueue);
+	$queueState = kreabankReconcileQueueState($pendingLines, $queueNext, $advanceQueue);
 	$pendingLines = $queueState['lines'];
 	if ($advanceQueue) {
 		$lineId = $queueState['line_id'];
@@ -1690,8 +1690,7 @@ if ($selectedLine && $canReconcile && !$creationUnavailable && array_filter($doc
 // Keep explicit searches in matching; an empty initial candidate set opens permitted creation.
 $requestedWorkflow = $searchOtherAccounts ? 'match' : GETPOST('workflow', 'aZ09');
 $initialWorkflow = ($quickEntryFailed || ($selectedLine && $canReconcile && $canCreate && ($requestedWorkflow === 'create' || ($requestedWorkflow !== 'match' && empty($documents) && empty($otherAccountDocuments) && $openDocumentsSearch === '' && !$forceBatchDetect)))) ? 'create' : 'match';
-print '<div class="kb-recon" data-initial-workflow="' . $initialWorkflow . '" data-queue-scope="' . dol_escape_htmltag((int) $conf->entity . ':' . (int) $user->id . ':' . (int) $navigationAccountId . ':' . $pendingSort['field'] . ':' . $pendingSort['order']) . '" data-queue-search="' . dol_escape_htmltag($queueSearch ?? '') . '"'
-	. ((!empty($queueOrder) || !empty($queueContinue)) ? ' data-queue-order="' . implode(',', array_column($pendingLines, 'rowid')) . '"' : '') . '>';
+print '<div class="kb-recon" data-initial-workflow="' . $initialWorkflow . '" data-queue-scope="' . dol_escape_htmltag((int) $conf->entity . ':' . (int) $user->id . ':' . (int) $navigationAccountId . ':' . $pendingSort['field'] . ':' . $pendingSort['order']) . '" data-queue-search="' . dol_escape_htmltag($queueSearch ?? '') . '">';
 print '<aside class="kb-queue" aria-labelledby="kb-queue-heading"><details class="kb-queue-disclosure" open>';
 print '<summary class="kb-queue-heading"><h2 id="kb-queue-heading">' . $langs->trans('KreaBankWorkspacePending') . '</h2><span class="kb-count">' . ((int) $pendingLinesTotal) . '</span></summary>';
 print '<div class="kb-queue-search kb-js-only"><label for="kb-pending-search">' . $langs->trans('KreaBankWorkspaceSearchQueue') . '</label><input type="search" id="kb-pending-search" autocomplete="off" aria-controls="kb-pending-list" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceSearchHint')) . '"></div>';
