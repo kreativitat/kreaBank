@@ -1704,6 +1704,7 @@ foreach ($pendingLines as $line) {
 	if ($lineTitle === '') { $lineTitle = $langs->trans('KreaBankStatementLine') . ' #' . (int) $line['rowid']; }
 	$lineDate = dol_print_date(strtotime((string) $line['operation_date']), 'day');
 	$queueParams = array('line_id' => (int) $line['rowid'], 'sortfield' => $pendingSort['field'], 'sortorder' => $pendingSort['order']);
+	if ($navigationAccountId === 0) { $queueParams['account_context'] = 0; }
 	$lineUrl = kreabankWorkspaceUrl('reconcile', $navigationAccountId) . '&' . http_build_query($queueParams);
 	$searchText = implode(' ', array($lineTitle, $line['counterparty_name'], $line['payment_reference'], $line['bank_reference'], $line['bank_account_ref'], $lineDate, $line['amount'], kreabankPrice($line['amount']), $line['currency']));
 	print '<a class="kb-queue-line' . ($isSelected ? ' selected' : '') . '" id="linecard-' . ((int) $line['rowid']) . '" data-queue-id="' . ((int) $line['rowid']) . '" href="' . dol_escape_htmltag($lineUrl) . '" data-search="' . dol_escape_htmltag($searchText) . '"' . ($isSelected ? ' aria-current="true"' : '') . '>';

@@ -30,7 +30,7 @@ function getNonce() { return 'synthetic-nonce'; }
 function dol_print_date($timestamp, $format = '') { return date('d/m/Y', $timestamp); }
 function kreabankStatusLabel($status, $langs) { return $langs->trans('KreaBankStatusPending'); }
 function kreabankNavigationHiddenFields($id) { return '<input type="hidden" name="account_context" value="' . (int) $id . '">'; }
-function kreabankWorkspaceUrl($page, $id = 0) { return '?view=' . $page . '&account_context=' . (int) $id; }
+function kreabankWorkspaceUrl($page, $id = 0) { return '?view=' . $page . ($id > 0 ? '&account_context=' . (int) $id : ''); }
 function GETPOST($key, $type = '') { return $GLOBALS['fixtureRequest'][$key] ?? ''; }
 function kreabankPrintWorkspaceNavigation($page, $account) {
 	global $langs;
@@ -114,7 +114,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 		}
 	};
 	$form = new WorkspaceFixtureForm();
-	$navigationAccountId = 81; $navigationAccount = null;
+	$navigationAccountId = $options['account_context'] ?? 81; $navigationAccount = null;
 	$searchOtherAccounts = in_array($case, array('otheraccounts','taxotheraccounts'), true) || !empty($options['search_accounts']); $otherAccountDocuments = array(); $accountMoveReviews = array(); $correctedBankLineId = 0;
 	if (in_array($case, array('otheraccounts','taxotheraccounts'), true)) {
 		$otherAccountDocuments = array(array('rowid'=>501,'label'=>'Pagamento de fatura · Exemplo','account_ref'=>'WRONG-BANK','dateo'=>'2026-11-03','amount'=>'-125.50','currency_code'=>'EUR','payment_refs'=>'PAY-EXAMPLE','customer_docs'=>'','supplier_docs'=>'Fatura de Exemplo','can_move'=>true));
@@ -346,6 +346,13 @@ foreach (array(
 	$html = renderWorkspaceFixture($case, 'pt_PT', $options);
 	workspaceCheck(strpos($html, 'data-initial-workflow="' . $expected . '"') !== false, $case . ': appropriate initial workflow');
 	workspaceCheck(strpos($html, 'id="kb-tab-' . $expected . '" aria-controls="kb-panel-' . $expected . '" aria-selected="true" tabindex="0"') !== false, $case . ': initial tab selection and keyboard focus agree');
+}
+$allAccountsHtml = renderWorkspaceFixture('debit', 'pt_PT', array('account_context'=>0));
+preg_match_all('/class="kb-queue-line[^\"]*"[^>]*href="([^\"]+)"/', $allAccountsHtml, $queueLinks);
+workspaceCheck(count($queueLinks[1]) === 10, 'All-accounts fixture renders the complete bounded pending queue');
+foreach ($queueLinks[1] as $href) {
+	parse_str(parse_url(html_entity_decode($href, ENT_QUOTES, 'UTF-8'), PHP_URL_QUERY), $params);
+	workspaceCheck(($params['account_context'] ?? '') === '0' && ($params['sortorder'] ?? '') === 'ASC', 'Pending links retain explicit all-accounts context and oldest-first sorting for manual selection and Next');
 }
 $otherHtml = renderWorkspaceFixture('otheraccounts');
 workspaceCheck(strpos($otherHtml, 'Movimentos noutras contas') !== false && strpos($otherHtml, 'WRONG-BANK') !== false, 'Other account and consequence are visible');

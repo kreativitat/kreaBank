@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.40 — 2026-11-06
+
+- Carry explicit all-accounts context on pending transaction links so Next and
+  manual selection retain the same chronological queue across bank accounts.
+
 ## 1.19.39 — 2026-11-06
 
 - Preserve an explicitly selected all-accounts reconciliation queue when sorting
