@@ -177,7 +177,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 		$pendingLines = array_values(array_filter($pendingLines, static function ($line) use ($options) { return !in_array($line['rowid'], $options['omit_lines'], true); }));
 		$pendingLinesTotal = count($pendingLines);
 	}
-	$queueState = kreabankReconcileQueueState($pendingLines, $queueNext, $queueContinue);
+	$queueState = kreabankReconcileQueueState($pendingLines, $queueOrder, $queueNext, $queueContinue);
 	$pendingLines = $queueState['lines'];
 	if ($queueContinue || isset($options['selected_line_id'])) {
 		$lineId = $queueContinue ? $queueState['line_id'] : (int) $options['selected_line_id'];

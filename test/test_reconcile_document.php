@@ -10,6 +10,7 @@ require_once __DIR__ . '/../lib/kreabank_reconcile_queue.lib.php';
 
 function GETPOST($key, $type = '') { return $GLOBALS['request'][$key] ?? ''; }
 function GETPOSTINT($key) { return (int) GETPOST($key); }
+function GETPOSTISSET($key) { return isset($GLOBALS['request'][$key]); }
 function dol_now() { return 1800000000; }
 function getDolGlobalInt($key) { return 0; }
 function kreabankIsTokenValid() { return GETPOST('token') === 'synthetic-token'; }
@@ -105,7 +106,10 @@ function loadDirectQueue($lineId, $params, $queueContinue, $account = 81)
 	$start = strpos($source, '$requestedLineId = (int) $lineId;');
 	$end = strpos($source, "\n\tif (\$selectedLine) {", $start);
 	if ($start === false || $end === false) { throw new LogicException('Review pending selection boundary'); }
-	eval(substr($source, $start, $end - $start));
+	$previousRequest = $GLOBALS['request'];
+	$GLOBALS['request'] = $params;
+	try { eval(substr($source, $start, $end - $start)); }
+	finally { $GLOBALS['request'] = $previousRequest; }
 	return array('selected'=>$selectedLine['rowid'] ?? 0, 'order'=>array_column($pendingLines, 'rowid'), 'search'=>$queueSearch, 'account'=>$navigationAccountId);
 }
 
@@ -135,6 +139,9 @@ checkDirect($redirectParams['account_context'] === '81' && $redirectParams['sort
 checkDirect(($redirectParams['queue_order'] ?? '') === '11,12,14,13' && ($redirectParams['queue_next'] ?? '') === '12,14,13' && ($redirectParams['queue_continue'] ?? '') === '1', 'Successful approval carries the exact displayed continuation through its redirect');
 checkDirect(loadDirectQueue(0, $redirectParams, true) === array('selected'=>12,'order'=>array(13,12,14),'search'=>'pagamento','account'=>81), 'After approval, select the displayed successor while preserving the server sort order');
 checkDirect(loadDirectQueue(11, $redirectParams, true, 0)['account'] === 0, 'Continuing an all-accounts queue does not silently narrow it to the completed source account');
+checkDirect(loadDirectQueue(12, array('account_context'=>'0','sortfield'=>'b.dateo','sortorder'=>'DESC'), false, 0)['account'] === 0, 'Date sorting keeps an explicitly selected all-accounts queue despite the current line account');
+checkDirect(loadDirectQueue(12, array('account_context'=>'0'), false, 0)['account'] === 0, 'Selecting a pending line retains explicit all-accounts context');
+checkDirect(loadDirectQueue(12, array(), false, 0)['account'] === 81, 'A direct line link without account context still infers its owned account');
 checkDirect(loadDirectQueue(0, array('queue_order'=>'11,12,14,13','queue_next'=>'999,14,13'), true)['selected'] === 14, 'A removed or foreign next identity falls through to the next scoped pending row');
 checkDirect(loadDirectQueue(0, array('queue_order'=>'11,12,14,13','queue_next'=>'999','queue_search'=>'missing'), true) === array('selected'=>13,'order'=>array(13,12,14),'search'=>'','account'=>81), 'Exhausted search results resume at the first sorted row with search cleared');
 checkDirect(count($service->executions) === 1 && $service->executions[0][1][0]['doc_type'] === 'supplier_invoice', 'Direct submit executes the reviewed invoice');
@@ -259,5 +266,5 @@ checkDirect(submitQueueAction('reconcile') && loadDirectQueue(11, $request, true
 checkDirect(kreabankReconcileQueueIds('12,12,0,-1,13,x,2147483648') === array(12,13), 'Navigation identities reject duplicates, invalid and oversized IDs');
 checkDirect(kreabankReconcileQueueIds(array(12,13)) === array() && kreabankReconcileQueueIds(str_repeat('1', 2212)) === array(), 'Malformed or overlong navigation state is bounded');
 checkDirect(count(kreabankReconcileQueueIds(implode(',', range(1,250)))) === 201, 'Navigation state cannot exceed the loaded queue bound');
-checkDirect(kreabankReconcileQueueState(array(), array(12), true)['line_id'] === 0, 'An exhausted queue has no fabricated successor');
+checkDirect(kreabankReconcileQueueState(array(), array(11,12), array(12), true)['line_id'] === 0, 'An exhausted queue has no fabricated successor');
 echo 'OK: ' . $checks . " direct one-by-one approval checks (synthetic, no database)\n";

@@ -11,6 +11,8 @@ account, date or amount, ignoring accents. It does not fetch or match on each
 keystroke. **View all pending lines** opens the full company/account-scoped pending
 view; bulk deferral remains there. The queue starts collapsed at mobile widths.
 Selecting a line is a read-only link and preserves queue search and sort state.
+Sorting and selection retain an explicit all-accounts context (`account_context=0`);
+only a direct line link without account context infers its owner account.
 Each pending item starts with a bold date and a larger right-aligned amount on
 the same row, followed by its description and account reference.
 

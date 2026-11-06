@@ -765,7 +765,7 @@ try {
 			$requestedLine = null;
 			$lineId = 0;
 			$requestedLineId = 0;
-		} elseif ($navigationAccountId === 0 && !$queueOrder && !$queueContinue) {
+		} elseif ($navigationAccountId === 0 && !GETPOSTISSET('account_context') && !$queueOrder && !$queueContinue) {
 			$navigationAccountId = (int) $requestedLine['bank_account_id'];
 			$navigationAccount = kreabankNavigationAccount($navigationAccountId);
 		}
@@ -777,7 +777,7 @@ try {
 		$pendingLinesTotal = count($pendingLines);
 	}
 	$advanceQueue = $queueContinue && (!$requestedLine || in_array((int) $requestedLine['status'], array(2, 3), true));
-	$queueState = kreabankReconcileQueueState($pendingLines, $queueNext, $advanceQueue);
+	$queueState = kreabankReconcileQueueState($pendingLines, $queueOrder, $queueNext, $advanceQueue);
 	$pendingLines = $queueState['lines'];
 	if ($advanceQueue) {
 		$lineId = $queueState['line_id'];

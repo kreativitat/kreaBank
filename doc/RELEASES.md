@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.19.39 — 2026-11-06
+
+- Preserve an explicitly selected all-accounts reconciliation queue when sorting
+  by date or selecting a transaction. Infer an account only for direct links that
+  omit account context.
+
 ## 1.19.38 — 2026-11-06
 
 - Keep the reconciliation queue oldest first through Next and successful

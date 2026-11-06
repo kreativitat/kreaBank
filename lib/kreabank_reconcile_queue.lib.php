@@ -14,8 +14,9 @@ function kreabankReconcileQueueIds($value)
 }
 
 /** Continue within fresh scoped rows without changing their selected sort order. */
-function kreabankReconcileQueueState($lines, $next, $advance)
+function kreabankReconcileQueueState($lines, $order, $next, $advance)
 {
+	// Retain the legacy order argument for callers; fresh server sorting is authoritative.
 	$ordered = array();
 	foreach ($lines as $line) { $ordered[(int) $line['rowid']] = $line; }
 	$target = 0;
