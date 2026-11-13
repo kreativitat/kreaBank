@@ -266,6 +266,21 @@ foreach (array('supplier_invoice', 'customer_invoice', 'payment', 'payment_suppl
 	workspaceCheck(strpos($html, $type === 'tax' ? 'Não cria um novo imposto' : ($invoice ? 'Regista um pagamento desta fatura' : 'Não cria um novo pagamento')) !== false, $type . ': financial consequence precedes review');
 	workspaceCheck(strpos($html, 'id="manualReconcileButton"') === false && strpos($html, 'id="kb-selection-difference"') === false, $type . ': native-only allocation controls are omitted');
 }
+$refund = array_merge($invoiceDocument, array('doc_type'=>'customer_credit_note'));
+$html = renderWorkspaceFixture('debit', 'en_US', array('documents'=>array($refund), 'statement_id'=>1));
+workspaceCheck(strpos($html, 'Customer credit note') !== false && strpos($html, 'Refund this credit note') !== false, 'Refund card names the credit note and refund consequence');
+workspaceCheck(strpos($html, 'name="review_doc" value="customer_credit_note__242"') !== false && strpos($html, 'name="review_signature"') !== false, 'Single refund retains signed per-card approval');
+$refund['amount_open'] = 60;
+$otherRefund = array_merge($refund, array('rowid'=>243,'ref'=>'CREDIT-SYNTHETIC-2','amount_open'=>65.5));
+$html = renderWorkspaceFixture('debit', 'en_US', array('documents'=>array($refund,$otherRefund), 'statement_id'=>1));
+$previous = libxml_use_internal_errors(true);
+$dom = new DOMDocument(); $dom->loadHTML($html); $xpath = new DOMXPath($dom);
+workspaceCheck($xpath->query('//input[@name="refund_docs[]" and @form="kb-refund-reviews" and not(@checked)]')->length === 2, 'Combined refund checkboxes explicitly select displayed cards without preselection');
+workspaceCheck($xpath->query('//form[@id="kb-refund-reviews"]//input[starts-with(@name,"refund_signatures[")]')->length === 2, 'Combined form signs each allocation separately');
+workspaceCheck($xpath->query('//form[@id="kb-refund-reviews"]//input[@name="line_source" and @value="staged"]')->length === 1, 'Combined form preserves explicit source namespace');
+workspaceCheck($xpath->query('//button[starts-with(@form,"kb-document-review-customer_credit_note") and @disabled]')->length === 2, 'Smaller refund cards require combined exact selection');
+workspaceCheck($xpath->query('//form//form')->length === 0 && $xpath->query('//input[@name="selected_docs[]"]')->length === 0, 'Refund approval does not enter unsigned native controller or nested forms');
+libxml_clear_errors(); libxml_use_internal_errors($previous);
 $legacyHtml = renderWorkspaceFixture('debit', 'pt_PT', array('documents'=>array($invoiceDocument)));
 workspaceCheck(strpos($legacyHtml, 'name="line_source" value="native"') !== false, 'Legacy native source namespace remains explicit');
 $draft = array_merge($invoiceDocument, array('is_draft'=>true, 'draft_snapshot'=>str_repeat('a', 64)));

@@ -26,7 +26,7 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 		if ($docType === 'customer_invoice') {
 			return 1;
 		}
-		if ($docType === 'supplier_invoice') {
+		if ($docType === 'supplier_invoice' || $docType === 'customer_credit_note') {
 			return -1;
 		}
 
@@ -61,6 +61,7 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 			'payment_linked' => 1,
 			'payment_supplier_linked' => 1,
 			'customer_invoice' => 1,
+			'customer_credit_note' => 1,
 			'supplier_invoice' => 1,
 			'tax' => 1,
 			'payment_tax' => 1,
@@ -92,7 +93,7 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 			if ($allocation <= 0.00001) {
 				continue;
 			}
-			if (abs($allocation - $outstanding) > 0.01) {
+			if (abs($allocation - $outstanding) > 0.01 && !($explicitDocument && $docType === 'customer_credit_note')) {
 				continue;
 			}
 
@@ -311,7 +312,7 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 			// A reviewed existing movement cannot create or move the other payment.
 			// Invoice/payment creation and matched/bulk approval keep their warning gate.
 			if ($accountReview && $suggestion['doc_type'] !== 'native_bank') { continue; }
-			if (!in_array($suggestion['doc_type'], array('native_bank', 'customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked', 'tax', 'payment_tax'), true)) {
+			if (!in_array($suggestion['doc_type'], array('native_bank', 'customer_invoice', 'customer_credit_note', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked', 'tax', 'payment_tax'), true)) {
 				continue;
 			}
 			if ($suggestion['doc_type'] === 'native_bank' && ((int) ($suggestion['bank_account_id'] ?? 0) !== (int) $line['bank_account_id']
@@ -337,18 +338,16 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 /** Execute one authenticated displayed pair through the existing service. */
 function kreabankExecuteManualReview($service, $row)
 {
-	$suggestion = $row['suggestion'];
-	$score = (int) ($suggestion['score'] ?? 0);
-	return $service->reconcileLine(
-		(int) $row['line']['rowid'],
-		array(array(
-			'doc_type' => (string) $suggestion['doc_type'],
-			'fk_doc' => (int) $suggestion['doc_id'],
-			'doc_ref' => (string) $suggestion['doc_ref'],
-			'allocated_amount' => (float) $row['allocation'],
-			'match_score' => $score,
-			'match_reasons' => (array) ($suggestion['details'] ?? array()),
-		)),
-		'bulk_manual', 0, 'Exact displayed pair reviewed and confirmed by user', $score, null, $row
-	);
+	$reviews = $row['refund_reviews'] ?? array($row);
+	$links = array();
+	$score = 0;
+	foreach ($reviews as $review) {
+		$suggestion = $review['suggestion'];
+		$score = (int) ($suggestion['score'] ?? 0);
+		$links[] = array('doc_type'=>(string) $suggestion['doc_type'], 'fk_doc'=>(int) $suggestion['doc_id'],
+			'doc_ref'=>(string) $suggestion['doc_ref'], 'allocated_amount'=>(float) $review['allocation'],
+			'match_score'=>$score, 'match_reasons'=>(array) ($suggestion['details'] ?? array()));
+	}
+	return $service->reconcileLine((int) $row['line']['rowid'], $links,
+		'bulk_manual', 0, 'Exact displayed pair reviewed and confirmed by user', $score, null, $row);
 }

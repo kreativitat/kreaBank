@@ -1445,7 +1445,7 @@ class KreaBankService
 		$discardZeroInvoices = (int) getDolGlobalInt('KREABANK_DISCARD_ZERO_INVOICES', 1);
 		$dateRange = $this->resolveOpenDocumentsDateRange($anchorDate, $intervalDays);
 
-		if ($direction >= 0) {
+		if ($direction >= 0 || !$draftOnly) {
 			$customerAmountOpenSql = '(f.total_ttc';
 			$customerAmountOpenSql .= ' - COALESCE((SELECT SUM(pf.amount) FROM ' . $this->db->prefix() . 'paiement_facture as pf WHERE pf.fk_facture = f.rowid), 0)';
 			$customerAmountOpenSql .= ' - COALESCE((SELECT SUM(rc.amount_ttc) FROM ' . $this->db->prefix() . 'societe_remise_except as rc';
@@ -1453,13 +1453,15 @@ class KreaBankService
 			$customerAmountOpenSql .= ' WHERE rc.entity = ' . ((int) $this->entity) . ' AND rf.entity = ' . ((int) $this->entity);
 			$customerAmountOpenSql .= ' AND rc.fk_facture = f.rowid AND rf.type IN (0, 2, 3, 5)), 0)';
 			$customerAmountOpenSql .= ')';
-			$sql = 'SELECT f.rowid, f.ref, f.ref_client, ' . $customerAmountOpenSql . ' as amount_open, f.datef as doc_date, f.fk_soc, s.nom as thirdparty_name';
+			$customerReceiptSql = '(f.type <> 2 AND ' . $customerAmountOpenSql . ' > 0.0000001)';
+			$customerRefundSql = '(f.type = 2 AND ' . $customerAmountOpenSql . ' < -0.0000001';
+			$customerRefundSql .= ' AND NOT EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'societe_remise_except cr WHERE cr.fk_facture_source = f.rowid))';
+			$sql = 'SELECT f.rowid, f.type as invoice_type, f.ref, f.ref_client, ABS(' . $customerAmountOpenSql . ') as amount_open, f.datef as doc_date, f.fk_soc, s.nom as thirdparty_name';
 			$sql .= " FROM " . $this->db->prefix() . "facture as f";
 			$sql .= ' LEFT JOIN ' . $this->db->prefix() . 'societe as s ON s.rowid = f.fk_soc';
 			$sql .= ' WHERE f.entity = ' . ((int) $this->entity);
 			$sql .= $draftOnly ? ' AND f.fk_statut = 0 AND f.paye = 0' : ' AND f.fk_statut = 1 AND f.paye = 0';
-			$sql .= ' AND f.type <> 2';
-			$sql .= ' AND ' . $customerAmountOpenSql . ' > 0.0000001';
+			$sql .= ' AND (' . ($draftOnly || $direction > 0 ? $customerReceiptSql : ($direction < 0 ? $customerRefundSql : $customerReceiptSql . ' OR ' . $customerRefundSql)) . ')';
 			if (!empty($dateRange['enabled'])) {
 				$sql .= ' AND f.datef >= ' . $this->sqlDate($dateRange['start']);
 				$sql .= ' AND f.datef <= ' . $this->sqlDate($dateRange['end']);
@@ -1479,7 +1481,8 @@ class KreaBankService
 					}
 					$documents[] = array(
 						'rowid' => (int) $obj->rowid,
-						'doc_type' => 'customer_invoice',
+						'doc_type' => (int) $obj->invoice_type === 2 ? 'customer_credit_note' : 'customer_invoice',
+						'invoice_type' => (int) $obj->invoice_type,
 						'ref' => (string) $obj->ref,
 						'ref_client' => (string) $obj->ref_client,
 						'amount_open' => $amountOpen,
@@ -2118,10 +2121,12 @@ class KreaBankService
 	public function reconcileLine($lineId, $links, $strategy = 'manual', $isAuto = 0, $note = '', $confidenceScore = 0, $automaticAccounts = null, $reviewedRow = null)
 	{
 		$isReviewedBulk = $reviewedRow !== null;
+		$isRefundReview = isset($reviewedRow['refund_reviews']);
+		$refundReviews = array();
 		$isSelectedNativeReview = ($reviewedRow['approval_context'] ?? '') === 'selected_native';
 		foreach ($links as $link) {
-			if (in_array($link['doc_type'] ?? '', array('tax', 'payment_tax'), true) && (!$isReviewedBulk || $isAuto)) {
-				throw new Exception('Tax reconciliation requires an explicitly reviewed pair');
+			if (in_array($link['doc_type'] ?? '', array('tax', 'payment_tax', 'customer_credit_note'), true) && (!$isReviewedBulk || $isAuto)) {
+				throw new Exception('Tax and refund reconciliation requires an explicitly reviewed pair');
 			}
 		}
 		if ($strategy === 'bulk_manual' && !$isReviewedBulk) {
@@ -2137,14 +2142,28 @@ class KreaBankService
 				|| self::automaticDecimal($reviewedRow['allocation'] ?? 0) !== ltrim(self::automaticDecimal($reviewedRow['line']['amount'] ?? 0), '-'))) {
 				throw new Exception('Invalid selected native movement review');
 			}
-			if ($strategy !== 'bulk_manual' || (int) $isAuto !== 0 || $automaticAccounts !== null || count($links) !== 1
+			if ($strategy !== 'bulk_manual' || (int) $isAuto !== 0 || $automaticAccounts !== null || (!$isRefundReview && count($links) !== 1)
 				|| !$this->user->hasRight('kreabank', 'reconciliation', 'write')
 				|| (!$this->user->hasRight('banque', 'modifier') && !$this->user->hasRight('banque', 'consolidate'))
-				|| (int) ($reviewedRow['line']['rowid'] ?? 0) !== (int) $lineId
-				|| (string) ($reviewedRow['suggestion']['doc_type'] ?? '') !== (string) ($links[0]['doc_type'] ?? '')
-				|| (int) ($reviewedRow['suggestion']['doc_id'] ?? 0) !== (int) ($links[0]['fk_doc'] ?? 0)
-				|| abs((float) ($reviewedRow['allocation'] ?? 0) - (float) ($links[0]['allocated_amount'] ?? 0)) > 0.00000001) {
+				|| (int) ($reviewedRow['line']['rowid'] ?? 0) !== (int) $lineId) {
 				throw new Exception('Invalid manual bank reconciliation review');
+			}
+			$rows = $isRefundReview ? $reviewedRow['refund_reviews'] : array($reviewedRow);
+			if (!is_array($rows) || count($rows) !== count($links) || !$rows) {
+				throw new Exception('Invalid refund review selection');
+			}
+			foreach (array_values($rows) as $index => $row) {
+				$link = $links[$index];
+				if (kreabankBulkReviewLineFacts($row['line'] ?? array()) !== kreabankBulkReviewLineFacts($reviewedRow['line'])
+					|| (string) ($row['suggestion']['doc_type'] ?? '') !== (string) ($link['doc_type'] ?? '')
+					|| (int) ($row['suggestion']['doc_id'] ?? 0) !== (int) ($link['fk_doc'] ?? 0)
+					|| abs((float) ($row['allocation'] ?? 0) - (float) ($link['allocated_amount'] ?? 0)) > 0.00000001
+					|| ($isRefundReview && (($link['doc_type'] ?? '') !== 'customer_credit_note' || !empty($row['approval_context'])))) {
+					throw new Exception('Invalid manual bank reconciliation review');
+				}
+				if (($link['doc_type'] ?? '') === 'customer_credit_note') {
+					$refundReviews[(int) $link['fk_doc']] = $row['suggestion'];
+				}
 			}
 		}
 		$isAutomaticNative = ($automaticAccounts !== null);
@@ -2178,13 +2197,25 @@ class KreaBankService
 		}
 
 		$totalAllocated = 0.0;
+		$refundLinks = array();
 		foreach ($links as $link) {
+			if (($link['doc_type'] ?? '') === 'customer_credit_note') {
+				$id = (int) $link['fk_doc'];
+				if (isset($refundLinks[$id])) {
+					throw new Exception('Duplicate customer credit note allocation');
+				}
+				$refundLinks[$id] = true;
+			}
+
 			$totalAllocated += abs((float) price2num((string) $link['allocated_amount'], 'MU'));
+		}
+		if ($refundLinks && (count($refundLinks) !== count($links) || (float) $line['amount'] >= 0 || $isAuto)) {
+			throw new Exception('Customer refunds require outgoing credit-note allocations only');
 		}
 		if ($totalAllocated <= 0.00001) {
 			throw new Exception('No valid allocated amount to reconcile');
 		}
-		if (abs($outstanding - $totalAllocated) > 0.01) {
+		if (abs($outstanding - $totalAllocated) > ($refundLinks ? 0.00001 : 0.01)) {
 			throw new Exception('Native bank reconciliation requires full allocation of the bank line amount');
 		}
 		$lineDirection = (int) (isset($line['direction']) ? $line['direction'] : 0);
@@ -2203,6 +2234,7 @@ class KreaBankService
 				'payment_linked' => 0,
 				'payment_supplier_linked' => 0,
 				'customer_invoice' => 1,
+				'customer_credit_note' => 1,
 				'supplier_invoice' => 1,
 				'quick_entry' => 2,
 			);
@@ -2300,6 +2332,23 @@ class KreaBankService
 				}
 			}
 
+			if ($refundLinks) {
+				// Lock the cash movement before credit notes to prevent a second refund after undo/concurrent review.
+				$bankRows = $this->transferRows('SELECT b.rowid,b.rappro,b.amount,ba.currency_code FROM ' . $this->db->prefix() . 'bank b JOIN '
+					. $this->db->prefix() . 'bank_account ba ON ba.rowid=b.fk_account WHERE b.rowid=' . (int) $nativeLineId
+					. ' AND ba.entity=' . $this->entity . ' AND ba.rowid=' . (int) $line['bank_account_id'] . ' FOR UPDATE');
+				if (count($bankRows) !== 1 || !empty($bankRows[0]->rappro)
+					|| abs((float) $bankRows[0]->amount - (float) $line['amount']) > 0.00000001
+					|| strtoupper($bankRows[0]->currency_code) !== strtoupper((string) $line['currency'])) {
+					throw new Exception('Refund bank line is missing, changed or already reconciled');
+				}
+				foreach (array('paiement', 'paiementfourn', 'paiementcharge') as $table) {
+					if ($this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . $table . ' WHERE fk_bank=' . (int) $nativeLineId . ' FOR UPDATE')) {
+						throw new Exception('Refund bank line is already linked to a native payment');
+					}
+				}
+			}
+
 			foreach ($links as $link) {
 				$allocatedAmount = abs((float) price2num((string) $link['allocated_amount'], 'MU'));
 				if ($allocatedAmount <= 0.00001) {
@@ -2360,8 +2409,8 @@ class KreaBankService
 							$companyLinks[$tpId] = $thirdparty;
 						}
 					}
-				} elseif ($docType === 'customer_invoice') {
-					$created = $this->createCustomerPaymentForBankLine($nativeLine, $docId, $allocatedAmount, (string) $note);
+				} elseif ($docType === 'customer_invoice' || $docType === 'customer_credit_note') {
+					$created = $this->createCustomerPaymentForBankLine($nativeLine, $docId, $allocatedAmount, (string) $note, $docType === 'customer_credit_note', $refundReviews[$docId] ?? null);
 					$createdPaymentLabel = '#' . ((int) $created['payment_id']);
 					$resLink = $this->native->addLineLink(
 						$nativeLineId,
@@ -6720,7 +6769,7 @@ class KreaBankService
 		}
 
 		if ($lineDirection < 0) {
-			return in_array($docType, array('payment_supplier', 'supplier_invoice', 'tax', 'payment_tax'), true);
+			return in_array($docType, array('payment_supplier', 'supplier_invoice', 'customer_credit_note', 'tax', 'payment_tax'), true);
 		}
 
 		return in_array($docType, array('native_bank', 'payment', 'payment_supplier', 'customer_invoice', 'supplier_invoice', 'tax', 'payment_tax'), true);
@@ -6739,7 +6788,7 @@ class KreaBankService
 			return '';
 		}
 
-		if ($docType === 'customer_invoice') {
+		if ($docType === 'customer_invoice' || $docType === 'customer_credit_note') {
 			$sql = 'SELECT ref FROM ' . $this->db->prefix() . 'facture WHERE rowid = ' . ((int) $docId) . ' AND entity = ' . ((int) $this->entity);
 			$resql = $this->db->query($sql);
 			if ($resql && ($obj = $this->db->fetch_object($resql))) {
@@ -7199,9 +7248,11 @@ class KreaBankService
 	 * @param int $invoiceId
 	 * @param float $allocatedAmount
 	 * @param string $note
+	 * @param bool $isRefund Dedicated customer credit-note document
+	 * @param array|null $reviewedDocument Authenticated displayed refund facts
 	 * @return array<string,mixed>
 	 */
-	protected function createCustomerPaymentForBankLine($line, $invoiceId, $allocatedAmount, $note = '')
+	protected function createCustomerPaymentForBankLine($line, $invoiceId, $allocatedAmount, $note = '', $isRefund = false, $reviewedDocument = null)
 	{
 		global $conf;
 		require_once DOL_DOCUMENT_ROOT . '/compta/facture/class/facture.class.php';
@@ -7215,18 +7266,43 @@ class KreaBankService
 		if ((int) $invoice->entity !== (int) $this->entity) {
 			throw new Exception('Customer invoice is outside current entity');
 		}
-		if ((int) $invoice->type === Facture::TYPE_CREDIT_NOTE) {
-			throw new Exception('Customer credit notes require a dedicated refund reconciliation workflow');
+		if (((int) $invoice->type === Facture::TYPE_CREDIT_NOTE) !== $isRefund) {
+			throw new Exception('Customer invoice type does not match the reviewed document type');
 		}
+		$direction = !empty($line['direction']) ? (int) $line['direction'] : ((float) $line['amount'] < 0 ? -1 : 1);
+		if (($isRefund && $direction >= 0) || (!$isRefund && $direction <= 0)) {
+			throw new Exception('Customer invoice type is not compatible with this statement line direction');
+		}
+		if ($isRefund) {
+			$baseCurrency = strtoupper((string) $conf->currency);
+			if (strtoupper((string) ($line['currency'] ?? $baseCurrency)) !== $baseCurrency
+				|| (!empty($invoice->multicurrency_code) && strtoupper($invoice->multicurrency_code) !== $baseCurrency)) {
+				throw new Exception('Customer credit note refunds require company currency for the invoice and bank line');
+			}
+			// Converted credit belongs to the discount workflow, even while still unused.
+			if ($this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'societe_remise_except WHERE fk_facture_source=' . (int) $invoiceId . ' FOR UPDATE')) {
+				throw new Exception('Customer credit note has already been converted into credit');
+			}
+		}
+
 		if ((int) $invoice->status !== Facture::STATUS_VALIDATED || !empty($invoice->paye)) {
 			throw new Exception('Customer invoice is no longer open for payment');
 		}
-		$this->assertInvoiceAllocationWithinRemaining($invoice, $allocatedAmount, 'Customer invoice');
+		$this->assertInvoiceAllocationWithinRemaining($invoice, $allocatedAmount, 'Customer invoice', $isRefund);
 		$invoice->fetch_thirdparty();
+		if ($isRefund && (!is_array($reviewedDocument)
+			|| (int) ($reviewedDocument['doc_id'] ?? 0) !== (int) $invoiceId
+			|| ($reviewedDocument['doc_type'] ?? '') !== 'customer_credit_note'
+			|| abs((float) $reviewedDocument['amount_open'] + (float) $invoice->getRemainToPay(0)) > 0.00000001
+			|| (string) ($reviewedDocument['doc_ref'] ?? '') !== (string) $invoice->ref
+			|| (string) ($reviewedDocument['thirdparty_name'] ?? '') !== (string) $invoice->thirdparty->name
+			|| substr((string) ($reviewedDocument['doc_date'] ?? ''), 0, 10) !== substr($this->db->idate($invoice->date), 0, 10))) {
+			throw new Exception('Customer credit note changed since review');
+		}
 
 		$payment = new Paiement($this->db);
 		$payment->datepaye = $this->resolveLineDateTimestamp($line);
-		$payment->amounts = array((int) $invoiceId => (float) price2num((string) $allocatedAmount, 'MT'));
+		$payment->amounts = array((int) $invoiceId => ($isRefund ? -1 : 1) * (float) price2num((string) $allocatedAmount, 'MT'));
 		$payment->multicurrency_amounts = array((int) $invoiceId => 0);
 		$payment->multicurrency_code = array(
 			(int) $invoiceId => !empty($invoice->multicurrency_code) ? (string) $invoice->multicurrency_code : (string) $conf->currency,
@@ -7441,9 +7517,10 @@ class KreaBankService
 	 * @param CommonInvoice $invoice
 	 * @param float $allocatedAmount
 	 * @param string $invoiceLabel
+	 * @param bool $isRefund Credit notes have a negative native remaining balance
 	 * @return void
 	 */
-	protected function assertInvoiceAllocationWithinRemaining($invoice, $allocatedAmount, $invoiceLabel)
+	protected function assertInvoiceAllocationWithinRemaining($invoice, $allocatedAmount, $invoiceLabel, $isRefund = false)
 	{
 		if (!is_object($invoice) || empty($invoice->id) || !method_exists($invoice, 'getRemainToPay')) {
 			throw new Exception($invoiceLabel . ' cannot provide a remaining balance');
@@ -7454,7 +7531,7 @@ class KreaBankService
 			throw new Exception($this->extractObjectErrorMessage($invoice, 'Failed to read current invoice remaining balance'));
 		}
 
-		$remaining = (float) price2num((string) $remainingRaw, 'MT');
+		$remaining = ($isRefund ? -1 : 1) * (float) price2num((string) $remainingRaw, 'MT');
 		$allocation = abs((float) price2num((string) $allocatedAmount, 'MT'));
 		if ($remaining <= 0.00001) {
 			throw new Exception($invoiceLabel . ' no longer has an outstanding balance');
@@ -7462,7 +7539,7 @@ class KreaBankService
 		if ($allocation <= 0.00001) {
 			throw new Exception('Invoice allocation amount must be greater than zero');
 		}
-		if (($allocation - $remaining) > 0.01) {
+		if (($allocation - $remaining) > ($isRefund ? 0.00001 : 0.01)) {
 			throw new Exception($invoiceLabel . ' allocation exceeds the current remaining balance');
 		}
 	}

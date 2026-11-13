@@ -131,8 +131,11 @@ class KreaBankMatcher
 		$docAmount = abs((float) $document['amount_open']);
 		$epsilon = 0.01;
 		$docType = ($document['doc_type'] ?? '');
+		if ($docType === 'customer_credit_note' && (float) $line['amount'] >= 0) {
+			return array('score' => 0, 'details' => array(), 'strategy_level' => 0);
+		}
 		$isNativeBankDocument = ($docType === 'native_bank');
-		$allowsPartialPayment = in_array($docType, array('customer_invoice', 'supplier_invoice', 'tax'), true);
+		$allowsPartialPayment = in_array($docType, array('customer_invoice', 'customer_credit_note', 'supplier_invoice', 'tax'), true);
 		$isLoteBatchLine = $this->isLoteBatchLine($line);
 		$hasStrongReferenceMatch = false;
 		$dateOutsideTolerance = false;
@@ -152,8 +155,8 @@ class KreaBankMatcher
 			$score += 70;
 			$details[] = 'amount';
 			$strategyLevel = max($strategyLevel, 1);
-		} elseif ($allowsPartialPayment && $docAmount > 0 && $lineAmount < $docAmount + $epsilon) {
-			// Existing invoices and taxes may receive an identity-supported partial payment.
+		} elseif ($allowsPartialPayment && $docAmount > 0 && ($lineAmount < $docAmount + $epsilon || $docType === 'customer_credit_note')) {
+			// Credit notes also contribute to a manually reviewed combined refund.
 			$score += 40;
 			$details[] = 'amount_pending';
 		}

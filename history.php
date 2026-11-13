@@ -47,7 +47,7 @@ if (!$res) {
 require_once __DIR__ . '/lib/kreabank.lib.php';
 require_once __DIR__ . '/class/KreaBankService.class.php';
 
-$langs->loadLangs(array('errors', 'kreabank@kreabank'));
+$langs->loadLangs(array('errors', 'banks', 'kreabank@kreabank'));
 
 if (!isModEnabled('kreabank')) {
 	accessforbidden();
@@ -71,8 +71,8 @@ $historyColumns = array('event_ts' => 'KreaBankWhen', 'description' => 'KreaBank
 $auditColumns = array('datec' => 'KreaBankWhen', 'audit_type' => 'KreaBankAction', 'login' => 'KreaBankUser', 'fk_statement_line' => 'KreaBankLine', 'summary' => 'KreaBankAuditPayloadSummary');
 $historySort = kreabankListSort($historyColumns, 'event_ts', 'DESC');
 $auditSort = kreabankListSort($auditColumns, 'datec', 'DESC', 'audit_');
-$nativeEntryLabel = 'LAN&Ccedil;AMENTO';
-$undoActionLabel = 'DESFAZER';
+$nativeEntryLabel = $langs->trans('BankTransaction');
+$undoActionLabel = $langs->trans('KreaBankUndo');
 $requestPage = GETPOSTISSET('pageplusone') ? (GETPOSTINT('pageplusone') - 1) : GETPOSTINT('page');
 if ($requestPage < 0) {
 	$requestPage = 0;
@@ -431,7 +431,7 @@ $summarizeAuditPayload = static function ($audit) use ($langs) {
 
 	$parts = array();
 	if (!empty($payload['strategy'])) {
-		$parts[] = $langs->trans('Type') . ': ' . (string) $payload['strategy'];
+		$parts[] = $langs->trans('Type') . ': ' . kreabankTypeLabel((string) $payload['strategy']);
 	}
 	if (isset($payload['confidence_score'])) {
 		$parts[] = 'Score: ' . ((int) $payload['confidence_score']);
@@ -456,14 +456,14 @@ $summarizeAuditPayload = static function ($audit) use ($langs) {
 			$parts[] = $langs->trans('KreaBankAllocate') . ': ' . kreabankPrice($allocated);
 		}
 		if (!empty($linkTypes)) {
-			$parts[] = implode(', ', array_keys($linkTypes));
+			$parts[] = implode(', ', array_map('kreabankTypeLabel', array_keys($linkTypes)));
 		}
 	}
 	if (!empty($payload['reason'])) {
 		$parts[] = $langs->trans('KreaBankReason') . ': ' . (string) $payload['reason'];
 	}
 	if (!empty($payload['quick_entry_id'])) {
-		$parts[] = 'Quick entry #' . ((int) $payload['quick_entry_id']);
+		$parts[] = $langs->trans('KreaBankTypeQuickEntry') . ' #' . ((int) $payload['quick_entry_id']);
 	}
 
 	$summary = !empty($parts) ? implode(' | ', $parts) : '-';
@@ -771,7 +771,7 @@ print '<td class="liste_titre">';
 print '<select name="hist_link_type" class="flat" form="kreaHistoryFilterForm">';
 print '<option value="all"' . ($historyLinkType === 'all' ? ' selected' : '') . '>' . $langs->trans('KreaBankLinkTypeAll') . '</option>';
 foreach ($availableLinkTypeOptions as $linkTypeOption) {
-	$linkTypeLabel = str_replace('_', ' ', (string) $linkTypeOption);
+	$linkTypeLabel = kreabankTypeLabel((string) $linkTypeOption);
 	print '<option value="' . dol_escape_htmltag((string) $linkTypeOption) . '"' . ($historyLinkType === $linkTypeOption ? ' selected' : '') . '>' . dol_escape_htmltag($linkTypeLabel) . '</option>';
 }
 print '</select>';
@@ -799,12 +799,12 @@ foreach ($historyColumns as $field => $label) {
 print '<th scope="col" class="center">' . $langs->trans('Action') . '</th>';
 print '</tr>';
 
-	$renderLinkedDocument = static function ($link) {
+	$renderLinkedDocument = static function ($link) use ($langs) {
 		if (!is_array($link)) {
 			return '';
 		}
 		$linkType = trim((string) (isset($link['doc_type']) ? $link['doc_type'] : ''));
-		$linkTypeLabel = ($linkType !== '' ? str_replace('_', ' ', $linkType) : 'doc');
+		$linkTypeLabel = ($linkType !== '' ? kreabankTypeLabel($linkType) : $langs->trans('KreaBankDocument'));
 		$linkRef = trim((string) (isset($link['doc_ref']) ? $link['doc_ref'] : ''));
 		$linkDocId = (int) (isset($link['fk_doc']) ? $link['fk_doc'] : 0);
 		if ($linkRef !== '' && in_array(strtolower($linkRef), array('(paiement)', '(payment)', '(variouspayment)', '(various_payment)', '(various payment)'), true)) {
@@ -938,7 +938,7 @@ if ($historyTotalRecords === 0) {
 		print '</td>';
 
 		print '<td>';
-		print '<span class="badge badge-status4">' . dol_escape_htmltag($strategy) . '</span>';
+		print '<span class="badge badge-status4">' . dol_escape_htmltag(kreabankTypeLabel($strategy)) . '</span>';
 		if ($confidence > 0) {
 			print '<br><span class="krea-history-sub">Score ' . $confidence . '</span>';
 		}

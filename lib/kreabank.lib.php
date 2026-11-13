@@ -326,3 +326,21 @@ function kreabankIsTokenValid($token = null)
 
 	return false;
 }
+
+/**
+ * Translate a document type or reconciliation strategy for display.
+ *
+ * @param string $type Stored type or strategy
+ * @return string Translated label, or the readable original for unknown types
+ */
+function kreabankTypeLabel($type)
+{
+	global $langs;
+
+	$aliases = array('invoice_supplier' => 'supplier_invoice', 'payment_linked' => 'payment', 'payment_supplier_linked' => 'payment_supplier', 'bank_line' => 'native_bank');
+	$type = isset($aliases[$type]) ? $aliases[$type] : $type;
+	$key = 'KreaBankType' . str_replace(' ', '', ucwords(str_replace('_', ' ', $type)));
+	$label = $langs->transnoentities($key);
+
+	return $label !== $key ? $label : str_replace('_', ' ', $type);
+}

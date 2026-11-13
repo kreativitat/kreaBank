@@ -9,8 +9,8 @@
 - 2026-07-16: Keep one reconciliation path through `KreaBankService`, `KreaBankNativeBankAdapter`, and `KreaBankMatcher`; do not introduce a second matching or execution engine.
 - 2026-07-16: Automatic safe matching requires an exact amount signal, a strong identity signal (`ref_payment`, `ref_exact`, `iban`, or `pattern_iban`), the configured score threshold, and at least a 35-point lead over the second valid candidate. Automatic batch approval and bulk/manual preselection must use `KreaBankService::getSafeSuggestion()`.
 - 2026-11-01: Explicitly reviewed bulk selections use manual `bulk_manual` reconciliation, including weak suggestions approved by the user. Require CSRF, current write permissions, the review checkbox and a session-signed, unexpired exact displayed pair; recompute suggestions and reject changed pairs. Never relax unattended matching to implement manual approval.
-- 2026-07-16: Customer and supplier credit notes are excluded from normal invoice candidates. Supporting refunds requires dedicated reverse-direction document types and payment semantics; credit notes must not be treated as standard positive invoice payments.
-- 2026-07-16: The manual reconciliation controller intentionally accepts only `native_bank` checkbox and drag/drop assignments. Payments and invoices remain supported through bulk, suggestion, and quick-entry service workflows.
+- Customer credit-note refunds use the dedicated `customer_credit_note` type on outgoing company-currency lines and native negative customer payments. Keep supplier credit notes excluded. Reject converted credit, stale balances, already allocated bank rows and wrong-company targets; ordinary invoices retain their normal directions.
+- 2026-07-16: The manual reconciliation controller accepts `native_bank` checkbox and drag/drop assignments; customer credit-note checkboxes use the separately signed refund review described below. Payments and invoices remain supported through bulk, suggestion, and quick-entry service workflows.
 
 ## Database & Schema Notes
 
@@ -43,7 +43,7 @@
 
 ## Technical Debt / Open Issues
 
-- 2026-07-16: Implement dedicated customer-credit-note and supplier-credit-note refund matching with explicit reversed directions before exposing those documents as candidates.
+- Supplier-credit-note refunds remain unsupported; do not expose them as ordinary invoice candidates.
 - 2026-07-16: Define and enforce a complete multicurrency reconciliation contract before allowing automatic foreign-currency invoice payments; current invoice payment creation is primarily company-currency oriented.
 - 2026-07-16: Replace the unconditional `VIR`/`CHQ` payment-mode fallback with an explicit configured or user-confirmed payment mode, or a separately tested bank-description classifier, before relying on generated payment method metadata for accounting reports.
 
@@ -325,3 +325,5 @@
   options when stock-on-invoice requires warehouse selection. Pure/controller/UI
   checks and `test/test_draft_invoice_review_database.php` cover this flow; the
   latter uses only the guarded disposable localhost:33317 fixture.
+
+- Selected-line customer refunds can combine explicitly selected credit-note cards against one outgoing movement. Authenticate each displayed allocation with the shared signed review, recompute candidates on POST and recheck all rows under the service transaction. Do not preselect a split refund or feed it into unattended approval.

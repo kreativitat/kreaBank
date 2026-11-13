@@ -106,13 +106,13 @@ print load_fiche_titre($langs->trans($title), $linkback, 'title_setup');
 
 // Configuration header
 $head = kreabankAdminPrepareHead();
-print dol_get_fiche_head($head, 'about', $langs->trans($title), -1, 'kreabank@kreabank');
+print dol_get_fiche_head($head, 'about', $langs->trans($title), -1, 'bank.svg@kreabank');
 
 dol_include_once('/kreabank/core/modules/modKreaBank.class.php');
 $tmpmodule = new modKreaBank($db);
 
 // Organized about block
-$logoUrl = dol_buildpath('/custom/kreaproducts/img/logo.png', 1);
+$logoUrl = dol_buildpath('/kreabank/img/bank.svg', 1);
 $moduleName = $tmpmodule->getName();
 $moduleVersion = $tmpmodule->getVersion();
 $editorName = $tmpmodule->editor_name;

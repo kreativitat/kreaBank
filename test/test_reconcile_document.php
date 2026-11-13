@@ -267,4 +267,36 @@ checkDirect(kreabankReconcileQueueIds('12,12,0,-1,13,x,2147483648') === array(12
 checkDirect(kreabankReconcileQueueIds(array(12,13)) === array() && kreabankReconcileQueueIds(str_repeat('1', 2212)) === array(), 'Malformed or overlong navigation state is bounded');
 checkDirect(count(kreabankReconcileQueueIds(implode(',', range(1,250)))) === 201, 'Navigation state cannot exceed the loaded queue bound');
 checkDirect(kreabankReconcileQueueState(array(), array(11,12), array(12), true)['line_id'] === 0, 'An exhausted queue has no fabricated successor');
+resetDirectReview();
+$service->suggestions[0]['doc_type'] = 'customer_credit_note';
+$service->suggestions[0]['thirdparty_name'] = 'Synthetic customer';
+$row = kreabankManualReviewCallbacks($service,3,100)['prepareDocumentReviews']($service->line)['customer_credit_note__22'];
+$request['review_doc'] = 'customer_credit_note__22';
+$request['review_signature'] = kreabankBulkReviewSignature($row,'7|9|81',$request['review_expires'],$_SESSION['kreabank_bulk_review_secret']);
+checkDirect(is_string(submitDirectReview()) && $service->executions[0][1][0]['doc_type'] === 'customer_credit_note', 'Single signed refund uses ordinary per-card execution');
+// Refund pairs must each remain signed, including a combination of smaller notes.
+resetDirectReview();
+$service->line['amount'] = -200;
+$service->suggestions = array();
+foreach (array(22=>60, 23=>140) as $id=>$amount) {
+ $service->suggestions[] = array('doc_type'=>'customer_credit_note','doc_id'=>$id,'doc_ref'=>'CREDIT-'.$id,
+ 'doc_date'=>'2026-11-03','thirdparty_name'=>'Synthetic customer','amount_open'=>$amount,'score'=>100,'details'=>array('date'));
+}
+$rows = kreabankManualReviewCallbacks($service,3,100)['prepareDocumentReviews']($service->line);
+checkDirect(count($rows) === 2, 'Smaller customer credit notes remain explicitly reviewable');
+$request['refund_docs'] = array_keys($rows);
+$request['refund_signatures'] = array();
+foreach ($rows as $key=>$row) { $request['refund_signatures'][$key] = kreabankBulkReviewSignature($row,'7|9|81',$request['review_expires'],$_SESSION['kreabank_bulk_review_secret']); }
+$savedRequest = $request;
+$request['refund_signatures']['customer_credit_note__23'] = str_repeat('0',64);
+checkDirect(submitDirectReview() === null && !$service->executions, 'An unsigned refund combination fails closed');
+$request = $savedRequest;
+$request['refund_docs'] = array('customer_credit_note__22');
+checkDirect(submitDirectReview() === null && !$service->executions, 'Incomplete refund total cannot reconcile the debit');
+$request = $savedRequest;
+$request['refund_docs'][] = 'customer_credit_note__22';
+checkDirect(submitDirectReview() === null && !$service->executions, 'Duplicate refund selections fail closed');
+$request = $savedRequest;
+checkDirect(is_string(submitDirectReview()) && count($service->executions[0][1]) === 2, 'Two signed refunds execute together through the existing executor');
+checkDirect(count($service->executions[0][7]['refund_reviews']) === 2, 'Executor receives both authenticated review snapshots');
 echo 'OK: ' . $checks . " direct one-by-one approval checks (synthetic, no database)\n";

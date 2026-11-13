@@ -264,11 +264,11 @@ if ($openInvoiceBody === '') {
 	$assertContains($openInvoiceBody, 'paiementfourn_facturefourn as pff WHERE pff.fk_facturefourn = f.rowid', 'supplier invoice candidates should subtract existing payments from open balance', $errors);
 	$assertContains($openInvoiceBody, 'societe_remise_except as rc', 'invoice candidates should subtract applied deposits and credit notes', $errors);
 	$assertContains($openInvoiceBody, 'WHERE rc.entity = ', 'applied deposit and credit-note lookups should enforce explicit entity scope', $errors);
+	$assertContains($openInvoiceBody, "' AND f.type <> 2'", 'supplier credit notes remain excluded', $errors);
+	$assertContains($openInvoiceBody, "'customer_credit_note'", 'customer refunds require a dedicated reverse document type', $errors);
+	$assertContains($openInvoiceBody, '$customerRefundSql', 'customer refund candidates use a separate eligibility predicate', $errors);
 	if (substr_count($openInvoiceBody, "' AND f.fk_statut = 1 AND f.paye = 0'") < 2) {
 		$errors[] = 'customer and supplier invoice candidates should include only validated unpaid invoices';
-	}
-	if (substr_count($openInvoiceBody, "' AND f.type <> 2'") < 2) {
-		$errors[] = 'customer and supplier invoice candidates should exclude credit notes until a dedicated refund workflow exists';
 	}
 }
 $customerPaymentBody = $extractFunctionBody($serviceSource, 'createCustomerPaymentForBankLine');

@@ -65,11 +65,12 @@ class KreaBankReconciliationScope
 				. " WHERE p.entity=$e AND p.rowid=$id AND (COALESCE(p.fk_bank,0)=0 OR (ba.entity=$e AND ba.rowid=$a))"
 				. " AND NOT EXISTS (SELECT 1 FROM {$p}{$link} pl JOIN {$p}{$invoice} f ON f.rowid=pl.{$invoiceKey} WHERE pl.{$paymentKey}=p.rowid AND f.entity<>$e)";
 		} else {
-			$tables = array('customer_invoice' => 'facture', 'supplier_invoice' => 'facture_fourn', 'quick_entry' => 'kreabank_quick_entry');
+			$tables = array('customer_credit_note' => 'facture', 'customer_invoice' => 'facture', 'supplier_invoice' => 'facture_fourn', 'quick_entry' => 'kreabank_quick_entry');
 			if (!isset($tables[$type])) {
 				throw new Exception('Unknown reconciliation document type');
 			}
 			$sql = 'SELECT rowid FROM ' . $p . $tables[$type] . " WHERE entity=$e AND rowid=$id";
+			if ($type === 'customer_credit_note') { $sql .= ' AND type=2'; }
 		}
 		$this->requireRow($sql);
 		(new KreaBankAccountPairs($this->db, $this->entity))->assertDocument($type, $id, $accountId);

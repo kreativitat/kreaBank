@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.19.43 — 2026-11-13
+
+- Use bundled, contrast-safe bank icons in module information and settings; remove image dependencies on KreaProducts.
+
+## 1.19.42 — 2026-11-13
+
+- Complete the German locale and translate hard-coded import, history and setup
+  labels, including reconciliation types and diagnostic statuses.
+
+## 1.19.41 — 2026-11-13
+
+- Reconcile customer credit-note refunds, including multiple notes against one
+  outgoing movement, through signed manual review and native negative payments.
+  Preserve the existing bank row and reject stale, converted or duplicate refunds.
+
 ## 1.19.40 — 2026-11-06
 
 - Carry explicit all-accounts context on pending transaction links so Next and

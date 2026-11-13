@@ -246,11 +246,32 @@ if ($action === 'confirm_document') {
 		$reviewRows = $line && (int) $line['status'] === 0 ? $callbacks['prepareDocumentReviews']($line) : array();
 		$row = $reviewRows[$documentKey] ?? null;
 		$scope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId;
-		if (!$row || !in_array($row['suggestion']['doc_type'], array('native_bank', 'customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked', 'tax', 'payment_tax'), true)
+		if (!GETPOSTISSET('refund_docs') && (!$row || !in_array($row['suggestion']['doc_type'], array('native_bank', 'customer_invoice', 'customer_credit_note', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked', 'tax', 'payment_tax'), true)
 			|| $documentKey !== $row['suggestion']['doc_type'] . '__' . (int) $row['suggestion']['doc_id']
 			|| !kreabankBulkReviewIsValid($row, $scope, GETPOSTINT('review_expires'), GETPOST('review_signature', 'aZ09'),
-				$_SESSION['kreabank_bulk_review_secret'] ?? '', dol_now(), true, $navigationAccountId)) {
+				$_SESSION['kreabank_bulk_review_secret'] ?? '', dol_now(), true, $navigationAccountId))) {
 			throw new Exception($langs->trans('KreaBankBulkMatchReviewChanged', '1'));
+		}
+		if (GETPOSTISSET('refund_docs')) {
+			$keys = GETPOST('refund_docs', 'array');
+			$signatures = GETPOST('refund_signatures', 'array');
+			if (!is_array($keys) || !$keys || count($keys) > 120 || count(array_filter($keys, 'is_string')) !== count($keys) || count(array_unique($keys)) !== count($keys) || !is_array($signatures)) {
+				throw new Exception($langs->trans('KreaBankBulkMatchReviewChanged', '1'));
+			}
+			$refundReviews = array(); $total = 0;
+			foreach ($keys as $key) {
+				$refund = is_string($key) ? ($reviewRows[$key] ?? null) : null;
+				if (!$refund || $refund['suggestion']['doc_type'] !== 'customer_credit_note'
+					|| !kreabankBulkReviewIsValid($refund, $scope, GETPOSTINT('review_expires'), $signatures[$key] ?? '',
+						$_SESSION['kreabank_bulk_review_secret'] ?? '', dol_now(), true, $navigationAccountId)) {
+					throw new Exception($langs->trans('KreaBankBulkMatchReviewChanged', '1'));
+				}
+				$refundReviews[] = $refund; $total += $refund['allocation'];
+			}
+			if (abs($total - (abs((float) $line['amount']) - abs((float) $line['allocated_amount']))) > 0.00000001) {
+				throw new Exception($langs->trans('KreaBankWorkspaceMismatch'));
+			}
+			$row = array('line'=>$line, 'refund_reviews'=>$refundReviews);
 		}
 		kreabankExecuteManualReview($service, $row);
 		unset($_SESSION['kreabank_bulkmatch_scan_state'], $_SESSION['kreabank_matched_scan_state']);
@@ -1672,6 +1693,7 @@ if ($selectedLine) {
 $canReconcile = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite);
 $documentReviewRows = array();
 $documentReviewForms = array();
+$refundReviewForms = array();
 $draftInvoiceForms = array();
 foreach ($_SESSION['kreabank_draft_invoices'] ?? array() as $key=>$review) {
 	if ($review['expires'] < time()) { unset($_SESSION['kreabank_draft_invoices'][$key]); }
@@ -1837,7 +1859,7 @@ if (!$selectedLine) {
 				$docCardUrl = dol_buildpath('/compta/paiement/card.php?id=' . (int) $doc['rowid'], 1);
 			} elseif ($rawDocType === 'payment_supplier' || $rawDocType === 'payment_supplier_linked') {
 				$docCardUrl = dol_buildpath('/fourn/paiement/card.php?id=' . (int) $doc['rowid'], 1);
-			} elseif ($rawDocType === 'customer_invoice') {
+			} elseif ($rawDocType === 'customer_invoice' || $rawDocType === 'customer_credit_note') {
 				$docCardUrl = dol_buildpath('/compta/facture/card.php?facid=' . (int) $doc['rowid'], 1);
 			} elseif ($rawDocType === 'tax') {
 				$docCardUrl = dol_buildpath('/compta/sociales/card.php?id=' . (int) $doc['rowid'], 1);
@@ -1867,7 +1889,7 @@ if (!$selectedLine) {
 			} else {
 				print '<strong>' . dol_escape_htmltag($displayReference) . '</strong>';
 			}
-			$documentKind = $rawDocType === 'tax' ? 'Tax' : ($rawDocType === 'native_bank' ? 'Bank' : (in_array($rawDocType, array('customer_invoice', 'supplier_invoice'), true) ? 'Invoice' : 'Payment'));
+			$documentKind = $rawDocType === 'customer_credit_note' ? 'CreditNote' : ($rawDocType === 'tax' ? 'Tax' : ($rawDocType === 'native_bank' ? 'Bank' : (in_array($rawDocType, array('customer_invoice', 'supplier_invoice'), true) ? 'Invoice' : 'Payment')));
 			print ' <span class="krea-muted">' . $langs->trans('KreaBankReviewExisting' . $documentKind) . '</span><br>';
 			if ($isDraft) { print '<span class="badge badge-status0">' . $langs->trans('KreaBankDraftInvoice') . '</span><br>'; }
 			if (trim($displayCounterparty) !== '' && trim($displayCounterparty) !== trim($displayReference)) {
@@ -1918,7 +1940,7 @@ if (!$selectedLine) {
 			}
 			if (!$isLocked && !$isDraft && ($rawDocType !== 'native_bank' || !$isLoteBatchLine)) {
 				print '<p>' . $langs->trans('KreaBankReviewConsequence' . $documentKind) . '</p>';
-				$actionLabel = $documentKind === 'Tax' ? 'KreaBankReviewPayTax' : ($documentKind === 'Bank' ? 'KreaBankWorkspaceReconcileBank' : ($documentKind === 'Invoice' ? 'KreaBankReviewPayInvoice' : 'KreaBankWorkspaceReconcilePayment'));
+				$actionLabel = $documentKind === 'CreditNote' ? 'KreaBankReviewRefundCreditNote' : ($documentKind === 'Tax' ? 'KreaBankReviewPayTax' : ($documentKind === 'Bank' ? 'KreaBankWorkspaceReconcileBank' : ($documentKind === 'Invoice' ? 'KreaBankReviewPayInvoice' : 'KreaBankWorkspaceReconcilePayment')));
 				if (isset($documentReviewRows[$docKey])) {
 					$reviewRow = $documentReviewRows[$docKey];
 					if (!empty($reviewRow['other_account_warning'])) {
@@ -1928,9 +1950,13 @@ if (!$selectedLine) {
 					foreach (array('ref'=>'doc_ref', 'doc_date'=>'doc_date', 'thirdparty_name'=>'thirdparty_name', 'amount_open'=>'amount_open') as $displayKey => $reviewKey) {
 						$reviewRow['suggestion'][$reviewKey] = $doc[$displayKey];
 					}
+					if ($rawDocType === 'customer_credit_note') {
+						$refundReviewForms[$docKey] = $reviewRow;
+						print '<label><input type="checkbox" form="kb-refund-reviews" name="refund_docs[]" value="' . dol_escape_htmltag($docKey) . '"> ' . $langs->trans('KreaBankReviewSelectRefund') . '</label>';
+					}
 					$formId = 'kb-document-review-' . $docKey;
 					$documentReviewForms[$formId] = $reviewRow;
-					print '<button type="submit" form="' . dol_escape_htmltag($formId) . '" class="button kb-primary-action">' . $langs->trans($actionLabel) . '</button>';
+					print '<button type="submit" form="' . dol_escape_htmltag($formId) . '" class="button kb-primary-action"' . ($rawDocType === 'customer_credit_note' && abs($reviewRow['allocation'] - $selectedOutstanding) > 0.00000001 ? ' disabled' : '') . '>' . $langs->trans($actionLabel) . '</button>';
 				} elseif ($canReconcile) {
 					print '<button type="button" class="button kb-primary-action" disabled>' . $langs->trans($actionLabel) . '</button>';
 					print '<p class="krea-muted">' . $langs->trans('KreaBankWorkspaceDocumentUnavailable') . '</p>';
@@ -1959,6 +1985,20 @@ if (!$selectedLine) {
 		}
 	}
 	print '</form>';
+	if ($refundReviewForms) {
+		$expires = dol_now() + 1800;
+		$scope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId;
+		print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="kb-refund-reviews">';
+		print kreabankNavigationHiddenFields($navigationAccountId) . $queueNavigationFields;
+		foreach (array('token'=>newToken(), 'action'=>'confirm_document', 'line_id'=>(int) $selectedLine['rowid'],
+			'line_source'=>!empty($selectedLine['fk_statement']) ? 'staged' : 'native', 'review_expires'=>$expires) as $name=>$value) {
+			print '<input type="hidden" name="' . $name . '" value="' . dol_escape_htmltag((string) $value) . '">';
+		}
+		foreach ($refundReviewForms as $key=>$refund) {
+			print '<input type="hidden" name="refund_signatures[' . dol_escape_htmltag($key) . ']" value="' . kreabankBulkReviewSignature($refund, $scope, $expires, $_SESSION['kreabank_bulk_review_secret']) . '">';
+		}
+		print '<p>' . $langs->trans('KreaBankReviewRefundSelectionHelp') . '</p><button type="submit" class="button kb-primary-action">' . $langs->trans('KreaBankReviewRefundSelected') . '</button></form>';
+	}
 	// Associated forms stay outside the native-movement form; no nested forms.
 	foreach ($draftInvoiceForms as $formId=>$key) {
 		print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="' . dol_escape_htmltag($formId) . '">'

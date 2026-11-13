@@ -266,3 +266,18 @@ it against an installation database. The workspace fixture's `otheraccounts` cas
 exercises the real renderer with intercepted submissions for desktop/mobile checks.
 Deploy `reconcile.php`, the service, native adapter, shared library, workspace CSS,
 translations and version metadata together. No migration or scheduler change.
+
+## Customer credit-note refunds
+
+Outgoing company-currency statement lines can be matched to open customer credit
+notes. Select the required credit-note cards and confirm their combined amount;
+for example, two notes for 60 and 140 can settle one outgoing movement of 200.
+Each displayed allocation is authenticated by the shared manual review and
+recomputed on submission. Split refunds are never automatically preselected.
+
+The existing service records native negative customer payments and attaches them
+to the same native bank row. It locks the source and credit notes, rejects stale
+or overpaid balances, and rolls back the complete allocation on failure. Notes
+converted into available credit, supplier credit notes and foreign-currency
+refunds are excluded. The quick Payment action remains a quick entry; use existing
+credit-note selection when refunding a documented invoice cancellation.

@@ -926,11 +926,11 @@ $isDuplicateReview = (!empty($currentWizard['phase']) && (string) $currentWizard
 $hasActiveWizard = (!empty($currentWizard) && is_array($currentWizard));
 
 if (!$hasActiveWizard) {
-	print '<div class="opacitymedium" style="font-size:1em;font-weight:600;margin:14px 0"><strong>Passo 1:</strong> ' . $langs->trans('KreaBankImportUpload') . '</div><br>';
+	print '<div class="opacitymedium" style="font-size:1em;font-weight:600;margin:14px 0"><strong>' . $langs->trans('KreaBankImportStep', 1) . ':</strong> ' . $langs->trans('KreaBankImportUpload') . '</div><br>';
 } elseif (!$isDuplicateReview) {
-	print '<div class="opacitymedium" style="font-size:1em;font-weight:600;margin:14px 0"><strong>Passo 2:</strong> Rever importação e confirmar.</div><br>';
+	print '<div class="opacitymedium" style="font-size:1em;font-weight:600;margin:14px 0"><strong>' . $langs->trans('KreaBankImportStep', 2) . ':</strong> ' . $langs->trans('KreaBankImportReviewConfirm') . '</div><br>';
 } else {
-	print '<div class="opacitymedium" style="font-size:1em;font-weight:600;margin:14px 0"><strong>Passo 3:</strong> Rever possíveis duplicados detetados e decidir o que importar.</div><br>';
+	print '<div class="opacitymedium" style="font-size:1em;font-weight:600;margin:14px 0"><strong>' . $langs->trans('KreaBankImportStep', 3) . ':</strong> ' . $langs->trans('KreaBankImportReviewDuplicates') . '</div><br>';
 }
 
 if (!$hasActiveWizard) {
@@ -950,8 +950,8 @@ if (!$hasActiveWizard) {
 	}
 	print '</select></td></tr>';
 	print '<tr><td>' . $langs->trans('KreaBankImportStatementDate') . '</td><td><input class="flat" type="date" name="statement_date" value="' . dol_escape_htmltag($selectedStatementDate) . '">';
-	print '<span class="opacitymedium paddingleft">(optional)</span></td></tr>';
-	print '<tr><td>Editor de campos</td><td><input type="hidden" name="force_mapping_editor_present" value="1"><label><input class="flat" type="checkbox" name="force_mapping_editor" value="1"' . ($selectedForceMappingEditor ? ' checked' : '') . '> Mostrar editor de correspondencia de campos</label></td></tr>';
+	print '<span class="opacitymedium paddingleft">(' . $langs->trans('Optional') . ')</span></td></tr>';
+	print '<tr><td>' . $langs->trans('KreaBankImportMappingEditor') . '</td><td><input type="hidden" name="force_mapping_editor_present" value="1"><label><input class="flat" type="checkbox" name="force_mapping_editor" value="1"' . ($selectedForceMappingEditor ? ' checked' : '') . '> ' . $langs->trans('KreaBankImportShowMappingEditor') . '</label></td></tr>';
 	print '</table>';
 
 	print '<div class="tabsAction">';
@@ -970,8 +970,8 @@ if (!empty($currentWizard) && !empty($analysis) && is_array($analysis)) {
 	$mappingPanelDisplay = ($mappingPanelOpen ? 'table-row-group' : 'none');
 	$mappingPreviewDisplay = ($mappingPanelOpen ? 'block' : 'none');
 	$mappingToggleIconClass = ($mappingPanelOpen ? 'fa-eye-slash' : 'fa-eye');
-	$mappingToggleTitle = ($mappingPanelOpen ? 'Ocultar mapeamento' : 'Mostrar mapeamento');
-	$mappingToggleLabel = ($mappingPanelOpen ? 'Ocultar mapeamento' : 'Mostrar mapeamento');
+	$mappingToggleTitle = ($mappingPanelOpen ? $langs->trans('KreaBankImportHideMapping') : $langs->trans('KreaBankImportShowMapping'));
+	$mappingToggleLabel = ($mappingPanelOpen ? $langs->trans('KreaBankImportHideMapping') : $langs->trans('KreaBankImportShowMapping'));
 
 	print '<br><table class="noborder centpercent">';
 	print '<tr class="liste_titre"><th colspan="2">' . $langs->trans('KreaBankImportReviewTitle') . '</th></tr>';
@@ -981,13 +981,13 @@ if (!empty($currentWizard) && !empty($analysis) && is_array($analysis)) {
 	if ($supportsMapping) {
 		print '<tr class="oddeven"><td>' . $langs->trans('KreaBankImportFingerprint') . '</td><td><span class="opacitymedium">' . dol_escape_htmltag((string) $analysis['fingerprint']) . '</span></td></tr>';
 		if (!empty($analysis['layout_signature'])) {
-			print '<tr class="oddeven"><td>Assinatura do layout</td><td><span class="opacitymedium">' . dol_escape_htmltag((string) $analysis['layout_signature']) . '</span></td></tr>';
+			print '<tr class="oddeven"><td>' . $langs->trans('KreaBankImportLayoutSignature') . '</td><td><span class="opacitymedium">' . dol_escape_htmltag((string) $analysis['layout_signature']) . '</span></td></tr>';
 		}
 	}
 	print '</table>';
 
 	if ($isDuplicateReview) {
-		print '<br><div class="opacitymedium">A importação deste ficheiro já foi confirmada. Escolha abaixo as ações para os possíveis duplicados.</div>';
+		print '<br><div class="opacitymedium">' . $langs->trans('KreaBankImportConfirmedDuplicateActions') . '</div>';
 	} else {
 		print '<br><form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="kreabankImportConfirmForm">';
 		print kreabankNavigationHiddenFields($navigationAccountId);
@@ -1009,7 +1009,7 @@ if (!empty($currentWizard) && !empty($analysis) && is_array($analysis)) {
 		print '<br><span class="opacitymedium">Use apenas após validar os detalhes dos possíveis duplicados.</span></td></tr>';
 
 		if ($supportsMapping) {
-			print '<tr><td>Rever mapeamento da importacao</td><td>';
+			print '<tr><td>' . $langs->trans('KreaBankImportReviewMapping') . '</td><td>';
 			print '<button type="button" class="button" id="kbToggleMapping" title="' . dol_escape_htmltag($mappingToggleTitle) . '" style="min-width:40px;padding:4px 8px">';
 			print '<span id="kbToggleMappingIcon" class="fas ' . $mappingToggleIconClass . '"></span>';
 			print '</button>';
@@ -1143,8 +1143,8 @@ if (!empty($currentWizard) && !empty($analysis) && is_array($analysis)) {
 		print 'panel.style.display = isOpen ? "none" : "table-row-group";';
 		print 'if (rawPreview) { rawPreview.style.display = isOpen ? "none" : "block"; }';
 		print 'if (icon) { icon.className = isOpen ? "fas fa-eye" : "fas fa-eye-slash"; }';
-		print 'btn.title = isOpen ? "Mostrar mapeamento" : "Ocultar mapeamento";';
-		print 'if (label) { label.textContent = isOpen ? "Mostrar mapeamento" : "Ocultar mapeamento"; }';
+		print 'btn.title = isOpen ? ' . json_encode($langs->transnoentities('KreaBankImportShowMapping'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ' : ' . json_encode($langs->transnoentities('KreaBankImportHideMapping'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';';
+		print 'if (label) { label.textContent = isOpen ? ' . json_encode($langs->transnoentities('KreaBankImportShowMapping'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ' : ' . json_encode($langs->transnoentities('KreaBankImportHideMapping'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . '; }';
 		print '});';
 		print '});';
 		print '</script>';
@@ -1182,7 +1182,7 @@ if (is_array($importResult)) {
 	if (!empty($duplicatesDetails)) {
 		$allowDuplicateSelection = ($isDuplicateReview && !empty($wizardToken) && !empty($currentWizard) && !empty($importResult['duplicates_skipped']));
 		if ($allowDuplicateSelection) {
-			print '<br><div class="opacitymedium">Alguns possíveis duplicados foram ignorados na confirmação. Selecione agora as linhas a importar ou conclua mantendo-as ignoradas.</div>';
+			print '<br><div class="opacitymedium">' . $langs->trans('KreaBankImportSkippedDuplicatesReview') . '</div>';
 			print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="kreabankDuplicateFinishForm" style="display:none">';
 			print kreabankNavigationHiddenFields($navigationAccountId);
 			print '<input type="hidden" name="token" value="' . newToken() . '">';
