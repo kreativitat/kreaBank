@@ -1,6 +1,6 @@
 # Monthly reconciliation reports
 
-Open **Bank statement → Monthly reconciliation reports**, select one owned bank
+Open the **Monthly reports** banking tab before **History**, select one owned bank
 account and a calendar month, then generate the report. The same reports work for
 any supported bank; the Santander workbook is a reporting reference, not imported
 business data or a replacement matching algorithm.
@@ -64,12 +64,17 @@ mode renders synthetic data without an application bootstrap or database.
 
 Design reference: existing `bankstatement.php`, native bank annual reporting and
 installed Dolibarr `/admin/tools/ui/content/tables.php` and
-`/admin/tools/ui/components/buttons.php`. Preserve the native left menu and six
-operational tabs; monthly reporting is an action within Bank statement.
+`/admin/tools/ui/components/buttons.php`. Preserve the native left menu and shared
+operational navigation. Monthly reporting is its own active tab; the former
+Bank statement action is removed. The selected-account toolbar retains the owned
+account as a hidden control, with month, optional exact closing balance and compact
+CSV/print actions. Detailed evidence/basis explanations remain expandable and open
+in print. Summary and indicators sit side by side on desktop and stack on mobile.
+Historical report values never use the header’s current-balance panel.
 
 Deploy the controller, class, library, CSS, JS and translations together. No schema
 migration, job or module reactivation is required. Source publication does not
-deploy production. Roll back these files and the Bank statement action together.
+deploy production. Roll back these files and the shared navigation together.
 
 See the [2026-11-14 production deployment record](deployment-2026-11-14.md) for
 verified runtime identity, checks and rollback locations.

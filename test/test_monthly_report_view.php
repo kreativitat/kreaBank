@@ -12,7 +12,9 @@ ob_end_clean();
 require_once __DIR__ . '/../lib/kreabank_monthly_report.lib.php';
 function dol_escape_htmltag($value) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
 function dol_buildpath($path, $absolute = 0) { return $path; }
-function kreabankPrice($value) { return number_format((float) $value, 2, ',', ' '); }
+function price($value, ...$options) { return number_format((float) $value, 2, ',', ' '); }
+define('DOL_DOCUMENT_ROOT', getenv('KREABANK_DOLIBARR_ROOT') ?: dirname(__DIR__, 3));
+require_once __DIR__ . '/../lib/kreabank.lib.php';
 class MonthlyViewLangs
 {
 	private $messages = array();
@@ -26,6 +28,7 @@ class MonthlyViewLangs
 	public function trans($key, ...$args) { return $args ? vsprintf($this->messages[$key] ?? $key, $args) : ($this->messages[$key] ?? $key); }
 	public function transnoentities($key, ...$args) { return $this->trans($key, ...$args); }
 	public function loadLangs($files) {}
+	public function load($file) {}
 }
 $account = array('rowid' => 101, 'entity' => 1, 'ref' => 'ST_TEST', 'label' => 'Synthetic account', 'currency_code' => 'EUR');
 $source = array(monthlyBank(1, '2026-08-01', '1000.00', '1000.00', 11), monthlyBank(2, '2026-09-01', '125.50', '1125.50', 12), monthlyBank(3, '2026-09-30', '-15.80', '1109.70'));
@@ -55,7 +58,7 @@ monthlyViewCheck(strpos($html, 'month=2026-09') !== false && strpos($html, 'bank
 monthlyViewCheck(substr_count(kreabankMonthlyDetailsHtml($rows, 'bank', 'Synthetic', $state, $langs, true), '&lt;script&gt;') === 127, 'Print never truncates pending evidence');
 $url = kreabankMonthlyReportUrl(array_merge($state, array('token' => 'secret', 'action' => 'delete', 'kind' => 'cash')));
 monthlyViewCheck(strpos($url, 'token') === false && strpos($url, 'action') === false && strpos($url, 'kind') === false, 'Report URLs exclude actions, tokens and unrelated account type state');
-monthlyViewCheck(strpos($url, 'mainmenu=bank') !== false && strpos($url, 'leftmenu=kreabank_bankstatement') !== false, 'Every report URL retains native bank menu context');
+monthlyViewCheck(strpos($url, 'mainmenu=bank') !== false && strpos($url, 'leftmenu=kreabank_monthlyreport') !== false, 'Every report URL retains native bank menu context');
 monthlyViewCheck(kreabankMonthlyScopedBalance('15.00', 101, '2026-09', 101, '2026-09') === '15.00', 'Entered official balance stays bound to its displayed account and period');
 monthlyViewCheck(kreabankMonthlyScopedBalance('15.00', 102, '2026-09', 101, '2026-09') === '' && kreabankMonthlyScopedBalance('15.00', 101, '2026-10', 101, '2026-09') === '', 'Account or month changes discard an old official balance server-side');
 monthlyViewCheck(kreabankMonthlyScopedBalance('15.00', 101, '2026-09', 0, '') === '', 'Unscoped URL balance cannot silently become confirmed');
@@ -91,14 +94,33 @@ foreach (array('external', 'banque.lire', 'kreabank.reconciliation.read', 'disab
 }
 $user = new MonthlyViewUser(); $monthlyDisabledModules = array(); eval($guard);
 monthlyViewCheck(true, 'Owned internal reader with both rights passes the real authorization guard');
+
+foreach (array('en_US','pt_PT') as $locale) {
+	$langs = new MonthlyViewLangs($locale);
+	$controls = kreabankMonthlyFiltersHtml($state, $langs);
+	$previousLibxml = libxml_use_internal_errors(true);
+	$dom = new DOMDocument(); $dom->loadHTML('<?xml encoding="utf-8" ?>' . $controls); $xp = new DOMXPath($dom);
+	libxml_clear_errors(); libxml_use_internal_errors($previousLibxml);
+	monthlyViewCheck($xp->query('//select')->length === 0 && $xp->query('//input[@id="kreabank-account-context" and @name="account_context" and @value="101"]')->length === 1, 'Scoped toolbar fixes the current owned account without another account switch');
+	monthlyViewCheck($xp->query('//input[@id="kb-monthly-balance-account" and @value="101"]')->length === 1 && $xp->query('//input[@id="kb-monthly-balance-month" and @value="2026-09"]')->length === 1, 'Compact controls retain explicit balance binding');
+	monthlyViewCheck(strpos($controls . kreabankMonthlyActionsHtml($state,$langs) . kreabankMonthlyViewsHtml($state,$langs), 'KreaBankMonthly') === false, 'All compact toolbar/view labels are translated');
+	$unscoped = kreabankMonthlyFiltersHtml(array_merge($state,array('account_context'=>0)), $langs, '<label for="kreabank-account-context">Account</label><select id="kreabank-account-context" name="account_context"><option value="101">ST_TEST</option></select>');
+	monthlyViewCheck(strpos($unscoped,'<select') !== false && strpos($unscoped,'type="hidden" id="kreabank-account-context"') === false, 'Unscoped reports retain their provided owned-account selector');
+}
 if (($argv[1] ?? '') === '--html') {
 	$locale = in_array($argv[2] ?? '', array('en_US', 'pt_PT'), true) ? $argv[2] : 'en_US';
 	$view = in_array($argv[3] ?? '', array('summary', 'checks', 'pending', 'bank', 'ledger', 'print'), true) ? $argv[3] : 'summary';
 	$langs = new MonthlyViewLangs($locale);
 	$state['view'] = $view;
-	print '<!doctype html><html lang="' . str_replace('_', '-', $locale) . '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="http://127.0.0.1:8080/theme/eldy/style.css.php"><style>' . file_get_contents(__DIR__ . '/../css/navigation.css') . file_get_contents(__DIR__ . '/../css/monthly-report.css') . 'body{margin:0}.fixture-shell{display:grid;grid-template-columns:170px minmax(0,1fr)}.fixture-menu{padding:28px 16px;background:#f5f6f7;border-right:1px solid #ddd;line-height:2.5}.fixture-page{padding:24px;min-width:0}.kb-monthly-report table{border-collapse:collapse}.kb-monthly-report td,.kb-monthly-report th{padding:10px}.fixture-note{font-size:12px;color:#59636c}@media(max-width:700px){.fixture-shell{grid-template-columns:minmax(0,1fr)}.fixture-menu{display:none}.fixture-page{padding:14px}}</style></head><body><div class="fixture-shell"><aside class="fixture-menu">Banks<br>Account list<br>Transfers<br>Cheque deposits</aside><main class="fixture-page"><header class="kb-header"><div class="kb-brand"><strong>KreaBank</strong><span class="kb-company">Synthetic company</span></div><nav class="kb-primary"><a>Movements</a><a class="active">Bank statement</a><a>Statements</a><a>Reconciliation</a><a>Connections</a><a>History</a></nav></header><h1>' . $langs->trans('KreaBankMonthlyTitle') . ' — ST_TEST</h1><p class="fixture-note">Synthetic data · No ERP connection</p><form class="kb-monthly-filters"><div><label for="account">Bank account</label><select id="account"><option>ST_TEST</option></select></div><div><label for="month">' . $langs->trans('KreaBankMonthlyPeriod') . '</label><input id="month" type="month" value="2026-09"></div><div><label for="balance">' . $langs->trans('KreaBankMonthlyOfficialBalance') . '</label><input id="balance" inputmode="decimal"><small>' . $langs->trans('KreaBankMonthlyOfficialBalanceHelp') . '</small></div><button type="button" class="button">' . $langs->trans('KreaBankMonthlyGenerate') . '</button></form><nav class="kb-view-switch kb-monthly-views">';
-	foreach (array('summary' => 'Summary', 'checks' => 'Checks', 'pending' => 'Pending', 'bank' => 'Bank', 'ledger' => 'Ledger') as $key => $label) { print '<a' . ($key === $view ? ' class="active"' : '') . '>' . $langs->trans('KreaBankMonthly' . $label) . '</a>'; }
-	print '</nav>' . kreabankMonthlyReportHtml($report, $state, $langs, $view === 'print') . '</main></div></body></html>';
+	$user = new MonthlyViewUser();
+	$accountView = (object) array('id'=>101,'ref'=>'ST_TEST','label'=>'Synthetic account','clos'=>0);
+	print '<!doctype html><html lang="' . str_replace('_', '-', $locale) . '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="theme.css"><style>' . file_get_contents(__DIR__ . '/../css/navigation.css') . file_get_contents(__DIR__ . '/../css/monthly-report.css') . 'body{margin:0;font-family:Arial,sans-serif;color:#253746;font-size:14px}.fixture-shell{display:grid;grid-template-columns:170px minmax(0,1fr)}.fixture-menu{padding:28px 16px;background:#f5f6f7;border-right:1px solid #ddd;line-height:2.5}.fixture-page{padding:24px;min-width:0}.fixture-note{font-size:12px;color:#59636c}@media(max-width:700px){.fixture-shell{grid-template-columns:minmax(0,1fr)}.fixture-menu{display:none}.fixture-page{padding:14px}}</style></head><body><div class="fixture-shell"><aside class="fixture-menu">Banks<br>New financial account<br>Movements<br>Transfers<br>Cheque deposits</aside><main class="fixture-page">';
+	print kreabankBankingHeader('monthlyreport', $accountView, false);
+	print '<div class="kb-monthly-heading"><h1>' . $langs->trans('KreaBankMonthlyShortTitle') . '</h1>' . kreabankMonthlyActionsHtml($state, $langs, $view === 'print') . '</div>';
+	print kreabankMonthlyFiltersHtml($state, $langs);
+	if ($view !== 'print') { print kreabankMonthlyViewsHtml($state, $langs); }
+	print kreabankMonthlyReportHtml($report, $state, $langs, $view === 'print') . '</main></div><script>' . file_get_contents(__DIR__ . '/../js/monthly-report.js') . '</script></body></html>';
+
 	exit;
 }
 print "OK: $checks monthly report view/export checks\n";

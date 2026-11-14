@@ -1,14 +1,14 @@
 # Banking workspace
 
-Operational banking pages share four tabs: Bank statement, Statements, Reconcile
-and History. Movements is in the native left menu directly below New financial
+Operational banking pages share five tabs: Bank statement, Statements, Reconcile,
+Monthly reports and History. Movements is in the native left menu directly below New financial
 account. Its standalone page does not render the operational tab bar. Reconcile opens the new `reconciliationlist.php`. The legacy
 `reconcile.php` controllers and direct routes remain dormant and intact. Connections also retains its
 direct route without an operational tab. Bank statement combines all imported
 movements; Statements retains the individual import list and details. Account
 management is separate: the native Banks/Cash heading opens the accounts
 overview. Bank references and pending counts open the account-scoped Reconcile
-workspace with its four tabs. Cash accounts retain native Movements because they
+workspace with its five tabs. Cash accounts retain native Movements because they
 are excluded from bank reconciliation. The pencil icon in the right-aligned
 Actions column opens the account’s native details and tool tabs.
 Bank rows also have a reconciliation icon beside the pencil, using the same
@@ -49,7 +49,7 @@ pending imported evidence. It never combines balances across currencies. Native
 account-list GETs route here for KreaBank readers. Readers without module rights
 retain the native banking interface.
 
-Selected-account Movements and the four operational tabs show the current Dolibarr balance, synced bank
+Selected-account Movements, Reconcile, Bank statement, Statements and History show the current Dolibarr balance, synced bank
 balance and bank refresh time above the page content. These reuse the accounts
 overview's read-only projection, currency and snapshot status, independently of
 list filters, matched view or pagination. The shared order is bank identity, operational tabs where applicable,
@@ -59,6 +59,7 @@ confirmations and account tools keep their original content. Closed status remai
 visible in the shared identity. The accounts overview omits its duplicate New
 financial account list button; the native left-menu action remains available.
 Missing snapshots remain a dash and stale/failed snapshots retain their status.
+Monthly reports show only their selected-period evidence and balances, without the current-balance panel.
 The all-accounts view has no combined balance. Deploy `lib/kreabank.lib.php`,
 `lib/kreabank_navigation.lib.php`, `class/actions_kreabank.class.php`,
 `css/navigation.css` and `accounts.php` with the descriptor/version files.

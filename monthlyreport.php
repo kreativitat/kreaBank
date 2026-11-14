@@ -57,31 +57,19 @@ if (GETPOST('export', 'aZ09') === 'csv') {
 }
 $print = GETPOSTINT('print_report') === 1;
 llxHeader('', $langs->trans('KreaBankMonthlyTitle'), '', '', 0, 0,
-	array('/custom/kreabank/js/monthly-report.js'), array('/custom/kreabank/css/monthly-report.css'));
-print kreabankBankingHeader('bankstatement', $account, false);
-print load_fiche_titre($langs->trans('KreaBankMonthlyTitle') . ($account ? ' — ' . dol_escape_htmltag($account->ref) : ''), '', 'bank');
-print '<form class="kb-monthly-filters" method="get" action="' . dol_escape_htmltag(dol_buildpath('/custom/kreabank/monthlyreport.php', 1)) . '">';
-print '<input type="hidden" name="mainmenu" value="bank"><input type="hidden" name="leftmenu" value="kreabank_bankstatement">';
-print '<input type="hidden" id="kb-monthly-balance-account" name="balance_account" value="' . $accountId . '"><input type="hidden" id="kb-monthly-balance-month" name="balance_month" value="' . dol_escape_htmltag($month) . '">';
-print '<input type="hidden" name="view" value="' . $view . '"><div>' . kreabankAccountFilterSelect($accountId) . '</div>';
-print '<div><label for="kb-monthly-month">' . $langs->trans('KreaBankMonthlyPeriod') . '</label><input class="flat" type="month" id="kb-monthly-month" name="month" required value="' . dol_escape_htmltag($month) . '"></div>';
-print '<div><label for="kb-monthly-balance">' . $langs->trans('KreaBankMonthlyOfficialBalance') . '</label><input class="flat right" type="text" inputmode="decimal" id="kb-monthly-balance" name="bank_balance" value="' . dol_escape_htmltag($bankBalance) . '" aria-describedby="kb-monthly-balance-help"><small id="kb-monthly-balance-help">' . $langs->trans('KreaBankMonthlyOfficialBalanceHelp') . '</small></div>';
-print '<button type="submit" class="button">' . $langs->trans('KreaBankMonthlyGenerate') . '</button></form>';
+	array('/custom/kreabank/js/monthly-report.js'));
+print '<link rel="stylesheet" href="' . dol_escape_htmltag(dol_buildpath('/custom/kreabank/css/monthly-report.css', 1) . '?v=' . filemtime(__DIR__ . '/css/monthly-report.css')) . '">';
+print kreabankBankingHeader('monthlyreport', $account, false);
+print '<div class="kb-monthly-heading">';
+print load_fiche_titre($langs->trans('KreaBankMonthlyShortTitle'), '', 'bank');
+if ($report) { print kreabankMonthlyActionsHtml($state, $langs, $print); }
+print '</div>';
+print kreabankMonthlyFiltersHtml($state, $langs, $account ? '' : kreabankAccountFilterSelect(0));
 if ($error !== '') { print '<div class="error" role="alert">' . dol_escape_htmltag($error) . '</div>'; }
 if ($enteredBankBalance !== '' && $bankBalance === '') { print '<p role="status">' . $langs->trans('KreaBankMonthlyBalanceReset') . '</p>'; }
 if (!$account) { print '<p>' . $langs->trans('KreaBankMonthlySelectAccount') . '</p>'; }
 if ($report) {
-	print '<div class="kb-monthly-actions"><a class="button" href="' . dol_escape_htmltag(kreabankMonthlyReportUrl($state, array('export' => 'csv'))) . '">' . $langs->trans('KreaBankMonthlyExport') . '</a>';
-	if ($print) { print '<button type="button" class="button" id="kb-monthly-print">' . $langs->trans('KreaBankMonthlyPrint') . '</button>'; }
-	else { print '<a class="button" href="' . dol_escape_htmltag(kreabankMonthlyReportUrl($state, array('print_report' => 1))) . '">' . $langs->trans('KreaBankMonthlyPrintView') . '</a>'; }
-	print '<a href="' . dol_escape_htmltag(kreabankWorkspaceUrl('bankstatement', $accountId)) . '">' . $langs->trans('KreaBankBankStatement') . '</a></div>';
-	if (!$print) {
-		print '<nav class="kb-view-switch kb-monthly-views" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankMonthlyTitle')) . '">';
-		foreach (array('summary' => 'Summary', 'checks' => 'Checks', 'pending' => 'Pending', 'bank' => 'Bank', 'ledger' => 'Ledger') as $key => $label) {
-			print '<a' . ($view === $key ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag(kreabankMonthlyReportUrl($state, array('view' => $key, 'bank_page' => 0, 'ledger_page' => 0))) . '">' . $langs->trans('KreaBankMonthly' . $label) . '</a>';
-		}
-		print '</nav>';
-	}
+	if (!$print) { print kreabankMonthlyViewsHtml($state, $langs); }
 	print kreabankMonthlyReportHtml($report, $state, $langs, $print);
 }
 llxFooter();

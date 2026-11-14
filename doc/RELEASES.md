@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.18 — 2026-11-14
+
+- Add Monthly reports before History and remove its Bank statement button.
+- Compact report controls and exports, shorten view labels, and align summary balances, reconciliation map and indicators. Preserve exact calculations, unknown/provisional evidence, print and CSV.
+
 ## 1.20.17 — 2026-11-14
 
 - Place Reconcile third, after Bank statement and Statements, throughout the banking workspace.

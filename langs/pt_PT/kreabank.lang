@@ -742,3 +742,19 @@ KreaBankMonthlyStateDuplicate=Duplicado (excluído)
 KreaBankMonthlyEmpty=Sem movimentos neste relatório.
 
 KreaBankHistoryNativeEntry=Lançamento
+
+# Monthly report workspace
+KreaBankMonthlyNav=Relatórios mensais
+KreaBankMonthlyShortTitle=Reconciliação mensal
+KreaBankMonthlyBalanceShort=Saldo bancário de fecho
+KreaBankMonthlyOptional=Opcional
+KreaBankMonthlyView=Consultar
+KreaBankMonthlySummaryShort=Resumo
+KreaBankMonthlyChecksShort=Controlos
+KreaBankMonthlyPendingShort=Pendentes
+KreaBankMonthlyBankShort=Extrato
+KreaBankMonthlyLedgerShort=Dolibarr
+KreaBankMonthlyBankCloseShort=Banco no fecho
+KreaBankMonthlyLedgerCloseShort=Dolibarr no fecho
+KreaBankMonthlyDifferenceShort=Diferença não explicada
+KreaBankMonthlyEvidenceShort=Dados atuais · %s

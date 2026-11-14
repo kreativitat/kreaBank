@@ -150,6 +150,7 @@ function kreabankPrepareHead($accountId = 0)
 		}
 		if (empty($user->socid)) {
 			$head[] = array(kreabankBankingUrl('worklist', $accountId), $langs->trans('KreaBankReconcile'), 'worklist');
+			$head[] = array(kreabankWorkspaceUrl('monthlyreport', $accountId), $langs->trans('KreaBankMonthlyNav'), 'monthlyreport');
 		}
 		$head[] = array(kreabankWorkspaceUrl('history', $accountId), $langs->trans('KreaBankNavHistory'), 'history');
 	}

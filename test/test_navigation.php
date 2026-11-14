@@ -70,10 +70,10 @@ $newHead = kreabankCompleteAccountHead($head, 45);
 checkNavigation($newHead === $head, 'Shared header replaces native tabs without inserting another navigation layer');
 checkNavigation(strpos(kreabankWorkspaceUrl('reconcile', 45), 'reconcile.php') !== false, 'Dormant reconciliation keeps its direct route');
 $tabs = kreabankPrepareHead(45);
-checkNavigation(array_column($tabs, 2) === array('bankstatement', 'statement', 'worklist', 'history'), 'Reconcile is third and native Movements is not an operational tab');
+checkNavigation(array_column($tabs, 2) === array('bankstatement', 'statement', 'worklist', 'monthlyreport', 'history'), 'Reconcile is third and native Movements is not an operational tab');
 $user->allowed[] = 'kreabank.reconciliation.write';
 $user->allowed[] = 'banque.modifier';
-checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('bankstatement', 'statement', 'worklist', 'history'), 'Write actions do not add another navigation layer');
+checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('bankstatement', 'statement', 'worklist', 'monthlyreport', 'history'), 'Write actions do not add another navigation layer');
 foreach (kreabankPrepareHead(45) as $tab) {
 	checkNavigation((strpos($tab[0], 'account_context=45') !== false || strpos($tab[0], 'search_account=45') !== false || preg_match('/[?&]id=45(?:&|$)/', $tab[0])) && strpos($tab[0], 'line_id') === false, 'Carry account without copying a stale line/action');
 }
@@ -175,14 +175,14 @@ checkNavigation(kreabankBankingUrl('reports', 0) === kreabankWorkspaceUrl('accou
 $html = kreabankBankingHeader('worklist', (object) array('id' => 45, 'ref' => 'Demo', 'label' => ''), false);
 checkNavigation(strpos($html, '>Demo</span>') !== false && strpos($html, 'kb-company') === false && strpos($html, '<form') === false, 'Selected worklist uses bank identity without an empty-label separator or duplicate account filter');
 checkNavigation(strpos($html, 'kb-reconcile-action') === false && kreabankBankingFilters('worklist') === '', 'The list keeps its own filters without a redundant self-action');
-foreach (array('movements','bankstatement','statement','worklist','history') as $entryPage) {
+foreach (array('movements','bankstatement','statement','worklist','monthlyreport','history') as $entryPage) {
 	$html = kreabankBankingHeader($entryPage, (object) array('id'=>45,'ref'=>'Demo','label'=>'Synthetic account'), false);
 	$dom = new DOMDocument();
 	@$dom->loadHTML('<meta charset="utf-8">' . $html);
 	$xpath = new DOMXPath($dom);
 	$entries = $xpath->query("//nav[contains(@class,'kb-primary')]/a[contains(@href,'reconciliationlist.php')]");
 	checkNavigation($entryPage === 'movements' ? $entries->length === 0 : ($entries->length === 1 && strpos($entries->item(0)->getAttribute('href'), 'search_account=45') !== false), 'Only operational pages expose the new list in their tab bar');
-	checkNavigation($xpath->query("//nav[contains(@class,'kb-primary')]/a")->length === ($entryPage === 'movements' ? 0 : 4) && strpos($html, 'kb-reconcile-action') === false, 'Standalone Movements has no operational tab bar or header button');
+	checkNavigation($xpath->query("//nav[contains(@class,'kb-primary')]/a")->length === ($entryPage === 'movements' ? 0 : 5) && strpos($html, 'kb-reconcile-action') === false, 'Standalone Movements has no operational tab bar or header button');
 	if ($entryPage === 'worklist') {
 		checkNavigation($entries->item(0)->getAttribute('aria-current') === 'page' && strpos($html, 'KreaBankReviewOneByOne') === false, 'New reconciliation tab is active without legacy review subtabs');
 	}
@@ -202,7 +202,7 @@ $action = 'create';
 checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0 && $hooks->resprints === '' && count($db->queries) === $queryCount, 'New-account creation keeps only the native form without workspace navigation');
 $action = '';
 $navigationRequest = array('kind' => 'cash', 'account_context' => 45);
-foreach (array('movements', 'worklist', 'bankstatement', 'statement', 'reconcile', 'matched', 'bulkmatch', 'pending', 'feed', 'history') as $page) {
+foreach (array('movements', 'worklist', 'bankstatement', 'statement', 'reconcile', 'matched', 'bulkmatch', 'pending', 'feed', 'monthlyreport', 'history') as $page) {
 	$queriesBefore = count($db->queries);
 	$html = kreabankBankingHeader($page, (object) array('id' => 45, 'ref' => 'Synthetic <account>', 'label' => 'Current & savings'));
 	$dom = new DOMDocument();
@@ -224,7 +224,7 @@ foreach (array('movements', 'worklist', 'bankstatement', 'statement', 'reconcile
 	} else {
 		checkNavigation(strpos($html, 'kb-movement-balances') === false, 'Dormant and configuration views retain their existing layout');
 	}
-	checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a')->length === ($page === 'movements' ? 0 : 4), 'Movements stays separate from the four operational tabs and legacy reconciliation');
+	checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a')->length === ($page === 'movements' ? 0 : 5), 'Movements stays separate from the five operational tabs and legacy reconciliation');
 	checkNavigation($xpath->query('//div[contains(@class,"kb-brand")]/span[@class="kb-account-context"]')->item(0)->textContent === 'Synthetic <account> — Current & savings', 'The bank reference and label remain visible and escaped beside the title');
 	foreach ($xpath->query('//nav/a | //div[contains(@class,"kb-view-switch")]/a') as $link) {
 		checkNavigation(preg_match('/[?&](?:id|account_context|search_account)=45(?:&|$)/', $link->getAttribute('href')) === 1, 'All operational and subview links retain the selected account');
