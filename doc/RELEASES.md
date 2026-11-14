@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.3 — 2026-11-14
+
+- Hide the old reconciliation tab and separate-list sidebar shortcut; preserve both features and their direct routes.
+- Show the selected bank reference and label beside Banking, with an all-account label for combined views.
+- Keep the fiscal/bank report inside the native banking menu without an extra divider. No migration, menu refresh or scheduler change is needed for this update.
+
 ## 1.20.2 — 2026-11-14
 
 - Keep the reconciliation list within the native page and retain compact icon actions.

@@ -37,15 +37,5 @@ checkMenuPermission(false);
 $user->allowed = array('kreabank.reconciliation.read');
 checkMenuPermission(false);
 $worklists = array_values(array_filter($module->menu, static function ($item) { return $item['leftmenu'] === 'kreabank_worklist'; }));
-if (count($worklists) !== 1) { throw new RuntimeException('The separate reconciliation list must have one native menu entry'); }
-$perms = $worklists[0]['perms'];
-$user->allowed = array('banque.lire','kreabank.reconciliation.read');
-checkMenuPermission(true);
-$user->socid = 12;
-checkMenuPermission(false);
-$user->socid = 0;
-$user->allowed = array('banque.lire');
-checkMenuPermission(false);
-$user->allowed = array('kreabank.reconciliation.read');
-checkMenuPermission(false);
+if ($worklists) { throw new RuntimeException('The reconciliation list must not have a sidebar shortcut'); }
 print "OK: $checks native menu authorization checks\n";

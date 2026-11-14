@@ -79,10 +79,12 @@ If the ZIP package does not ship the `vendor/` directory, run the same `composer
 
 ## Account navigation
 
-The banking workspace provides **Movements**, **Bank statement**, **Statements**,
-**Reconciliation** and **History**. Opening an account keeps its context across
-tabs without an account-switching control. The Banks/Cash heading returns to the
-account overview. **Bank statement** combines all imports into one table with
+The banking workspace provides **Movements**, **Bank statement**, **Statements**
+and **History**. The old reconciliation tab remains dormant, with its direct routes
+and functionality preserved. Opening an account keeps its context across
+tabs without an account-switching control; its reference and label replace the
+company name beside Banking. Combined views identify All accounts. The Banks/Cash
+heading returns to the account overview. **Bank statement** combines all imports into one table with
 dates, debit/credit, supplied bank balances and source links. Batch review and
 pending lines are tools inside reconciliation. Account tools show details,
 documents and annual reports; connections and other native tools retain direct

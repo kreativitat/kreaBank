@@ -1,8 +1,9 @@
 # Banking workspace
 
-Operational banking pages share five tabs: Movements, Bank statement, Statements,
-Reconciliation and History. Connections remains directly accessible without an
-operational tab. Bank statement combines all imported
+Operational banking pages share four tabs: Movements, Bank statement, Statements
+and History. The former Reconciliation tab is dormant: its controllers and direct
+routes remain intact, without a replacement tab. Connections also retains its
+direct route without an operational tab. Bank statement combines all imported
 movements; Statements retains the individual import list and details. Account
 management is separate: the native Banks/Cash heading opens the accounts
 overview. Account references open movements; the pencil icon in the right-aligned
@@ -14,9 +15,12 @@ workspace header or tabs.
 A separate Filters panel below unscoped operational navigation contains one bank-account
 selector, listing only current-company accounts. Opening an account fixes the
 request-local context across tabs, subviews, search and pagination. The shared
-header shows its reference and removes the account selector on every scoped page,
+header shows its escaped reference and label beside Banking, replacing the
+company name and duplicate reference line, and removes the account selector on every scoped page,
 including native account tools and direct Connections links. Return through the
-Banks/Cash heading to choose another account. On both unscoped statement views the selector lists
+Banks/Cash heading to choose another account. Unscoped views identify All accounts.
+The separate worklist takes its header account from the explicit statement-bank
+filter and revalidates current-company ownership. On both unscoped statement views the selector lists
 only accounts with imported statements, including legacy imports. The standalone accounts overview
 uses compact account-type view links (all, bank, cash or closed) and has no filter
 form or account selector.
@@ -31,8 +35,8 @@ remains explicitly company-wide, available only in the all-account History view.
 Scoped History neither loads nor renders that panel; its reconciliation list
 continues to use the selected account before the fixed recent window and paging.
 
-Import is an action under Statements. Reconciliation offers compact view controls
-for single, bulk and pending review. Internal transfers keep the native layout.
+Import is an action under Statements. Direct legacy Reconciliation routes retain
+compact view controls for single, bulk and pending review. Internal transfers keep the native layout.
 
 The bank entry point opens `accounts.php`, with bank, cash and closed-account
 views. It shows each account's native current balance in its own currency and
@@ -54,10 +58,14 @@ native sort/page links. Existing reconciled-view semantics remain unchanged.
 
 The native Dolibarr left menu remains visible with its standard layout and
 responsive behavior. For internal workspace readers, the existing `leftblock`
-hook removes the duplicate Account list, Reconcile and Entry list links, keeping
+hook removes the Account list, old Reconcile, Entry list and separate
+Reconciliation list links, keeping
 the **Banks/Cash** heading (pt_PT: **Bancos Dinheiro**) as the account-list entry
-point. The existing KreaTax fiscal/bank report becomes a level-one sibling, with
-its URL and permissions preserved. Native-only readers retain their menu.
+point. The existing KreaTax fiscal/bank report follows the native bank siblings
+as a level-one item, with its URL and permissions preserved. Keep its physical
+array order aligned with native sorting before reindexing: Eldy sorts with
+preserved keys but checks the next integer key when closing blocks. This avoids
+a divider before the report without hiding native section separators. Native-only readers retain their menu.
 Only the duplicate native account tab bar is hidden inside
 this workspace. Global ERP navigation remains available. Selected-account pages
 have tabs for details, documents and annual reports. Forecasts, native numbered
@@ -95,7 +103,7 @@ updates only registration for already-enabled companies and preserves business
 data, rights, schemas and schedulers. Retain the registration snapshot and source
 preimages for rollback. Do not overwrite an earlier backup file.
 
-The 1.20.1 navigation changes need no schema, scheduler or menu-registration update.
+The 1.20.3 navigation changes need no schema, scheduler or menu-registration update.
 Deploy the shared libraries, hook, navigation CSS and History controller together.
 
 Verify accounts, account selection, native movements and details, statements,
@@ -117,3 +125,11 @@ guards. Synthetic previews of the actual navigation renderer passed desktop and
 Full ERP rendering remains UNVERIFIED: the local test installation returned its
 technical-error page before authentication in both the internal browser and the
 authorized Chrome fallback. No business operation was submitted.
+
+The dormant-tab/header update is covered by `php test/test_navigation.php` and
+`php test/test_navigation_native_menu.php`. The latter renders the installed
+Eldy final-menu stage without an ERP bootstrap or database, reproduces the old
+divider and verifies that fiscal remains inside Banks/Cash while cheque deposits
+retain their own section. Deploy the descriptor, shared navigation libraries,
+hook/CSS and worklist controller together. The hook also hides an existing
+registered worklist link, so this update needs no menu refresh.

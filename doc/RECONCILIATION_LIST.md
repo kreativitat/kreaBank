@@ -2,8 +2,9 @@
 
 `reconciliationlist.php` is a separate banking feature. The existing
 `reconcile.php`, its JavaScript and CSS retain their existing workflows.
-The native banking left menu contains **Reconciliation list** after registration
-is refreshed. All accounts belong directly to the active company; cash accounts
+The list remains directly accessible; its sidebar shortcut is hidden and no
+longer registered. The old reconciliation tab remains dormant, with its code and
+direct routes preserved. All accounts belong directly to the active company; cash accounts
 are excluded. Account selection is explicit in the header filter, never session-global.
 
 The page uses native `print_barre_liste()`, `print_liste_field_titre()` and filter

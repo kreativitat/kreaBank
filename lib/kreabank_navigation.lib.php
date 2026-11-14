@@ -160,17 +160,18 @@ function kreabankAccountFilterSelect($accountId = 0, $statementsOnly = false, $f
 /** Account management and operations have separate navigation; filters follow the header. */
 function kreabankBankingHeader($page, $account = null, $showFilters = true)
 {
-	global $db, $conf, $langs, $user, $mysoc;
+	global $db, $conf, $langs, $user;
 	$accountId = $account ? (int) $account->id : 0;
 	$langs->loadLangs(array('banks', 'kreabank@kreabank'));
 	$css = dol_buildpath('/custom/kreabank/css/navigation.css', 1) . '?v=' . (int) filemtime(__DIR__ . '/../css/navigation.css');
 	$html = kreabankListAssets() . '<link rel="stylesheet" href="' . dol_escape_htmltag($css) . '"><header class="kb-header">';
 	$html .= '<div class="kb-context"><div class="kb-brand"><span class="fas fa-university" aria-hidden="true"></span><strong>' . $langs->trans('KreaBankBanking') . '</strong>';
-	$html .= '<span class="kb-company" title="' . dol_escape_htmltag($mysoc->name ?? '') . '">' . dol_escape_htmltag($mysoc->name ?? '') . '</span></div>';
+	$accountLabel = $langs->trans('KreaBankAllAccounts');
 	if ($accountId > 0) {
-		$html .= '<span class="kb-account-context" title="' . dol_escape_htmltag($langs->trans('BankAccount')) . '">' . dol_escape_htmltag($account->ref ?? '') . '</span>';
+		$parts = array(trim((string) ($account->ref ?? '')), trim((string) ($account->label ?? '')));
+		$accountLabel = implode(' — ', array_filter($parts, static function ($value) { return $value !== ''; }));
 	}
-	$html .= '</div>';
+	$html .= '<span class="kb-account-context" title="' . dol_escape_htmltag($accountLabel) . '">' . dol_escape_htmltag($accountLabel) . '</span></div></div>';
 	$accountTools = $accountId > 0 ? kreabankAccountToolEntries($accountId) : array();
 	$active = in_array($page, array('card', 'documents', 'reports', 'forecast', 'native_statements', 'numbering'), true) ? 'account' : (in_array($page, array('matched', 'bulkmatch', 'pending'), true) ? 'reconcile' : ($page === 'import' ? 'statement' : $page));
 	if ($page !== 'accounts' && $active !== 'account') {

@@ -6,11 +6,10 @@ body.kreabank-banking.kb-native-bank #id-right .tabs { display:none !important; 
 body.kreabank-banking.kb-native-bank #id-right > .fiche > .tabs { display:none !important; }
 .kb-header { position:relative; margin:0 0 26px; color:#243649; }
 .kb-context { display:flex; flex-direction:column; align-items:flex-start; gap:12px; padding:4px 0 18px; }
-.kb-brand { display:flex; align-items:center; gap:10px; min-width:0; }
+.kb-brand { display:flex; flex-wrap:wrap; align-items:center; gap:10px; min-width:0; max-width:100%; }
 .kb-brand > strong { font-size:24px; letter-spacing:-.5px; }
 .kb-brand > .fas { color:#4b7561; font-size:23px; }
-.kb-company { font-size:12px; color:#576878; max-width:38ch; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; border-left:1px solid #d5dde4; padding-left:12px; margin-left:4px; }
-.kb-account-context { font-size:14px; font-weight:600; max-width:100%; overflow-wrap:anywhere; }
+.kb-account-context { font-size:12px; color:#576878; border-left:1px solid #d5dde4; padding-left:12px; margin-left:4px; min-width:0; max-width:100%; overflow-wrap:anywhere; }
 .kb-primary { display:flex; gap:6px; border-bottom:1px solid #d9e1e8; padding-bottom:10px; overflow-x:auto; }
 .kb-primary a { color:#526477; border-radius:6px; padding:10px 17px; white-space:nowrap; text-decoration:none; font-weight:600; }
 .kb-primary a:hover { background:#f0f4f7; }
@@ -53,7 +52,7 @@ body.kreabank-banking.kb-native-bank #id-right > .fiche > .tabs { display:none !
  body.kreabank-banking #id-right { padding:16px 12px; }
  .kb-context { gap:12px; }
  .kb-brand > strong { font-size:22px; }
- .kb-company { max-width:24ch; }
+ .kb-account-context { box-sizing:border-box; }
  .kb-primary a { padding:9px 12px; }
  .kb-accounts-table td,.kb-accounts-table th { padding:12px; }
  .kb-accounts-toolbar { flex-wrap:wrap; }

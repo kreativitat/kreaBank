@@ -314,8 +314,9 @@ if (!$scanDone) {
 	$scan = array('message'=>kreabankWorklistTranslate($langs, 'KreaBankWorklistAnalyzing'),'done'=>count($cache['summaries']),'total'=>count($sourceKeys),'page_ready'=>$pageReady($cache),
 		'action'=>array('action'=>'advance_scan','fields'=>array_merge($baseParams,array('scan_generation'=>$cache['generation'],'scan_cursor'=>$cache['cursor']))));
 }
+$navigationAccount = kreabankNavigationAccount((int) $state['filters']['account']);
 llxHeader('',$langs->trans('KreaBankWorklistTitle'));
-print kreabankBankingHeader('worklist',null,false);
+print kreabankBankingHeader('worklist',$navigationAccount,false);
 $assetRoot = dol_buildpath('/custom/kreabank/',1);
 print '<link rel="stylesheet" href="' . dol_escape_htmltag($assetRoot . 'css/worklist.css?v=' . filemtime(__DIR__ . '/css/worklist.css')) . '">';
 print '<script defer src="' . dol_escape_htmltag($assetRoot . 'js/worklist.js?v=' . filemtime(__DIR__ . '/js/worklist.js')) . '"></script>';

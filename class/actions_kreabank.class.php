@@ -54,21 +54,48 @@ class ActionsKreaBank extends CommonHookActions
 			|| !$user->hasRight('banque', 'lire') || !$user->hasRight('kreabank', 'reconciliation', 'read')) {
 			return 0;
 		}
-		$changed = false;
 		$visible = array();
 		foreach ($menuitems as $item) {
 			$path = parse_url($item['url'] ?? '', PHP_URL_PATH);
-			if ((int) ($item['level'] ?? 0) === 1 && in_array($path, array('/compta/bank/list.php', '/compta/bank/bankentries_list.php', '/custom/kreabank/reconcile.php'), true)) {
-				$changed = true;
+			if ($path === '/custom/kreabank/reconciliationlist.php' || ((int) ($item['level'] ?? 0) === 1
+				&& in_array($path, array('/compta/bank/list.php', '/compta/bank/bankentries_list.php', '/custom/kreabank/reconcile.php'), true))) {
 				continue;
-			}
-			if ($path === '/custom/kreatax/bankreconciliation.php' && (int) ($item['level'] ?? 0) > 1) {
-				$item['level'] = 1;
-				$changed = true;
 			}
 			$visible[] = $item;
 		}
-		if (!$changed) {
+		$bankIndex = null;
+		foreach ($visible as $index => $item) {
+			if ((int) ($item['level'] ?? 0) === 0 && parse_url($item['url'] ?? '', PHP_URL_PATH) === '/compta/bank/list.php') {
+				$bankIndex = $index;
+				break;
+			}
+		}
+		if ($bankIndex !== null) {
+			$reports = array();
+			$ordinary = array();
+			foreach ($visible as $item) {
+				if (parse_url($item['url'] ?? '', PHP_URL_PATH) === '/custom/kreatax/bankreconciliation.php') {
+					$item['level'] = 1;
+					$reports[] = $item;
+				} else {
+					$ordinary[] = $item;
+				}
+			}
+			if ($reports) {
+				// Keep physical order aligned with native sibling sorting: its block closing
+				// checks the next integer key even after sorting with preserved keys.
+				foreach ($ordinary as $index => $item) {
+					if ((int) ($item['level'] ?? 0) === 0 && parse_url($item['url'] ?? '', PHP_URL_PATH) === '/compta/bank/list.php') {
+						$insert = $index + 1;
+						while (isset($ordinary[$insert]) && (int) ($ordinary[$insert]['level'] ?? 0) > 0) { $insert++; }
+						array_splice($ordinary, $insert, 0, $reports);
+						break;
+					}
+				}
+				$visible = $ordinary;
+			}
+		}
+		if ($visible === array_values($menuitems)) {
 			return 0;
 		}
 		// Native rendering uses adjacent integer keys to determine menu block boundaries.
