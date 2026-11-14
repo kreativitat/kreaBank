@@ -181,8 +181,8 @@ foreach (array('movements','bankstatement','statement','worklist','history') as 
 	@$dom->loadHTML('<meta charset="utf-8">' . $html);
 	$xpath = new DOMXPath($dom);
 	$entries = $xpath->query("//nav[contains(@class,'kb-primary')]/a[contains(@href,'reconciliationlist.php')]");
-	checkNavigation($entries->length === 1 && strpos($entries->item(0)->getAttribute('href'), 'search_account=45') !== false, 'Every operational tab bar exposes the new list with its owned account');
-	checkNavigation($xpath->query("//nav[contains(@class,'kb-primary')]/a")->length === 4 && strpos($html, 'kb-reconcile-action') === false, 'Four banking tabs contain the new list without a Movements tab or header button');
+	checkNavigation($entryPage === 'movements' ? $entries->length === 0 : ($entries->length === 1 && strpos($entries->item(0)->getAttribute('href'), 'search_account=45') !== false), 'Only operational pages expose the new list in their tab bar');
+	checkNavigation($xpath->query("//nav[contains(@class,'kb-primary')]/a")->length === ($entryPage === 'movements' ? 0 : 4) && strpos($html, 'kb-reconcile-action') === false, 'Standalone Movements has no operational tab bar or header button');
 	if ($entryPage === 'worklist') {
 		checkNavigation($entries->item(0)->getAttribute('aria-current') === 'page' && strpos($html, 'KreaBankReviewOneByOne') === false, 'New reconciliation tab is active without legacy review subtabs');
 	}
@@ -215,16 +215,16 @@ foreach (array('movements', 'worklist', 'bankstatement', 'statement', 'reconcile
 	checkNavigation(count($balanceQueries) === ($withBalances ? 2 : 0), 'Selected operational views read only the feed configuration and one scoped account snapshot');
 	if ($withBalances) {
 		checkNavigation(strpos($balanceQueries[1], ' WHERE ba.entity=7 AND ba.rowid=45 ORDER BY ') !== false && strpos($balanceQueries[1], 'LIMIT 0, 1') !== false, 'Balance reads cannot list other accounts or companies');
-		checkNavigation($xpath->query('//header/nav/following-sibling::dl[@class="kb-movement-balances"]')->length === 1 && strpos($html, '-1234.56') !== false, 'Every selected operational tab shares one balance panel after its tabs');
+		checkNavigation($xpath->query('//header/dl[@class="kb-movement-balances"]')->length === 1 && ($page === 'movements' || $xpath->query('//header/nav/following-sibling::dl[@class="kb-movement-balances"]')->length === 1) && strpos($html, '-1234.56') !== false, 'Selected pages retain one balance panel, after the operational tabs where applicable');
 		if ($page === 'movements') {
-			checkNavigation($xpath->query('//nav/a[@aria-current="page"]')->length === 0 && strpos($html, 'kb-movement-balances') !== false, 'Native Movements retains its header and balances without selecting another operational tab');
+			checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]')->length === 0 && strpos($html, 'kb-movement-balances') !== false && $xpath->query('//div[contains(@class,"kb-view-switch")]/a')->length === 3, 'Standalone Movements keeps its balances and three native movement views without operational tabs');
 		} else {
 			checkNavigation($xpath->query('//nav/a[@aria-current="page"]')->item(0)->textContent === $tabs[array_search($page, array_column($tabs, 2), true)][1], 'Each operational view highlights its own tab');
 		}
 	} else {
 		checkNavigation(strpos($html, 'kb-movement-balances') === false, 'Dormant and configuration views retain their existing layout');
 	}
-	checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a')->length === 4, 'Four operational tabs keep native Movements in its menu and legacy reconciliation dormant');
+	checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a')->length === ($page === 'movements' ? 0 : 4), 'Movements stays separate from the four operational tabs and legacy reconciliation');
 	checkNavigation($xpath->query('//div[contains(@class,"kb-brand")]/span[@class="kb-account-context"]')->item(0)->textContent === 'Synthetic <account> — Current & savings', 'The bank reference and label remain visible and escaped beside the title');
 	foreach ($xpath->query('//nav/a | //div[contains(@class,"kb-view-switch")]/a') as $link) {
 		checkNavigation(preg_match('/[?&](?:id|account_context|search_account)=45(?:&|$)/', $link->getAttribute('href')) === 1, 'All operational and subview links retain the selected account');

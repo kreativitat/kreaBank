@@ -2,7 +2,7 @@
 
 Operational banking pages share four tabs: Reconcile, Bank statement, Statements
 and History. Movements is in the native left menu directly below New financial
-account, without an operational tab. Reconcile opens the new `reconciliationlist.php`. The legacy
+account. Its standalone page does not render the operational tab bar. Reconcile opens the new `reconciliationlist.php`. The legacy
 `reconcile.php` controllers and direct routes remain dormant and intact. Connections also retains its
 direct route without an operational tab. Bank statement combines all imported
 movements; Statements retains the individual import list and details. Account
@@ -48,7 +48,7 @@ retain the native banking interface.
 Selected-account Movements and the four operational tabs show the current Dolibarr balance, synced bank
 balance and bank refresh time above the page content. These reuse the accounts
 overview's read-only projection, currency and snapshot status, independently of
-list filters, matched view or pagination. The shared order is bank identity, tabs,
+list filters, matched view or pagination. The shared order is bank identity, operational tabs where applicable,
 balance panel, then each page’s existing controls and table. Normal selected-account
 native Movements hides only its duplicate account-banner wrapper; native action
 confirmations and account tools keep their original content. Closed status remains

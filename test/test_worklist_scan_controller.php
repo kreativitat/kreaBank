@@ -21,7 +21,11 @@ class WorklistScanStopped extends RuntimeException
 	public $status;
 	public function __construct($status) { parent::__construct('Synthetic HTTP terminal'); $this->status = $status; }
 }
-class WorklistScanRedirect extends RuntimeException {}
+class WorklistScanRedirect extends RuntimeException
+{
+	public $params;
+	public function __construct($params) { parent::__construct('Synthetic redirect'); $this->params = $params; }
+}
 
 /** Capture only terminal HTTP exits; all admission/view/lease logic stays original. */
 function scanControllerRegion()
@@ -68,16 +72,24 @@ function runScanController($request = array(), $session = array(), $options = ar
 	$action = $request['action'] ?? '';
 	$expand = $request['expand'] ?? '';
 	$user = (object) array('id'=>7); $conf = (object) array('entity'=>1);
-	$redirect = static function () { throw new WorklistScanRedirect('Synthetic redirect'); };
+	$source = file_get_contents(__DIR__ . '/../reconciliationlist.php');
+	$redirectStart = strpos($source, '$redirect = static function');
+	$redirectEnd = strpos($source, '$pairDescriptor =', $redirectStart);
+	$redirectSource = substr($source,$redirectStart,$redirectEnd-$redirectStart);
+	$terminal = "header('Location: ' . \$url . '?' . http_build_query(array_merge(\$baseParams,\$extra),'','&',PHP_QUERY_RFC3986)); exit;";
+	$redirectSource = str_replace($terminal,'throw new WorklistScanRedirect(array_merge($baseParams,$extra));',$redirectSource,$replaced);
+	if ($replaced !== 1) { throw new RuntimeException('Actual redirect boundary changed'); }
+	$url = '/synthetic/reconciliationlist.php'; eval($redirectSource);
 	$status = 200; $redirected = false;
+	$redirectParams = null;
 	http_response_code(200); ob_start();
 	try { eval(scanControllerRegion()); }
 	catch (WorklistScanStopped $stopped) { $status = $stopped->status; }
-	catch (WorklistScanRedirect $stopped) { $redirected = true; }
+	catch (WorklistScanRedirect $stopped) { $redirected = true; $redirectParams = $stopped->params; }
 	finally { $body = ob_get_clean(); }
 	return array('session'=>$_SESSION,'cache'=>$_SESSION['kreabank_worklist_scan'] ?? null,'state'=>$state,'base'=>$baseParams,
 		'view'=>$scanView ?? null,'scope'=>$scanScope,'display'=>$displayKeys ?? array(),'status'=>$status,'redirected'=>$redirected,
-		'body'=>json_decode($body,true));
+		'body'=>json_decode($body,true),'redirect'=>$redirectParams);
 }
 
 function scanControllerPost($rendered, $extra = array())
@@ -147,6 +159,7 @@ checkScanController(serialize($reload['session']) === serialize($cached), 'Reloa
 $more = runScanController(scanControllerPost($reload,array('action'=>'more_scan')),$reload['session']);
 checkScanController($more['redirected'] && $more['cache']['targets'] === array_map(static function ($id) { return 'staged:'.$id; },range(26,50)), 'Actual explicit More POST grants the next 25 and redirects without matching');
 checkScanController($more['base']['page'] === 1, 'More opens the native page containing the newly granted results');
+checkScanController($more['redirect']['page'] === 1, 'The actual by-value redirect closure receives the new page explicitly');
 $morePage = runScanController($more['base'],$more['session']);
 checkScanController($morePage['cache']['targets'] === $more['cache']['targets'], 'The next native page retains the granted batch rather than expanding matching');
 $repeatMore = runScanController(scanControllerPost($reload,array('action'=>'more_scan')),$more['session']);

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.14 — 2026-11-14
+
+- Keep the standalone Movements list free of reconciliation/statement/history tabs, retaining its own filters and balances.
+- Send More to the page containing the newly analysed group through the actual redirect callback.
+
 ## 1.20.13 — 2026-11-14
 
 - Limit automatic reconciliation-list analysis to the pagination-sized displayed batch. Stop after completion; More explicitly grants only the next bounded batch. Keep global payment filters pending until analysis is complete.

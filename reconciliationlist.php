@@ -187,7 +187,7 @@ if ($action === 'more_scan') {
 		$position = array_search($cache['targets'][0],$moreKeys,true);
 		if ($position !== false) { $baseParams['page'] = intdiv($position,$state['limit']); }
 	}
-	$redirect();
+	$redirect(array('page'=>$baseParams['page']));
 }
 if ($action === 'advance_scan') {
 	$ajax = ($_SERVER['HTTP_X_KREABANK_SCAN'] ?? '') === '1';

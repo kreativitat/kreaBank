@@ -81,7 +81,7 @@ If the ZIP package does not ship the `vendor/` directory, run the same `composer
 
 The banking workspace provides four tabs: **Reconcile**, **Bank statement**,
 **Statements** and **History**. **Movements** is in the native left menu directly
-below **New financial account**. Reconcile opens the new reconciliation list. The old
+below **New financial account**, on a standalone page without operational tabs. Reconcile opens the new reconciliation list. The old
 reconciliation controller remains dormant, with its direct routes preserved. Opening an account keeps its context across
 tabs without an account-switching control; its reference and label replace the
 company name beside Banking. Combined views identify All accounts. The Banks/Cash
