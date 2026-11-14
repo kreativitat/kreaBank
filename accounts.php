@@ -95,7 +95,12 @@ while ($row=$db->fetch_object($rows)) {
 	print kreabankAccountFeedCells($row);
 	print '<td class="kb-money">' . kreabankPrice($row->balance) . '</td>';
 	print '<td><a class="kb-count" href="' . dol_escape_htmltag($accountWorkspaceUrl) . '">' . (int) $row->pending_count . '</a></td>';
-	print '<td class="kb-accounts-action-cell"><a class="kb-account-edit" href="' . dol_escape_htmltag(kreabankBankingUrl('card', $row->rowid)) . '" aria-label="' . dol_escape_htmltag($langs->trans('Modify') . ' ' . $row->ref) . '" title="' . dol_escape_htmltag($langs->trans('Modify')) . '">' . img_picto('', 'edit') . '</a></td>';
+	print '<td class="kb-accounts-action-cell">';
+	if ((int) $row->account_type !== 2) {
+		$reconcileLabel = $langs->trans('KreaBankReconcile') . ' ' . $row->ref;
+		print '<a class="kb-account-reconcile" href="' . dol_escape_htmltag($accountWorkspaceUrl) . '" aria-label="' . dol_escape_htmltag($reconcileLabel) . '" title="' . dol_escape_htmltag($reconcileLabel) . '">' . img_picto('', 'fa-check-double', 'aria-hidden="true"') . '</a>';
+	}
+	print '<a class="kb-account-edit" href="' . dol_escape_htmltag(kreabankBankingUrl('card', $row->rowid)) . '" aria-label="' . dol_escape_htmltag($langs->trans('Modify') . ' ' . $row->ref) . '" title="' . dol_escape_htmltag($langs->trans('Modify')) . '">' . img_picto('', 'edit') . '</a></td>';
 	print '</tr>';
 }
 if (!$total) {

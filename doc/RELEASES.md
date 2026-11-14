@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.16 — 2026-11-14
+
+- Add a reconciliation shortcut beside each bank account’s edit icon, opening the same scoped list as its reference link.
+
 ## 1.20.15 — 2026-11-14
 
 - Open the selected-bank reconciliation workspace from account names and pending counts, restoring access to its four tabs. Cash accounts retain native Movements; account tools and reconciliation eligibility are unchanged.

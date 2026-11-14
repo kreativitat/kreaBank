@@ -11,6 +11,8 @@ overview. Bank references and pending counts open the account-scoped Reconcile
 workspace with its four tabs. Cash accounts retain native Movements because they
 are excluded from bank reconciliation. The pencil icon in the right-aligned
 Actions column opens the account’s native details and tool tabs.
+Bank rows also have a reconciliation icon beside the pencil, using the same
+scoped list URL as the account reference and pending count.
 The accounts overview and account-tool pages do not display the operational tabs.
 Internal transfers and new-account creation keep the native layout without a
 workspace header or tabs.
