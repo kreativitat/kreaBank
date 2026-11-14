@@ -78,7 +78,7 @@ function renderHistory($request=array(),$method='GET'){
 $checks=0;
 function historyCheck($ok,$label){global $checks;if(!$ok){throw new RuntimeException($label);} $checks++;}
 $html=renderHistory();
-historyCheck(!$fixtureErrors && substr_count($html,'krea-history-row-top')===4,'History renders actual rows without errors');
+historyCheck(!$fixtureErrors && preg_match_all('/<tr\b[^>]*class="[^"]*\bkrea-history-row-top\b/', $html)===3,'History renders actual rows without errors');
 historyCheck(strpos($html,'125,00 EUR')!==false && strpos($html,'17,00 USD')!==false && strpos($html,'142,00')===false,'Summary amounts remain separated by currency');
 historyCheck(strpos($html,'name="undo_review"')!==false && strpos($html,'id="kreaUndoFormstaged5001"')!==false && strpos($html,'id="kreaUndoFormnative5001"')!==false,'Colliding IDs have separate displayed Undo reviews/forms');
 historyCheck(strpos($html,'min-width:600px')===false,'Global search can shrink on narrow screens');
