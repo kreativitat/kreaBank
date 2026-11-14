@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.8 — 2026-11-14
+
+- Keep the new Reconcile header action beside the bank identity when native tables extend beyond the viewport.
+
 ## 1.20.7 — 2026-11-14
 
 - Restore visible access to the new reconciliation list through a compact header action, retaining the selected bank and four operational tabs.
