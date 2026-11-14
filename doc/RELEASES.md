@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.10 — 2026-11-14
+
+- Place Reconcile second, after Movements. Share the selected-account balance panel across operational tabs and remove the duplicate native movement banner.
+- Remove the New financial account button from the accounts list; retain the native menu action, header filters and pagination. No migration or scheduler change.
+- Give History entry and Undo buttons equal dimensions and centred labels, with a distinct Undo colour.
+
 ## 1.20.9 — 2026-11-14
 
 - Open the new reconciliation list from the Reconcile banking tab and remove the header button. Preserve account scope and keep the legacy reconciliation controller dormant.

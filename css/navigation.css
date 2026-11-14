@@ -4,6 +4,7 @@ body.kreabank-banking #id-right > .fiche { margin:0; }
 body.kreabank-banking #id-right > .fiche > .tabBar { border-top:0; padding-top:0; }
 body.kreabank-banking.kb-native-bank #id-right .tabs { display:none !important; }
 body.kreabank-banking.kb-native-bank #id-right > .fiche > .tabs { display:none !important; }
+body.kreabank-banking.kb-native-movements #id-right > .fiche > #dragDropAreaTabBar.tabBar { display:none; }
 .kb-header { position:relative; margin:0 0 26px; color:#243649; }
 .kb-context { display:flex; flex-direction:column; align-items:flex-start; gap:12px; padding:4px 0 18px; }
 .kb-brand { display:flex; flex-wrap:wrap; align-items:center; gap:10px; min-width:0; max-width:100%; }
@@ -48,6 +49,7 @@ body.kreabank-banking.kb-native-bank #id-right > .fiche > .tabs { display:none !
 .kb-movement-balances .kb-balance-currency { font-size:13px; font-weight:400; }
 .kb-movement-balances .kb-balance-updated { font-size:15px; line-height:26px; font-weight:400; }
 .kb-movement-balances small { display:block; margin-top:5px; font-size:12px; line-height:1.5; font-weight:400; color:#576878; }
+.kb-header .kb-movement-balances { margin:18px 0 0; }
 @media(max-width:700px) {
  body.kreabank-banking #id-right { padding:16px 12px; }
  .kb-context { gap:12px; }

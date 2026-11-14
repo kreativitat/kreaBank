@@ -72,16 +72,12 @@ $params = array('kind'=>$kind, 'mainmenu'=>'bank', 'leftmenu'=>'kreabank_account
 $param = '&' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
 llxHeader('', $langs->trans('KreaBankAccounts'));
 kreabankPrintWorkspaceNavigation('accounts',$account);
-$newAccount = '';
-if ($user->hasRight('banque','configurer')) {
-	$newAccount = '<a class="button" href="' . dol_buildpath('/compta/bank/card.php?action=create',1) . '">' . $langs->trans('NewFinancialAccount') . '</a>';
-}
 print kreabankBankingFilters('accounts', $accountId, $kind);
 print '<form method="GET" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 foreach (array_merge($params, array('sortfield'=>$accountSort['field'],'sortorder'=>$accountSort['order'])) as $key=>$value) {
 	if ($key !== 'limit') { print '<input type="hidden" name="' . $key . '" value="' . dol_escape_htmltag((string) $value) . '">'; }
 }
-print_barre_liste($langs->trans('KreaBankAccounts'), $paging['page'], $_SERVER['PHP_SELF'], $param, $accountSort['field'], $accountSort['order'], '', $paging['num'], $total, 'bank', 0, $newAccount, '', $paging['limit'], 0, 0, 1);
+print_barre_liste($langs->trans('KreaBankAccounts'), $paging['page'], $_SERVER['PHP_SELF'], $param, $accountSort['field'], $accountSort['order'], '', $paging['num'], $total, 'bank', 0, '', '', $paging['limit'], 0, 0, 1);
 print '</form>';
 print '<div class="div-table-responsive kb-accounts-scroll"><table class="kb-accounts-table"><tr>';
 foreach ($accountColumns as $field => $label) {

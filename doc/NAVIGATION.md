@@ -1,7 +1,7 @@
 # Banking workspace
 
-Operational banking pages share five tabs: Movements, Bank statement, Statements,
-Reconcile and History. Reconcile opens the new `reconciliationlist.php`. The legacy
+Operational banking pages share five tabs: Movements, Reconcile, Bank statement,
+Statements and History. Reconcile opens the new `reconciliationlist.php`. The legacy
 `reconcile.php` controllers and direct routes remain dormant and intact. Connections also retains its
 direct route without an operational tab. Bank statement combines all imported
 movements; Statements retains the individual import list and details. Account
@@ -44,13 +44,21 @@ pending imported evidence. It never combines balances across currencies. Native
 account-list GETs route here for KreaBank readers. Readers without module rights
 retain the native banking interface.
 
-Selected-account Movements pages show the current Dolibarr balance, synced bank
-balance and bank refresh time above the native list. These reuse the accounts
+All five selected-account operational tabs show the current Dolibarr balance, synced bank
+balance and bank refresh time above the page content. These reuse the accounts
 overview's read-only projection, currency and snapshot status, independently of
-list filters, matched view or pagination. Missing snapshots remain a dash and
-stale/failed snapshots retain their status. The all-accounts view has no combined
-balance. Deploy `lib/kreabank_integration.lib.php`, `class/actions_kreabank.class.php`
-and `css/navigation.css` together; no registration or schema update is required.
+list filters, matched view or pagination. The shared order is bank identity, tabs,
+balance panel, then each page’s existing controls and table. Normal selected-account
+native Movements hides only its duplicate account-banner wrapper; native action
+confirmations and account tools keep their original content. Closed status remains
+visible in the shared identity. The accounts overview omits its duplicate New
+financial account list button; the native left-menu action remains available.
+Missing snapshots remain a dash and stale/failed snapshots retain their status.
+The all-accounts view has no combined balance. Deploy `lib/kreabank.lib.php`,
+`lib/kreabank_navigation.lib.php`, `class/actions_kreabank.class.php`,
+`css/navigation.css` and `accounts.php` with the descriptor/version files.
+The existing `lib/kreabank_integration.lib.php` provides the projection; no
+registration or schema update is required.
 Movements also offers **Unreconciled** (pt_PT: **Por reconciliar**), selecting native
 `b.rappro=0` rows within the same owned-account scope before counting/pagination.
 The explicit `kreabank_matched=2` view persists through account/search forms and
@@ -66,8 +74,9 @@ as a level-one item, with its URL and permissions preserved. Keep its physical
 array order aligned with native sorting before reindexing: Eldy sorts with
 preserved keys but checks the next integer key when closing blocks. This avoids
 a divider before the report without hiding native section separators. Native-only readers retain their menu.
-Only the duplicate native account tab bar is hidden inside
-this workspace. Global ERP navigation remains available. Selected-account pages
+The duplicate native account tab bar is hidden inside this workspace.
+The normal selected-account movement list also hides its duplicate account banner.
+Global ERP navigation remains available. Selected-account pages
 have tabs for details, documents and annual reports. Forecasts, native numbered
 statements and statement numbering keep their direct routes without visible tabs.
 These tools do not add left-menu sections or operational tabs. Transfers and

@@ -179,6 +179,9 @@ function kreabankBankingHeader($page, $account = null, $showFilters = true)
 		$accountLabel = implode(' — ', array_filter($parts, static function ($value) { return $value !== ''; }));
 	}
 	$html .= '<span class="kb-account-context" title="' . dol_escape_htmltag($accountLabel) . '">' . dol_escape_htmltag($accountLabel) . '</span>';
+	if ($accountId > 0 && !empty($account->clos)) {
+		$html .= '<span class="badge badge-status8">' . $langs->trans('StatusAccountClosed') . '</span>';
+	}
 	$html .= '</div></div>';
 	$accountTools = $accountId > 0 ? kreabankAccountToolEntries($accountId) : array();
 	$active = in_array($page, array('card', 'documents', 'reports', 'forecast', 'native_statements', 'numbering'), true) ? 'account' : (in_array($page, array('matched', 'bulkmatch', 'pending'), true) ? 'reconcile' : ($page === 'import' ? 'statement' : $page));
@@ -188,6 +191,9 @@ function kreabankBankingHeader($page, $account = null, $showFilters = true)
 			$html .= '<a' . ($active === $tab[2] ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag($tab[0]) . '">' . $tab[1] . '</a>';
 		}
 		$html .= '</nav>';
+	}
+	if ($accountId > 0 && in_array($page, array('movements', 'worklist', 'bankstatement', 'statement', 'history'), true)) {
+		$html .= kreabankMovementBalances($accountId);
 	}
 	if ($active === 'account' && $accountTools) {
 		$html .= '<div class="kb-view-switch kb-account-tabs" role="navigation" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankAccountOptions')) . '">';

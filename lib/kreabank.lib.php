@@ -145,13 +145,12 @@ function kreabankPrepareHead($accountId = 0)
 	$langs->load('kreabank@kreabank');
 	$head = array();
 	if ($user->hasRight('kreabank', 'reconciliation', 'read') && $user->hasRight('banque', 'lire')) {
-		foreach (array('movements' => 'KreaBankNavMovements', 'bankstatement' => 'KreaBankBankStatement', 'statement' => 'KreaBankNavStatements') as $page => $label) {
-			$head[] = array(kreabankBankingUrl($page, $accountId), $langs->trans($label), $page);
-		}
-	}
-	if ($user->hasRight('kreabank', 'reconciliation', 'read') && $user->hasRight('banque', 'lire')) {
+		$head[] = array(kreabankBankingUrl('movements', $accountId), $langs->trans('KreaBankNavMovements'), 'movements');
 		if (empty($user->socid)) {
 			$head[] = array(kreabankBankingUrl('worklist', $accountId), $langs->trans('KreaBankReconcile'), 'worklist');
+		}
+		foreach (array('bankstatement' => 'KreaBankBankStatement', 'statement' => 'KreaBankNavStatements') as $page => $label) {
+			$head[] = array(kreabankBankingUrl($page, $accountId), $langs->trans($label), $page);
 		}
 		$head[] = array(kreabankWorkspaceUrl('history', $accountId), $langs->trans('KreaBankNavHistory'), 'history');
 	}

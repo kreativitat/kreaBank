@@ -10,6 +10,9 @@ require_once __DIR__ . '/../class/actions_kreabank.class.php';
 require_once __DIR__ . '/../class/KreaBankNativeBankAdapter.class.php';
 function dol_buildpath($path, $absolute = 0) { return '/erp' . $path; }
 function accessforbidden() { throw new LogicException('Forbidden'); }
+function dol_now() { return 1794690000; }
+function dol_print_date($time, $format = '') { return gmdate('d/m/Y H:i', $time); }
+function price($amount, ...$options) { return number_format((float) $amount, 2, '.', ''); }
 class NavigationTestUser
 {
 	public $allowed = array('banque.lire', 'kreabank.reconciliation.read');
@@ -26,8 +29,23 @@ class NavigationTestDb
 	public $queries = array();
 	public $fail = false;
 	public function prefix() { return 'navtest_'; }
-	public function query($sql) { $this->queries[] = $sql; return !$this->fail; }
-	public function fetch_object($result) { return false; }
+	public function query($sql) {
+		$this->queries[] = $sql;
+		if ($this->fail) { return false; }
+		if (strpos($sql, 'SELECT ba.rowid,ba.ref,ba.label,ba.currency_code') === 0) {
+			return (object) array('owned' => strpos($sql, ' WHERE ba.entity=7 AND ba.rowid=45 ORDER BY ') !== false, 'read' => false);
+		}
+		return true;
+	}
+	public function fetch_object($result) {
+		if (is_object($result) && $result->owned && !$result->read) {
+			$result->read = true;
+			return (object) array('balance' => '-1234.56', 'currency_code' => 'EUR', 'feed_balance' => null, 'feed_status' => null, 'bank_updated_at' => null);
+		}
+		return false;
+	}
+	public function escape($value) { return addslashes((string) $value); }
+	public function idate($time) { return gmdate('Y-m-d H:i:s', $time); }
 	public function plimit($limit, $offset) { return ' LIMIT ' . (int) $offset . ', ' . (int) $limit; }
 }
 class NavigationTestAdapter extends KreaBankNativeBankAdapter
@@ -52,10 +70,10 @@ $newHead = kreabankCompleteAccountHead($head, 45);
 checkNavigation($newHead === $head, 'Shared header replaces native tabs without inserting another navigation layer');
 checkNavigation(strpos(kreabankWorkspaceUrl('reconcile', 45), 'reconcile.php') !== false, 'Dormant reconciliation keeps its direct route');
 $tabs = kreabankPrepareHead(45);
-checkNavigation(array_column($tabs, 2) === array('movements', 'bankstatement', 'statement', 'worklist', 'history'), 'Operational tabs exclude account management');
+checkNavigation(array_column($tabs, 2) === array('movements', 'worklist', 'bankstatement', 'statement', 'history'), 'Reconcile is the second operational tab');
 $user->allowed[] = 'kreabank.reconciliation.write';
 $user->allowed[] = 'banque.modifier';
-checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('movements', 'bankstatement', 'statement', 'worklist', 'history'), 'Write actions do not add another navigation layer');
+checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('movements', 'worklist', 'bankstatement', 'statement', 'history'), 'Write actions do not add another navigation layer');
 foreach (kreabankPrepareHead(45) as $tab) {
 	checkNavigation((strpos($tab[0], 'account_context=45') !== false || strpos($tab[0], 'search_account=45') !== false || preg_match('/[?&]id=45(?:&|$)/', $tab[0])) && strpos($tab[0], 'line_id') === false, 'Carry account without copying a stale line/action');
 }
@@ -184,7 +202,7 @@ $action = 'create';
 checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0 && $hooks->resprints === '' && count($db->queries) === $queryCount, 'New-account creation keeps only the native form without workspace navigation');
 $action = '';
 $navigationRequest = array('kind' => 'cash', 'account_context' => 45);
-foreach (array('movements', 'bankstatement', 'statement', 'reconcile', 'matched', 'bulkmatch', 'pending', 'feed', 'history') as $page) {
+foreach (array('movements', 'worklist', 'bankstatement', 'statement', 'reconcile', 'matched', 'bulkmatch', 'pending', 'feed', 'history') as $page) {
 	$queriesBefore = count($db->queries);
 	$html = kreabankBankingHeader($page, (object) array('id' => 45, 'ref' => 'Synthetic <account>', 'label' => 'Current & savings'));
 	$dom = new DOMDocument();
@@ -192,7 +210,16 @@ foreach (array('movements', 'bankstatement', 'statement', 'reconcile', 'matched'
 	$xpath = new DOMXPath($dom);
 	checkNavigation(strpos($html, 'Synthetic company') === false && strpos($html, 'kb-company') === false, 'Bank identity replaces company text');
 	checkNavigation($xpath->query('//form')->length === 0 && $xpath->query('//select[@name="account_context"]')->length === 0, 'Every selected-account view removes the account switch');
-	checkNavigation(count($db->queries) === $queriesBefore, 'Locked account views never load a list of other accounts');
+	$withBalances = in_array($page, array('movements', 'worklist', 'bankstatement', 'statement', 'history'), true);
+	$balanceQueries = array_slice($db->queries, $queriesBefore);
+	checkNavigation(count($balanceQueries) === ($withBalances ? 2 : 0), 'Selected operational views read only the feed configuration and one scoped account snapshot');
+	if ($withBalances) {
+		checkNavigation(strpos($balanceQueries[1], ' WHERE ba.entity=7 AND ba.rowid=45 ORDER BY ') !== false && strpos($balanceQueries[1], 'LIMIT 0, 1') !== false, 'Balance reads cannot list other accounts or companies');
+		checkNavigation($xpath->query('//header/nav/following-sibling::dl[@class="kb-movement-balances"]')->length === 1 && strpos($html, '-1234.56') !== false, 'Every selected operational tab shares one balance panel after its tabs');
+		checkNavigation($xpath->query('//nav/a[@aria-current="page"]')->item(0)->textContent === $tabs[array_search($page, array_column($tabs, 2), true)][1], 'Each operational view highlights its own tab');
+	} else {
+		checkNavigation(strpos($html, 'kb-movement-balances') === false, 'Dormant and configuration views retain their existing layout');
+	}
 	checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a')->length === 5, 'Five operational tabs keep the legacy reconciliation controller dormant');
 	checkNavigation($xpath->query('//div[contains(@class,"kb-brand")]/span[@class="kb-account-context"]')->item(0)->textContent === 'Synthetic <account> — Current & savings', 'The bank reference and label remain visible and escaped beside the title');
 	foreach ($xpath->query('//nav/a | //div[contains(@class,"kb-view-switch")]/a') as $link) {
@@ -203,13 +230,18 @@ foreach (array('movements', 'bankstatement', 'statement', 'reconcile', 'matched'
 	@$dom->loadHTML('<meta charset="utf-8">' . $html);
 	$xpath = new DOMXPath($dom);
 	checkNavigation($xpath->query('//span[@class="kb-account-context"]')->item(0)->textContent === 'KreaBankAllAccounts', 'All-account views identify their combined scope without naming an arbitrary bank');
+	checkNavigation(strpos($html, 'kb-movement-balances') === false, 'Combined views never display a summed monetary balance');
 	$accountField = $page === 'movements' ? 'id' : 'account_context';
-	checkNavigation($xpath->query('//form[contains(@class,"kb-accounts-filters")]')->length === 1 && $xpath->query('//select[@name="' . $accountField . '"]')->length === 1, 'Unscoped pages retain their current-company selector using the destination account parameter');
+	checkNavigation($xpath->query('//form[contains(@class,"kb-accounts-filters")]')->length === ($page === 'worklist' ? 0 : 1) && $xpath->query('//select[@name="' . $accountField . '"]')->length === ($page === 'worklist' ? 0 : 1), 'Unscoped pages retain their selector; the worklist owns its statement-bank column filter');
 	if ($page === 'movements') {
 		checkNavigation($xpath->query('//*[@name="account_context"]')->length === 0 && strpos($html, 'bankentries_list.php') !== false, 'Native account selection submits id without conflicting account_context, locking the destination account control');
 	}
-	checkNavigation((strpos(end($db->queries), 'EXISTS (SELECT 1 FROM navtest_kreabank_statement') !== false) === in_array($page, array('bankstatement', 'statement'), true), 'Only unscoped statement views restrict account choices to imported statements');
+	if ($page !== 'worklist') {
+		checkNavigation((strpos(end($db->queries), 'EXISTS (SELECT 1 FROM navtest_kreabank_statement') !== false) === in_array($page, array('bankstatement', 'statement'), true), 'Only unscoped statement views restrict account choices to imported statements');
+	}
 }
+checkNavigation(strpos(kreabankBankingHeader('worklist', (object) array('id' => 999)), 'kb-movement-balances') === false, 'Unknown and foreign account snapshots remain absent');
+checkNavigation(strpos(kreabankBankingHeader('movements', (object) array('id' => 45, 'clos' => 1)), 'StatusAccountClosed') !== false, 'The shared identity retains closed-account status after hiding the duplicate native banner');
 checkNavigation(strpos(kreabankWorkspaceUrl('pending', 45), 'kind=') === false && strpos(kreabankNativeEntriesUrl(45), 'kind=') === false && strpos(kreabankStatementUrl(45), 'kind=') === false, 'Account types do not carry into operational links');
 checkNavigation(kreabankNavigationHiddenFields(0) === '', 'Operational forms never keep a hidden account-type filter');
 $html = kreabankBankingFilters('accounts', 45, 'closed');

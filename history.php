@@ -634,7 +634,11 @@ print '.krea-history-salary-group{margin:0 0 10px 0;padding:7px 10px;border:1px 
 print '.krea-history-salary-group:last-child{margin-bottom:0}';
 print '.krea-history-sub{color:#666;font-size:12px}';
 print '.krea-history-pre{max-height:160px;overflow:auto;font-size:11px;line-height:1.35;background:#f7f7f7;border:1px solid #e4e4e4;padding:6px;border-radius:4px;white-space:pre-wrap;word-break:break-word}';
-print '.krea-history-action-btn{font-size:11px!important;padding:3px 8px!important;line-height:1.25;display:inline-block;text-transform:uppercase}';
+print '.krea-history-action-btn{box-sizing:border-box;display:inline-flex!important;align-items:center;justify-content:center;vertical-align:middle;width:112px;height:28px;margin:0!important;padding:3px 8px!important;border:1px solid #4b4b4b;border-radius:3px;background:#4b4b4b;color:#fff!important;font-family:inherit;font-size:11px!important;font-weight:600;line-height:1!important;text-align:center;text-decoration:none;text-transform:uppercase;appearance:none;cursor:pointer}';
+print '.krea-history-action-btn:hover{background:#353535;border-color:#353535}';
+print '.krea-history-action-btn.krea-history-undo{background:#9a4b16;border-color:#9a4b16}';
+print '.krea-history-action-btn.krea-history-undo:hover{background:#7b3c12;border-color:#7b3c12}';
+print '.krea-history-action-btn:focus-visible{outline:2px solid #1769aa;outline-offset:2px}';
 print '@media (max-width: 1100px){.krea-history-kpi{grid-template-columns:repeat(2,minmax(140px,1fr))}}';
 print '@media (max-width: 700px){.krea-history-kpi{grid-template-columns:1fr}}';
 print '</style>';
@@ -946,7 +950,7 @@ if ($historyTotalRecords === 0) {
 			print '<input type="hidden" name="audit_search_summary" value="' . dol_escape_htmltag($auditSearchSummary) . '">';
 			print '<input type="hidden" name="limit" value="' . ((int) $limit) . '">';
 			print '<input type="hidden" name="page" value="' . ((int) $page) . '">';
-			print '<button type="submit" class="button smallpaddingimp krea-history-action-btn">' . $undoActionLabel . '</button>';
+			print '<button type="submit" class="button smallpaddingimp krea-history-action-btn krea-history-undo">' . $undoActionLabel . '</button>';
 			print '<br><input type="text" name="reason" class="flat maxwidth100" style="margin-top:4px" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankReason')) . '">';
 			print '</form>';
 		}
