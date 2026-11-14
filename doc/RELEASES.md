@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.2 — 2026-11-14
+
+- Keep the reconciliation list within the native page and retain compact icon actions.
+- Preserve header filters when sorting fields containing underscores.
+
 ## 1.20.1 — 2026-11-14
 
 - Simplify banking tabs and sidebar links; keep the fiscal/bank report outside nested menus.

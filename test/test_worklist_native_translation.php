@@ -17,9 +17,11 @@ require_once DOL_DOCUMENT_ROOT . '/core/lib/functions.lib.php';
 require_once DOL_DOCUMENT_ROOT . '/core/class/translate.class.php';
 require_once __DIR__ . '/../lib/kreabank.lib.php';
 require_once __DIR__ . '/../lib/kreabank_worklist_view.lib.php';
+require_once __DIR__ . '/../lib/kreabank_worklist.lib.php';
 $conf = (object) array('global' => (object) array(
 	'MAIN_MAX_DECIMALS_UNIT'=>'8', 'MAIN_MAX_DECIMALS_TOT'=>'8', 'MAIN_MAX_DECIMALS_SHOWN'=>'8...'
 ));
+$conf->currency = 'EUR';
 $checks = 0;
 function checkWorklistNativeTranslation($condition, $message)
 {
@@ -55,5 +57,28 @@ foreach (array('en_US'=>'Reconciliation list', 'pt_PT'=>'Lista de reconciliaçã
 	checkWorklistNativeTranslation(strpos($text, $description) !== false, 'Literal source entities remain evidence rather than being decoded as translations in ' . $locale);
 	checkWorklistNativeTranslation(strpos($html, '&amp;ccedil;') === false && strpos($html, '&amp;ecirc;') === false, 'Portuguese control labels are never double encoded');
 	checkWorklistNativeTranslation(strpos($html, '1234.56789012') === false, 'Visible monetary evidence retains the native two-decimal display');
+}
+// Render the actual controller's title block with installed native helpers. The
+// native sort cleanup regex does not consume underscores in existing sort keys.
+$controller = file_get_contents(__DIR__ . '/../reconciliationlist.php');
+$start = strpos($controller, '$headers = array();');
+$end = strpos($controller, '$scan = null;', $start);
+if ($start === false || $end === false) { throw new RuntimeException('Native header test boundary changed'); }
+$_SERVER['PHP_SELF'] = '/custom/kreabank/reconciliationlist.php';
+foreach (array('operation_date','bank_account_ref','payment_account') as $sort) {
+	$state = kreabankWorklistState(array('sortfield'=>$sort,'sortorder'=>'ASC','search_account'=>'101','search_description'=>'Salary & reference','limit'=>15));
+	eval(substr($controller, $start, $end - $start));
+	foreach ($headers as $field=>$html) {
+		$dom = new DOMDocument();
+		$previous = libxml_use_internal_errors(true);
+		$dom->loadHTML('<?xml encoding="utf-8" ?>' . $html);
+		libxml_clear_errors();
+		libxml_use_internal_errors($previous);
+		foreach ($dom->getElementsByTagName('a') as $link) {
+			parse_str(parse_url($link->getAttribute('href'), PHP_URL_QUERY), $query);
+			checkWorklistNativeTranslation(($query['sortfield'] ?? '') === $field && !array_intersect(array_keys($query), array('_date','_account','_account_ref')), 'Native sort links retain the exact field without orphaned underscore fragments');
+			checkWorklistNativeTranslation(($query['search_account'] ?? '') === '101' && ($query['search_description'] ?? '') === 'Salary & reference' && ($query['limit'] ?? '') === '15', 'Native sort links retain header filters and page size');
+		}
+	}
 }
 print "OK: $checks native worklist translation/render checks\n";

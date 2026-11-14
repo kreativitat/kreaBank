@@ -303,8 +303,11 @@ ob_start();
 print_barre_liste($langs->trans('KreaBankWorklistTitle'),$page['page'],$_SERVER['PHP_SELF'],'&' . http_build_query($state['params'],'','&',PHP_QUERY_RFC3986),$state['sort']['field'],$state['sort']['order'],'',$page['num'],$page['total'],'bank',0,'','',$page['limit'],0,0,1);
 $pagination = ob_get_clean();
 $headers = array();
+$headerParams = $state['params'];
+// Native title links add sort state themselves; their cleanup truncates underscores.
+unset($headerParams['sortfield'], $headerParams['sortorder']);
 foreach (array('operation_date'=>'KreaBankDate','bank_account_ref'=>'KreaBankWorklistStatementAccount','description'=>'KreaBankReviewStatementLine','amount'=>'Amount','match'=>'KreaBankWorklistMatch','payment_account'=>'KreaBankWorklistPaymentAccount','status'=>'Status') as $field=>$label) {
-	ob_start(); print_liste_field_titre($langs->trans($label),$_SERVER['PHP_SELF'],$field,'','&' . http_build_query($state['params'],'','&',PHP_QUERY_RFC3986),$field === 'amount' ? 'class="right"' : '',$state['sort']['field'],$state['sort']['order']); $headers[$field] = ob_get_clean();
+	ob_start(); print_liste_field_titre($langs->trans($label),$_SERVER['PHP_SELF'],$field,'','&' . http_build_query($headerParams,'','&',PHP_QUERY_RFC3986),'',$state['sort']['field'],$state['sort']['order'],$field === 'amount' ? 'right ' : ''); $headers[$field] = ob_get_clean();
 }
 $scan = null;
 if (!$scanDone) {

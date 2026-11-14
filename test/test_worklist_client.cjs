@@ -188,6 +188,46 @@ async function browserChecks(directory) {
         assert.equal(await page.getByRole('button',{name:'Guardar',exact:true}).count(),1); browserCount++;
         await page.screenshot({path:path.join(directory,'worklist-account-dialog-pt_PT.png'),fullPage:true});
 
+        // Reproduce the installed native table-cell shell and its button selector specificity.
+        await open('batch-pt_PT');
+        await page.evaluate(() => {
+            const shell = document.querySelector('.fixture-shell');
+            shell.className = 'native-shell'; shell.id = 'id-container';
+            document.querySelector('aside').id = 'id-left';
+            document.querySelector('main').id = 'id-right';
+            document.querySelector('.kb-wl-table').style.minWidth = '1403px';
+            const native = document.createElement('style');
+            native.textContent = '#id-container{display:table;width:100%}#id-right,#id-left{display:table-cell;float:none;vertical-align:top}#id-left{width:210px;min-width:210px;box-sizing:border-box}#id-right{width:100%;padding:20px 28px}.button:not(.bordertransp):not(.buttonpayment){display:inline-block;min-width:90px;padding:8px 15px}@media(max-width:700px){#id-container{table-layout:fixed}#id-left{display:none}#id-right{padding:16px 12px}}';
+            document.head.prepend(native);
+        });
+        const baseline = await page.addStyleTag({content:'.kb-worklist .div-table-responsive{width:auto;min-width:0}'});
+        const before = await page.evaluate(() => ({viewport:innerWidth,document:document.documentElement.scrollWidth}));
+        assert.ok(before.document > before.viewport, 'Native automatic table layout must reproduce the original overflow'); browserCount++;
+        await baseline.evaluate(style => style.remove());
+        const native = await page.evaluate(() => {
+            const wrapper = document.querySelector('.kb-worklist .div-table-responsive');
+            const main = document.querySelector('#id-right').getBoundingClientRect();
+            const left = document.querySelector('#id-left').getBoundingClientRect();
+            const icon = getComputedStyle(document.querySelector('.kb-wl-actions .kb-wl-icon'));
+            return {viewport:innerWidth,document:document.documentElement.scrollWidth,main:main.width,left:left.width,scroll:wrapper.scrollWidth,width:wrapper.clientWidth,iconWidth:icon.width,iconMin:icon.minWidth,iconDisplay:icon.display};
+        });
+        assert.ok(native.document <= native.viewport, JSON.stringify(native)); browserCount++;
+        assert.ok(native.left >= 210 && native.main <= native.viewport-native.left+1, 'Native left menu retains its column'); browserCount++;
+        assert.ok(native.scroll > native.width, 'The list scrolls inside its own constrained wrapper'); browserCount++;
+        assert.deepEqual([native.iconWidth,native.iconMin,native.iconDisplay],['30px','30px','inline-flex']); browserCount++;
+        await page.locator('.kb-worklist .div-table-responsive').evaluate(wrapper => { wrapper.scrollLeft = wrapper.scrollWidth; });
+        assert.ok(await page.locator('.kb-wl-actions').evaluate(cell => { const row=cell.getBoundingClientRect(),wrapper=cell.closest('.div-table-responsive').getBoundingClientRect();return row.left>=wrapper.left-1 && row.right<=wrapper.right+1; }), 'End-of-row actions remain reachable by table scrolling'); browserCount++;
+        assert.ok(await page.locator('.fixture-pager').evaluate(pager => pager.getBoundingClientRect().right<=innerWidth+1), 'Pagination remains in the available content width'); browserCount++;
+        await page.screenshot({path:path.join(directory,'worklist-native-shell-desktop.png'),fullPage:true});
+        await page.setViewportSize({width:390,height:844});
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth<=innerWidth), 'Native responsive shell stays within the mobile viewport'); browserCount++;
+        assert.equal(await page.locator('#id-left').isVisible(),false); browserCount++;
+        await page.locator('.kb-worklist .div-table-responsive').evaluate(wrapper => { wrapper.scrollLeft = wrapper.scrollWidth; });
+        assert.ok(await page.locator('.kb-wl-actions').evaluate(cell => { const row=cell.getBoundingClientRect(),wrapper=cell.closest('.div-table-responsive').getBoundingClientRect();return row.left>=wrapper.left-1 && row.right<=wrapper.right+1; }), 'Mobile end-of-row actions remain reachable'); browserCount++;
+        await page.locator('.kb-worklist .div-table-responsive').evaluate(wrapper => { wrapper.scrollLeft = 0; });
+        await page.screenshot({path:path.join(directory,'worklist-native-shell-mobile.png'),fullPage:true});
+        console.log(`Native shell overflow: ${before.document}px -> ${native.document}px at ${native.viewport}px; table ${native.scroll}px in ${native.width}px; icons ${native.iconWidth}`);
+
         assert.deepEqual(errors, []); browserCount++;
         console.log(`OK: ${browserCount} Chromium worklist interactions; screenshots saved in ${directory}`);
     } finally { await browser.close(); }

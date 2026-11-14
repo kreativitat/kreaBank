@@ -1,8 +1,9 @@
 /* Copyright (C) 2026 Kreativität Works <mail@kreativitat.com>
  * SPDX-License-Identifier: GPL-3.0-or-later */
-.kb-worklist { --kb-wl-border:var(--colortextlink,#6a7b8d); --kb-wl-focus:#2672b8; }
+.kb-worklist { --kb-wl-border:var(--colortextlink,#6a7b8d); --kb-wl-focus:#2672b8; min-width:0; max-width:100%; }
 .kb-worklist .kb-wl-table { width:100%; }
-.kb-worklist .div-table-responsive { position:relative; max-width:100%; }
+/* Keep table intrinsic width out of Dolibarr's automatic table-cell page layout. */
+.kb-worklist .div-table-responsive { position:relative; width:0; min-width:100%; max-width:100%; overflow-x:auto; }
 .kb-worklist .kb-wl-table th { vertical-align:bottom; }
 .kb-worklist .kb-wl-table td { vertical-align:middle; }
 .kb-worklist .kb-wl-date { display:block; max-width:135px; box-sizing:border-box; }
@@ -12,7 +13,7 @@
 .kb-worklist .kb-wl-statement { min-width:150px; max-width:330px; overflow-wrap:anywhere; }
 .kb-worklist .kb-wl-match { min-width:170px; max-width:320px; overflow-wrap:anywhere; }
 .kb-worklist .kb-wl-caption { display:block; font-size:.88em; line-height:1.5; opacity:.8; }
-.kb-worklist .kb-wl-icon { display:inline-flex; align-items:center; justify-content:center; min-width:30px; min-height:30px; width:30px; height:30px; box-sizing:border-box; padding:5px; margin:2px; vertical-align:middle; font-size:13px; text-decoration:none; }
+.kb-worklist .button.kb-wl-icon { display:inline-flex; align-items:center; justify-content:center; min-width:30px; min-height:30px; width:30px; height:30px; box-sizing:border-box; padding:5px; margin:2px; vertical-align:middle; font-size:13px; text-decoration:none; }
 .kb-worklist .kb-wl-icon.kb-wl-primary { color:#fff; background:#2c6c4f; border-color:#2c6c4f; }
 .kb-worklist .kb-wl-icon.kb-wl-primary:disabled { opacity:.45; }
 .kb-worklist :is(button,a,input,select):focus-visible { outline:2px solid var(--kb-wl-focus); outline-offset:3px; }
