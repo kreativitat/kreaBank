@@ -133,3 +133,10 @@ divider and verifies that fiscal remains inside Banks/Cash while cheque deposits
 retain their own section. Deploy the descriptor, shared navigation libraries,
 hook/CSS and worklist controller together. The hook also hides an existing
 registered worklist link, so this update needs no menu refresh.
+
+The native **Reconcile** header action opens the separate reconciliation list
+from account and banking views. It retains an owned selected account using the
+list's `search_account` filter, or opens all accounts when unscoped. It adds no
+operational tab or sidebar item and does not reactivate the old reconciliation UI.
+Native bank and module read rights are both required; the list keeps its own
+column filters and omits the redundant self-action.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.7 — 2026-11-14
+
+- Restore visible access to the new reconciliation list through a compact header action, retaining the selected bank and four operational tabs.
+
 ## 1.20.6 — 2026-11-14
 
 - Use the bounded SimpleXML spreadsheet fallback when PHP disables XMLReader methods; retain all import resource limits.

@@ -94,6 +94,18 @@ $mysoc = (object) array('name' => 'Synthetic company');
 $html = kreabankBankingHeader('accounts');
 checkNavigation(strpos($html, '<nav ') === false && strpos($html, 'KreaBankLedgerExplanation') === false, 'Accounts are a standalone page without operational tabs');
 checkNavigation(strpos($html, '<form') === false, 'Account overview keeps list filters outside the banking navigation');
+checkNavigation(strpos($html, 'kb-reconcile-action') !== false && strpos($html, 'reconciliationlist.php?mainmenu=bank&amp;leftmenu=bank') !== false, 'Account overview visibly opens the new reconciliation list');
+checkNavigation(strpos(kreabankBankingUrl('worklist'), 'search_account=') === false, 'Combined reconciliation link omits an account filter');
+checkNavigation(strpos(kreabankBankingUrl('worklist', 45), 'search_account=45') !== false && strpos(kreabankBankingUrl('worklist', 45), 'account_context=') === false, 'New list links use its actual account-filter contract');
+$savedPermissions = $user->allowed;
+foreach (array(array('banque.lire'), array('kreabank.reconciliation.read'), array()) as $permissions) {
+	$user->allowed = $permissions;
+	checkNavigation(strpos(kreabankBankingHeader('accounts'), 'kb-reconcile-action') === false, 'Reconciliation entry requires both native and module read rights');
+}
+$user->allowed = $savedPermissions;
+$user->socid = 123;
+checkNavigation(strpos(kreabankBankingHeader('accounts'), 'kb-reconcile-action') === false, 'External users cannot see the reconciliation action');
+$user->socid = 0;
 $accountSelect = kreabankAccountFilterSelect();
 checkNavigation(strpos($accountSelect, 'name="account_context"') !== false && strpos(end($db->queries), 'WHERE entity=7 ') !== false, 'Shared account control lists only current-company accounts');
 $_SERVER['PHP_SELF'] = '/compta/bank/bankentries_list.php';
@@ -144,6 +156,16 @@ checkNavigation(strpos($html, 'treso.php') === false && strpos($html, 'releve.ph
 checkNavigation(kreabankBankingUrl('reports', 0) === kreabankWorkspaceUrl('accounts'), 'Clearing the account context returns account-specific pages to the overview');
 $html = kreabankBankingHeader('worklist', (object) array('id' => 45, 'ref' => 'Demo', 'label' => ''), false);
 checkNavigation(strpos($html, '>Demo</span>') !== false && strpos($html, 'kb-company') === false && strpos($html, '<form') === false, 'Selected worklist uses bank identity without an empty-label separator or duplicate account filter');
+checkNavigation(strpos($html, 'kb-reconcile-action') === false && kreabankBankingFilters('worklist') === '', 'The list keeps its own filters without a redundant self-action');
+foreach (array('movements','bankstatement','statement','history','card','documents','reports') as $entryPage) {
+	$html = kreabankBankingHeader($entryPage, (object) array('id'=>45,'ref'=>'Demo','label'=>'Synthetic account'));
+	$dom = new DOMDocument();
+	@$dom->loadHTML('<meta charset="utf-8">' . $html);
+	$xpath = new DOMXPath($dom);
+	$entries = $xpath->query('//a[contains(concat(" ", normalize-space(@class), " "), " kb-reconcile-action ")]');
+	checkNavigation($entries->length === 1 && strpos($entries->item(0)->getAttribute('href'), 'reconciliationlist.php') !== false && strpos($entries->item(0)->getAttribute('href'), 'search_account=45') !== false, 'Every banking header exposes the new tool with its owned account');
+	checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a')->length === ($entryPage === 'card' || $entryPage === 'documents' || $entryPage === 'reports' ? 0 : 4), 'The new entry adds no operational tab');
+}
 function complete_head_from_modules(...$arguments) {}
 checkNavigation(in_array('automation', array_column(kreabankAdminPrepareHead(), 2), true), 'Automatic reconciliation remains available in module configuration');
 $_SERVER['PHP_SELF'] = '/compta/bank/budget.php';

@@ -58,6 +58,11 @@ function kreabankNavigationHiddenFields($accountId)
 /** Resolve a page in the single banking workspace. */
 function kreabankBankingUrl($page, $accountId = 0)
 {
+	if ($page === 'worklist') {
+		return dol_buildpath('/custom/kreabank/reconciliationlist.php', 1)
+			. '?mainmenu=bank&leftmenu=bank'
+			. ((int) $accountId > 0 ? '&search_account=' . (int) $accountId : '');
+	}
 	if ($page === 'movements') {
 		return kreabankNativeEntriesUrl($accountId);
 	}
@@ -109,6 +114,8 @@ function kreabankNavigationKind($default = 'all')
 function kreabankBankingFilters($page, $accountId = 0, $kind = null)
 {
 	global $langs;
+	// The separate list owns its native column filters, including account scope.
+	if ($page === 'worklist') { return ''; }
 	$kind = $page === 'accounts' ? ($kind === null ? kreabankNavigationKind('bank') : $kind) : 'all';
 	if ($page === 'accounts') {
 		$html = '<div class="kb-view-switch kb-account-kinds" role="navigation" aria-label="' . dol_escape_htmltag($langs->trans('AccountType')) . '">';
@@ -171,7 +178,11 @@ function kreabankBankingHeader($page, $account = null, $showFilters = true)
 		$parts = array(trim((string) ($account->ref ?? '')), trim((string) ($account->label ?? '')));
 		$accountLabel = implode(' — ', array_filter($parts, static function ($value) { return $value !== ''; }));
 	}
-	$html .= '<span class="kb-account-context" title="' . dol_escape_htmltag($accountLabel) . '">' . dol_escape_htmltag($accountLabel) . '</span></div></div>';
+	$html .= '<span class="kb-account-context" title="' . dol_escape_htmltag($accountLabel) . '">' . dol_escape_htmltag($accountLabel) . '</span>';
+	if ($page !== 'worklist' && empty($user->socid) && $user->hasRight('banque', 'lire') && $user->hasRight('kreabank', 'reconciliation', 'read')) {
+		$html .= '<a class="butAction kb-reconcile-action" href="' . dol_escape_htmltag(kreabankBankingUrl('worklist', $accountId)) . '"><span class="fas fa-check-double" aria-hidden="true"></span>' . $langs->trans('KreaBankReconcile') . '</a>';
+	}
+	$html .= '</div></div>';
 	$accountTools = $accountId > 0 ? kreabankAccountToolEntries($accountId) : array();
 	$active = in_array($page, array('card', 'documents', 'reports', 'forecast', 'native_statements', 'numbering'), true) ? 'account' : (in_array($page, array('matched', 'bulkmatch', 'pending'), true) ? 'reconcile' : ($page === 'import' ? 'statement' : $page));
 	if ($page !== 'accounts' && $active !== 'account') {

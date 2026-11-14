@@ -9,6 +9,7 @@
   trait and normalized mappings. Preserve exact signed amounts, all components,
   atomic audit/undo, private drafts and claim guards. Never create a duplicate
   aggregate movement. Read projections/monthly reports must verify every member.
+- The compact **Reconcile** action in banking headers opens this list, using `search_account` for an owned selected bank. Keep four operational tabs and the removed sidebar shortcut hidden.
 - See [the reconciliation list](doc/RECONCILIATION_LIST.md) for migration,
   rollback and strictly disposable database checks. No GET-time batch DDL or jobs.
 
