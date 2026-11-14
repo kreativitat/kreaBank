@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.27 — 2026-11-14
+
+- Translate History document badges, native references, reconciliation methods, audit actions and score captions; search and sort by their displayed labels without rewriting audit evidence.
+- Add Record payment to eligible invoice proposals using the native payment dialog; refresh current evidence at the same row on close while unpaid reconciliation remains disabled.
+- Restore compact reconciliation status tabs, hide repeated bank columns in selected-bank reconciliation/statement lists, and enlarge the bank context heading.
+
 ## 1.20.26 — 2026-11-14
 
 - Disable reconciliation of unpaid invoice/tax proposals until a payment is recorded; reject old signed approvals in the separate list.

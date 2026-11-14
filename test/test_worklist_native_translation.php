@@ -22,6 +22,8 @@ $conf = (object) array('global' => (object) array(
 	'MAIN_MAX_DECIMALS_UNIT'=>'8', 'MAIN_MAX_DECIMALS_TOT'=>'8', 'MAIN_MAX_DECIMALS_SHOWN'=>'8...'
 ));
 $conf->currency = 'EUR';
+$conf->use_javascript_ajax = 1;
+$conf->file = (object) array('dol_document_root'=>array('main'=>DOL_DOCUMENT_ROOT));
 $checks = 0;
 function checkWorklistNativeTranslation($condition, $message)
 {
@@ -97,6 +99,26 @@ foreach (array('en_US'=>'Reconciliation list', 'pt_PT'=>'Lista de reconciliaçã
 	$disabled = $xpath->query('//td[contains(@class,"kb-wl-actions")]/button[@disabled and @type="button" and not(@form)]')->item(0);
 	checkWorklistNativeTranslation($disabled && $disabled->getAttribute('title') === $langs->transnoentities('KreaBankWorklistPaymentRequired') && strpos($disabled->getAttribute('class'),'kb-wl-primary') === false,
 		'Actual native labels explain the disabled unpaid proposal without a green submit action: ' . $locale);
+	$model['rows'][0]['line']['bank_account_id'] = 1;
+	$model['rows'][0]['review']['doc_id'] = 51;
+	$model['rows'][0]['review']['payment_url'] = '/fourn/facture/paiement.php?action=create&facid=51&accountid=1&year=2026&month=11&day=14&reyear=2026&remonth=11&reday=14&amount_51=1234.56789012';
+	$before = serialize($model);
+	$popup = kreabankWorklistTable($model, $langs);
+	$previous = libxml_use_internal_errors(true);
+	$dom->loadHTML('<?xml encoding="utf-8" ?>' . $popup);
+	libxml_clear_errors(); libxml_use_internal_errors($previous);
+	$xpath = new DOMXPath($dom);
+	$opener = $xpath->query('//div[@data-kb-payment-popup]/a[contains(@class,"kb-wl-record-payment")]')->item(0);
+	checkWorklistNativeTranslation($opener && trim($opener->textContent) === $langs->transnoentities('KreaBankWorklistRecordPayment') && $opener->getAttribute('href') === '#',
+		'The installed native popup renders the translated payment opener: ' . $locale);
+	$scripts = '';
+	foreach ($dom->getElementsByTagName('script') as $script) { $scripts .= $script->textContent; }
+	checkWorklistNativeTranslation(strpos($scripts, '/fourn/facture/paiement.php?action=create&facid=51&accountid=1&year=2026&month=11&day=14') !== false
+		&& strpos($scripts, 'dol_hide_topmenu=1&dol_hide_leftmenu=1&dol_openinpopup=kbwlpay') !== false
+		&& strpos($scripts, "new Event('kb-worklist-payment-close',{bubbles:true})") !== false,
+		'The actual Dolibarr helper owns the iframe and read-only close notification: ' . $locale);
+	checkWorklistNativeTranslation(serialize($model) === $before && $xpath->query('//td[contains(@class,"kb-wl-actions")]/button[@disabled]')->length === 1,
+		'The payment popup preserves evidence and leaves unpaid reconciliation disabled: ' . $locale);
 }
 // Render the actual controller's title block with installed native helpers. The
 // native sort cleanup regex does not consume underscores in existing sort keys.

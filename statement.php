@@ -78,11 +78,14 @@ if ($statement) {
 } else {
 	$source = '(' . $report->statementsSql($navigationAccountId) . ') h';
 	$columns = array('statement_ref' => 'Ref', 'bank_account_ref' => 'BankAccount', 'imported_at' => 'KreaBankWhen', 'imported_lines' => 'KreaBankImportedLines', 'native_lines' => 'KreaBankNativeMovements', 'reconciled_lines' => 'KreaBankReconciled');
+	if ($navigationAccount) { unset($columns['bank_account_ref']); }
 	$sort = kreabankListSort($columns, 'imported_at', 'DESC');
 	$tieOrder = ',h.bank_account_id,h.statement_ref';
 }
 $order = 'h.' . $sort['field'] . ' ' . $sort['order'] . $tieOrder;
 $list = kreabankImportListState(array_merge($_GET, $_POST), $conf->liste_limit, (bool) $statement);
+// The selected owned account replaces this column and its otherwise invisible filter.
+if ($navigationAccount && !$statement) { $list['filters']['bank_account_ref'] = ''; }
 $filters = $list['filters'];
 $where = kreabankImportListWhere($db, $filters, (bool) $statement, $reference, $statement ? $statement->source_type : '');
 $total = (int) $db->fetch_object($report->query('SELECT COUNT(*) nb FROM ' . $source . $where))->nb;
@@ -175,7 +178,10 @@ if ($statement) {
 		if ((int) $row->issue_lines > 0) {
 			print '<br><strong class="warning">' . $langs->trans('KreaBankLinkIssues', (int) $row->issue_lines) . '</strong>';
 		}
-		print '</td><td><a href="' . dol_escape_htmltag(kreabankStatementUrl($row->bank_account_id)) . '">' . dol_escape_htmltag($row->bank_account_ref) . '</a></td>';
+		print '</td>';
+		if (isset($columns['bank_account_ref'])) {
+			print '<td><a href="' . dol_escape_htmltag(kreabankStatementUrl($row->bank_account_id)) . '">' . dol_escape_htmltag($row->bank_account_ref) . '</a></td>';
+		}
 		print '<td>' . dol_print_date($db->jdate($row->imported_at), 'dayhour') . '</td><td class="right">' . (int) $row->imported_lines . '</td><td class="right">' . (int) $row->native_lines . '</td><td class="right">' . (int) $row->reconciled_lines . '</td><td></td></tr>';
 	}
 }

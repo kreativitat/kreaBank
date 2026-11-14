@@ -11,7 +11,7 @@ body.kreabank-banking.kb-native-movements #id-right > .fiche > form > .div-table
 .kb-brand { display:flex; flex-wrap:wrap; align-items:center; gap:10px; min-width:0; max-width:100%; }
 .kb-brand > strong { font-size:24px; letter-spacing:-.5px; }
 .kb-brand > .fas { color:#4b7561; font-size:23px; }
-.kb-account-context { font-size:12px; color:#576878; border-left:1px solid #d5dde4; padding-left:12px; margin-left:4px; min-width:0; max-width:100%; overflow-wrap:anywhere; }
+.kb-account-context { font-size:16px; color:#576878; border-left:1px solid #d5dde4; padding-left:12px; margin-left:4px; min-width:0; max-width:100%; overflow-wrap:anywhere; }
 .kb-primary { display:flex; gap:6px; border-bottom:1px solid #d9e1e8; padding-bottom:10px; overflow-x:auto; }
 .kb-primary a { color:#526477; border-radius:6px; padding:10px 17px; white-space:nowrap; text-decoration:none; font-weight:600; }
 .kb-primary a:hover { background:#f0f4f7; }

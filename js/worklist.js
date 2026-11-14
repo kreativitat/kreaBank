@@ -46,7 +46,23 @@
         const context = root.dataset.navigationContext;
         const page = Number(root.dataset.navigationPage);
         const reload = () => window.location.reload();
-        if (!scope || !context || !Number.isInteger(page) || page < 0) return {reload};
+        const samePage = value => {
+            try {
+                const url = new URL(value, window.location.href);
+                return !url.username && !url.password && url.origin === window.location.origin && url.pathname === window.location.pathname;
+            } catch (_) { return false; }
+        };
+        const navigate = (value, encoded = '') => {
+            if (!samePage(value)) return false;
+            if (encoded) {
+                const record = JSON.parse(encoded);
+                record.time = Date.now();
+                try { window.sessionStorage.setItem(storageKey, JSON.stringify(record)); } catch (_) {}
+            }
+            window.location.assign(new URL(value, window.location.href).href);
+            return true;
+        };
+        if (!scope || !context || !Number.isInteger(page) || page < 0) return {reload, capture:() => value => navigate(value)};
         const rows = () => [...root.querySelectorAll('.kb-wl-row[data-line-key]')];
         const clear = () => { try { window.sessionStorage.removeItem(storageKey); } catch (_) {} };
         const forgetCancelled = (event, encoded) => setTimeout(() => {
@@ -71,7 +87,7 @@
         let keyboard = false;
         document.addEventListener('keydown', () => { keyboard = true; }, true);
         document.addEventListener('pointerdown', () => { keyboard = false; }, true);
-        const save = (row, kind, focused, withFocus) => {
+        const save = (row, kind, focused, withFocus, persist = true) => {
             if (!row) return '';
             const wrapper = row.closest('.div-table-responsive');
             const record = {scope, context, page, row:row.dataset.lineKey, index:rows().indexOf(row),
@@ -79,12 +95,9 @@
                 left:wrapper ? wrapper.scrollLeft : 0, time:Date.now(), kind, keyboard:!!withFocus,
                 focusId:focused && owner(focused) === row ? focused.id.slice(0,160) : ''};
             const encoded = JSON.stringify(record);
+            if (!persist) return encoded;
             try { window.sessionStorage.setItem(storageKey, encoded); } catch (_) { return ''; }
             return encoded;
-        };
-        const samePage = value => {
-            try { const url = new URL(value, window.location.href); return url.origin === window.location.origin && url.pathname === window.location.pathname; }
-            catch (_) { return false; }
         };
         document.addEventListener('click', event => {
             const link = event.target.closest && event.target.closest('a[href]');
@@ -113,7 +126,7 @@
             && Number.isInteger(pending.page) && pending.page >= 0 && Number.isFinite(pending.offset) && Number.isFinite(pending.left) && pending.left >= 0) {
             const available = rows();
             const exact = available.find(row => row.dataset.lineKey === pending.row);
-            const relatedPage = pending.page === page || (exact && pending.kind !== 'refresh') || (page === 0 && pending.kind === 'submit' && !exact);
+            const relatedPage = pending.page === page || (exact && pending.kind !== 'refresh') || (page === 0 && ['submit','popup'].includes(pending.kind) && !exact);
             const row = relatedPage ? exact || available[Math.min(pending.index, available.length - 1)] : null;
             if (row) {
                 let cancelled = false;
@@ -127,7 +140,8 @@
                     const offset = Math.max(stickyTop(), Math.min(window.innerHeight - 48, pending.offset));
                     window.scrollTo(window.scrollX, Math.max(0, window.scrollY + row.getBoundingClientRect().top - offset));
                     if (pending.keyboard && !focused) {
-                        const previous = typeof pending.focusId === 'string' ? document.getElementById(pending.focusId) : null;
+                        let previous = typeof pending.focusId === 'string' ? document.getElementById(pending.focusId) : null;
+                        if (previous && previous.matches('[data-kb-payment-popup]')) previous = previous.querySelector('a.kb-wl-record-payment');
                         const target = previous && owner(previous) === row ? previous : row;
                         if (target === row) row.tabIndex = -1;
                         target.focus({preventScroll:true});
@@ -139,7 +153,11 @@
                 if (document.readyState !== 'complete') window.addEventListener('load', schedule, {once:true});
             }
         }
-        return {reload:() => {
+        return {capture:(element, focused, withFocus) => {
+            const target = focused && focused.id ? focused : element;
+            const encoded = save(owner(element), 'popup', target, withFocus, false);
+            return value => navigate(value, encoded);
+        }, reload:() => {
             const top = stickyTop();
             const visible = rows().filter(item => { const rect = item.getBoundingClientRect(); return rect.bottom > top && rect.top < window.innerHeight; });
             const row = visible.find(item => item.getBoundingClientRect().top >= top) || visible[0];
@@ -201,6 +219,51 @@
             });
         });
         const navigation = positionNavigation(root);
+        let paymentRefreshPending = false;
+        let pausePaymentAnalysis = () => {};
+        const paymentReturns = new WeakMap();
+        root.addEventListener('click', event => {
+            const opener = event.target.closest && event.target.closest('a.kb-wl-record-payment');
+            const popup = opener && opener.closest('[data-kb-payment-popup]');
+            if (!popup || !root.contains(popup) || !/^(staged|native):[1-9]\d*$/.test(popup.dataset.lineKey)) return;
+            // The native popup handler returns false, so observe before bubbling stops.
+            paymentReturns.set(popup, navigation.capture(popup, opener, true));
+            paymentRefreshPending = true;
+            pausePaymentAnalysis();
+        }, true);
+        root.addEventListener('kb-worklist-payment-close', event => {
+            const popup = event.target.closest && event.target.closest('[data-kb-payment-popup]');
+            const refresh = popup && paymentReturns.get(popup);
+            if (!refresh || !root.contains(popup)) return;
+            let url;
+            try { url = new URL(popup.dataset.kbPaymentRefresh, window.location.href); } catch (_) { return; }
+            if (url.origin !== window.location.origin || url.pathname !== window.location.pathname || url.username || url.password
+                || url.searchParams.get('refresh_payment') !== popup.dataset.lineKey || url.searchParams.has('action')) return;
+            paymentReturns.delete(popup);
+            pausePaymentAnalysis();
+            // Closing means re-read actual state; it never signals payment success.
+            refresh(url.href);
+        });
+        root.querySelectorAll('select[data-kb-account-filter]').forEach(select => select.addEventListener('change', () => {
+            const form = select.form;
+            if (select.disabled || !form || form.id !== 'searchFormList' || (form.getAttribute('method') || 'get').toLowerCase() !== 'get') return;
+            let url;
+            try { url = new URL(form.getAttribute('action') || window.location.href, window.location.href); } catch (_) { return; }
+            if (url.origin !== window.location.origin || url.pathname !== window.location.pathname || url.username || url.password) return;
+            const submitter = [...form.elements].find(control => ['button_search','button_search_x','button_search.x'].includes(control.name)
+                && ['submit','image'].includes(control.type) && !control.disabled);
+            if (submitter) {
+                if (typeof form.requestSubmit === 'function') form.requestSubmit(submitter);
+                else submitter.click();
+                return;
+            }
+            const marker = document.createElement('input');
+            marker.type = 'hidden'; marker.name = 'button_search'; marker.value = '1'; form.append(marker);
+            try {
+                if (typeof form.requestSubmit === 'function') form.requestSubmit();
+                else window.HTMLFormElement.prototype.submit.call(form);
+            } finally { marker.remove(); }
+        }));
         const scanForm = root.querySelector('form[data-kb-scan]');
         const scan = root.querySelector('.kb-wl-scan');
         if (scanForm && scan && scanForm.elements.action && scanForm.elements.action.value === 'advance_scan' && typeof fetch === 'function') {
@@ -209,7 +272,7 @@
             let running = false;
             let timer;
             let request;
-            const editing = () => paused || !!root.querySelector('.kb-wl-detail-row');
+            const editing = () => paused || paymentRefreshPending || !!root.querySelector('.kb-wl-detail-row');
             const message = text => { scan.querySelector('[data-kb-scan-message]').textContent = text; };
             const advance = async () => {
                 if (running || editing() || requests >= 30) return;
@@ -231,6 +294,7 @@
                     const progress = scan.querySelector('[data-kb-scan-progress]');
                     if (progress) { progress.max = Math.max(1, result.total); progress.value = result.processed; }
                     if (!response.ok) { message(scan.dataset.failed); return; }
+                    if (paymentRefreshPending) { message(scan.dataset.paused); return; }
                     if (result.page_ready === true && scan.dataset.pageReady !== '1') {
                         scan.dataset.pageReady = '1';
                         if (!editing()) navigation.reload();
@@ -248,11 +312,12 @@
                 } finally { running = false; }
             };
             const pause = () => { paused = true; clearTimeout(timer); message(scan.dataset.paused); };
+            pausePaymentAnalysis = pause;
             root.addEventListener('input', pause);
             root.addEventListener('change', pause);
             scanForm.addEventListener('submit', event => {
                 event.preventDefault();
-                if (root.querySelector('.kb-wl-detail-row')) { message(scan.dataset.paused); return; }
+                if (paymentRefreshPending || root.querySelector('.kb-wl-detail-row')) { message(scan.dataset.paused); return; }
                 paused = false;
                 requests = 0;
                 clearTimeout(timer);

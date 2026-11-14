@@ -48,7 +48,7 @@ require_once __DIR__ . '/lib/kreabank.lib.php';
 require_once __DIR__ . '/lib/kreabank_history.lib.php';
 require_once __DIR__ . '/class/KreaBankNativeBankAdapter.class.php';
 
-$langs->loadLangs(array('errors', 'kreabank@kreabank'));
+$langs->loadLangs(array('main','banks','bills','companies','salaries','compta','trips','donations','loan','errors','kreabank@kreabank'));
 
 if (!isModEnabled('kreabank')) {
 	accessforbidden();
@@ -249,6 +249,7 @@ foreach ($recent as $row) {
 
 	$rawLinks = $lineLinksCache[$row['line_source'] . ':' . $lineId] ?? array();
 	$strategy = (string) $row['strategy'];
+	$strategyLabel = kreabankHistoryCodeLabel($strategy, 'strategy', $langs);
 	$availableAuditTypes[$strategy] = true;
 	$preparedLinks = array();
 	$linkTypesForRow = array();
@@ -269,6 +270,8 @@ foreach ($recent as $row) {
 			'doc_type' => $docType,
 			'fk_doc' => $docId,
 			'doc_ref' => $docRef,
+			'doc_type_label' => kreabankHistoryCodeLabel($docType, 'document', $langs),
+			'doc_ref_label' => kreabankHistoryNativeLabel($docRef, $langs),
 			'doc_url' => $docUrl,
 		);
 	}
@@ -285,7 +288,8 @@ foreach ($recent as $row) {
 	if (!kreabankHistoryAmountMatches((string) $row['amount'], $historyAmount)) { continue; }
 	$amount = (float) (isset($row['amount']) ? $row['amount'] : 0.0);
 	$descriptionRaw = (string) (isset($row['description']) ? $row['description'] : '');
-	$normalizedDescription = kreabankNormalizeText($descriptionRaw);
+	$descriptionLabel = kreabankHistoryNativeLabel($descriptionRaw, $langs);
+	$normalizedDescription = kreabankNormalizeText($descriptionRaw . ' ' . $descriptionLabel);
 	if ($historyAuditType !== 'all' && $historyAuditType !== $strategy) { continue; }
 	if ($historyDirection === 'debit' && !($amount < -0.00001)) {
 		continue;
@@ -309,17 +313,23 @@ foreach ($recent as $row) {
 
 	$rowSearchParts = array(
 		$descriptionRaw,
+		$descriptionLabel,
+		$strategy,
+		$strategyLabel,
 		(string) $eventDateRaw,
 		(string) $amount,
 		kreabankPrice($amount),
 		(string) (isset($row['currency']) ? $row['currency'] : ''),
 		(string) (!empty($auditInfo['audit_type']) ? $auditInfo['audit_type'] : ''),
+		kreabankHistoryCodeLabel($auditInfo['audit_type'] ?? '', 'action', $langs),
 		(string) (!empty($auditInfo['login']) ? $auditInfo['login'] : ''),
 		(string) $lineId,
 	);
 	foreach ($preparedLinks as $preparedLink) {
 		$rowSearchParts[] = (string) $preparedLink['doc_type'];
 		$rowSearchParts[] = (string) $preparedLink['doc_ref'];
+		$rowSearchParts[] = (string) $preparedLink['doc_type_label'];
+		$rowSearchParts[] = (string) $preparedLink['doc_ref_label'];
 		$rowSearchParts[] = (string) $preparedLink['fk_doc'];
 		$rowSearchParts[] = (string) $preparedLink['doc_url'];
 	}
@@ -336,6 +346,8 @@ foreach ($recent as $row) {
 		'event_date' => $eventDateRaw,
 		'event_audit_type' => (string) (!empty($auditInfo['audit_type']) ? $auditInfo['audit_type'] : ''),
 		'event_login' => (string) (!empty($auditInfo['login']) ? $auditInfo['login'] : ''),
+		'strategy_label' => $strategyLabel,
+		'description_label' => $descriptionLabel,
 		'links' => $preparedLinks,
 	);
 
@@ -349,7 +361,9 @@ foreach ($recent as $row) {
 }
 
 $preparedRecentRows = kreabankListOrderRows($preparedRecentRows, $historySort, static function ($item, $field) {
-	if ($field === 'links') { return implode(' ', array_column($item['links'], 'doc_ref')); }
+	if ($field === 'links') { return implode(' ', array_map(static function ($link) { return $link['doc_type_label'] . ' ' . $link['doc_ref_label']; }, $item['links'])); }
+	if ($field === 'strategy') { return $item['strategy_label']; }
+	if ($field === 'description') { return $item['description_label']; }
 	if ($field === 'status') { return (int) ($item['row']['needs_review'] ?? 0); }
 	return $item[$field] ?? $item['row'][$field] ?? '';
 });
@@ -367,20 +381,13 @@ if ($limit > 0 && ($offset + $historyCurrentPageCount) < $historyTotalRecords) {
 }
 
 $availableLinkTypeOptions = array_keys($availableLinkTypes);
-sort($availableLinkTypeOptions);
 $availableAuditTypeOptions = array_keys($availableAuditTypes);
-sort($availableAuditTypeOptions);
-$auditTypeToLangKey = static function ($auditType) {
-	$auditType = trim((string) $auditType);
-	if ($auditType === '') {
-		return '';
-	}
-	$normalized = str_replace(array('-', '_'), ' ', strtolower($auditType));
-	$normalized = ucwords($normalized);
-	$normalized = str_replace(' ', '', $normalized);
-
-	return 'KreaBankAudit' . $normalized;
-};
+foreach (array('document'=>&$availableLinkTypeOptions,'strategy'=>&$availableAuditTypeOptions) as $kind=>&$options) {
+	usort($options, static function ($left, $right) use ($kind, $langs) {
+		return strnatcasecmp(kreabankHistoryCodeLabel($left,$kind,$langs),kreabankHistoryCodeLabel($right,$kind,$langs)) ?: strcmp($left,$right);
+	});
+}
+unset($options);
 
 $summarizeAuditPayload = static function ($audit) use ($langs) {
 	$payloadRaw = (string) (isset($audit['payload_json']) ? $audit['payload_json'] : '');
@@ -393,10 +400,10 @@ $summarizeAuditPayload = static function ($audit) use ($langs) {
 
 	$parts = array();
 	if (!empty($payload['strategy'])) {
-		$parts[] = $langs->trans('Type') . ': ' . (string) $payload['strategy'];
+		$parts[] = kreabankWorklistTranslate($langs,'Type') . ': ' . kreabankHistoryCodeLabel($payload['strategy'],'strategy',$langs);
 	}
 	if (isset($payload['confidence_score'])) {
-		$parts[] = 'Score: ' . ((int) $payload['confidence_score']);
+		$parts[] = kreabankWorklistTranslate($langs,'KreaBankHistoryScore') . ': ' . ((int) $payload['confidence_score']);
 	}
 	if (!empty($payload['links']) && is_array($payload['links'])) {
 		$linkCount = 0;
@@ -414,18 +421,18 @@ $summarizeAuditPayload = static function ($audit) use ($langs) {
 			}
 		}
 		if ($linkCount > 0) {
-			$parts[] = $langs->trans('KreaBankHistoryLinksCount', (string) $linkCount);
-			$parts[] = $langs->trans('KreaBankAllocate') . ': ' . kreabankPrice($allocated);
+			$parts[] = method_exists($langs,'transnoentities') ? $langs->transnoentities('KreaBankHistoryLinksCount',(string) $linkCount) : $langs->trans('KreaBankHistoryLinksCount',(string) $linkCount);
+			$parts[] = kreabankWorklistTranslate($langs,'KreaBankAllocate') . ': ' . kreabankPrice($allocated);
 		}
 		if (!empty($linkTypes)) {
-			$parts[] = implode(', ', array_keys($linkTypes));
+			$parts[] = implode(', ', array_map(static function ($type) use ($langs) { return kreabankHistoryCodeLabel($type,'document',$langs); },array_keys($linkTypes)));
 		}
 	}
 	if (!empty($payload['reason'])) {
-		$parts[] = $langs->trans('KreaBankReason') . ': ' . (string) $payload['reason'];
+		$parts[] = kreabankWorklistTranslate($langs,'KreaBankReason') . ': ' . (string) $payload['reason'];
 	}
 	if (!empty($payload['quick_entry_id'])) {
-		$parts[] = 'Quick entry #' . ((int) $payload['quick_entry_id']);
+		$parts[] = kreabankWorklistTranslate($langs,'KreaBankHistoryActionQuickEntry') . ' #' . ((int) $payload['quick_entry_id']);
 	}
 
 	$summary = !empty($parts) ? implode(' | ', $parts) : '-';
@@ -441,7 +448,8 @@ foreach ($auditRows as $auditRow) {
 	if ($auditType === 'trigger_event') {
 		continue;
 	}
-	if ($normalizedAuditActionSearch !== '' && strpos(kreabankNormalizeText($auditType . ' ' . $langs->trans($auditTypeToLangKey($auditType))), $normalizedAuditActionSearch) === false) {
+	$actionLabel = kreabankHistoryCodeLabel($auditType,'action',$langs);
+	if ($normalizedAuditActionSearch !== '' && strpos(kreabankNormalizeText($auditType . ' ' . $actionLabel), $normalizedAuditActionSearch) === false) {
 		continue;
 	}
 	$auditDateRaw = (string) (isset($auditRow['datec']) ? $auditRow['datec'] : '');
@@ -490,13 +498,14 @@ foreach ($auditRows as $auditRow) {
 
 	$summary = $summarizeAuditPayload($auditRow);
 	if ($normalizedAuditSummarySearch !== '') {
-		$auditSummarySearchBlob = kreabankNormalizeText((string) $summary['summary']);
+		$auditSummarySearchBlob = kreabankNormalizeText((string) $summary['summary'] . ' ' . (string) ($auditRow['payload_json'] ?? ''));
 		if (strpos($auditSummarySearchBlob, $normalizedAuditSummarySearch) === false) {
 			continue;
 		}
 	}
 	$auditSearchBlob = kreabankNormalizeText(
 		(string) (isset($auditRow['audit_type']) ? $auditRow['audit_type'] : '') . ' ' .
+			$actionLabel . ' ' .
 			(string) (isset($auditRow['login']) ? $auditRow['login'] : '') . ' ' .
 			(string) (isset($summary['summary']) ? $summary['summary'] : '') . ' ' .
 			(string) (isset($auditRow['fk_statement_line']) ? $auditRow['fk_statement_line'] : 0) . ' ' .
@@ -509,9 +518,11 @@ foreach ($auditRows as $auditRow) {
 	$preparedAuditRows[] = array(
 		'audit' => $auditRow,
 		'summary' => $summary,
+		'action_label' => $actionLabel,
 	);
 }
 $preparedAuditRows = kreabankListOrderRows($preparedAuditRows, $auditSort, static function ($item, $field) {
+	if ($field === 'audit_type') { return $item['action_label']; }
 	return $field === 'summary' ? $item['summary']['summary'] : ($item['audit'][$field] ?? '');
 });
 $auditTotalRecords = count($preparedAuditRows);
@@ -712,7 +723,7 @@ print '<td class="liste_titre">';
 print '<select name="hist_link_type" class="flat" form="kreaHistoryFilterForm">';
 print '<option value="all"' . ($historyLinkType === 'all' ? ' selected' : '') . '>' . $langs->trans('KreaBankLinkTypeAll') . '</option>';
 foreach ($availableLinkTypeOptions as $linkTypeOption) {
-	$linkTypeLabel = str_replace('_', ' ', (string) $linkTypeOption);
+	$linkTypeLabel = kreabankHistoryCodeLabel($linkTypeOption,'document',$langs);
 	print '<option value="' . dol_escape_htmltag((string) $linkTypeOption) . '"' . ($historyLinkType === $linkTypeOption ? ' selected' : '') . '>' . dol_escape_htmltag($linkTypeLabel) . '</option>';
 }
 print '</select>';
@@ -721,11 +732,7 @@ print '<td class="liste_titre">';
 print '<select name="hist_audit_type" class="flat" form="kreaHistoryFilterForm">';
 print '<option value="all"' . ($historyAuditType === 'all' ? ' selected' : '') . '>' . $langs->trans('KreaBankDirectionAll') . '</option>';
 foreach ($availableAuditTypeOptions as $auditTypeOption) {
-	$auditTypeLangKey = $auditTypeToLangKey($auditTypeOption);
-	$auditTypeLabel = ($auditTypeLangKey !== '' ? $langs->trans($auditTypeLangKey) : '');
-	if ($auditTypeLabel === '' || $auditTypeLabel === $auditTypeLangKey) {
-		$auditTypeLabel = (string) $auditTypeOption;
-	}
+	$auditTypeLabel = kreabankHistoryCodeLabel($auditTypeOption,'strategy',$langs);
 	print '<option value="' . dol_escape_htmltag((string) $auditTypeOption) . '"' . ($historyAuditType === $auditTypeOption ? ' selected' : '') . '>' . dol_escape_htmltag((string) $auditTypeLabel) . '</option>';
 }
 print '</select>';
@@ -744,18 +751,15 @@ foreach ($historyColumns as $field => $label) {
 print '<th scope="col" class="center">' . $langs->trans('Action') . '</th>';
 print '</tr>';
 
-	$renderLinkedDocument = static function ($link) {
+	$renderLinkedDocument = static function ($link) use ($langs) {
 		if (!is_array($link)) {
 			return '';
 		}
 		$linkType = trim((string) (isset($link['doc_type']) ? $link['doc_type'] : ''));
-		$linkTypeLabel = ($linkType !== '' ? str_replace('_', ' ', $linkType) : 'doc');
+		$linkTypeLabel = $link['doc_type_label'] ?? ($linkType !== '' ? kreabankHistoryCodeLabel($linkType,'document',$langs) : kreabankWorklistTranslate($langs,'KreaBankHistoryDocument'));
 		$linkRef = trim((string) (isset($link['doc_ref']) ? $link['doc_ref'] : ''));
 		$linkDocId = (int) (isset($link['fk_doc']) ? $link['fk_doc'] : 0);
-		if ($linkRef !== '' && in_array(strtolower($linkRef), array('(paiement)', '(payment)', '(variouspayment)', '(various_payment)', '(various payment)'), true)) {
-			$linkRef = '';
-		}
-		$linkText = ($linkRef !== '' ? $linkRef : ('#' . $linkDocId));
+		$linkText = $linkRef !== '' ? ($link['doc_ref_label'] ?? kreabankHistoryNativeLabel($linkRef,$langs)) : ('#' . $linkDocId);
 		$linkDocUrl = trim((string) (isset($link['doc_url']) ? $link['doc_url'] : ''));
 		$out = '<div>';
 		$out .= '<span class="krea-history-link">' . dol_escape_htmltag($linkTypeLabel) . '</span>';
@@ -781,7 +785,7 @@ if ($historyTotalRecords === 0) {
 		$eventTs = (int) $preparedRow['event_ts'];
 		$eventLabel = ($eventTs > 0 ? dol_print_date($eventTs, 'dayhour') : dol_escape_htmltag((string) $preparedRow['event_date']));
 
-		$description = trim((string) (isset($row['description']) ? $row['description'] : ''));
+		$description = trim($preparedRow['description_label']);
 		$amount = (float) (isset($preparedRow['amount']) ? $preparedRow['amount'] : 0.0);
 		$currency = (string) (isset($row['currency']) ? $row['currency'] : 'EUR');
 		$links = is_array($preparedRow['links']) ? $preparedRow['links'] : array();
@@ -883,9 +887,9 @@ if ($historyTotalRecords === 0) {
 		print '</td>';
 
 		print '<td>';
-		print '<span class="badge badge-status4">' . dol_escape_htmltag($strategy) . '</span>';
+		print '<span class="badge badge-status4">' . dol_escape_htmltag($preparedRow['strategy_label']) . '</span>';
 		if ($confidence > 0) {
-			print '<br><span class="krea-history-sub">Score ' . $confidence . '</span>';
+			print '<br><span class="krea-history-sub">' . dol_escape_htmltag(kreabankWorklistTranslate($langs,'KreaBankHistoryScore')) . ' ' . $confidence . '</span>';
 		}
 		print '</td>';
 
@@ -901,7 +905,7 @@ if ($historyTotalRecords === 0) {
 		if ($nativeLineUrl !== '') {
 			print '<a class="button smallpaddingimp krea-history-action-btn" href="' . $nativeLineUrl . '" target="_blank" rel="noopener">' . $nativeEntryLabel . '</a>';
 		} elseif (!empty($row['group_id'])) {
-			print '<a class="button smallpaddingimp krea-history-action-btn" href="' . dol_buildpath('/custom/kreabank/reconciliationlist.php?search_account=' . $row['bank_account_id'] . '&search_status=all&expand=staged:' . $lineId, 1) . '">' . $langs->trans('Review') . '</a>';
+			print '<a class="button smallpaddingimp krea-history-action-btn" href="' . dol_buildpath('/custom/kreabank/reconciliationlist.php?search_account=' . $row['bank_account_id'] . '&search_status=all&expand=staged:' . $lineId, 1) . '">' . dol_escape_htmltag(kreabankWorklistTranslate($langs,'KreaBankHistoryReview')) . '</a>';
 		} else {
 			print '<a class="button smallpaddingimp krea-history-action-btn" href="' . $lineUrl . '" target="_blank" rel="noopener">' . $langs->trans('KreaBankReconcile') . '</a>';
 		}
@@ -1005,11 +1009,7 @@ if ($auditTotalRecords === 0) {
 		$audit = $preparedAuditRow['audit'];
 		$summary = $preparedAuditRow['summary'];
 		$statementLineId = (int) (isset($audit['fk_statement_line']) ? $audit['fk_statement_line'] : 0);
-		$actionKey = $auditTypeToLangKey((string) (isset($audit['audit_type']) ? $audit['audit_type'] : ''));
-		$actionLabel = ($actionKey !== '' ? $langs->trans($actionKey) : '');
-		if ($actionLabel === '' || $actionLabel === $actionKey) {
-			$actionLabel = (string) (isset($audit['audit_type']) ? $audit['audit_type'] : '');
-		}
+		$actionLabel = $preparedAuditRow['action_label'];
 		$auditDateRaw = (string) (isset($audit['datec']) ? $audit['datec'] : '');
 		$auditDateTs = ($auditDateRaw !== '' ? strtotime($auditDateRaw) : false);
 		$auditDateLabel = ($auditDateTs !== false && $auditDateTs > 0) ? dol_print_date($auditDateTs, 'dayhour') : '<span class="opacitymedium">-</span>';

@@ -18,12 +18,51 @@ function kreabankWorklistPaymentAccount($pair)
 		'ref'=>(string) ($planned ? ($pair['line']['bank_account_ref'] ?? '') : ($suggestion['bank_account_ref'] ?? '')), 'planned'=>$planned);
 }
 
+/** Open an existing native invoice-payment form; this helper never records or reconciles. */
+function kreabankWorklistPaymentUrl($pair, $permissions, $companyCurrency)
+{
+	$s = $pair['suggestion'] ?? array(); $line = $pair['line'] ?? array();
+	$type = $s['doc_type'] ?? '';
+	$paths = array('customer_invoice'=>'/compta/paiement.php','supplier_invoice'=>'/fourn/facture/paiement.php');
+	if (!isset($paths[$type]) || empty($permissions[$type]) || empty($line['fk_statement']) || empty($line['account_open'])
+		|| (int) ($line['status'] ?? -1) !== 0 || !empty($line['native_bank_line_id']) || !empty($line['needs_review'])
+		|| $companyCurrency === '' || ($line['currency'] ?? '') !== $companyCurrency
+		|| (int) ($s['doc_id'] ?? 0) <= 0 || (int) ($line['bank_account_id'] ?? 0) <= 0) { return ''; }
+	foreach (array($s['doc_id'],$line['bank_account_id'],$line['fk_statement']) as $id) {
+		if (!is_scalar($id) || !preg_match('/^[1-9][0-9]{0,9}$/D',(string) $id)) { return ''; }
+	}
+	$day = substr((string) ($line['operation_date'] ?? ''),0,10);
+	if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/D',$day,$date) || !checkdate((int) $date[2],(int) $date[3],(int) $date[1])) { return ''; }
+	try {
+		if (kreabankWorklistCompareDecimal($line['allocated_amount'] ?? '0','0') !== 0
+			|| kreabankWorklistCompareDecimal($line['amount_decimal'] ?? $line['amount'] ?? '0','0') !== ($type === 'customer_invoice' ? 1 : -1)) { return ''; }
+		$source = ltrim((string) ($line['amount_decimal'] ?? $line['amount']),'+-');
+		$open = ltrim((string) ($s['amount_open'] ?? ''),'+-');
+		if (kreabankWorklistCompareDecimal($open,'0') <= 0) { return ''; }
+		$amount = kreabankWorklistCompareDecimal($source,$open) <= 0 ? $source : $open;
+	} catch (InvalidArgumentException $e) { return ''; }
+	return $paths[$type] . '?' . http_build_query(array('action'=>'create','facid'=>(int) $s['doc_id'],'accountid'=>(int) $line['bank_account_id'],
+		'year'=>(int) $date[1],'month'=>(int) $date[2],'day'=>(int) $date[3],
+		'reyear'=>(int) $date[1],'remonth'=>(int) $date[2],'reday'=>(int) $date[3], 'amount_' . (int) $s['doc_id']=>$amount),'','&',PHP_QUERY_RFC3986);
+}
+
+/** Discard advisory state after closing the native form, regardless of whether it saved. */
+function kreabankWorklistRefreshPayment(&$session, $key)
+{
+	foreach ((array) ($session['kreabank_worklist_reviews'] ?? array()) as $nonce=>$review) {
+		if (($review['payload']['key'] ?? '') === $key) { unset($session['kreabank_worklist_reviews'][$nonce]); }
+	}
+	unset($session['kreabank_worklist_scan'],$session['kreabank_worklist_batch_review'][$key]);
+}
+
 /** Request state for the separate list. Financial actions never enter read URLs. */
 function kreabankWorklistState($request, $defaultLimit = 25)
 {
 	$columns = array('operation_date','bank_account_ref','description','amount','match','payment_account','status');
 	$clear = false;
 	foreach (array('button_removefilter','button_removefilter_x','button_removefilter.x') as $button) { if (isset($request[$button])) { $clear = true; } }
+	$status = is_scalar($request['search_status'] ?? '') ? (string) ($request['search_status'] ?? '') : '';
+	$status = in_array($status,array('pending','draft','reconciled','review','all'),true) ? $status : 'pending';
 	$filters = array();
 	foreach (array('date_from','date_to','account','description','amount','match','payment_account','status') as $name) {
 		$value = $clear ? '' : ($request['search_' . $name] ?? '');
@@ -45,7 +84,7 @@ function kreabankWorklistState($request, $defaultLimit = 25)
 		$filters['payment_account'] = ctype_digit($filters['payment_account']) ? (string) max(0, (int) $filters['payment_account']) : '';
 		if ($filters['payment_account'] === '0') { $filters['payment_account'] = ''; }
 	}
-	$filters['status'] = in_array($filters['status'], array('pending','draft','reconciled','review','all'), true) ? $filters['status'] : 'pending';
+	$filters['status'] = $clear ? $status : (in_array($filters['status'], array('pending','draft','reconciled','review','all'), true) ? $filters['status'] : 'pending');
 	if ($filters['amount'] !== '' && !preg_match('/^(?:>=|<=|<>|>|<|=)?\s*[+-]?\d+(?:[.,]\d{1,8})?$/D', $filters['amount'])) {
 		throw new InvalidArgumentException('KreaBankWorklistInvalidFilter');
 	}
@@ -64,7 +103,7 @@ function kreabankWorklistState($request, $defaultLimit = 25)
 			if ($clear || !$jump) { $page = 0; }
 			if (strpos($button, 'removefilter') !== false) {
 				$filters = array_fill_keys(array_keys($filters), '');
-				$filters['status'] = 'pending';
+				$filters['status'] = $status;
 			}
 		}
 	}

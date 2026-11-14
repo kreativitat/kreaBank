@@ -272,17 +272,19 @@ async function navigationBrowserChecks() {
     page.setDefaultTimeout(5000);
     const errors = [];
     const posts = [];
+    const paymentRefreshes = [];
     const removed = new Set();
     let draft = '';
     let analysed = false;
     let scanRequests = 0;
+    let scanDelay = 300;
     let count = 0;
     page.on('pageerror', error => errors.push(error.message));
     const escape = value => String(value).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const render = url => {
         const input = url.searchParams;
-        const number = input.has('button_search') ? 0 : Math.max(0, Number(input.get('pageplusone') || 1) - 1 || Number(input.get('page') || 0));
-        const state = new URLSearchParams({page:String(number),company:input.get('company') || 'one',sortorder:input.get('sortorder') || 'DESC',limit:input.get('limit') || '24',search_description:input.get('search_description') || ''});
+        const number = ['button_search','button_search_x','button_search.x'].some(name=>input.has(name)) ? 0 : Math.max(0, Number(input.get('pageplusone') || 1) - 1 || Number(input.get('page') || 0));
+        const state = new URLSearchParams({page:String(number),company:input.get('company') || 'one',sortorder:input.get('sortorder') || 'DESC',limit:input.get('limit') || '24',search_description:input.get('search_description') || '',search_account:input.get('search_account') || '',search_status:input.get('search_status') || 'pending'});
         const href = changes => {
             const target = new URLSearchParams(state);
             for (const [key,value] of Object.entries(changes)) if (value !== null) target.set(key,value);
@@ -291,16 +293,18 @@ async function navigationBrowserChecks() {
         const hidden = extra => [...state,...Object.entries(extra)].map(([name,value]) => '<input type="hidden" name="' + escape(name) + '" value="' + escape(value) + '">').join('');
         const expanded = input.get('expand');
         const mode = input.get('mode') || 'search';
-        const context = JSON.stringify([state.get('sortorder'),state.get('limit'),state.get('search_description')]);
+        const context = JSON.stringify([state.get('sortorder'),state.get('limit'),state.get('search_description'),state.get('search_account'),state.get('search_status')]);
         let forms = '';
         let html = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding-top:80px;font:16px Arial}#id-top{position:fixed;inset:0 0 auto;height:60px;background:#ddd;z-index:5}.kb-worklist{margin:16px}.spacer{height:260px}.bottom{height:1000px}.div-table-responsive{overflow:auto}table{border-collapse:collapse;min-width:1000px;width:100%}.kb-wl-row{height:90px}td{border-bottom:1px solid #ddd;padding:10px}a,button{display:inline-block;margin:4px;padding:8px}dialog{max-width:400px}.kb-wl-detail{padding:16px}.kb-wl-dialog:not([open]){display:none}</style><div id="id-top">Native fixed header</div><div class="kb-worklist" data-navigation-scope="fixture-' + escape(state.get('company')) + '" data-navigation-context="' + escape(context) + '" data-navigation-page="' + number + '">';
-        html += '<form id="searchFormList" method="get" action="' + app + '"><input name="company" type="hidden" value="' + escape(state.get('company')) + '"><input name="page" type="hidden" value="' + number + '"><input name="sortorder" type="hidden" value="' + escape(state.get('sortorder')) + '"><input name="search_description" aria-label="Filter" value="' + escape(state.get('search_description')) + '"><input name="pageplusone" aria-label="Page" value="' + (number+1) + '"><select name="limit" aria-label="Page size"><option>24</option><option>12</option></select><button name="button_search" value="1">Filter</button><a id="sort" href="' + href({sortorder:'ASC'}) + '">Sort</a><a id="next" href="' + href({page:String(number+1)}) + '">Next page</a><div class="spacer"></div><div class="div-table-responsive"><table class="kb-wl-table"><tbody>';
+        html += '<select id="account-filter" aria-label="Account" name="search_account" form="searchFormList"' + (state.get('search_account') ? ' data-kb-account-filter' : '') + '>';
+        for (const [value,label] of [['','All'],['101','Bank A'],['102','Bank B']]) html += '<option value="' + value + '"' + (state.get('search_account')===value ? ' selected' : '') + '>' + label + '</option>';
+        html += '</select><form id="searchFormList" method="get" action="' + app + '"><input name="company" type="hidden" value="' + escape(state.get('company')) + '"><input name="page" type="hidden" value="' + number + '"><input name="sortorder" type="hidden" value="' + escape(state.get('sortorder')) + '"><input name="search_status" type="hidden" value="' + escape(state.get('search_status')) + '"><input name="search_description" aria-label="Filter" value="' + escape(state.get('search_description')) + '"><input name="pageplusone" aria-label="Page" value="' + (number+1) + '"><select name="limit" aria-label="Page size"><option>24</option><option>12</option></select><button name="button_search" value="1">Filter</button><a id="sort" href="' + href({sortorder:'ASC'}) + '">Sort</a><a id="next" href="' + href({page:String(number+1)}) + '">Next page</a><div class="spacer"></div><div class="div-table-responsive"><table class="kb-wl-table"><tbody>';
         const ids = Array.from({length:60},(_,index)=>index+1).filter(id=>!removed.has(id)).slice(number*24,number*24+24);
         for (const id of ids) {
             const key = 'staged:' + id;
             const marker = ' data-kb-row-navigation="' + key + '"';
             const base = {expand:key,mode};
-            html += '<tr class="kb-wl-row" data-line-key="' + key + '" id="row-' + id + '"><td>' + key + '</td><td>125.12345678 EUR</td><td class="kb-wl-actions"><a aria-label="Search ' + id + '"' + marker + ' href="' + href({expand:key,mode:'search'}) + '">Search</a><a aria-label="Batch ' + id + '"' + marker + ' href="' + href({expand:key,mode:'batch'}) + '">Batch</a><button type="submit" aria-label="Approve ' + id + '" form="approve-' + id + '">Approve</button><button type="button" aria-label="Correct ' + id + '" data-kb-dialog="dialog-' + id + '">Bank</button></td></tr>';
+            html += '<tr class="kb-wl-row" data-line-key="' + key + '" id="row-' + id + '"><td>' + key + '</td><td>125.12345678 EUR</td><td class="kb-wl-actions"><a aria-label="Search ' + id + '"' + marker + ' href="' + href({expand:key,mode:'search'}) + '">Search</a><a aria-label="Batch ' + id + '"' + marker + ' href="' + href({expand:key,mode:'batch'}) + '">Batch</a><button type="submit" aria-label="Approve ' + id + '" form="approve-' + id + '">Approve</button><button type="button" aria-label="Correct ' + id + '" data-kb-dialog="dialog-' + id + '">Bank</button><div style="display:inline-block" id="payment-popup-' + id + '" data-kb-payment-popup data-line-key="' + key + '" data-kb-payment-refresh="' + href({refresh_payment:key,scan:input.has('scan') ? '1' : null}) + '"><a class="kb-wl-record-payment" aria-label="Record payment ' + id + '" href="#">Payment</a></div></td></tr>';
             forms += '<form method="post" action="' + app + '" id="approve-' + id + '">' + hidden({action:'confirm_pair',row:key,token:'fixture-token',review:'fixture-review'}) + '</form>';
             forms += '<form method="post" action="' + app + '" id="correct-' + id + '">' + hidden({action:'correct_account',row:key,token:'fixture-token',review:'fixture-correction'}) + '</form><dialog class="kb-wl-dialog" id="dialog-' + id + '"><button type="button" data-kb-dialog-close autofocus>Cancel dialog</button><button type="submit" form="correct-' + id + '">Save correction</button></dialog>';
             if (expanded !== key) continue;
@@ -310,11 +314,29 @@ async function navigationBrowserChecks() {
             forms += '<form method="get" action="' + app + '" id="search-' + id + '">' + hidden(base) + '</form><form method="post" action="' + app + '" id="batch-' + id + '">' + hidden({action:'save_draft',row:key,expand:key,mode:'batch',token:'fixture-token'}) + '</form>';
         }
         html += '</tbody></table></div></form>' + forms;
-        if (input.has('scan') && !analysed) html += '<div class="kb-wl-scan" data-page-ready="0" data-ready="Ready" data-failed="Failed" data-changed="Changed" data-paused="Paused"><span data-kb-scan-message>Analysing</span><span data-kb-scan-count>0 / 24</span></div><form data-kb-scan method="post" action="' + app + '?scan=1"><input name="action" value="advance_scan"><input name="scan_generation" value="fixture-generation"><input name="scan_cursor" value="0"></form>';
-        return html + '</div><div class="bottom"></div><script>' + script + '</script>';
+        if (input.has('scan') && !analysed) html += '<div class="kb-wl-scan" data-page-ready="0" data-ready="Ready" data-failed="Failed" data-changed="Changed" data-paused="Paused"><span data-kb-scan-message>Analysing</span><span data-kb-scan-count>0 / 24</span></div><form data-kb-scan method="post" action="' + app + '?scan=1"><input name="action" value="advance_scan"><input name="scan_generation" value="fixture-generation"><input name="scan_cursor" value="0"><button type="submit">Continue analysis</button></form>';
+        const nativePopup = () => document.querySelectorAll('a.kb-wl-record-payment').forEach(opener=>opener.addEventListener('click',event=>{
+            event.preventDefault(); event.stopPropagation();
+            const wrapper=opener.closest('[data-kb-payment-popup]');
+            const dialog=document.createElement('dialog');
+            dialog.className='fixture-native-payment';
+            dialog.innerHTML='<iframe title="Synthetic native payment" src="/native-payment.php"></iframe><button type="button">Cancel payment</button><button type="button">Close payment</button>';
+            dialog.querySelectorAll('button').forEach(button=>button.addEventListener('click',()=>dialog.close()));
+            dialog.addEventListener('close',()=>{
+                dialog.remove();
+                wrapper.dispatchEvent(new Event('kb-worklist-payment-close',{bubbles:true}));
+                if(window.fixtureDuplicateClose) wrapper.dispatchEvent(new Event('kb-worklist-payment-close',{bubbles:true}));
+            });
+            document.body.append(dialog); dialog.showModal();
+        }));
+        return html + '</div><div class="bottom"></div><script>' + script + '</script><script>(' + nativePopup.toString() + ')();</script>';
     };
     const server = http.createServer(async (request, response) => {
         const url = new URL(request.url,app);
+        if (request.method==='GET' && url.pathname==='/native-payment.php') {
+            response.writeHead(200,{'Content-Type':'text/html'});
+            response.end('<!doctype html><title>Synthetic native payment</title><p>Read-only payment fixture; no payment can be submitted.</p>'); return;
+        }
         if (url.pathname !== new URL(app).pathname) { response.writeHead(404); response.end(); return; }
         if (request.method === 'POST') {
             let body = '';
@@ -322,7 +344,7 @@ async function navigationBrowserChecks() {
             const fields = Object.fromEntries(await new Response(body,{headers:{'Content-Type':request.headers['content-type']}}).formData());
             if (fields.action === 'advance_scan') {
                 scanRequests++;
-                await new Promise(resolve => setTimeout(resolve,300));
+                await new Promise(resolve => setTimeout(resolve,scanDelay));
                 analysed = true;
                 response.writeHead(200,{'Content-Type':'application/json'});
                 response.end(JSON.stringify({done:true,page_ready:true,processed:24,total:24,generation:'fixture-generation',cursor:1})); return;
@@ -331,9 +353,10 @@ async function navigationBrowserChecks() {
             if (fields.action === 'confirm_pair') removed.add(Number(fields.row.split(':')[1]));
             if (fields.action === 'save_draft') draft = fields.batch_name;
             const target = new URL(app);
-            for (const key of ['company','sortorder','limit','page','search_description','expand','mode']) if (fields[key] !== undefined) target.searchParams.set(key,fields[key]);
+            for (const key of ['company','sortorder','limit','page','search_description','search_account','search_status','expand','mode']) if (fields[key] !== undefined) target.searchParams.set(key,fields[key]);
             response.writeHead(303,{Location:target.href}); response.end(); return;
         }
+        if (url.searchParams.has('refresh_payment')) paymentRefreshes.push(url.href);
         response.writeHead(200,{'Content-Type':'text/html','Cache-Control':'no-store'}); response.end(render(url));
     });
     await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
@@ -447,13 +470,111 @@ async function navigationBrowserChecks() {
         assert.deepEqual(Object.keys(snapshot).sort(),['context','focusId','index','keyboard','kind','left','offset','page','row','scope','time']); count++;
         assert.equal(await page.evaluate(key=>sessionStorage.getItem(key),storageKey),null); count++;
 
+        await page.goto(app);
+        const bankOpener = page.getByRole('button',{name:'Correct 13',exact:true});
+        await bankOpener.click(); await page.keyboard.press('Escape');
+        assert.equal(await bankOpener.evaluate(button=>document.activeElement===button),true); count++;
+        for (const close of ['Cancel payment','Close payment']) {
+            await page.goto(app+'?search_account=101&search_description=Keep+these+filters&search_status=all');
+            await place(13);
+            before = await offset(13);
+            const refreshCount = paymentRefreshes.length;
+            const opener = page.getByRole('link',{name:'Record payment 13',exact:true});
+            await opener.focus(); await opener.press('Enter');
+            await page.frameLocator('iframe[title="Synthetic native payment"]').getByText('Read-only payment fixture; no payment can be submitted.').waitFor();
+            assert.equal(await page.locator('.fixture-native-payment').isVisible(),true,'A native return-false opener still activates the capture handler'); count++;
+            assert.equal(await page.evaluate(key=>sessionStorage.getItem(key),storageKey),null,'Opening does not leave stale reload state'); count++;
+            if (close==='Close payment') await page.evaluate(()=>{window.fixtureDuplicateClose=true;});
+            await cycle(()=>page.getByRole('button',{name:close,exact:true}).click());
+            await sameOffset(13,before,'Native payment close refreshes at the source row');
+            assert.equal(await opener.evaluate(link=>document.activeElement===link),true,'Payment refresh returns focus to its native opener'); count++;
+            const target = new URL(page.url());
+            assert.deepEqual([target.searchParams.get('refresh_payment'),target.searchParams.get('search_account'),target.searchParams.get('search_description'),target.searchParams.get('search_status')],['staged:13','101','Keep these filters','all']); count++;
+            assert.equal(paymentRefreshes.length,refreshCount+1,'A duplicate native close callback grants one read-only refresh'); count++;
+        }
+        await page.setViewportSize({width:500,height:900});
+        await place(13);
+        await page.locator('.div-table-responsive').evaluate(wrapper=>{wrapper.scrollLeft=350;});
+        before = await offset(13);
+        await page.getByRole('link',{name:'Record payment 13',exact:true}).evaluate(link=>link.click());
+        await cycle(()=>page.getByRole('button',{name:'Close payment',exact:true}).click());
+        await sameOffset(13,before,'Native popup keeps narrow-screen vertical position');
+        assert.equal(await page.locator('.div-table-responsive').evaluate(wrapper=>wrapper.scrollLeft),350,'Native popup keeps horizontal table position'); count++;
+        await page.setViewportSize({width:1280,height:900});
+        for (const invalid of ['https://example.invalid/reconciliationlist.php?refresh_payment=staged:13',new URL('/accounts.php?refresh_payment=staged:13',app).href,app+'?refresh_payment=staged:999',app+'?refresh_payment=staged:13&action=confirm_pair']) {
+            await page.goto(app);
+            await place(13);
+            await page.locator('#payment-popup-13').evaluate((wrapper,url)=>{wrapper.dataset.kbPaymentRefresh=url;},invalid);
+            const refreshCount = paymentRefreshes.length;
+            await page.getByRole('link',{name:'Record payment 13',exact:true}).click();
+            await page.getByRole('button',{name:'Close payment',exact:true}).click();
+            await page.waitForTimeout(80);
+            assert.equal(page.url(),app,'Unsafe or mismatched popup refresh targets are rejected'); count++;
+            assert.equal(paymentRefreshes.length,refreshCount); count++;
+        }
+        assert.equal(posts.length,3,'The iframe lifecycle never submits a payment'); count++;
+
+        await page.goto(app);
+        await page.getByRole('combobox',{name:'Account',exact:true}).selectOption('101');
+        await page.waitForTimeout(80);
+        assert.equal(page.url(),app,'The original unmarked all-account selector remains manual'); count++;
+        const scopedAccountUrl = app+'?page=1&search_account=101&search_description=Preserved&search_status=all';
+        const accountState = async () => {
+            const target=new URL(page.url());
+            return [await page.locator('.kb-worklist').getAttribute('data-navigation-page'),target.searchParams.get('search_account'),target.searchParams.get('search_description'),target.searchParams.get('search_status')];
+        };
+        for (const name of ['button_search','button_search_x','button_search.x']) {
+            await page.goto(scopedAccountUrl);
+            await page.locator('button[name="button_search"]').evaluate((button,value)=>{button.name=value;},name);
+            await cycle(()=>page.getByRole('combobox',{name:'Account',exact:true}).selectOption('102'));
+            assert.deepEqual(await accountState(),['0','102','Preserved','all'],'Marked account selection uses the native Search owner/submitter'); count++;
+            assert.equal(new URL(page.url()).searchParams.get(name),'1'); count++;
+        }
+        await page.goto(scopedAccountUrl);
+        await page.locator('#searchFormList').evaluate(form=>{form.requestSubmit=undefined;});
+        await cycle(()=>page.getByRole('combobox',{name:'Account',exact:true}).selectOption('102'));
+        assert.deepEqual(await accountState(),['0','102','Preserved','all'],'Older clients fall back to the actual GET Search button'); count++;
+        await page.goto(scopedAccountUrl);
+        await page.locator('button[name="button_search"]').evaluate(button=>button.remove());
+        await cycle(()=>page.getByRole('combobox',{name:'Account',exact:true}).selectOption('102'));
+        assert.deepEqual(await accountState(),['0','102','Preserved','all'],'A missing Search submitter uses only a temporary read-only search marker'); count++;
+        await page.goto(scopedAccountUrl);
+        await page.getByRole('combobox',{name:'Account',exact:true}).evaluate(select=>select.setAttribute('form','approve-30'));
+        await page.getByRole('combobox',{name:'Account',exact:true}).selectOption('102');
+        await page.waitForTimeout(80);
+        assert.equal(page.url(),scopedAccountUrl); count++;
+        assert.equal(posts.length,3,'Account filtering cannot submit a row financial form'); count++;
+
+        analysed = false; scanDelay = 800;
+        const scanCount = scanRequests;
+        const inFlight = page.waitForRequest(request=>request.method()==='POST' && request.url().endsWith('?scan=1'));
+        await page.goto(app+'?scan=1');
+        await place(13);
+        await inFlight;
+        before = await offset(13);
+        const scanUrl=page.url();
+        await page.getByRole('link',{name:'Record payment 13',exact:true}).click();
+        await page.waitForTimeout(1000);
+        assert.equal(page.url(),scanUrl,'An in-flight analysis completion cannot reload over the native iframe'); count++;
+        assert.equal(await page.locator('.fixture-native-payment').isVisible(),true); count++;
+        assert.equal(await page.locator('[data-kb-scan-message]').innerText(),'Paused'); count++;
+        await page.locator('form[data-kb-scan]').evaluate(form=>form.requestSubmit());
+        await page.waitForTimeout(80);
+        assert.equal(scanRequests,scanCount+1,'Continue cannot resume analysis while payment refresh is pending'); count++;
+        await cycle(()=>page.getByRole('button',{name:'Cancel payment',exact:true}).click());
+        await sameOffset(13,before,'Closing an unfinished payment form still re-reads actual state at its row');
+        assert.equal(new URL(page.url()).searchParams.get('refresh_payment'),'staged:13'); count++;
+        assert.equal(posts.length,3); count++;
+
+        analysed = false; scanDelay = 300;
+        const beforeScan = scanRequests;
         await page.goto(app+'?scan=1');
         await place(13);
         before = await offset(13);
         await page.waitForEvent('load');
         await page.waitForTimeout(100);
         await sameOffset(13,before,'Read-only scan refresh retains the visible row');
-        assert.equal(scanRequests,1); count++;
+        assert.equal(scanRequests,beforeScan+1); count++;
         assert.equal(posts.length,3,'Scanning never submits a financial action'); count++;
         assert.deepEqual(errors,[]); count++;
         console.log('OK: '+count+' isolated Chromium row navigation checks (synthetic routes only)');

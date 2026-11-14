@@ -3,6 +3,61 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 require_once __DIR__ . '/../class/KreaBankHistory.class.php';
+require_once __DIR__ . '/kreabank_worklist_view.lib.php';
+
+/** Known application codes have labels; unknown/custom evidence stays verbatim. */
+function kreabankHistoryCodeLabel($value, $kind, $langs)
+{
+	$value = (string) $value;
+	$documents = array(
+		'payment'=>'CustomerInvoicePayment','payment_linked'=>'CustomerInvoicePayment','paiement'=>'CustomerInvoicePayment',
+		'payment_supplier'=>'SupplierInvoicePayment','payment_supplier_linked'=>'SupplierInvoicePayment','paiementfourn'=>'SupplierInvoicePayment',
+		'payment_salary'=>'SalaryPayment','payment_sc'=>'SocialContributionPayment','payment_tax'=>'SocialContributionPayment',
+		'payment_various'=>'VariousPayment','payment_expensereport'=>'ExpenseReportPayment','payment_donation'=>'DonationPayment',
+		'payment_loan'=>'LoanPayment','payment_withdraw'=>'WithdrawalPayment','banktransfert'=>'BankTransfer',
+		'company'=>'ThirdParty','user'=>'User','bank_line'=>'KreaBankHistoryNativeEntry','native_bank'=>'KreaBankHistoryNativeEntry',
+		'customer_invoice'=>'CustomerInvoice','supplier_invoice'=>'SupplierInvoice','tax'=>'SocialContribution','sc'=>'SocialContribution',
+		'quick_entry'=>'KreaBankHistoryActionQuickEntry',
+	);
+	$actions = array(
+		'import'=>'KreaBankHistoryActionImport','reconcile'=>'KreaBankHistoryActionReconcile','undo'=>'KreaBankHistoryActionUndo',
+		'quick_entry'=>'KreaBankHistoryActionQuickEntry','quick_tax_entry'=>'KreaBankHistoryActionQuickTax',
+		'quick_supplier_invoice'=>'KreaBankHistoryActionQuickSupplierInvoice','batch_approve'=>'KreaBankHistoryActionBatchApprove',
+		'feed_sync'=>'KreaBankHistoryActionFeedSync','skip'=>'KreaBankHistoryActionSkip','delete_statement'=>'KreaBankHistoryActionDeleteStatement',
+		'account_correction'=>'KreaBankHistoryActionAccountCorrection','invoice_validation'=>'KreaBankHistoryActionInvoiceValidation',
+		'statement_evidence'=>'KreaBankHistoryActionStatementEvidence','audit_purge'=>'KreaBankHistoryActionAuditPurge',
+		'trigger_event'=>'KreaBankHistoryActionTriggerEvent',
+	);
+	$strategies = array(
+		'native'=>'KreaBankHistoryNativeEntry','legacy_staging'=>'KreaBankHistoryTypeLegacyImport','manual'=>'KreaBankHistoryTypeManual',
+		'drag_drop'=>'KreaBankHistoryTypeAssignment','bulk_manual'=>'KreaBankHistoryTypeReviewed',
+		'auto_native'=>'KreaBankHistoryTypeAutomaticMovement','auto_safe'=>'KreaBankHistoryTypeAutomaticSafe',
+		'auto_pair'=>'KreaBankHistoryTypeAutomaticTransfer','auto_tpa'=>'KreaBankHistoryTypeAutomaticCard',
+		'manual_payment_batch'=>'KreaBankHistoryTypePaymentBatch','manual_worklist_movement'=>'KreaBankHistoryTypeCreatedMovement',
+		'quick_entry'=>$actions['quick_entry'],'quick_tax_entry'=>$actions['quick_tax_entry'],'quick_supplier_invoice'=>$actions['quick_supplier_invoice'],
+	);
+	$maps = array('document'=>$documents,'action'=>$actions,'strategy'=>$strategies);
+	$key = $maps[$kind][$value] ?? '';
+	if ($key === '') { return $value; }
+	$label = kreabankWorklistTranslate($langs, $key);
+	// Native English labels such as "User" may legitimately equal their key.
+	return $label !== '' && (strpos($key,'KreaBank') !== 0 || $label !== $key) ? $label : $value;
+}
+
+/** Only reserved standalone native markers are translated, including composite references. */
+function kreabankHistoryNativeLabel($value, $langs)
+{
+	$parts = preg_split('/(\s+\/\s+)/u', (string) $value, -1, PREG_SPLIT_DELIM_CAPTURE);
+	if ($parts === false) { return (string) $value; }
+	foreach ($parts as &$part) {
+		if (preg_match('/^(\s*)\((payment|various_payment|various payment)\)(\s*)$/iuD', $part, $match)) {
+			$key = strtolower($match[2]) === 'payment' ? 'Payment' : 'VariousPayment';
+			$part = $match[1] . kreabankWorklistTranslate($langs, $key) . $match[3];
+		} else { $part = kreabankWorklistNativeLabel($part, $langs); }
+	}
+	unset($part);
+	return implode('', $parts);
+}
 
 /** Private, short-lived displayed undo snapshot; never accept identities from hidden fields alone. */
 function kreabankHistoryUndoReview($row)

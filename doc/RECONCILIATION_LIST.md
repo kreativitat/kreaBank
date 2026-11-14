@@ -25,6 +25,27 @@ Unpaid invoice and tax suggestions have a grey disabled Reconcile action until a
 payment is recorded. Neither rows nor expanded search cards issue approval tokens
 for these documents; the controller also rejects earlier signed invoice/tax reviews.
 Existing native movements and recorded payments retain their reviewed approval.
+Eligible unpaid customer/supplier invoice proposals offer **Record payment** in
+the row and expanded Search card. This opens the installed native payment form
+in Dolibarr's iframe dialog, with the invoice, statement account, booking date
+and exact bounded amount prefilled. Native payment permissions and confirmation
+remain authoritative. Closing or cancelling only clears advisory reviews and
+re-reads current evidence at the same row; it never means payment succeeded or
+automatically reconciles the line. Search and Create batch remain available as
+alternative ways to find recorded payments.
+
+The payment shortcut requires owned, pending, unallocated, unmapped staged
+evidence in company currency. Legacy ledger imports, mapped/partial sources and
+tax proposals do not use this shortcut: the native tax form does not provide the
+required parent ownership and remaining-balance locking contract. No core payment
+controller or financial lifecycle is replaced.
+
+Compact status tabs replace the status column dropdown while preserving native
+header filters and pagination. A selected bank hides the repeated statement-bank
+column; its compact selector remains above the list. The all-bank view retains
+the bank column and its filter. Statements follows the same conditional-column
+rule and drops stale filters for its hidden column.
+
 Unique suggestions and explicit search choices use the
 existing signed manual review and `KreaBankService::reconcileLine()`; ambiguous
 records are never preselected. Typed searches filter eligible native entries,

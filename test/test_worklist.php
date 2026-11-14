@@ -341,6 +341,43 @@ $pair['suggestion']['doc_type']='native_bank'; $projected=$candidateModel($pair)
 checkWorklist($projected['account_ref']==='RECORDED-BANK' && $projected['account_planned']===false && kreabankWorklistPaymentAccount($pair)['id']===102,
 	'Existing movements preserve their actual recorded bank');
 
+$paymentPair=worklistControllerPair(); $paymentPair['line']['account_open']=true; $paymentPair['line']['allocated_amount']='0';
+$paymentPair['suggestion']['doc_type']='supplier_invoice'; $paymentPair['suggestion']['amount_open']='100.00000000';
+$permission=array('supplier_invoice'=>true,'customer_invoice'=>true);
+parse_str(parse_url(kreabankWorklistPaymentUrl($paymentPair,$permission,'EUR'),PHP_URL_QUERY),$nativePayment);
+checkWorklist($nativePayment['action']==='create' && $nativePayment['facid']==='81' && $nativePayment['accountid']==='101'
+	&& $nativePayment['amount_81']==='50.00000000' && $nativePayment['reyear']==='2026' && $nativePayment['remonth']==='11' && $nativePayment['reday']==='12', 'Native supplier payment form defaults retain exact source amount, owned account and calendar day without a payment POST');
+$paymentPair['line']['amount']='-9007199254.74099301'; $paymentPair['suggestion']['amount_open']='9007199254.74099300';
+parse_str(parse_url(kreabankWorklistPaymentUrl($paymentPair,$permission,'EUR'),PHP_URL_QUERY),$nativePayment);
+checkWorklist($nativePayment['amount_81']==='9007199254.74099300','Native payment default is capped at exact open invoice balance without floating point rounding');
+$paymentPair=worklistControllerPair(); $paymentPair['line']['account_open']=true; $paymentPair['suggestion']['doc_type']='supplier_invoice';
+foreach (array('unpaid_tax','legacy','mapped','closed','reconciled','partial','foreign_currency','wrong_direction','bad_date','bad_id','no_native_right') as $case) {
+	$blocked=$paymentPair; $rights=$permission;
+	switch($case) {
+		case 'unpaid_tax':$blocked['suggestion']['doc_type']='tax';break;
+		case 'legacy':$blocked['line']['fk_statement']=0;break;
+		case 'mapped':$blocked['line']['native_bank_line_id']=99;break;
+		case 'closed':$blocked['line']['account_open']=false;break;
+		case 'reconciled':$blocked['line']['status']=2;break;
+		case 'partial':$blocked['line']['allocated_amount']='1';break;
+		case 'foreign_currency':$blocked['line']['currency']='USD';break;
+		case 'wrong_direction':$blocked['line']['amount']='50.00';break;
+		case 'bad_date':$blocked['line']['operation_date']='2026-02-30';break;
+		case 'bad_id':$blocked['suggestion']['doc_id']='81<script>';break;
+		case 'no_native_right':$rights['supplier_invoice']=false;break;
+	}
+	checkWorklist(kreabankWorklistPaymentUrl($blocked,$rights,'EUR')==='','Unavailable/unsafe native invoice payment shortcut fails closed: '.$case);
+}
+$paymentPair['suggestion']['doc_type']='customer_invoice'; $paymentPair['line']['amount']='50.00000000';
+checkWorklist(strpos(kreabankWorklistPaymentUrl($paymentPair,$permission,'EUR'),'/compta/paiement.php?action=create&facid=81')===0,'Customer invoice shortcut uses its own installed native payment route');
+$session=worklistControllerSession(); $session['kreabank_worklist_reviews']['other']=worklistControllerReview('pair',array('key'=>'staged:9'));
+$session['kreabank_worklist_batch_review']=array('staged:8'=>'old','staged:9'=>'kept');
+kreabankWorklistRefreshPayment($session,'staged:8');
+checkWorklist(!isset($session['kreabank_worklist_scan'],$session['kreabank_worklist_reviews']['fixture'],$session['kreabank_worklist_batch_review']['staged:8'])
+	&& isset($session['kreabank_worklist_reviews']['other'],$session['kreabank_worklist_batch_review']['staged:9']), 'Closing a native payment form invalidates only advisory approvals for that row and recomputes the scan');
+$keptStatus=kreabankWorklistState(array('search_status'=>'reconciled','search_description'=>'old','button_removefilter_x'=>'x','page'=>3));
+checkWorklist($keptStatus['filters']['status']==='reconciled' && $keptStatus['filters']['description']==='' && $keptStatus['page']===0, 'Clearing column filters keeps the selected status tab and resets pagination');
+
 
 // Preparing matches retains read permission and CSRF without financial authority.
 foreach (array('advance_scan','more_scan') as $readAction) {

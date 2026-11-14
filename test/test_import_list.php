@@ -48,4 +48,66 @@ foreach(array('en_US','pt_PT') as $locale){
 }
 checkImportList(dol_string_nohtmltag('<>125',0,'')==='125','Native alphanohtml sanitization would erase the not-equal operator');
 foreach(array(array('1.01','1.00',false),array('1.01000001','1.00',true),array('9999999999999999.12345678','9999999999999999.11345678',false),array('9999999999999999.12345678','9999999999999999.11345677',true)) as $values){checkImportList(kreabankIntegrationAmountNeedsReview($values[0],$values[1])===$values[2],'Displayed status retains exact one-cent tolerance even at maximum precision');}
+
+// Execute the shipped index setup/render regions with synthetic owned projections.
+// No native bootstrap, connection, financial records or query mutation is involved.
+$statementController=file_get_contents(__DIR__.'/../statement.php');
+$setupStart=strpos($statementController,"if (\$statement) {\n\t\$source");
+$setupEnd=strpos($statementController,'$form = new Form($db);',$setupStart);
+$headerStart=strpos($statementController,'foreach ($columns as $field=>$key)',$setupEnd);
+$headerEnd=strpos($statementController,'$shown = 0;',$headerStart);
+$bodyEnd=strpos($statementController,"print '</tbody></table></div></form>';",$headerEnd);
+$conf->liste_limit=25;
+$conf->file=(object)array('dol_document_root'=>array('main'=>DOL_DOCUMENT_ROOT));
+$_SERVER['PHP_SELF']='/custom/kreabank/statement.php';
+$renderImportIndex=static function($account,$request)use($statementController,$setupStart,$setupEnd,$headerStart,$headerEnd,$bodyEnd){
+ global $conf,$langs;
+ $_GET=$request;$_POST=array();
+ $navigationAccountId=$account;$navigationAccount=$account?(object)array('id'=>$account):null;$statement=null;$reference='';
+ $db=new class{
+  public function escape($value){return addslashes($value);}
+  public function plimit($limit,$offset=0){return ' LIMIT '.$offset.','.$limit;}
+  public function fetch_object($result){return array_shift($result->rows);}
+  public function num_rows($result){return count($result->rows);}
+  public function jdate($value){return strtotime($value.' UTC');}
+ };
+ $report=new class($request['search_bank_account_ref']??''){
+  public $account=0;public $queries=array();private $bankFilter;
+  public function __construct($bankFilter){$this->bankFilter=$bankFilter;}
+  public function statementsSql($account){$this->account=$account;return 'OWNED_STATEMENTS_'.$account;}
+  public function query($sql){
+   $this->queries[]=$sql;$rows=array();
+   foreach(array(101,101,102) as $i=>$account){
+    if($this->account && $this->account!==$account){continue;}
+    $row=(object)array('bank_account_id'=>$account,'bank_account_ref'=>'ACCOUNT-'.$account,'statement_ref'=>'STATEMENT-'.$i,'imported_at'=>'2026-11-01 12:00:00','imported_lines'=>7,'native_lines'=>3,'reconciled_lines'=>2,'issue_lines'=>0);
+    if(strpos($sql,'h.bank_account_ref LIKE')!==false && stripos($row->bank_account_ref,$this->bankFilter)===false){continue;}
+    $rows[]=$row;
+   }
+   if(strpos($sql,'SELECT COUNT(*)')===0){return(object)array('rows'=>array((object)array('nb'=>count($rows))));}
+   if(preg_match('/ LIMIT (\d+),(\d+)$/',$sql,$parts)){$rows=array_slice($rows,(int)$parts[1],(int)$parts[2]);}
+   return(object)array('rows'=>$rows);
+  }
+ };
+ eval(substr($statementController,$setupStart,$setupEnd-$setupStart));
+ $form=new Form($db);
+ ob_start();print '<table><thead><tr class="liste_titre_filter">';
+ eval(substr($statementController,$headerStart,$headerEnd-$headerStart));
+ eval(substr($statementController,$headerEnd,$bodyEnd-$headerEnd));
+ print '</tbody></table>';$html=ob_get_clean();
+ return compact('html','columns','filters','params','sort','total','page','num','report');
+};
+$selected=$renderImportIndex(101,array('search_bank_account_ref'=>'ABSENT','sortfield'=>'bank_account_ref','sortorder'=>'ASC','limit'=>1,'page'=>1));
+checkImportList(!isset($selected['columns']['bank_account_ref']) && !isset($selected['params']['search_bank_account_ref']) && $selected['filters']['bank_account_ref']==='', 'Owned selected account removes both repeated column and invisible stale bank filter');
+checkImportList($selected['report']->account===101 && $selected['total']===2 && $selected['page']===1 && $selected['num']===1, 'Selected-account projection, count and pagination survive a stale hidden bank filter');
+checkImportList($selected['sort']['field']==='imported_at' && strpos(implode(' ',$selected['report']->queries),'h.bank_account_ref LIKE')===false, 'Hidden account column cannot remain a sort target or count/data predicate');
+checkImportList(strpos($selected['html'],'search_bank_account_ref')===false && strpos($selected['html'],'ACCOUNT-101')===false && $selected['params']['account_context']===101, 'Selected rows/filter headers and sort links omit repeated account/filter while retaining owned account navigation');
+$all=$renderImportIndex(0,array('search_bank_account_ref'=>'ACCOUNT-101','sortfield'=>'bank_account_ref','limit'=>1,'page'=>1));
+checkImportList(isset($all['columns']['bank_account_ref']) && $all['params']['search_bank_account_ref']==='ACCOUNT-101' && $all['sort']['field']==='bank_account_ref', 'All-bank index retains visible account column, filter and allowlisted sort');
+checkImportList($all['total']===2 && $all['page']===1 && substr_count(implode(' ',$all['report']->queries),'h.bank_account_ref LIKE')===2, 'All-bank account filtering remains identical for count and paginated data');
+foreach(array($selected,$all) as $case){
+ $previous=libxml_use_internal_errors(true);$dom=new DOMDocument();$dom->loadHTML($case['html']);$xp=new DOMXPath($dom);libxml_clear_errors();libxml_use_internal_errors($previous);
+ checkImportList($xp->query('//tbody/tr[1]/td')->length===count($case['columns'])+1 && $xp->query('//thead/tr[1]/td')->length===count($case['columns'])+1, 'Conditional account column keeps data/header/action cells aligned');
+ checkImportList($xp->query('//tbody/tr[1]/td[@class="right"]')->length===3 && $xp->query('//thead/tr[2]/th[contains(@class,"right")]')->length===3, 'All three numeric columns retain native right alignment in either scope');
+}
+$_GET=$_POST=array();
 print "OK: $checks imported-list/native-header checks\n";

@@ -10,6 +10,9 @@ function dol_escape_htmltag($value) { return htmlspecialchars((string) $value, E
 function dol_buildpath($path, $type = 0) { return ($GLOBALS['worklistFixtureUrlRoot'] ?? '') . $path; }
 function dol_print_date($timestamp, $format) { return gmdate('d/m/Y', $timestamp); }
 function kreabankPrice($value) { return number_format((float) $value, 2, ($GLOBALS['langs']->defaultlang ?? '') === 'pt_PT' ? ',' : '.', ($GLOBALS['langs']->defaultlang ?? '') === 'pt_PT' ? ' ' : ','); }
+function dolButtonToOpenUrlInDialogPopup($name,$label,$button,$url,$disabled='',$css='',$open='',$close='',$key='') {
+	return '<a href="#" class="' . dol_escape_htmltag($css) . '" data-fixture-native-url="' . dol_escape_htmltag($url . '&dol_hide_topmenu=1&dol_hide_leftmenu=1&dol_openinpopup=' . $name) . '">' . $button . '</a><div id="idfordialog' . $name . '" class="hidden" data-fixture-native-close="' . dol_escape_htmltag($close) . '"></div>';
+}
 
 /** Read shipped language resources without bootstrapping Dolibarr or a database. */
 function worklistFixtureLanguages($locale)
@@ -98,12 +101,18 @@ function worklistViewFixture($case)
 		$model['rows'][0]['needs_review'] = true;
 		$model['rows'][0]['notice'] = 'Historical linkage is inconsistent.';
 	}
-	if ($case === 'planned_invoice') {
+	if (in_array($case,array('planned_invoice','payment_popup','single_bank'),true)) {
 		$model['rows'][0]['review']['doc_type']='supplier_invoice'; $model['rows'][0]['review']['account_ref']='STATEMENT-BANK'; $model['rows'][0]['review']['account_planned']=true;
 		$model['rows'][0]['review']['consequence']='KreaBankWorklistPaymentRequired';
 		// Retain the old action to prove unpaid proposals override stale approval descriptors.
 		$model['rows'][0]['expanded']=true; $model['rows'][0]['candidates']=array($model['rows'][0]['review']);
 	}
+	if ($case === 'payment_popup' || $case === 'single_bank') {
+		$model['rows'][0]['line']['bank_account_id']=10;
+		$model['rows'][0]['review']['payment_url']='/fourn/facture/paiement.php?action=create&facid=51&accountid=10&year=2026&month=11&day=11&reyear=2026&remonth=11&reday=11&amount_51=3300.00000000';
+		$model['rows'][0]['candidates']=array($model['rows'][0]['review']);
+	}
+	if ($case === 'single_bank') { $model['hide_statement_account']=true; $model['filters']['search_account']='10'; $model['state']['search_account']='10'; }
 	if ($case === 'empty_search') { $model['rows'][0]['expanded']=true; $model['rows'][0]['review']=null; $model['rows'][0]['candidates']=array(); $model['rows'][0]['create_available']=true; }
 	if ($case === 'empty') { $model['rows'] = array(); }
 	if ($case === 'unsafe') {
@@ -140,7 +149,7 @@ $checks = 0;
 function checkWorklistView($condition, $message) { global $checks; if (!$condition) { throw new RuntimeException($message); } $checks++; }
 foreach (array('en_US','pt_PT') as $locale) {
 	$langs = worklistFixtureLanguages($locale);
-	foreach (array('ready','batch','reviewed','other','readonly','empty','unsafe','ambiguous','loading','direct_correction','completed','unavailable','needs_review','creation','creation_unavailable','empty_search','planned_invoice') as $case) {
+	foreach (array('ready','batch','reviewed','other','readonly','empty','unsafe','ambiguous','loading','direct_correction','completed','unavailable','needs_review','creation','creation_unavailable','empty_search','planned_invoice','payment_popup','single_bank') as $case) {
 		$html = kreabankWorklistTable(worklistViewFixture($case), $langs);
 		$dom = new DOMDocument();
 		$previous = libxml_use_internal_errors(true);
@@ -152,9 +161,10 @@ foreach (array('en_US','pt_PT') as $locale) {
 		checkWorklistView($xpath->query('//form[@id="searchFormList"]//*[@name="limit"]')->length === 1, $case . ': exactly one native page-size control');
 		checkWorklistView($xpath->query('//form//form')->length === 0, $case . ': no nested forms');
 		checkWorklistView($xpath->query('//form[@method="get"]//input[@name="token" or @name="action" or @name="review_signature"]')->length === 0, $case . ': no write evidence in GET forms');
-		checkWorklistView($xpath->query('//thead/tr[@class="liste_titre_filter"]/td')->length === 8, $case . ': column header filters');
+		checkWorklistView($xpath->query('//thead/tr[@class="liste_titre_filter"]/td')->length === ($case==='single_bank'?7:8), $case . ': column header filters');
 		checkWorklistView($xpath->query('//select[@name="search_payment_account"]/option[@value="none"]')->length === 1, $case . ': unbanked payment filter');
-		checkWorklistView($xpath->query('//select[@name="search_status"]/option[@value="review"]')->length === 1, $case . ': historical review status filter');
+		checkWorklistView($xpath->query('//nav[contains(@class,"kb-wl-status-tabs")]/a')->length === 5 && $xpath->query('//nav[contains(@class,"kb-wl-status-tabs")]/a[@aria-current="page"]')->length === 1
+			&& $xpath->query('//select[@name="search_status"]')->length===0 && $xpath->query('//input[@type="hidden" and @name="search_status"]')->length>=1, $case . ': status tabs replace the dropdown and retain native form state');
 		checkWorklistView(strpos($html, 'KreaBankWorklist') === false, $case . ': translated feature copy');
 		foreach ($xpath->query('//*[@form]') as $control) {
 			checkWorklistView($dom->getElementById($control->getAttribute('form')) instanceof DOMElement, $case . ': every associated control targets an existing form');
@@ -181,6 +191,19 @@ foreach (array('en_US','pt_PT') as $locale) {
 			checkWorklistView($xpath->query('//button[@disabled and @type="button" and not(@form) and not(contains(@class,"kb-wl-primary"))]//span[contains(@class,"fa-check")]')->length === 2
 				&& $xpath->query('//input[@name="action" and @value="confirm_pair"]')->length === 0, 'Unpaid row and expanded card retain grey disabled checks without any approval forms or submit binding');
 			checkWorklistView($xpath->query('//button[@disabled and @title="' . $langs->trans('KreaBankWorklistPaymentRequired') . '"]')->length === 2, 'Both unpaid approval hints explain that payment must be recorded first');
+		}
+		if ($case === 'payment_popup' || $case === 'single_bank') {
+			$popups=$xpath->query('//div[@data-kb-payment-popup]');
+			checkWorklistView($popups->length===2 && $xpath->query('//a[contains(@class,"kb-wl-record-payment")]')->length===2, 'Both unpaid row and search card use the native payment popup');
+			$ids=array(); foreach($popups as $popup) {
+				$ids[]=$popup->getAttribute('id'); parse_str(parse_url($popup->getAttribute('data-kb-payment-refresh'),PHP_URL_QUERY),$query);
+				checkWorklistView(($query['refresh_payment']??'')==='staged:11' && ($query['search_description']??'')==='Salary' && !isset($query['token'],$query['action']), 'Payment close refreshes the exact source row/filter without a financial action');
+			}
+			checkWorklistView(count(array_unique($ids))===2 && $xpath->query('//input[@name="action" and @value="confirm_pair"]')->length===0, 'Native payment dialogs are unique and do not re-enable unpaid reconciliation');
+		}
+		if ($case==='single_bank') {
+			checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-row")]/td')->length===7 && $xpath->query('//tr[@class="kb-wl-detail-row"]/td[@colspan="7"]')->length===1, 'Selected-bank rows and expanded details omit the repeated account column');
+			checkWorklistView($xpath->query('//select[@name="search_account" and @form="searchFormList" and @data-kb-account-filter]')->length===1 && $xpath->query('//thead//select[@name="search_account"]')->length===0, 'One external owned-account selector remains available without duplicating the column');
 		}
         if ($case === 'empty_search') {
             checkWorklistView($xpath->query('//div[@class="kb-wl-search"]/span[@class="kb-wl-search-actions"]/button[@type="submit"]')->length === 1

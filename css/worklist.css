@@ -1,6 +1,10 @@
 /* Copyright (C) 2026 Kreativität Works <mail@kreativitat.com>
  * SPDX-License-Identifier: GPL-3.0-or-later */
 .kb-worklist { --kb-wl-border:var(--colortextlink,#6a7b8d); --kb-wl-focus:#2672b8; min-width:0; max-width:100%; }
+.kb-worklist .kb-wl-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:10px 18px; margin:0 0 18px; }
+.kb-worklist .kb-wl-status-tabs { margin:0; max-width:100%; overflow-x:auto; }
+.kb-worklist .kb-wl-payment-popup { display:block; margin-top:7px; }
+.kb-worklist .kb-wl-record-payment.button { display:inline-flex; align-items:center; justify-content:center; gap:6px; height:30px; box-sizing:border-box; margin:2px 0; padding:5px 9px; font-size:12px; line-height:1.2; text-transform:none; text-decoration:none; }
 .kb-worklist .kb-wl-table { width:100%; }
 /* Keep table intrinsic width out of Dolibarr's automatic table-cell page layout. */
 .kb-worklist .div-table-responsive { position:relative; width:0; min-width:100%; max-width:100%; overflow-x:auto; }
