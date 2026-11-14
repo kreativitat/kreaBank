@@ -59,6 +59,15 @@ function kreabankHistoryNativeLabel($value, $langs)
 	return implode('', $parts);
 }
 
+/** A generic native marker is a type, not a document reference. */
+function kreabankHistoryReferenceLabel($value, $id, $langs)
+{
+	$value = (string) $value;
+	$label = kreabankHistoryNativeLabel($value, $langs);
+	return (int) $id > 0 && $label !== $value && preg_match('/^\s*\([^()]+\)\s*$/uD', $value)
+		? '#' . (int) $id : $label;
+}
+
 /** Private, short-lived displayed undo snapshot; never accept identities from hidden fields alone. */
 function kreabankHistoryUndoReview($row)
 {

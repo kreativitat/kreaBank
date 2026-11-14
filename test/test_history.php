@@ -33,6 +33,7 @@ if (in_array('--native', $argv ?? array(), true)) {
 		}
 		foreach (array('(banktransfert)'=>'BankTransfer','(paiement)'=>'Payment','(payment)'=>'Payment','(Various_Payment)'=>'VariousPayment','(SalaryPayment)'=>'SalaryPayment') as $marker=>$key) {
 			$check(kreabankHistoryNativeLabel($marker,$langs) === $langs->transnoentities($key), 'Reserved native reference marker is translated: ' . $locale . '/' . $marker);
+			$check(kreabankHistoryReferenceLabel($marker,77,$langs) === '#77', 'Generic native markers retain a useful document ID beside the translated type: ' . $locale . '/' . $marker);
 		}
 		$source = 'Supplier (paiement) department &amp; Filhos';
 		$check(kreabankHistoryNativeLabel($source,$langs) === $source && kreabankHistoryCodeLabel('custom_connector','action',$langs) === 'custom_connector', 'Custom source prose and unknown codes remain literal in ' . $locale);
@@ -196,7 +197,8 @@ foreach (array('payment_supplier','company','banktransfert','payment_salary','us
 historyCheck(strpos($html,'Pontuação 100')!==false && strpos($html,'Score 100')===false && strpos($html,'Reconciliação revista')!==false, 'Type badges and score captions use translated text');
 historyCheck($xp->query('//select[@name="hist_audit_type"]/option[@value="bulk_manual"]')->item(0)->textContent==='Reconciliação revista'
 	&& $xp->query('//select[@name="hist_link_type"]/option[@value="payment_supplier"]')->item(0)->textContent===$langs->trans('SupplierInvoicePayment'), 'Filter options display the same translated labels and retain raw query IDs');
-historyCheck($xp->query('//a[text()="'.$langs->trans('BankTransfer').'"]')->length===1, 'Native transfer placeholder references use the installed bank translation');
+historyCheck($xp->query('//span[@class="krea-history-link" and text()="'.$langs->trans('BankTransfer').'"]/following-sibling::a[text()="#77"]')->length===1,
+	'Generic native transfer markers retain their record ID next to the translated badge');
 historyCheck(strpos($html,'Human (paiement) department')!==false && strpos($html,'Original explanation (paiement) must stay literal')!==false
 	&& strpos($html,'DeGema &amp;amp; Filhos')!==false, 'Actual names, literal entities and operator explanations remain source evidence');
 historyCheck(strpos($html,'<script>source</script>')===false && strpos($html,'&lt;script&gt;source&lt;/script&gt;')!==false, 'Untrusted document references stay escaped after translation');

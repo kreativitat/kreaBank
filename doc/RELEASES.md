@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.28 — 2026-11-14
+
+- Retain linked record IDs when History contains generic native reference markers; avoid repeating the translated document type as its reference.
+
 ## 1.20.27 — 2026-11-14
 
 - Translate History document badges, native references, reconciliation methods, audit actions and score captions; search and sort by their displayed labels without rewriting audit evidence.

@@ -271,7 +271,7 @@ foreach ($recent as $row) {
 			'fk_doc' => $docId,
 			'doc_ref' => $docRef,
 			'doc_type_label' => kreabankHistoryCodeLabel($docType, 'document', $langs),
-			'doc_ref_label' => kreabankHistoryNativeLabel($docRef, $langs),
+			'doc_ref_label' => kreabankHistoryReferenceLabel($docRef, $docId, $langs),
 			'doc_url' => $docUrl,
 		);
 	}
@@ -759,7 +759,7 @@ print '</tr>';
 		$linkTypeLabel = $link['doc_type_label'] ?? ($linkType !== '' ? kreabankHistoryCodeLabel($linkType,'document',$langs) : kreabankWorklistTranslate($langs,'KreaBankHistoryDocument'));
 		$linkRef = trim((string) (isset($link['doc_ref']) ? $link['doc_ref'] : ''));
 		$linkDocId = (int) (isset($link['fk_doc']) ? $link['fk_doc'] : 0);
-		$linkText = $linkRef !== '' ? ($link['doc_ref_label'] ?? kreabankHistoryNativeLabel($linkRef,$langs)) : ('#' . $linkDocId);
+		$linkText = $linkRef !== '' ? ($link['doc_ref_label'] ?? kreabankHistoryReferenceLabel($linkRef,$linkDocId,$langs)) : ('#' . $linkDocId);
 		$linkDocUrl = trim((string) (isset($link['doc_url']) ? $link['doc_url'] : ''));
 		$out = '<div>';
 		$out .= '<span class="krea-history-link">' . dol_escape_htmltag($linkTypeLabel) . '</span>';
