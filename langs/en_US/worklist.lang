@@ -55,3 +55,9 @@ KreaBankWorklistUnavailablePayment=Unavailable. Remove or review.
 KreaBankWorklistRefineFilters=Narrow the date or account filters.
 KreaBankWorklistRefineSearch=More results. Refine the search.
 KreaBankWorklistBatchesUnavailable=Payment batches unavailable. Setup required.
+
+KreaBankWorklistCreateMovement=Create movement
+KreaBankWorklistCreateAndReconcile=Create and reconcile
+KreaBankWorklistMovementEffect=Creates one bank movement from this statement line and reconciles it.
+KreaBankWorklistMovementUnavailable=Creation is unavailable. Review existing movements, payments and statement evidence first.
+KreaBankWorklistMovementCreated=Bank movement created and reconciled.

@@ -133,6 +133,8 @@ class WorklistControllerUser
 class WorklistControllerService
 {
 	public $calls = array();
+	public $failCreation = false;
+	public function createWorklistMovementAndReconcile(...$args) { if ($this->failCreation) { throw new RuntimeException('Review changed'); } $this->calls[] = array('createWorklistMovementAndReconcile',$args); return 88; }
 	public function reconcileLine(...$args) { $this->calls[] = array('reconcileLine',$args); return 8; }
 	public function changeMovementAccount(...$args) { $this->calls[] = array('changeMovementAccount',$args); return true; }
 	public function savePaymentBatchDraft(...$args) { $this->calls[] = array('savePaymentBatchDraft',$args); return true; }
@@ -156,6 +158,7 @@ class WorklistControllerRead
 	public function batchesAvailable() { return $this->batchSchema; }
 }
 function GETPOST($name, $filter = '') { return $_POST[$name] ?? $_GET[$name] ?? ($filter === 'array' ? array() : ''); }
+function getDolGlobalInt($name) { return $GLOBALS['worklistControllerDisableInput'] ?? 0; }
 function kreabankIsTokenValid() { return $GLOBALS['worklistControllerCsrf']; }
 function isModEnabled($name) { return in_array($name, $GLOBALS['worklistControllerModules'], true); }
 function accessforbidden($message = '') { $GLOBALS['worklistControllerDenied'] = true; throw new WorklistControllerForbidden($message); }
@@ -186,12 +189,13 @@ function runWorklistController($post, $session = array(), $options = array())
 {
 	$_GET = $options['get'] ?? array(); $_POST = $post; $_SESSION = $session;
 	$_SERVER['REQUEST_METHOD'] = $options['method'] ?? 'POST';
+	$GLOBALS['worklistControllerDisableInput'] = $options['disable_input'] ?? 0;
 	$GLOBALS['worklistControllerCsrf'] = $options['csrf'] ?? true;
 	$GLOBALS['worklistControllerModules'] = $options['modules'] ?? array('kreabank','banque');
 	$GLOBALS['worklistControllerDenied'] = false; $GLOBALS['worklistControllerEvents'] = array();
 	$conf = (object) array('entity'=>$options['entity'] ?? 1,'liste_limit'=>25); $user = new WorklistControllerUser();
 	$user->denied = $options['denied'] ?? array(); $user->socid = $options['socid'] ?? 0;
-	$langs = new WorklistControllerLangs(); $service = new WorklistControllerService();
+	$langs = new WorklistControllerLangs(); $service = new WorklistControllerService(); $service->failCreation = $options['fail_creation'] ?? false;
 	$worklist = new WorklistControllerRead($options['fresh_pair'] ?? worklistControllerPair());
 	$worklist->batchSchema = $options['batch_schema'] ?? true;
 	$controller = file_get_contents(__DIR__ . '/../reconciliationlist.php');
@@ -268,6 +272,32 @@ $result = runWorklistController(array('action'=>'undo_batch','review'=>'undo'),$
 checkWorklist(!$result['calls'] && $result['denied'], 'Batch undo requires its separate native/module authority');
 $result = runWorklistController(array('action'=>'undo_batch','review'=>'undo'),$undoSession);
 checkWorklist($result['calls'] === array(array('undoPaymentBatch',array(8,array('signed'=>'undo proof')))), 'Authorized group undo delegates the exact reviewed group to the shared service');
+
+// A created native movement requires the private displayed review and modifier rights.
+$movementPayload = array('key'=>'staged:8','movement'=>array('source_key'=>'staged:8','source'=>array('amount'=>'-50.00000000'),'signature'=>'private proof'));
+$movementSession = worklistControllerSession();
+$movementSession['kreabank_worklist_reviews']['movement'] = worklistControllerReview('movement',$movementPayload);
+$movementPost = array('action'=>'create_movement','review'=>'movement','payment_mode'=>'VIR','movement_note'=>'Reviewed fee','source_key'=>'staged:999','amount'=>'999','expand'=>'staged:8','mode'=>'create','q'=>'Fee');
+$result = runWorklistController($movementPost,$movementSession);
+checkWorklist($result['calls'] === array(array('createWorklistMovementAndReconcile',array($movementPayload['movement'],'VIR','Reviewed fee'))), 'Movement creation uses the private reviewed source and ignores replacement financial POST fields');
+checkWorklist(!isset($result['session']['kreabank_worklist_reviews']['movement'],$result['session']['kreabank_worklist_movement_inputs']['staged:8'],$result['session']['kreabank_worklist_scan']), 'Created movement consumes its nonce, clears sticky inputs and invalidates analysis');
+checkWorklist(!isset($result['redirect']['expand']) && !runWorklistController($movementPost,$result['session'])['calls'], 'Completed movement closes its review and cannot replay');
+foreach (array(array('csrf'=>false),array('denied'=>array('banque/modifier')),array('disable_input'=>1),array('denied'=>array('kreabank/reconciliation/write'))) as $options) {
+    $result = runWorklistController($movementPost,$movementSession,$options);
+    checkWorklist(!$result['calls'] && $result['denied'], 'Movement creation requires CSRF, native modifier rights, module write and direct input policy');
+}
+$result = runWorklistController($movementPost,$movementSession,array('fail_creation'=>true));
+checkWorklist(!$result['calls'] && $result['redirect']['expand']==='staged:8' && $result['redirect']['mode']==='create' && $result['redirect']['q']==='Fee', 'Failed creation returns to its source row and search context');
+checkWorklist($result['session']['kreabank_worklist_movement_inputs']['staged:8']===array('payment_mode'=>'VIR','note'=>'Reviewed fee') && isset($result['session']['kreabank_worklist_scan']), 'Failed creation retains reviewed user inputs without claiming financial success');
+$expired = $movementSession; $expired['kreabank_worklist_reviews']['movement']['expires']=time()-1;
+$result=runWorklistController($movementPost,$expired);
+checkWorklist(!$result['calls'] && $result['redirect']['expand']==='staged:8' && $result['session']['kreabank_worklist_movement_inputs']['staged:8']['note']==='Reviewed fee', 'Expired reviews retain bounded inputs for a freshly scoped source without executing');
+$movementSession['kreabank_worklist_movement_inputs'] = array('staged:8'=>array('payment_mode'=>'VIR','note'=>'Other company'));
+$movementSession['kreabank_worklist_movement_reviews'] = array('private'=>'old source');
+$result = runWorklistController(array(),$movementSession,array('method'=>'GET','entity'=>2));
+checkWorklist(!isset($result['session']['kreabank_worklist_movement_inputs'],$result['session']['kreabank_worklist_movement_reviews']), 'Company changes clear creation inputs and private backend reviews');
+$result=runWorklistController(array(),$movementSession,array('method'=>'GET','get'=>$movementPost));
+checkWorklist($result['denied'] && !$result['calls'], 'Creation is never executed by read navigation');
 
 // Preparing matches retains read permission and CSRF without financial authority.
 foreach (array('advance_scan','more_scan') as $readAction) {

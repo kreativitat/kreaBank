@@ -14,6 +14,7 @@ require_once __DIR__ . '/KreaBankReconciliationScope.class.php';
 require_once __DIR__ . '/KreaBankTaxReconciliation.class.php';
 require_once __DIR__ . '/KreaBankStatementEvidence.class.php';
 require_once __DIR__ . '/KreaBankPaymentBatchTrait.php';
+require_once __DIR__ . '/KreaBankWorklistMovementTrait.php';
 require_once __DIR__ . '/../lib/kreabank.lib.php';
 
 /**
@@ -37,6 +38,7 @@ class KreaBankNullLangs
 class KreaBankService
 {
 	use KreaBankPaymentBatchTrait;
+	use KreaBankWorklistMovementTrait;
 
 	/** Legacy samples were repeatedly scaled and cannot be reconstructed safely. */
 	const BATCH_ML_FEATURE_VERSION = 2;

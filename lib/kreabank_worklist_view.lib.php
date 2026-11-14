@@ -2,6 +2,7 @@
 /* Copyright (C) 2026 Kreativität Works <mail@kreativitat.com>
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
+require_once __DIR__ . '/kreabank_worklist_creation_view.lib.php';
 
 /** Presentation only: prepared facts and action descriptors come from the controller. */
 function kreabankWorklistEscape($value)
@@ -14,6 +15,21 @@ function kreabankWorklistEscape($value)
 function kreabankWorklistTranslate($langs, $key)
 {
 	return method_exists($langs, 'transnoentities') ? $langs->transnoentities($key) : $langs->trans($key);
+}
+
+/** Translate reserved native label segments without rewriting customer prose. */
+function kreabankWorklistNativeLabel($value, $langs)
+{
+	$parts = preg_split('/(\s+\/\s+)/u', (string) $value, -1, PREG_SPLIT_DELIM_CAPTURE);
+	if ($parts === false) { return (string) $value; }
+	$keys = array('banktransfert'=>'BankTransfer', 'paiement'=>'Payment');
+	foreach ($parts as &$part) {
+		if (preg_match('/^(\s*)\((banktransfert|paiement)\)(\s*)$/iuD', $part, $match)) {
+			$part = $match[1] . kreabankWorklistTranslate($langs, $keys[strtolower($match[2])]) . $match[3];
+		}
+	}
+	unset($part);
+	return implode('', $parts);
 }
 
 /** Keep navigation read-only; never carry a financial action or review token into links. */
@@ -64,7 +80,7 @@ function kreabankWorklistMoney($amount, $currency)
 
 function kreabankWorklistIcon($icon)
 {
-	$allowed = array('check', 'search', 'layer-group', 'save', 'times', 'exchange-alt', 'eye', 'undo', 'sync-alt', 'chevron-down', 'chevron-up');
+	$allowed = array('check', 'search', 'layer-group', 'plus', 'save', 'times', 'exchange-alt', 'eye', 'undo', 'sync-alt', 'chevron-down', 'chevron-up');
 	return '<span class="fas fa-' . (in_array($icon, $allowed, true) ? $icon : 'eye') . '" aria-hidden="true"></span>';
 }
 
@@ -88,8 +104,8 @@ function kreabankWorklistPostForm($id, $descriptor, $model, $extra = '')
 /** Candidate evidence uses the same compact structure for every accounting record type. */
 function kreabankWorklistCandidate($candidate, $langs)
 {
-	$html = '<strong>' . kreabankWorklistEscape($candidate['reference'] ?? '') . '</strong>';
-	if (!empty($candidate['description'])) { $html .= '<span class="kb-wl-caption">' . kreabankWorklistEscape($candidate['description']) . '</span>'; }
+	$html = '<strong>' . kreabankWorklistEscape(kreabankWorklistNativeLabel($candidate['reference'] ?? '', $langs)) . '</strong>';
+	if (!empty($candidate['description'])) { $html .= '<span class="kb-wl-caption">' . kreabankWorklistEscape(kreabankWorklistNativeLabel($candidate['description'], $langs)) . '</span>'; }
 	$html .= '<span class="kb-wl-caption">' . kreabankWorklistEscape(kreabankWorklistDate($candidate['date'] ?? ''));
 	if (isset($candidate['amount'])) { $html .= ' · ' . kreabankWorklistMoney($candidate['amount'], $candidate['currency'] ?? ''); }
 	elseif (array_key_exists('amount', $candidate)) { $html .= ' · —'; }
@@ -110,7 +126,7 @@ function kreabankWorklistCorrection($candidate, $line, $id, $model, $langs)
 	$accountRef = trim((string) ($candidate['account_ref'] ?? ''));
 	$reference = $accountRef === '' ? '' : '<button type="button" class="kb-wl-account-ref" data-kb-dialog="' . $dialogId . '" aria-haspopup="dialog" title="' . $t('KreaBankWorklistChangeAccount') . '">' . $e($accountRef) . '</button>';
 	$dialog = '<dialog class="kb-wl-dialog" id="' . $dialogId . '" aria-labelledby="' . $dialogId . '-title" aria-describedby="' . $dialogId . '-effect"><h2 id="' . $dialogId . '-title">' . $t('KreaBankWorklistChangeAccount') . '</h2>'
-		. '<p><strong>' . $e($candidate['reference'] ?? '') . '</strong></p><dl><dt>' . $t('KreaBankDate') . '</dt><dd>' . $e(kreabankWorklistDate($candidate['date'] ?? '')) . '</dd><dt>' . $t('Amount') . '</dt><dd>' . kreabankWorklistMoney($candidate['amount'], $candidate['currency'] ?? $line['currency']) . '</dd><dt>' . $t('KreaBankWorklistStatementAccount') . '</dt><dd>' . $e($line['bank_account_ref']) . '</dd><dt>' . $t('KreaBankWorklistFromAccount') . '</dt><dd>' . $e($correction['from_account_ref'] ?? $candidate['account_ref'] ?? '') . '</dd><dt>' . $t('KreaBankWorklistToAccount') . '</dt><dd>' . $e($correction['to_account_ref'] ?? $line['bank_account_ref']) . '</dd></dl><p id="' . $dialogId . '-effect">' . $t('KreaBankWorklistCorrectionEffect') . '</p><div class="kb-wl-dialog-actions"><button type="button" class="button" data-kb-dialog-close autofocus>' . $t('Cancel') . '</button><button type="submit" class="button" form="' . $actionId . '">' . $t('Save') . '</button></div></dialog>';
+		. '<p><strong>' . $e(kreabankWorklistNativeLabel($candidate['reference'] ?? '', $langs)) . '</strong></p><dl><dt>' . $t('KreaBankDate') . '</dt><dd>' . $e(kreabankWorklistDate($candidate['date'] ?? '')) . '</dd><dt>' . $t('Amount') . '</dt><dd>' . kreabankWorklistMoney($candidate['amount'], $candidate['currency'] ?? $line['currency']) . '</dd><dt>' . $t('KreaBankWorklistStatementAccount') . '</dt><dd>' . $e($line['bank_account_ref']) . '</dd><dt>' . $t('KreaBankWorklistFromAccount') . '</dt><dd>' . $e($correction['from_account_ref'] ?? $candidate['account_ref'] ?? '') . '</dd><dt>' . $t('KreaBankWorklistToAccount') . '</dt><dd>' . $e($correction['to_account_ref'] ?? $line['bank_account_ref']) . '</dd></dl><p id="' . $dialogId . '-effect">' . $t('KreaBankWorklistCorrectionEffect') . '</p><div class="kb-wl-dialog-actions"><button type="button" class="button" data-kb-dialog-close autofocus>' . $t('Cancel') . '</button><button type="submit" class="button" form="' . $actionId . '">' . $t('Save') . '</button></div></dialog>';
 	return array('button'=>kreabankWorklistButton(kreabankWorklistTranslate($langs, 'KreaBankWorklistChangeAccount'), 'exchange-alt', 'type="button" data-kb-dialog="' . $dialogId . '" aria-haspopup="dialog"'),
 		'reference'=>$reference, 'form'=>kreabankWorklistPostForm($actionId, $correction, $model), 'dialog'=>$dialog);
 }
@@ -134,7 +150,8 @@ function kreabankWorklistTable($model, $langs)
 	$formatSample = html_entity_decode(strip_tags(kreabankPrice('1000.10')), ENT_QUOTES, 'UTF-8');
 	$moneyFormat = preg_match('/^\s*1([^0-9]*)000([^0-9]+)10\s*$/uD', $formatSample, $separators)
 		? ' data-group-separator="' . $e($separators[1]) . '" data-decimal-separator="' . $e($separators[2]) . '"' : '';
-	$html = '<div class="kb-worklist" data-locale="' . $e(str_replace('_', '-', $langs->defaultlang ?? 'en_US')) . '"' . $moneyFormat . '>';
+	$html = '<div class="kb-worklist" data-locale="' . $e(str_replace('_', '-', $langs->defaultlang ?? 'en_US')) . '"' . $moneyFormat
+		. ' data-navigation-scope="' . $e($model['navigation_scope'] ?? '') . '" data-navigation-context="' . $e($model['navigation_context'] ?? '') . '" data-navigation-page="' . max(0, (int) ($model['navigation_page'] ?? 0)) . '">';
 	if (!$canWrite) { $html .= '<p class="opacitymedium" role="status">' . $t('KreaBankWorkspaceReadOnly') . '</p>'; }
 	if (!empty($model['notice'])) { $html .= '<p role="status">' . $e($model['notice']) . '</p>'; }
 	if (!empty($model['scan'])) {
@@ -193,6 +210,7 @@ function kreabankWorklistTable($model, $langs)
 		$review = (array) ($row['review'] ?? array());
 		$expanded = !empty($row['expanded']);
 		$batchMode = !empty($row['batch_mode']);
+		$createMode = !empty($row['create_mode']);
 		$batchReview = !empty($row['batch_review']);
 		$activeBatch = !empty($row['batch_active']);
 		$draft = (array) ($row['draft'] ?? array());
@@ -218,18 +236,23 @@ function kreabankWorklistTable($model, $langs)
 			$forms .= kreabankWorklistPostForm($formId, $review['action'], $model);
 		}
 		if (!$done) {
-			foreach (array('search'=>'Search', 'batch'=>'KreaBankWorklistCreateBatch') as $mode => $label) {
+			foreach (array('search'=>'Search', 'batch'=>'KreaBankWorklistCreateBatch', 'create'=>'KreaBankWorklistCreateMovement') as $mode => $label) {
 				if ($mode === 'batch' && (!$canWrite || !empty($row['batch_unavailable']))) { continue; }
+				if ($mode === 'create' && (!$canWrite || empty($row['create_available']))) { continue; }
 				$url = kreabankWorklistUrl($model, array('expand'=>$key, 'mode'=>$mode));
-				$html .= '<a class="button kb-wl-icon" href="' . $e($url) . '" title="' . $t($label) . '" aria-label="' . $t($label) . '" aria-controls="' . $id . '-detail" aria-expanded="' . ($expanded && ($batchMode === ($mode === 'batch')) ? 'true' : 'false') . '">' . kreabankWorklistIcon($mode === 'batch' ? 'layer-group' : 'search') . '<span class="kb-wl-sr">' . $t($label) . '</span></a>';
+				$html .= '<a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e($url) . '" title="' . $t($label) . '" aria-label="' . $t($label) . '" aria-controls="' . $id . '-detail" aria-expanded="' . ($expanded && ($createMode ? 'create' : ($batchMode ? 'batch' : 'search')) === $mode ? 'true' : 'false') . '">' . kreabankWorklistIcon($mode === 'batch' ? 'layer-group' : ($mode === 'create' ? 'plus' : 'search')) . '<span class="kb-wl-sr">' . $t($label) . '</span></a>';
 			}
 		}
 		if ($done && $activeBatch) {
-			$html .= '<a class="button kb-wl-icon" href="' . $e(kreabankWorklistUrl($model, array('expand'=>$key, 'mode'=>'view'))) . '" title="' . $t('KreaBankWorklistViewBatch') . '" aria-label="' . $t('KreaBankWorklistViewBatch') . '" aria-controls="' . $id . '-detail" aria-expanded="' . ($expanded ? 'true' : 'false') . '">' . kreabankWorklistIcon('eye') . '</a>';
+			$html .= '<a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e(kreabankWorklistUrl($model, array('expand'=>$key, 'mode'=>'view'))) . '" title="' . $t('KreaBankWorklistViewBatch') . '" aria-label="' . $t('KreaBankWorklistViewBatch') . '" aria-controls="' . $id . '-detail" aria-expanded="' . ($expanded ? 'true' : 'false') . '">' . kreabankWorklistIcon('eye') . '</a>';
 		}
 		$html .= '</td></tr>';
 		if (!$expanded || ($done && !$activeBatch)) { continue; }
-		$html .= '<tr class="kb-wl-detail-row" id="' . $id . '-detail"><td colspan="8"><section class="kb-wl-detail" aria-label="' . $e($line['description'] ?? '') . '"><div class="kb-wl-detail-heading"><strong>' . $t($batchMode || $activeBatch ? 'KreaBankWorklistPaymentBatch' : 'KreaBankWorklistFindMatch') . '</strong><a class="button kb-wl-icon" href="' . $e(kreabankWorklistUrl($model, array('expand'=>null, 'mode'=>null, 'entry_search'=>null, 'q'=>null))) . '" title="' . $t('Close') . '" aria-label="' . $t('Close') . '">' . kreabankWorklistIcon('times') . '</a></div>';
+		$html .= '<tr class="kb-wl-detail-row" id="' . $id . '-detail" data-line-key="' . $e($key) . '"><td colspan="8"><section class="kb-wl-detail" aria-label="' . $e($line['description'] ?? '') . '"><div class="kb-wl-detail-heading"><strong>' . $t($createMode ? 'KreaBankWorklistCreateMovement' : ($batchMode || $activeBatch ? 'KreaBankWorklistPaymentBatch' : 'KreaBankWorklistFindMatch')) . '</strong><a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e(kreabankWorklistUrl($model, array('expand'=>null, 'mode'=>null, 'entry_search'=>null, 'q'=>null))) . '" title="' . $t('Close') . '" aria-label="' . $t('Close') . '">' . kreabankWorklistIcon('times') . '</a></div>';
+		if ($createMode) {
+			$creation = kreabankWorklistCreation($row,$line,$id,$model,$langs);
+			$html .= $creation['html'] . '</section></td></tr>'; $forms .= $creation['form']; continue;
+		}
 		$searchId = $id . '-search';
 		if (!$activeBatch && !$batchReview) {
 		$html .= '<div class="kb-wl-search"><label for="' . $searchId . '-query">' . $t('KreaBankWorkspaceSearchEntries') . '</label><input class="flat" form="' . $searchId . '" type="search" name="q" id="' . $searchId . '-query" value="' . $e($row['search'] ?? '') . '">' . kreabankWorklistButton(kreabankWorklistTranslate($langs, 'Search'), 'search', 'type="submit" form="' . $searchId . '"') . '</div>';
@@ -252,6 +275,9 @@ function kreabankWorklistTable($model, $langs)
 		if ($activeBatch || $batchReview) { $otherCandidates = array(); }
 		if (isset($otherCandidates['key'])) { $otherCandidates = array($otherCandidates); }
 		if (!$candidates && !$otherCandidates) { $html .= '<p class="opacitymedium">' . $t('KreaBankWorklistNoResults') . '</p>'; }
+		if (!$batchMode && !$candidates && !$otherCandidates && $canWrite && !empty($row['create_available'])) {
+			$html .= '<a class="button" data-kb-row-navigation="' . $e($key) . '" href="' . $e(kreabankWorklistUrl($model,array('expand'=>$key,'mode'=>'create','q'=>null))) . '">' . kreabankWorklistIcon('plus') . ' ' . $t('KreaBankWorklistCreateMovement') . '</a>';
+		}
 		if ($batchMode) {
 			$html .= '<div class="kb-wl-batch"' . (!$batchReview && $canWrite ? ' data-kb-batch' : '') . ' data-target="' . $e($line['amount_decimal'] ?? $line['amount']) . '" data-currency="' . $e($line['currency']) . '" data-incomplete="' . $t('KreaBankWorklistBatchIncomplete') . '" data-ready="' . $t('KreaBankWorklistReady') . '"><div class="kb-wl-members">';
 		}
@@ -262,7 +288,7 @@ function kreabankWorklistTable($model, $langs)
 			if ($batchMode && !$batchReview && $canWrite) {
 				$selected = !empty($candidate['selected']) || in_array((string) $candidate['key'], array_map('strval', (array) ($draft['member_keys'] ?? array())), true);
 				$selectable = $canWrite && !$isOther && !empty($candidate['selectable']);
-				$html .= '<input type="checkbox" id="' . $candidateId . '" form="' . $batchId . '" name="' . $e($batch['selection_name'] ?? 'batch_members[]') . '" value="' . $e($candidate['key']) . '" data-kb-member data-amount="' . $e($candidate['amount']) . '"' . ($selected ? ' checked' : '') . (!$selectable ? ' disabled' : '') . ' aria-label="' . $e(kreabankWorklistTranslate($langs, 'Select') . ' ' . ($candidate['reference'] ?? '')) . '">';
+				$html .= '<input type="checkbox" id="' . $candidateId . '" form="' . $batchId . '" name="' . $e($batch['selection_name'] ?? 'batch_members[]') . '" value="' . $e($candidate['key']) . '" data-kb-member data-amount="' . $e($candidate['amount']) . '"' . ($selected ? ' checked' : '') . (!$selectable ? ' disabled' : '') . ' aria-label="' . $e(kreabankWorklistTranslate($langs, 'Select') . ' ' . kreabankWorklistNativeLabel($candidate['reference'] ?? '', $langs)) . '">';
 			}
 			$evidence = kreabankWorklistCandidate($candidate, $langs);
 			if ($batchMode && !$batchReview && $canWrite && $selectable) { $evidence = '<label class="kb-wl-member-label" for="' . $candidateId . '">' . $evidence . '</label>'; }

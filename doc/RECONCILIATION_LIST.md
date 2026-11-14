@@ -122,3 +122,19 @@ complete. `php test/test_worklist_scan.php` covers quotas, pages, retries and re
 A short in-flight session claim prevents concurrent tabs from matching the same
 batch. Stale views cannot replace newer state; failed workers return their current
 retry cursor while preserving completed summaries.
+
+Row actions preserve the active row, horizontal scroll and keyboard focus across
+Search/Create batch opening and closing, inline searches, POST redirects and
+read-only analysis refreshes. Position hints expire after two minutes and are
+bound to the session/company/user, filter/sort context and page; no financial
+inputs or review tokens are stored in the browser.
+
+Unmatched staged rows offer Create movement when native modifier rights and direct
+bank input policy permit. Opening the panel only prepares a private, single-use
+review of exact persisted evidence. The user chooses an active payment mode and
+explicitly approves Create and reconcile. The shared native adapter/finalizer
+creates the movement, source mapping and audit atomically, without learning.
+Existing movement/payment, duplicate, feed, batch, currency, restricted-account
+and ownership conflicts fail closed and are rechecked under locks. The legacy
+reconciliation controller is unchanged. Validate using the guarded disposable
+`test/test_worklist_movement_database.php`; never create live records for testing.

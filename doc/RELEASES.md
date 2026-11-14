@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.21 — 2026-11-14
+
+- Add native column filters, sorting, page-size controls and pagination to every monthly-report table; retain complete totals, CSV and print. Close the final table border.
+- Preserve reconciliation row position when opening/closing Search and Create batch, submitting reviews and refreshing analysis. Translate native payment/transfer markers.
+- Add explicit reviewed movement creation for eligible unmatched staged rows through the existing native adapter, with atomic audit and duplicate/conflict checks.
+
 ## 1.20.20 — 2026-11-14
 
 - Give imported statements and their lines native header filters, sort controls and pagination. Filter complete owned projections without changing import totals.

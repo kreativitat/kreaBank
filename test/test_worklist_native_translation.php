@@ -57,6 +57,30 @@ foreach (array('en_US'=>'Reconciliation list', 'pt_PT'=>'Lista de reconciliaçã
 	checkWorklistNativeTranslation(strpos($text, $description) !== false, 'Literal source entities remain evidence rather than being decoded as translations in ' . $locale);
 	checkWorklistNativeTranslation(strpos($html, '&amp;ccedil;') === false && strpos($html, '&amp;ecirc;') === false, 'Portuguese control labels are never double encoded');
 	checkWorklistNativeTranslation(strpos($html, '1234.56789012') === false, 'Visible monetary evidence retains the native two-decimal display');
+	$paymentRef = 'DG01-PAY-0001 / (paiement) / Ação &amp; Filhos';
+	$model['rows'][0]['review']['reference'] = $paymentRef;
+	$model['rows'][0]['review']['description'] = '(paiement) / Ação &amp; Filhos';
+	$model['rows'][0]['review']['correction']['fields']['review_label'] = $paymentRef;
+	$model['rows'][0]['candidates'][0]['reference'] = '(banktransfert)';
+	$model['rows'][0]['candidates'][0]['description'] = 'Customer (paiement) department';
+	$model['filters']['search_match'] = '(banktransfert)';
+	$before = serialize($model);
+	$html = kreabankWorklistTable($model, $langs);
+	$dom = new DOMDocument();
+	$previous = libxml_use_internal_errors(true);
+	$dom->loadHTML('<?xml encoding="utf-8" ?>' . $html);
+	libxml_clear_errors(); libxml_use_internal_errors($previous);
+	$xpath = new DOMXPath($dom);
+	$reference = $xpath->query('//td[@class="kb-wl-match"]/strong')->item(0)->textContent;
+	$expected = 'DG01-PAY-0001 / ' . $langs->transnoentities('Payment') . ' / Ação &amp; Filhos';
+	checkWorklistNativeTranslation($reference === $expected && substr_count($reference, 'DG01-PAY-0001') === 1, 'Native payment labels translate inside a composite reference without repeating its document reference: ' . $locale);
+	checkWorklistNativeTranslation($xpath->query('//td[@class="kb-wl-match"]/span')->item(0)->textContent === $langs->transnoentities('Payment') . ' / Ação &amp; Filhos', 'The proposed payment subtitle translates the same reserved marker: ' . $locale);
+	checkWorklistNativeTranslation($xpath->query('//dialog/p/strong')->item(0)->textContent === $expected, 'Account correction repeats the translated displayed reference: ' . $locale);
+	checkWorklistNativeTranslation($xpath->query('//div[@class="kb-wl-candidate-evidence"]/strong')->item(0)->textContent === $langs->transnoentities('BankTransfer'), 'Native bank-transfer titles use the installed banks translation exactly once: ' . $locale);
+	checkWorklistNativeTranslation($xpath->query('//div[@class="kb-wl-candidate-evidence"]/span')->item(0)->textContent === 'Customer (paiement) department', 'Marker-like customer prose is not rewritten: ' . $locale);
+	checkWorklistNativeTranslation($xpath->query('//input[@name="review_label"]')->item(0)->getAttribute('value') === $paymentRef
+		&& $xpath->query('//input[@name="search_match"]')->item(0)->getAttribute('value') === '(banktransfert)', 'Translated display never rewrites signed review or search evidence: ' . $locale);
+	checkWorklistNativeTranslation(serialize($model) === $before && strpos($html, '&amp;ecirc;') === false, 'Native label translations preserve the original model and Portuguese encoding: ' . $locale);
 }
 // Render the actual controller's title block with installed native helpers. The
 // native sort cleanup regex does not consume underscores in existing sort keys.

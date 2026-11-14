@@ -258,6 +258,212 @@ async function browserChecks(directory) {
         console.log(`OK: ${browserCount} Chromium worklist interactions; screenshots saved in ${directory}`);
     } finally { await browser.close(); }
 }
-if (process.argv[2] === '--browser') {
+/** Real reload/GET/POST/303 cycles use a disposable loopback-only synthetic server. */
+async function navigationBrowserChecks() {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const http = require('node:http');
+    const {chromium} = require('playwright');
+    const script = fs.readFileSync(path.join(__dirname, '../js/worklist.js'), 'utf8');
+    let app;
+    const storageKey = 'kreabank.worklist.position.v1';
+    const browser = await chromium.launch({executablePath:process.env.KREABANK_CHROMIUM || '/usr/bin/chromium', headless:true, args:['--no-sandbox']});
+    const page = await browser.newPage({viewport:{width:1280,height:900}});
+    page.setDefaultTimeout(5000);
+    const errors = [];
+    const posts = [];
+    const removed = new Set();
+    let draft = '';
+    let analysed = false;
+    let scanRequests = 0;
+    let count = 0;
+    page.on('pageerror', error => errors.push(error.message));
+    const escape = value => String(value).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const render = url => {
+        const input = url.searchParams;
+        const number = input.has('button_search') ? 0 : Math.max(0, Number(input.get('pageplusone') || 1) - 1 || Number(input.get('page') || 0));
+        const state = new URLSearchParams({page:String(number),company:input.get('company') || 'one',sortorder:input.get('sortorder') || 'DESC',limit:input.get('limit') || '24',search_description:input.get('search_description') || ''});
+        const href = changes => {
+            const target = new URLSearchParams(state);
+            for (const [key,value] of Object.entries(changes)) if (value !== null) target.set(key,value);
+            return escape(app + '?' + target);
+        };
+        const hidden = extra => [...state,...Object.entries(extra)].map(([name,value]) => '<input type="hidden" name="' + escape(name) + '" value="' + escape(value) + '">').join('');
+        const expanded = input.get('expand');
+        const mode = input.get('mode') || 'search';
+        const context = JSON.stringify([state.get('sortorder'),state.get('limit'),state.get('search_description')]);
+        let forms = '';
+        let html = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding-top:80px;font:16px Arial}#id-top{position:fixed;inset:0 0 auto;height:60px;background:#ddd;z-index:5}.kb-worklist{margin:16px}.spacer{height:260px}.bottom{height:1000px}.div-table-responsive{overflow:auto}table{border-collapse:collapse;min-width:1000px;width:100%}.kb-wl-row{height:90px}td{border-bottom:1px solid #ddd;padding:10px}a,button{display:inline-block;margin:4px;padding:8px}dialog{max-width:400px}.kb-wl-detail{padding:16px}.kb-wl-dialog:not([open]){display:none}</style><div id="id-top">Native fixed header</div><div class="kb-worklist" data-navigation-scope="fixture-' + escape(state.get('company')) + '" data-navigation-context="' + escape(context) + '" data-navigation-page="' + number + '">';
+        html += '<form id="searchFormList" method="get" action="' + app + '"><input name="company" type="hidden" value="' + escape(state.get('company')) + '"><input name="page" type="hidden" value="' + number + '"><input name="sortorder" type="hidden" value="' + escape(state.get('sortorder')) + '"><input name="search_description" aria-label="Filter" value="' + escape(state.get('search_description')) + '"><input name="pageplusone" aria-label="Page" value="' + (number+1) + '"><select name="limit" aria-label="Page size"><option>24</option><option>12</option></select><button name="button_search" value="1">Filter</button><a id="sort" href="' + href({sortorder:'ASC'}) + '">Sort</a><a id="next" href="' + href({page:String(number+1)}) + '">Next page</a><div class="spacer"></div><div class="div-table-responsive"><table class="kb-wl-table"><tbody>';
+        const ids = Array.from({length:60},(_,index)=>index+1).filter(id=>!removed.has(id)).slice(number*24,number*24+24);
+        for (const id of ids) {
+            const key = 'staged:' + id;
+            const marker = ' data-kb-row-navigation="' + key + '"';
+            const base = {expand:key,mode};
+            html += '<tr class="kb-wl-row" data-line-key="' + key + '" id="row-' + id + '"><td>' + key + '</td><td>125.12345678 EUR</td><td class="kb-wl-actions"><a aria-label="Search ' + id + '"' + marker + ' href="' + href({expand:key,mode:'search'}) + '">Search</a><a aria-label="Batch ' + id + '"' + marker + ' href="' + href({expand:key,mode:'batch'}) + '">Batch</a><button type="submit" aria-label="Approve ' + id + '" form="approve-' + id + '">Approve</button><button type="button" aria-label="Correct ' + id + '" data-kb-dialog="dialog-' + id + '">Bank</button></td></tr>';
+            forms += '<form method="post" action="' + app + '" id="approve-' + id + '">' + hidden({action:'confirm_pair',row:key,token:'fixture-token',review:'fixture-review'}) + '</form>';
+            forms += '<form method="post" action="' + app + '" id="correct-' + id + '">' + hidden({action:'correct_account',row:key,token:'fixture-token',review:'fixture-correction'}) + '</form><dialog class="kb-wl-dialog" id="dialog-' + id + '"><button type="button" data-kb-dialog-close autofocus>Cancel dialog</button><button type="submit" form="correct-' + id + '">Save correction</button></dialog>';
+            if (expanded !== key) continue;
+            html += '<tr class="kb-wl-detail-row" data-line-key="' + key + '"><td colspan="3"><section class="kb-wl-detail"><div class="kb-wl-detail-heading">' + mode + '<a aria-label="Close"' + marker + ' href="' + href({}) + '">X</a></div><input type="search" id="query-' + id + '" name="q" form="search-' + id + '" value="' + escape(input.get('q') || '') + '"><button type="submit" form="search-' + id + '">Search entries</button>';
+            if (mode === 'batch') html += '<input id="name-' + id + '" name="batch_name" form="batch-' + id + '" value="' + escape(draft) + '"><button type="submit" form="batch-' + id + '">Save draft</button><a aria-label="Cancel batch"' + marker + ' href="' + href({}) + '">Cancel</a>';
+            html += '</section></td></tr>';
+            forms += '<form method="get" action="' + app + '" id="search-' + id + '">' + hidden(base) + '</form><form method="post" action="' + app + '" id="batch-' + id + '">' + hidden({action:'save_draft',row:key,expand:key,mode:'batch',token:'fixture-token'}) + '</form>';
+        }
+        html += '</tbody></table></div></form>' + forms;
+        if (input.has('scan') && !analysed) html += '<div class="kb-wl-scan" data-page-ready="0" data-ready="Ready" data-failed="Failed" data-changed="Changed" data-paused="Paused"><span data-kb-scan-message>Analysing</span><span data-kb-scan-count>0 / 24</span></div><form data-kb-scan method="post" action="' + app + '?scan=1"><input name="action" value="advance_scan"><input name="scan_generation" value="fixture-generation"><input name="scan_cursor" value="0"></form>';
+        return html + '</div><div class="bottom"></div><script>' + script + '</script>';
+    };
+    const server = http.createServer(async (request, response) => {
+        const url = new URL(request.url,app);
+        if (url.pathname !== new URL(app).pathname) { response.writeHead(404); response.end(); return; }
+        if (request.method === 'POST') {
+            let body = '';
+            for await (const chunk of request) body += chunk;
+            const fields = Object.fromEntries(await new Response(body,{headers:{'Content-Type':request.headers['content-type']}}).formData());
+            if (fields.action === 'advance_scan') {
+                scanRequests++;
+                await new Promise(resolve => setTimeout(resolve,300));
+                analysed = true;
+                response.writeHead(200,{'Content-Type':'application/json'});
+                response.end(JSON.stringify({done:true,page_ready:true,processed:24,total:24,generation:'fixture-generation',cursor:1})); return;
+            }
+            posts.push(fields);
+            if (fields.action === 'confirm_pair') removed.add(Number(fields.row.split(':')[1]));
+            if (fields.action === 'save_draft') draft = fields.batch_name;
+            const target = new URL(app);
+            for (const key of ['company','sortorder','limit','page','search_description','expand','mode']) if (fields[key] !== undefined) target.searchParams.set(key,fields[key]);
+            response.writeHead(303,{Location:target.href}); response.end(); return;
+        }
+        response.writeHead(200,{'Content-Type':'text/html','Cache-Control':'no-store'}); response.end(render(url));
+    });
+    await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
+    app = 'http://127.0.0.1:'+server.address().port+'/reconciliationlist.php';
+    await page.route('**/*', route => new URL(route.request().url()).origin === new URL(app).origin ? route.continue() : route.abort());
+    const row = id => page.locator('.kb-wl-row[data-line-key="staged:' + id + '"]');
+    const offset = id => row(id).evaluate(element => element.getBoundingClientRect().top);
+    const place = async (id,top=180) => row(id).evaluate((element,y) => window.scrollBy(0,element.getBoundingClientRect().top-y),top);
+    const cycle = async action => { await Promise.all([page.waitForEvent('load'),action()]); await page.waitForTimeout(100); };
+    const sameOffset = async (id,before,label) => { assert.ok(Math.abs(await offset(id)-before)<3,label + ': ' + await offset(id) + ' vs ' + before); count++; };
+    const seed = async changes => page.evaluate(({storageKey,changes}) => {
+        const root = document.querySelector('.kb-worklist');
+        sessionStorage.setItem(storageKey,JSON.stringify({scope:root.dataset.navigationScope,context:root.dataset.navigationContext,page:Number(root.dataset.navigationPage),row:'staged:12',index:11,offset:180,left:0,time:Date.now(),kind:'row',keyboard:false,focusId:'',...changes}));
+    },{storageKey,changes});
+    try {
+        await page.goto(app);
+        for (const mode of ['Search','Batch']) {
+            await place(12);
+            let before = await offset(12);
+            await cycle(()=>page.getByRole('link',{name:mode+' 12',exact:true}).click());
+            await sameOffset(12,before,mode+' opens at its parent row');
+            assert.equal(await page.evaluate(key=>sessionStorage.getItem(key),storageKey),null); count++;
+            before = await offset(12);
+            await cycle(()=>page.getByRole('link',{name:'Close',exact:true}).click());
+            await sameOffset(12,before,mode+' X closes at its parent row');
+        }
+        await place(12);
+        await cycle(()=>page.getByRole('link',{name:'Search 12',exact:true}).click());
+        await page.locator('#query-12').fill('Synthetic lookup');
+        let before = await offset(12);
+        await cycle(()=>page.locator('#query-12').press('Enter'));
+        await sameOffset(12,before,'Inline search keeps its source row');
+        assert.equal(await page.locator('#query-12').inputValue(),'Synthetic lookup'); count++;
+        assert.equal(await page.locator('#query-12').evaluate(input=>document.activeElement===input),true); count++;
+        await cycle(()=>page.getByRole('link',{name:'Close',exact:true}).click());
+        await cycle(()=>page.getByRole('link',{name:'Batch 12',exact:true}).click());
+        await page.locator('#name-12').fill('Synthetic draft');
+        before = await offset(12);
+        await cycle(()=>page.getByRole('button',{name:'Save draft',exact:true}).click());
+        await sameOffset(12,before,'Native draft POST/redirect keeps its source row');
+        assert.equal(await page.locator('#name-12').inputValue(),'Synthetic draft'); count++;
+        await cycle(()=>page.getByRole('link',{name:'Cancel batch',exact:true}).click());
+        await sameOffset(12,before,'Batch Cancel keeps its source row');
+        await page.getByRole('button',{name:'Correct 12',exact:true}).click();
+        before = await offset(12);
+        await cycle(()=>page.getByRole('button',{name:'Save correction',exact:true}).click());
+        await sameOffset(12,before,'Dialog POST uses the parent row of its opener');
+        await page.getByRole('button',{name:'Approve 12',exact:true}).focus();
+        before = await offset(12);
+        await cycle(()=>page.getByRole('button',{name:'Approve 12',exact:true}).press('Enter'));
+        assert.equal(await row(12).count(),0); count++;
+        await sameOffset(13,before,'Approval removal selects the nearest surviving row');
+        assert.equal(await row(13).evaluate(element=>document.activeElement===element),true); count++;
+        assert.deepEqual(posts.map(post=>post.action),['save_draft','correct_account','confirm_pair']); count++;
+        assert.ok(posts.every(post=>post.token==='fixture-token')); count++;
+
+        await page.evaluate(()=>scrollTo(0,0));
+        await seed({});
+        await cycle(()=>page.getByRole('link',{name:'Next page',exact:true}).click());
+        assert.equal(await page.evaluate(()=>scrollY),0); count++;
+        await seed({page:1,row:'staged:30',index:5});
+        await cycle(()=>page.getByRole('link',{name:'Sort',exact:true}).click());
+        assert.equal(await page.evaluate(()=>scrollY),0); count++;
+        await seed({});
+        await page.getByRole('textbox',{name:'Filter',exact:true}).fill('New filter');
+        await cycle(()=>page.getByRole('button',{name:'Filter',exact:true}).click());
+        assert.equal(await page.evaluate(()=>scrollY),0); count++;
+        assert.equal(await page.evaluate(key=>sessionStorage.getItem(key),storageKey),null); count++;
+        await seed({});
+        await page.evaluate(key=>document.addEventListener('submit',event=>{
+            window.__headerPosition=sessionStorage.getItem(key);
+            event.preventDefault();
+        },{once:true}),storageKey);
+        await page.getByRole('button',{name:'Filter',exact:true}).click();
+        assert.equal(await page.evaluate(()=>window.__headerPosition),null,'The header form cannot borrow a row-owned dialog button as its navigation context'); count++;
+
+        await page.goto(app);
+        await seed({});
+        await cycle(()=>page.goto(app+'?company=two'));
+        assert.equal(await page.evaluate(()=>scrollY),0); count++;
+        await seed({time:Date.now()-120001});
+        await cycle(()=>page.reload());
+        assert.equal(await page.evaluate(()=>scrollY),0); count++;
+        await seed({page:3,kind:'refresh'});
+        await cycle(()=>page.reload());
+        assert.equal(await page.evaluate(()=>scrollY),0); count++;
+
+        await page.goto(app);
+        await place(13,30);
+        await cycle(()=>page.getByRole('link',{name:'Search 13',exact:true}).click());
+        assert.ok(await offset(13)>=68); count++;
+        await cycle(()=>page.getByRole('link',{name:'Close',exact:true}).click());
+        await page.setViewportSize({width:500,height:900});
+        await page.locator('.div-table-responsive').evaluate(wrapper=>{wrapper.scrollLeft=350;});
+        await place(13);
+        await cycle(()=>page.getByRole('link',{name:'Search 13',exact:true}).evaluate(link=>link.click()));
+        assert.equal(await page.locator('.div-table-responsive').evaluate(wrapper=>wrapper.scrollLeft),350); count++;
+        await cycle(()=>page.getByRole('link',{name:'Close',exact:true}).evaluate(link=>link.click()));
+        assert.equal(await page.locator('.div-table-responsive').evaluate(wrapper=>wrapper.scrollLeft),350); count++;
+        await page.setViewportSize({width:1280,height:900});
+        await page.evaluate(key=>{
+            document.addEventListener('click',event=>{
+                if(!event.target.closest('a[data-kb-row-navigation]')) return;
+                window.__positionSnapshot=JSON.parse(sessionStorage.getItem(key));
+                event.preventDefault();
+            },{once:true});
+        },storageKey);
+        await page.getByRole('link',{name:'Search 13',exact:true}).click();
+        await page.waitForTimeout(30);
+        const snapshot = await page.evaluate(()=>window.__positionSnapshot);
+        assert.deepEqual(Object.keys(snapshot).sort(),['context','focusId','index','keyboard','kind','left','offset','page','row','scope','time']); count++;
+        assert.equal(await page.evaluate(key=>sessionStorage.getItem(key),storageKey),null); count++;
+
+        await page.goto(app+'?scan=1');
+        await place(13);
+        before = await offset(13);
+        await page.waitForEvent('load');
+        await page.waitForTimeout(100);
+        await sameOffset(13,before,'Read-only scan refresh retains the visible row');
+        assert.equal(scanRequests,1); count++;
+        assert.equal(posts.length,3,'Scanning never submits a financial action'); count++;
+        assert.deepEqual(errors,[]); count++;
+        console.log('OK: '+count+' isolated Chromium row navigation checks (synthetic routes only)');
+    } catch (error) {
+        console.error({url:page.url(),posts,errors,body:(await page.locator('body').innerText().catch(()=>'' )).slice(0,300)});
+        throw error;
+    } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
+}
+if (process.argv[2] === '--navigation-browser') {
+    navigationBrowserChecks().catch(error => { console.error(error); process.exitCode = 1; });
+} else if (process.argv[2] === '--browser') {
     browserChecks(process.argv[3]).catch(error => { console.error(error); process.exitCode = 1; });
 }

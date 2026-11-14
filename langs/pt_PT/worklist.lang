@@ -55,3 +55,9 @@ KreaBankWorklistUnavailablePayment=Indisponível. Remova ou reveja.
 KreaBankWorklistRefineFilters=Reduza o período ou filtre por conta.
 KreaBankWorklistRefineSearch=Existem mais resultados. Refine a pesquisa.
 KreaBankWorklistBatchesUnavailable=Lotes indisponíveis. É necessária configuração.
+
+KreaBankWorklistCreateMovement=Criar movimento
+KreaBankWorklistCreateAndReconcile=Criar e reconciliar
+KreaBankWorklistMovementEffect=Cria um movimento bancário a partir desta linha do extrato e reconcilia-o.
+KreaBankWorklistMovementUnavailable=Criação indisponível. Reveja primeiro os movimentos, pagamentos e dados do extrato existentes.
+KreaBankWorklistMovementCreated=Movimento bancário criado e reconciliado.

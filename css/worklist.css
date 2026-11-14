@@ -57,3 +57,7 @@
  .kb-worklist .kb-wl-totals { gap:12px 18px; }
  .kb-worklist .kb-wl-totals > div:first-child { margin-right:auto; }
 }
+.kb-wl-create-fields { display:grid; grid-template-columns:max-content minmax(160px,420px); gap:12px; align-items:start; margin:18px 0; }
+.kb-wl-create-fields label { padding-top:6px; }
+.kb-wl-create-fields select, .kb-wl-create-fields textarea { box-sizing:border-box; width:100%; }
+@media(max-width:700px) { .kb-wl-create-fields { grid-template-columns:minmax(0,1fr); gap:6px; } }

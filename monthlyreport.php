@@ -14,6 +14,7 @@ if (!$res) { die('Include of main fails'); }
 require_once __DIR__ . '/lib/kreabank.lib.php';
 require_once __DIR__ . '/lib/kreabank_monthly_report.lib.php';
 require_once __DIR__ . '/class/KreaBankMonthlyReport.class.php';
+require_once DOL_DOCUMENT_ROOT . '/core/class/html.form.class.php';
 $langs->loadLangs(array('banks', 'kreabank@kreabank'));
 if (!isModEnabled('kreabank') || !isModEnabled('banque') || !empty($user->socid)
 	|| !$user->hasRight('banque', 'lire') || !$user->hasRight('kreabank', 'reconciliation', 'read')) {
@@ -29,7 +30,9 @@ $view = GETPOST('view', 'aZ09');
 if (!in_array($view, array('summary', 'checks', 'pending', 'bank', 'ledger'), true)) { $view = 'summary'; }
 $state = array('account_context' => $accountId, 'month' => $month, 'bank_balance' => $bankBalance,
 	'balance_account' => $accountId, 'balance_month' => $month,
-	'view' => $view, 'bank_page' => max(0, GETPOSTINT('bank_page')), 'ledger_page' => max(0, GETPOSTINT('ledger_page')));
+	'view' => $view);
+// Presentation filters never change the full report's loader inputs or totals.
+$state = array_merge($state, kreabankMonthlyListRequestState(array_merge($_GET, $_POST), !empty($conf->liste_limit) ? $conf->liste_limit : 25));
 $report = null;
 $error = '';
 if ($accountId > 0) {

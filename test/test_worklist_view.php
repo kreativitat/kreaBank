@@ -64,6 +64,14 @@ function worklistViewFixture($case)
 			'correction'=>array('action'=>'correct_account', 'fields'=>array('source_key'=>'staged:11','account_move_review'=>'synthetic-move-token'), 'from_account_ref'=>'OTHER-BANK', 'to_account_ref'=>'STATEMENT-BANK')));
 		$model['rows'][0]['candidates'] = array();
 	}
+	if (in_array($case,array('creation','creation_unavailable'),true)) {
+        $model['rows'][0]['review']=null; $model['rows'][0]['candidates']=array();
+        $model['rows'][0]['expanded']=true; $model['rows'][0]['create_mode']=true; $model['rows'][0]['create_available']=true;
+        $model['rows'][0]['movement_form']=array('action'=>'create_movement','fields'=>array('review'=>'synthetic-create-review','expand'=>'staged:11','mode'=>'create'),
+            'source'=>array('bank_account_ref'=>'SIGNED-BANK','operation_date'=>'2026-11-12','amount'=>'-42.25000000','currency'=>'EUR','description'=>'Reviewed exact source'),
+            'modes'=>array('VIR'=>'Bank transfer','CHQ'=>'Cheque'),'note'=>'<reviewed note>','payment_mode'=>'');
+        if($case==='creation_unavailable') { unset($model['rows'][0]['movement_form']); $model['rows'][0]['create_available']=false; }
+    }
 	if ($case === 'readonly') { $model['can_write'] = false; }
 	if ($case === 'direct_correction') {
 		$model['rows'][0]['review']['correction'] = array('action'=>'correct_account', 'fields'=>array('account_move_review'=>'synthetic-direct-review'), 'from_account_ref'=>'PAYMENT-BANK', 'to_account_ref'=>'STATEMENT-BANK');
@@ -124,7 +132,7 @@ $checks = 0;
 function checkWorklistView($condition, $message) { global $checks; if (!$condition) { throw new RuntimeException($message); } $checks++; }
 foreach (array('en_US','pt_PT') as $locale) {
 	$langs = worklistFixtureLanguages($locale);
-	foreach (array('ready','batch','reviewed','other','readonly','empty','unsafe','ambiguous','loading','direct_correction','completed','unavailable','needs_review') as $case) {
+	foreach (array('ready','batch','reviewed','other','readonly','empty','unsafe','ambiguous','loading','direct_correction','completed','unavailable','needs_review','creation','creation_unavailable') as $case) {
 		$html = kreabankWorklistTable(worklistViewFixture($case), $langs);
 		$dom = new DOMDocument();
 		$previous = libxml_use_internal_errors(true);
@@ -146,6 +154,17 @@ foreach (array('en_US','pt_PT') as $locale) {
 		foreach ($xpath->query('//form[@method="post"]') as $form) {
 			checkWorklistView($xpath->query('.//input[@name="token"]', $form)->length === 1, $case . ': CSRF token on isolated POST');
 		}
+        if ($case==='creation') {
+            checkWorklistView($xpath->query('//input[@name="action" and @value="create_movement"]')->length===1, 'Explicit isolated creation action');
+            checkWorklistView($xpath->query('//select[@name="payment_mode" and @required]/option[@selected]')->length===0, 'User must explicitly choose an active native payment mode');
+            checkWorklistView(strpos($html,'SIGNED-BANK')!==false && strpos($html,'Reviewed exact source')!==false && strpos($html,kreabankPrice('-42.25'))!==false, 'Creation consent renders the exact signed source snapshot rather than a stale display projection');
+            checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-detail-row")]//input[@name="q"]')->length===0, 'Creation panel is separate from candidate search');
+            checkWorklistView($xpath->query('//a[contains(@href,"mode=create") and @aria-expanded="true"]')->length===1, 'Only the active creation action is expanded');
+            checkWorklistView($xpath->query('//textarea[@name="movement_note"]')->item(0)->textContent==='<reviewed note>', 'Sticky note is escaped and retained');
+        }
+        if ($case==='creation_unavailable') {
+            checkWorklistView($xpath->query('//input[@name="action" and @value="create_movement"]')->length===0, 'Unavailable source has no financial creation action');
+        }
 		if ($case === 'ready') {
 			checkWorklistView(strpos($html, 'STATEMENT-BANK') !== false && strpos($html, 'PAYMENT-BANK') !== false, 'Actual source/payment banks are distinct');
 			checkWorklistView($xpath->query('//button[@form and @type="submit"]')->length === 1, 'Sole signed proposed pair has direct approval');
@@ -183,7 +202,15 @@ foreach (array('en_US','pt_PT') as $locale) {
 			checkWorklistView(strpos($html,'OTHER-BANK') !== false && strpos($html,'STATEMENT-BANK') !== false, 'Correction shows old and destination banks');
 			checkWorklistView($xpath->query('//input[@name="account_move_review" and @value="synthetic-move-token"]')->length === 1, 'Correction submits exact prepared review');
 		}
-		if ($case === 'readonly') {
+		if (in_array($case,array('creation','creation_unavailable'),true)) {
+        $model['rows'][0]['review']=null; $model['rows'][0]['candidates']=array();
+        $model['rows'][0]['expanded']=true; $model['rows'][0]['create_mode']=true; $model['rows'][0]['create_available']=true;
+        $model['rows'][0]['movement_form']=array('action'=>'create_movement','fields'=>array('review'=>'synthetic-create-review','expand'=>'staged:11','mode'=>'create'),
+            'source'=>array('bank_account_ref'=>'SIGNED-BANK','operation_date'=>'2026-11-12','amount'=>'-42.25000000','currency'=>'EUR','description'=>'Reviewed exact source'),
+            'modes'=>array('VIR'=>'Bank transfer','CHQ'=>'Cheque'),'note'=>'<reviewed note>','payment_mode'=>'');
+        if($case==='creation_unavailable') { unset($model['rows'][0]['movement_form']); $model['rows'][0]['create_available']=false; }
+    }
+	if ($case === 'readonly') {
 			checkWorklistView($xpath->query('//form[@method="post"]')->length === 0, 'Read-only view has no financial action form');
 			checkWorklistView($xpath->query('//button[@data-kb-dialog]')->length === 0, 'Read-only view cannot correct accounts');
 		}
@@ -193,6 +220,36 @@ foreach (array('en_US','pt_PT') as $locale) {
 			checkWorklistView(strpos($html,'1970') === false && strpos($html,'&lt;script&gt;') !== false, 'Invalid dates fail closed without epoch fallbacks');
 		}
 	}
+	foreach (array(
+		'(banktransfert)'=>$langs->trans('BankTransfer'),
+		'(paiement)'=>$langs->trans('Payment'),
+		'DG01-PAY-0001 / (paiement) / Ação & Filhos'=>'DG01-PAY-0001 / ' . $langs->trans('Payment') . ' / Ação & Filhos',
+		' (BANKTRANSFERT) '=>' ' . $langs->trans('BankTransfer') . ' ',
+		'Customer (paiement) department'=>'Customer (paiement) department',
+		'(banktransfert) service'=>'(banktransfert) service',
+		'Customer/(paiement)/department'=>'Customer/(paiement)/department',
+		'(UnknownMarker)'=>'(UnknownMarker)',
+	) as $raw=>$expected) {
+		checkWorklistView(kreabankWorklistNativeLabel($raw, $langs) === $expected, 'Only reserved standalone native label segments translate: ' . $locale . '/' . $raw);
+	}
+	$markerModel = worklistViewFixture('batch');
+	$markerModel['rows'][0]['batch_candidates'][0]['reference'] = 'DG01-PAY-0001 / (paiement)';
+	$markerModel['rows'][0]['batch_candidates'][0]['description'] = '(banktransfert)';
+	$markerModel['filters']['search_match'] = '(paiement)';
+	$markerModel['rows'][0]['batch_form']['fields']['review_snapshot'] = '(banktransfert) / (paiement)';
+	$originalModel = serialize($markerModel);
+	$html = kreabankWorklistTable($markerModel, $langs);
+	$dom = new DOMDocument();
+	$previous = libxml_use_internal_errors(true);
+	$dom->loadHTML('<?xml encoding="utf-8" ?>' . $html);
+	libxml_clear_errors(); libxml_use_internal_errors($previous);
+	$xpath = new DOMXPath($dom);
+	$selection = $xpath->query('//input[@data-kb-member]')->item(0);
+	checkWorklistView($selection->getAttribute('aria-label') === $langs->trans('Select') . ' DG01-PAY-0001 / ' . $langs->trans('Payment'), 'Batch selection announces the same translated payment label');
+	checkWorklistView($selection->getAttribute('value') === 'native_bank__21' && $selection->getAttribute('data-amount') === '-1000.00000000', 'Native labels never change selected identities or exact allocation evidence');
+	checkWorklistView($xpath->query('//input[@name="search_match"]')->item(0)->getAttribute('value') === '(paiement)'
+		&& $xpath->query('//input[@name="review_snapshot"]')->item(0)->getAttribute('value') === '(banktransfert) / (paiement)', 'Raw search and signed POST evidence remain unchanged');
+	checkWorklistView(serialize($markerModel) === $originalModel, 'Rendering translated native labels does not mutate the prepared model');
 }
 checkWorklistView(kreabankWorklistDate('2026-02-31') === '—', 'Invalid date is not normalized into another date');
 checkWorklistView(kreabankWorklistDate('2026-11-11') === '11/11/2026', 'Calendar date formatted without timezone drift');

@@ -78,3 +78,10 @@ deploy production. Roll back these files and the shared navigation together.
 
 See the [2026-11-14 production deployment record](deployment-2026-11-14.md) for
 verified runtime identity, checks and rollback locations.
+
+All seven tables across Summary, Checks, Pending, Bank and Dolibarr use native
+Dolibarr header filters, sortable headers and pagination (configured list size,
+maximum 5,000). Each table owns independent namespaced state. Filters and sorting
+apply to the complete prepared display rows before paging; loader inputs, totals,
+CSV and print remain complete. Unknown amounts stay unknown and support an em-dash
+filter. See `lib/kreabank_monthly_list.lib.php` and the pure/native view suites.
