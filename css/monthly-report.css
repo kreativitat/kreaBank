@@ -76,6 +76,16 @@
   .kb-monthly-totals > div { padding:14px; }
   .kb-monthly-totals dd { font-size:1.4em; }
 }
+@media screen and (max-width:700px) {
+  .kb-monthly-report .kb-monthly-detail-table { min-width:850px; }
+  .kb-monthly-list-form > .table-fiche-title,
+  .kb-monthly-list-form > .table-fiche-title > tbody,
+  .kb-monthly-list-form > .table-fiche-title > tbody > tr { display:block; width:100%; }
+  .kb-monthly-list-form > .table-fiche-title .col-title,
+  .kb-monthly-list-form > .table-fiche-title .col-right { display:block; box-sizing:border-box; width:100%; max-width:100%; }
+  .kb-monthly-list-form > .table-fiche-title .col-title .titre { white-space:normal; overflow-wrap:anywhere; }
+  .kb-monthly-list-form > .table-fiche-title .col-right .pagination { float:none; margin:8px 0; }
+}
 @media print {
   body.kb-monthly-print #id-left, body.kb-monthly-print #id-top, body.kb-monthly-print #id-top-padding,
   body.kb-monthly-print .side-nav, body.kb-monthly-print .tmenu, body.kb-monthly-print footer,

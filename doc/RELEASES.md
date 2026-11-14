@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.25 — 2026-11-14
+
+- Keep monthly transaction columns readable on phones with scrolling inside the table frame; wrap native list headings and pagination without widening the page.
+
 ## 1.20.24 — 2026-11-14
 
 - Show the planned payment bank for unpaid invoice and tax proposals; use the same bank for list filtering and sorting.

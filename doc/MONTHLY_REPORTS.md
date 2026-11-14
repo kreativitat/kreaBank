@@ -88,5 +88,7 @@ CSV and print remain complete. Unknown amounts stay unknown and support an em-da
 filter. Shared column widths and wrapped references keep both sides aligned and
 within the desktop browser width. Known native movement markers and source captions
 are translated for display and filtering; original evidence and CSV remain unchanged.
+Phone layouts retain readable transaction columns with horizontal scrolling confined
+to each table frame; native headings and page controls wrap above them.
 Deploy the shared `lib/kreabank_worklist_view.lib.php` label helper with these views.
 See `lib/kreabank_monthly_list.lib.php` and the pure/native view suites.
