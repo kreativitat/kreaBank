@@ -70,10 +70,10 @@ $newHead = kreabankCompleteAccountHead($head, 45);
 checkNavigation($newHead === $head, 'Shared header replaces native tabs without inserting another navigation layer');
 checkNavigation(strpos(kreabankWorkspaceUrl('reconcile', 45), 'reconcile.php') !== false, 'Dormant reconciliation keeps its direct route');
 $tabs = kreabankPrepareHead(45);
-checkNavigation(array_column($tabs, 2) === array('worklist', 'bankstatement', 'statement', 'history'), 'Reconcile is first and native Movements is not an operational tab');
+checkNavigation(array_column($tabs, 2) === array('bankstatement', 'statement', 'worklist', 'history'), 'Reconcile is third and native Movements is not an operational tab');
 $user->allowed[] = 'kreabank.reconciliation.write';
 $user->allowed[] = 'banque.modifier';
-checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('worklist', 'bankstatement', 'statement', 'history'), 'Write actions do not add another navigation layer');
+checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('bankstatement', 'statement', 'worklist', 'history'), 'Write actions do not add another navigation layer');
 foreach (kreabankPrepareHead(45) as $tab) {
 	checkNavigation((strpos($tab[0], 'account_context=45') !== false || strpos($tab[0], 'search_account=45') !== false || preg_match('/[?&]id=45(?:&|$)/', $tab[0])) && strpos($tab[0], 'line_id') === false, 'Carry account without copying a stale line/action');
 }

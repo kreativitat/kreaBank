@@ -99,10 +99,10 @@ function scanControllerPost($rendered, $extra = array())
 }
 
 $pageA = runScanController(array('page'=>0));
-checkScanController($pageA['cache']['targets'] === array_map(static function ($id) { return 'staged:'.$id; },range(1,25)), 'Actual GET grants only page one of the 166 sources');
+checkScanController($pageA['cache']['targets'] === array_map(static function ($id) { return 'staged:'.$id; },range(166,142)), 'Actual GET grants only the newest page of the 166 sources');
 $sessionA = $pageA['session']; $sessionA['unrelated_fixture_state'] = 'preserve';
 $pageB = runScanController(array('page'=>1),$sessionA);
-checkScanController($pageB['cache']['targets'] === array_map(static function ($id) { return 'staged:'.$id; },range(26,50)), 'Actual GET page two grants only its displayed source identities');
+checkScanController($pageB['cache']['targets'] === array_map(static function ($id) { return 'staged:'.$id; },range(141,117)), 'Actual GET page two grants only its displayed source identities');
 checkScanController($pageA['cache']['generation'] !== $pageB['cache']['generation'], 'Changing native page replaces the active batch generation');
 
 foreach (array('advance_scan','more_scan') as $action) {
@@ -126,7 +126,7 @@ $admitted = runScanController(scanControllerPost($outOfRange),$outOfRange['sessi
 checkScanController($admitted['status'] === 200 && isset($admitted['cache']['lease']), 'The first request from a clamped page is admitted and reserves its work');
 checkScanController($admitted['cache']['generation'] === $outOfRange['cache']['generation'] && $admitted['cache']['view'] === $outOfRange['cache']['view'], 'Clamped-page POST does not reset its just-rendered generation');
 $expanded = runScanController(array('page'=>0,'expand'=>'staged:101'));
-checkScanController($expanded['state']['page'] === 4 && $expanded['cache']['targets'] === array_map(static function ($id) { return 'staged:'.$id; },range(101,125)), 'An expanded row binds analysis to its rendered page rather than the requested page');
+checkScanController($expanded['state']['page'] === 2 && $expanded['cache']['targets'] === array_map(static function ($id) { return 'staged:'.$id; },range(116,92)), 'An expanded row binds analysis to its rendered page rather than the requested page');
 $expandedPost = runScanController(scanControllerPost($expanded),$expanded['session']);
 checkScanController($expandedPost['status'] === 200 && $expandedPost['cache']['generation'] === $expanded['cache']['generation'], 'Expanded-row page normalization remains admitted when action fields use its rendered page');
 
@@ -157,7 +157,7 @@ foreach ($pageA['cache']['targets'] as $key) { $cached['kreabank_worklist_scan']
 $reload = runScanController(array('page'=>0),$cached);
 checkScanController(serialize($reload['session']) === serialize($cached), 'Reloading a completed page does not grant hidden additional work');
 $more = runScanController(scanControllerPost($reload,array('action'=>'more_scan')),$reload['session']);
-checkScanController($more['redirected'] && $more['cache']['targets'] === array_map(static function ($id) { return 'staged:'.$id; },range(26,50)), 'Actual explicit More POST grants the next 25 and redirects without matching');
+checkScanController($more['redirected'] && $more['cache']['targets'] === array_map(static function ($id) { return 'staged:'.$id; },range(141,117)), 'Actual explicit More POST grants the next 25 and redirects without matching');
 checkScanController($more['base']['page'] === 1, 'More opens the native page containing the newly granted results');
 checkScanController($more['redirect']['page'] === 1, 'The actual by-value redirect closure receives the new page explicitly');
 $morePage = runScanController($more['base'],$more['session']);

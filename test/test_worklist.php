@@ -30,7 +30,9 @@ checkWorklist(!kreabankWorklistCorrectionMatches(array_merge($accountReview,$acc
 
 $state = kreabankWorklistState(array(), 25);
 checkWorklist($state['limit'] === 25 && $state['page'] === 0, 'Configured native list size and first page are the defaults');
-checkWorklist($state['filters']['status'] === 'pending' && $state['sort']['field'] === 'operation_date' && $state['sort']['order'] === 'ASC', 'Pending oldest-first is the default list');
+checkWorklist($state['filters']['status'] === 'pending' && $state['sort']['field'] === 'operation_date' && $state['sort']['order'] === 'DESC', 'Pending newest-first is the default list');
+checkWorklist(kreabankWorklistState(array('sortfield'=>'operation_date','sortorder'=>'asc'), 25)['params']['sortorder'] === 'ASC', 'An explicit ascending date choice survives normalization and read navigation');
+checkWorklist(kreabankWorklistState(array('sortfield'=>'amount'), 25)['sort']['order'] === 'ASC', 'Other columns retain their ascending default');
 $state = kreabankWorklistState(array('page'=>4,'limit'=>15,'search_description'=>'  Example  ','button_search_x'=>'x'), 25);
 checkWorklist($state['page'] === 0 && $state['limit'] === 15 && $state['filters']['description'] === 'Example', 'Header searching resets the page while retaining list size');
 $state = kreabankWorklistState(array('pageplusone'=>3,'pageplusoneold'=>1,'button_search_x'=>'x'), 25);
@@ -46,7 +48,7 @@ foreach (array('button_removefilter','button_removefilter_x','button_removefilte
 }
 $state = kreabankWorklistState(array('page'=>-9,'limit'=>99999,'sortfield'=>'amount; DROP TABLE bank','sortorder'=>'DESC; SELECT 1','token'=>'secret','action'=>'approve','review'=>'signed','line_id'=>123,'account_context'=>2,'kind'=>'all','selected'=>array(9),'search_description'=>array('injected')), 25);
 checkWorklist($state['page'] === 0 && $state['limit'] === 100, 'The page and list size are bounded');
-checkWorklist($state['sort']['field'] === 'operation_date' && $state['sort']['order'] === 'ASC', 'Unknown sort expressions are replaced by allowlisted state');
+checkWorklist($state['sort']['field'] === 'operation_date' && $state['sort']['order'] === 'DESC', 'Unknown sort expressions are replaced by allowlisted state');
 checkWorklist($state['filters']['description'] === '', 'Nested request values cannot become a text filter');
 checkWorklist(!array_intersect(array_keys($state['params']), array('token','action','review','line_id','account_context','kind','selected')), 'Read navigation excludes financial actions, signatures, selections and unrelated account state');
 checkWorklist(kreabankWorklistState(array('search_amount'=>'0'), 25)['params']['search_amount'] === '0', 'Zero is retained as an active amount filter');

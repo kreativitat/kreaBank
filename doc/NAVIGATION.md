@@ -1,6 +1,6 @@
 # Banking workspace
 
-Operational banking pages share four tabs: Reconcile, Bank statement, Statements
+Operational banking pages share four tabs: Bank statement, Statements, Reconcile
 and History. Movements is in the native left menu directly below New financial
 account. Its standalone page does not render the operational tab bar. Reconcile opens the new `reconciliationlist.php`. The legacy
 `reconcile.php` controllers and direct routes remain dormant and intact. Connections also retains its

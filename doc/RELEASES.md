@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.17 — 2026-11-14
+
+- Place Reconcile third, after Bank statement and Statements, throughout the banking workspace.
+- Default the new reconciliation list to newest booking date first; retain explicit sort choices and page-sized analysis. Legacy reconciliation is unchanged.
+
 ## 1.20.16 — 2026-11-14
 
 - Add a reconciliation shortcut beside each bank account’s edit icon, opening the same scoped list as its reference link.

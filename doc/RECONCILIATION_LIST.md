@@ -8,7 +8,8 @@ direct routes preserved. All accounts belong directly to the active company; cas
 are excluded. Account selection is explicit in the header filter, never session-global.
 
 The page uses native `print_barre_liste()`, `print_liste_field_titre()` and filter
-buttons. Source filters run before analysis; match/payment-bank filters and sorts
+buttons. It defaults to newest booking date first; explicit header sort choices
+persist through filters and pagination. Source filters run before analysis; match/payment-bank filters and sorts
 require the complete bounded analysis before pagination. A visible page becomes
 actionable without waiting for other pages. Read-only matching releases the PHP
 session lock and authenticates the session, generation and cursor before saving.

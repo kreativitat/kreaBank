@@ -37,7 +37,7 @@ function kreabankWorklistState($request, $defaultLimit = 25)
 	$sort = is_scalar($request['sortfield'] ?? '') ? (string) ($request['sortfield'] ?? '') : '';
 	$sort = in_array($sort, $columns, true) ? $sort : 'operation_date';
 	$order = strtoupper(is_scalar($request['sortorder'] ?? '') ? (string) ($request['sortorder'] ?? '') : '');
-	$order = $order === 'DESC' ? 'DESC' : 'ASC';
+	$order = in_array($order, array('ASC','DESC'), true) ? $order : ($sort === 'operation_date' ? 'DESC' : 'ASC');
 	$limit = (int) ($request['limit'] ?? 0);
 	if ($limit <= 0) { $limit = max(1,(int) $defaultLimit); }
 	$limit = min(100,$limit);
