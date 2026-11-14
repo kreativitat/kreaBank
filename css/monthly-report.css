@@ -2,7 +2,7 @@
 .kb-monthly-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin:24px 0 16px; }
 .kb-monthly-heading > table { width:auto; margin:0; }
 .kb-monthly-actions { display:flex; gap:8px; align-items:center; }
-.kb-monthly-actions .button:not(.bordertransp):not(.buttonpayment), .kb-monthly-filters .button:not(.bordertransp):not(.buttonpayment) { display:inline-flex; align-items:center; justify-content:center; gap:6px; box-sizing:border-box; min-height:36px; margin:0; }
+.kb-monthly-actions .button:not(.bordertransp):not(.buttonpayment), .kb-monthly-filters .button:not(.bordertransp):not(.buttonpayment) { display:inline-flex; align-items:center; justify-content:center; gap:6px; box-sizing:border-box; height:36px; min-height:36px; line-height:1.2; margin:0; }
 .kb-monthly-actions .button:not(.bordertransp):not(.buttonpayment) { min-width:36px; padding:8px 12px; }
 .kb-monthly-filters { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; padding:16px; margin:0 0 20px; border:1px solid #d8e2e9; border-radius:8px; background:var(--colorbacktitle1,#f5f7f9); }
 .kb-monthly-filters > div { display:flex; flex-direction:column; gap:6px; min-width:0; }
@@ -32,7 +32,7 @@
 .kb-monthly-report section { margin:20px 0 28px; }
 .kb-monthly-report h2 { font-size:1.12em; margin:0 0 14px; }
 .kb-monthly-summary-grid { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:24px; align-items:start; }
-.kb-monthly-indicators h3 { margin:0 0 12px; font-size:1em; }
+.kb-monthly-indicators h3 { margin:0 0 14px; font-size:1.12em; }
 .kb-monthly-report th[scope="row"] { font-weight:normal; text-align:left; }
 .kb-monthly-report .liste_total th { font-weight:600; }
 .kb-monthly-report th, .kb-monthly-report td { padding:12px; }

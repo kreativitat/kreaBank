@@ -80,8 +80,8 @@ function kreabankMonthlyMapRows($report)
 
 function kreabankMonthlySummaryHtml($report, $langs)
 {
-	$html = '<section aria-labelledby="kb-monthly-summary"><h2 id="kb-monthly-summary">' . $langs->trans('KreaBankMonthlySummary') . '</h2>';
-	$html .= '<div class="kb-monthly-summary-grid"><div class="kb-monthly-map"><div class="div-table-responsive"><table class="tagtable liste centpercent"><thead><tr class="liste_titre"><th scope="col">' . $langs->trans('KreaBankMonthlySummary') . '</th><th scope="col" class="right">' . dol_escape_htmltag($report['account']['currency_code']) . '</th></tr></thead><tbody>';
+	$html = '<section aria-labelledby="kb-monthly-summary"><div class="kb-monthly-summary-grid"><div class="kb-monthly-map"><h2 id="kb-monthly-summary">' . $langs->trans('KreaBankMonthlySummary') . '</h2>';
+	$html .= '<div class="div-table-responsive"><table class="tagtable liste centpercent"><thead><tr class="liste_titre"><th scope="col">' . $langs->trans('KreaBankMonthlySummary') . '</th><th scope="col" class="right">' . dol_escape_htmltag($report['account']['currency_code']) . '</th></tr></thead><tbody>';
 	foreach (kreabankMonthlyMapRows($report) as $row) {
 		$highlight = in_array($row[0], array('BankAdjusted', 'LedgerAdjusted', 'UnexplainedDifference'), true);
 		$html .= '<tr class="' . ($highlight ? 'liste_total' : 'oddeven') . '"><th scope="row">' . $langs->trans('KreaBankMonthly' . $row[0]) . '</th><td class="right nowrap">' . kreabankMonthlyAmount($row[1]) . '</td></tr>';

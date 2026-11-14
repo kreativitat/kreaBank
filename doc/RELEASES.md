@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.19 — 2026-11-14
+
+- Align the monthly report section headings and match toolbar button heights after native-theme review.
+
 ## 1.20.18 — 2026-11-14
 
 - Add Monthly reports before History and remove its Bank statement button.
