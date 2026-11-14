@@ -7,11 +7,19 @@ require_once __DIR__ . '/kreabank_csv.lib.php';
 require_once __DIR__ . '/kreabank_monthly_list.lib.php';
 require_once __DIR__ . '/kreabank_worklist_view.lib.php';
 
+/** Keep old pending bookmarks on the bank side; new subtabs are independent. */
+function kreabankMonthlyReportView($view)
+{
+	if ($view === 'pending') { return 'bank_pending'; }
+	return in_array($view,array('summary','checks','bank_pending','ledger_pending','bank','ledger'),true) ? $view : 'summary';
+}
+
 /** Read-only report links carry only the displayed report's filter state. */
 function kreabankMonthlyReportUrl($state, $changes = array())
 {
 	$allowed = array('account_context', 'month', 'bank_balance', 'balance_account', 'balance_month', 'view');
 	$params = array_intersect_key(array_merge($state, $changes), array_flip($allowed));
+	if (isset($params['view'])) { $params['view'] = kreabankMonthlyReportView($params['view']); }
 	$request = array_merge($state, $changes);
 	foreach (kreabankMonthlyListRequestState($request) as $key=>$value) {
 		if (array_key_exists($key, $request)) { $params[$key] = $value; }
@@ -26,7 +34,7 @@ function kreabankMonthlyFiltersHtml($state, $langs, $accountSelector = '')
 {
 	$accountId = max(0, (int) $state['account_context']);
 	$html = '<form class="kb-monthly-filters" method="get" action="' . dol_escape_htmltag(dol_buildpath('/custom/kreabank/monthlyreport.php', 1)) . '">';
-	foreach (array('mainmenu'=>'bank','leftmenu'=>'kreabank_monthlyreport','view'=>$state['view'],
+	foreach (array('mainmenu'=>'bank','leftmenu'=>'kreabank_monthlyreport','view'=>kreabankMonthlyReportView($state['view']),
 		'balance_account'=>$accountId,'balance_month'=>$state['month']) as $name=>$value) {
 		$id = in_array($name, array('balance_account','balance_month'), true) ? ' id="kb-monthly-' . str_replace('_', '-', $name) . '"' : '';
 		$html .= '<input type="hidden"' . $id . ' name="' . $name . '" value="' . dol_escape_htmltag((string) $value) . '">';
@@ -54,8 +62,8 @@ function kreabankMonthlyActionsHtml($state, $langs, $print = false)
 function kreabankMonthlyViewsHtml($state, $langs)
 {
 	$html = '<nav class="kb-view-switch kb-monthly-views" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankMonthlyNav')) . '">';
-	foreach (array('summary'=>'Summary','checks'=>'Checks','pending'=>'Pending','bank'=>'Bank','ledger'=>'Ledger') as $key=>$label) {
-		$html .= '<a' . ($state['view'] === $key ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag(kreabankMonthlyReportUrl($state, array('view'=>$key))) . '" title="' . dol_escape_htmltag($langs->trans('KreaBankMonthly' . $label)) . '">' . $langs->trans('KreaBankMonthly' . $label . 'Short') . '</a>';
+	foreach (array('summary'=>'Summary','checks'=>'Checks','bank_pending'=>'BankPending','ledger_pending'=>'LedgerPending','bank'=>'Bank','ledger'=>'Ledger') as $key=>$label) {
+		$html .= '<a' . (kreabankMonthlyReportView($state['view']) === $key ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag(kreabankMonthlyReportUrl($state, array('view'=>$key))) . '" title="' . dol_escape_htmltag($langs->trans('KreaBankMonthly' . $label)) . '">' . $langs->trans('KreaBankMonthly' . $label . 'Short') . '</a>';
 	}
 	return $html . '</nav>';
 }
@@ -177,7 +185,7 @@ function kreabankMonthlyDetailsHtml($rows, $side, $title, $state, $langs, $print
 
 function kreabankMonthlyReportHtml($report, $state, $langs, $print = false)
 {
-	$view = $state['view'] ?? 'summary';
+	$view = kreabankMonthlyReportView($state['view'] ?? 'summary');
 	$html = '<div class="kb-monthly-report"><div class="kb-monthly-status"><span class="kb-monthly-identity"><strong>' . dol_escape_htmltag($report['company'] ?? '') . '</strong> · ' . dol_escape_htmltag($report['account']['ref']) . ' · ' . dol_escape_htmltag($report['account']['currency_code']) . ' · ' . dol_escape_htmltag($report['month']) . '</span>';
 	$errors = count(array_filter($report['checks'], static function ($check) { return $check['status'] === 'error'; }));
 	$warnings = count(array_filter($report['checks'], static function ($check) { return $check['status'] === 'warning'; }));
@@ -194,8 +202,10 @@ function kreabankMonthlyReportHtml($report, $state, $langs, $print = false)
 	}
 	if ($print || $view === 'summary') { $html .= kreabankMonthlySummaryHtml($report, $langs, $state, $print); }
 	if ($print || $view === 'checks') { $html .= kreabankMonthlyChecksHtml($report, $langs, $state, $print); }
-	if ($print || $view === 'pending') {
+	if ($print || $view === 'bank_pending') {
 		$html .= kreabankMonthlyDetailsHtml($report['bank_pending'], 'bank', $langs->transnoentities('KreaBankMonthlyBankPending'), $state, $langs, $print, 'bank_pending');
+	}
+	if ($print || $view === 'ledger_pending') {
 		$html .= kreabankMonthlyDetailsHtml($report['ledger_pending'], 'ledger', $langs->transnoentities('KreaBankMonthlyLedgerPending'), $state, $langs, $print, 'ledger_pending');
 	}
 	if (!$print && in_array($view, array('bank', 'ledger'), true)) {

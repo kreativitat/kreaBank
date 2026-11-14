@@ -76,7 +76,7 @@ $checks = 0;
 function monthlyViewCheck($ok, $message) { global $checks; if (!$ok) { throw new RuntimeException($message); } $checks++; }
 foreach (array('en_US', 'pt_PT') as $locale) {
 	$langs = new MonthlyViewLangs($locale);
-	foreach (array('summary', 'checks', 'pending', 'bank', 'ledger') as $view) {
+	foreach (array('summary', 'checks', 'bank_pending', 'ledger_pending', 'bank', 'ledger') as $view) {
 		$html = kreabankMonthlyReportHtml($report, array_merge($state, array('view' => $view)), $langs);
 		monthlyViewCheck(strpos($html, 'KreaBankMonthly') === false, 'All monthly labels are translated: ' . $locale . '/' . $view);
 		monthlyViewCheck(strpos($html, '<script>unsafe') === false, 'Evidence is escaped: ' . $locale . '/' . $view);
@@ -193,7 +193,7 @@ $conf->liste_limit = 50;
 monthlyViewCheck(kreabankMonthlyListPrepare(array_fill(0,127,$detailRows[0]),'bank',array(),$identity)['limit'] === 50, 'The native configured page size supplies the default');
 $conf->liste_limit = 25;
 $reportBefore = serialize($report);
-foreach (array('summary'=>array(),'checks'=>array(),'pending'=>array('bank_pending','ledger_pending'),'bank'=>array('bank'),'ledger'=>array('ledger')) as $view=>$keys) {
+foreach (array('summary'=>array(),'checks'=>array(),'bank_pending'=>array('bank_pending'),'ledger_pending'=>array('ledger_pending'),'bank'=>array('bank'),'ledger'=>array('ledger')) as $view=>$keys) {
 	$html = kreabankMonthlyReportHtml($report, array_merge($state,array('view'=>$view)), $langs);
 	$previousLibxml = libxml_use_internal_errors(true); $dom = new DOMDocument(); $dom->loadHTML($html); $xp = new DOMXPath($dom); libxml_clear_errors(); libxml_use_internal_errors($previousLibxml);
 	monthlyViewCheck($xp->query('//form//form')->length === 0 && $xp->query('//form')->length === count($keys), 'Each ' . $view . ' table has its own non-nested GET owner');
@@ -231,17 +231,23 @@ monthlyViewCheck(strpos($cleanUrl,'ml_map_') === false && strpos($cleanUrl,'ml_i
 $manyReport = $report;
 $manyReport['bank_pending'] = $rows;
 $manyReport['ledger_pending'] = array_fill(0,53,$report['ledger_pending'][0]);
-$listState = array_merge($state,array('view'=>'pending','ml_bank_pending_page'=>1,'ml_bank_pending_limit'=>25,
+$listState = array_merge($state,array('view'=>'bank_pending','ml_bank_pending_page'=>1,'ml_bank_pending_limit'=>25,
 	'ml_ledger_pending_page'=>2,'ml_ledger_pending_limit'=>10,'ml_bank_pending_search_amount'=>'>999999','token'=>'secret','action'=>'undo'));
-$html = kreabankMonthlyReportHtml($manyReport,$listState,$langs);
-monthlyViewCheck(strpos($html,'data-page="0" data-total="0"') !== false && strpos($html,'data-page="2" data-total="53" data-num="11"') !== false, 'The two pending lists filter/count/page independently');
-$previousLibxml = libxml_use_internal_errors(true); $dom = new DOMDocument(); $dom->loadHTML($html); $xp = new DOMXPath($dom); libxml_clear_errors(); libxml_use_internal_errors($previousLibxml);
-foreach ($xp->query('//form[@class="kb-monthly-list-form"]//a') as $link) {
-	parse_str((string)parse_url($link->getAttribute('href'),PHP_URL_QUERY),$params);
-	if (($params['leftmenu'] ?? '') !== 'kreabank_monthlyreport') { continue; }
-	monthlyViewCheck(($params['account_context'] ?? '') === '101' && ($params['month'] ?? '') === '2026-09' && ($params['bank_balance'] ?? '') === '1109.70'
-		&& ($params['balance_account'] ?? '') === '101' && ($params['balance_month'] ?? '') === '2026-09' && ($params['view'] ?? '') === 'pending'
-		&& !isset($params['page'],$params['sortfield'],$params['token'],$params['action']), 'Read links retain report identity/balance/view and no generic or write state');
+foreach (array('bank_pending','ledger_pending') as $pendingView) {
+	$html = kreabankMonthlyReportHtml($manyReport,array_merge($listState,array('view'=>$pendingView)),$langs);
+	$otherView = $pendingView === 'bank_pending' ? 'ledger_pending' : 'bank_pending';
+	monthlyViewCheck(strpos($html,'id="kb-monthly-table-' . $pendingView . '"') !== false && strpos($html,'id="kb-monthly-table-' . $otherView . '"') === false,
+		'Each pending subtab renders only its own transactions: ' . $pendingView);
+	monthlyViewCheck(strpos($html,$pendingView === 'bank_pending' ? 'data-page="0" data-total="0"' : 'data-page="2" data-total="53" data-num="11"') !== false,
+		'The pending subtab retains its independent filters/count/page: ' . $pendingView);
+	$previousLibxml = libxml_use_internal_errors(true); $dom = new DOMDocument(); $dom->loadHTML($html); $xp = new DOMXPath($dom); libxml_clear_errors(); libxml_use_internal_errors($previousLibxml);
+	foreach ($xp->query('//form[@class="kb-monthly-list-form"]//a') as $link) {
+		parse_str((string)parse_url($link->getAttribute('href'),PHP_URL_QUERY),$params);
+		if (($params['leftmenu'] ?? '') !== 'kreabank_monthlyreport') { continue; }
+		monthlyViewCheck(($params['account_context'] ?? '') === '101' && ($params['month'] ?? '') === '2026-09' && ($params['bank_balance'] ?? '') === '1109.70'
+			&& ($params['balance_account'] ?? '') === '101' && ($params['balance_month'] ?? '') === '2026-09' && ($params['view'] ?? '') === $pendingView
+			&& !isset($params['page'],$params['sortfield'],$params['token'],$params['action']), 'Read links retain report identity/balance/current subtab and no write state');
+	}
 }
 $print = kreabankMonthlyReportHtml($manyReport,$listState,$langs,true);
 monthlyViewCheck(substr_count($print,'&lt;script&gt;') === 127 && strpos($print,'fixture-native-pager') === false && strpos($print,'<form') === false,
@@ -252,10 +258,45 @@ monthlyViewCheck(serialize($report) === $reportBefore, 'Filtering every view pre
 monthlyViewCheck(strpos($controller,'kreabankMonthlyListRequestState(array_merge($_GET, $_POST)') !== false
 	&& strpos($controller,'->load($accountId, $month, $bankBalance)') !== false, 'Controller confines unrounded list inputs to presentation state, outside the financial loader');
 
+monthlyViewCheck(kreabankMonthlyReportView('pending') === 'bank_pending' && kreabankMonthlyReportView('not-a-view') === 'summary', 'Legacy pending bookmarks resolve to the bank subtab and unknown views fail closed');
+$legacyHtml = kreabankMonthlyReportHtml($report,array_merge($state,array('view'=>'pending')),$langs);
+monthlyViewCheck(strpos($legacyHtml,'id="kb-monthly-table-bank_pending"') !== false && strpos($legacyHtml,'id="kb-monthly-table-ledger_pending"') === false,
+	'Legacy pending bookmarks display only the bank side');
+$navState = array_merge($listState,array('view'=>'pending','ml_ledger_pending_search_status'=>'pending'));
+foreach (array('en_US'=>array('Pending bank','Pending ERP'),'pt_PT'=>array('Pendentes do banco','Pendentes ERP')) as $locale=>$shortLabels) {
+	$langs = new MonthlyViewLangs($locale);
+	$navigation=kreabankMonthlyViewsHtml($navState,$langs);
+	$previousLibxml=libxml_use_internal_errors(true); $dom=new DOMDocument(); $dom->loadHTML('<?xml encoding="utf-8" ?>' . $navigation); $xp=new DOMXPath($dom); libxml_clear_errors(); libxml_use_internal_errors($previousLibxml);
+	monthlyViewCheck($xp->query('//nav/a')->length === 6 && $xp->query('//nav/a[@aria-current="page"]')->length === 1, 'Six report subtabs have exactly one active state in ' . $locale);
+	$labels=array(); $views=array();
+	foreach ($xp->query('//nav/a') as $link) {
+		parse_str((string)parse_url($link->getAttribute('href'),PHP_URL_QUERY),$params); $views[]=$params['view']; $labels[$params['view']]=$link->textContent;
+		monthlyViewCheck(($params['account_context'] ?? '') === '101' && ($params['month'] ?? '') === '2026-09' && ($params['bank_balance'] ?? '') === '1109.70'
+			&& ($params['balance_account'] ?? '') === '101' && ($params['balance_month'] ?? '') === '2026-09' && ($params['ml_ledger_pending_page'] ?? '') === '2'
+			&& ($params['ml_ledger_pending_search_status'] ?? '') === 'pending' && ($params['ml_bank_pending_search_amount'] ?? '') === '>999999'
+			&& !isset($params['token'],$params['action']), 'Changing subtabs preserves report scope and independent transaction state without replaying writes');
+	}
+	monthlyViewCheck($views === array('summary','checks','bank_pending','ledger_pending','bank','ledger')
+		&& $labels['bank_pending'] === $shortLabels[0] && $labels['ledger_pending'] === $shortLabels[1], 'Pending tabs have the requested short translated labels and distinct identities in ' . $locale);
+}
+$langs = new MonthlyViewLangs('en_US');
+foreach (array('bank_pending','ledger_pending') as $pendingView) {
+	$activeState=array_merge($listState,array('view'=>$pendingView));
+	$print=kreabankMonthlyReportHtml($manyReport,$activeState,$langs,true);
+	monthlyViewCheck(substr_count($print,'&lt;script&gt;') === 127 && strpos($print,'id="kb-monthly-table-bank_pending"') !== false
+		&& strpos($print,'id="kb-monthly-table-ledger_pending"') !== false && strpos($print,'<form') === false, 'Print from either pending subtab retains both complete sides despite active filters/pages');
+	foreach (array('export'=>'csv','print_report'=>1) as $action=>$value) {
+		parse_str((string)parse_url(kreabankMonthlyReportUrl($activeState,array($action=>$value)),PHP_URL_QUERY),$params);
+		monthlyViewCheck(($params['view'] ?? '') === $pendingView && (string)$params[$action] === (string)$value
+			&& ($params['bank_balance'] ?? '') === '1109.70' && ($params['balance_account'] ?? '') === '101', 'CSV/print links preserve exact scope from ' . $pendingView);
+	}
+}
+monthlyViewCheck(strpos($controller,"kreabankMonthlyReportView(GETPOST('view', 'aZ09'))") !== false, 'Actual controller uses the same canonical view and compatibility alias as the renderer');
+
 // All detail lists share widths and translate only reserved display tokens.
 foreach (array('en_US','pt_PT') as $locale) {
 	$langs = new MonthlyViewLangs($locale);
-	foreach (array('summary','checks','pending','bank','ledger') as $view) {
+	foreach (array('summary','checks','bank_pending','ledger_pending','bank','ledger') as $view) {
 		$html = kreabankMonthlyReportHtml($report,array_merge($state,array('view'=>$view)),$langs);
 		$text = html_entity_decode(strip_tags($html),ENT_QUOTES,'UTF-8');
 		monthlyViewCheck(!preg_match('/\bKreaBank[A-Za-z]+|\(SupplierInvoicePayment\)|\b(?:staging|native|legacy_native):\d+/',$text), 'No raw module keys, native placeholders or source namespaces in ' . $locale . '/' . $view);
@@ -273,21 +314,24 @@ foreach (array('en_US','pt_PT') as $locale) {
 $langs = new MonthlyViewLangs('pt_PT');
 $prose = 'Original note contains (SupplierInvoicePayment), acc_token and literal staging:123 text';
 monthlyViewCheck(kreabankWorklistNativeLabel($prose,$langs) === $prose, 'Arbitrary source prose containing reserved words is preserved exactly');
-$pendingHtml = kreabankMonthlyReportHtml($report,array_merge($state,array('view'=>'pending')),$langs);
+$pendingHtml = kreabankMonthlyReportHtml($report,array_merge($state,array('view'=>'bank_pending')),$langs);
 monthlyViewCheck(strpos($pendingHtml,$source[2]['payment_reference']) !== false, 'Long bank references remain complete rather than clipped or abbreviated');
-$previousLibxml = libxml_use_internal_errors(true); $dom = new DOMDocument(); $dom->loadHTML($pendingHtml); $xp = new DOMXPath($dom); libxml_clear_errors(); libxml_use_internal_errors($previousLibxml);
 $columnSets = array();
-foreach ($xp->query('//table[contains(@class,"kb-monthly-detail-table")]') as $table) {
-	$columns = array(); foreach ($xp->query('./colgroup/col',$table) as $column) { $columns[] = $column->getAttribute('class'); } $columnSets[] = $columns;
+foreach (array('bank_pending','ledger_pending') as $pendingView) {
+	$pendingHtml=kreabankMonthlyReportHtml($report,array_merge($state,array('view'=>$pendingView)),$langs);
+	$previousLibxml = libxml_use_internal_errors(true); $dom = new DOMDocument(); $dom->loadHTML($pendingHtml); $xp = new DOMXPath($dom); libxml_clear_errors(); libxml_use_internal_errors($previousLibxml);
+	foreach ($xp->query('//table[contains(@class,"kb-monthly-detail-table")]') as $table) {
+		$columns = array(); foreach ($xp->query('./colgroup/col',$table) as $column) { $columns[] = $column->getAttribute('class'); } $columnSets[] = $columns;
+	}
 }
-monthlyViewCheck(count($columnSets) === 2 && count($columnSets[0]) === 8 && $columnSets[0] === $columnSets[1], 'Both Pending detail tables use identical column definitions');
+monthlyViewCheck(count($columnSets) === 2 && count($columnSets[0]) === 8 && $columnSets[0] === $columnSets[1], 'Both separate pending subtabs retain identical detail column definitions');
 $stream = fopen('php://temp','w+'); kreabankMonthlyReportCsv($stream,$report,$langs); rewind($stream); $originalCsv=stream_get_contents($stream); fclose($stream);
 monthlyViewCheck(strpos($originalCsv,'(SupplierInvoicePayment)') !== false && strpos($originalCsv,'staging:3') !== false && strpos($originalCsv,'native:13') !== false
 	&& strpos($originalCsv,$source[2]['payment_reference']) !== false, 'CSV retains original placeholders, source identities and complete long references');
 monthlyViewCheck(serialize($report) === $reportBefore, 'Translated presentation leaves all original report evidence and amounts unchanged');
 if (($argv[1] ?? '') === '--html') {
 	$locale = in_array($argv[2] ?? '', array('en_US', 'pt_PT'), true) ? $argv[2] : 'en_US';
-	$view = in_array($argv[3] ?? '', array('summary', 'checks', 'pending', 'bank', 'ledger', 'print'), true) ? $argv[3] : 'summary';
+	$view = ($argv[3] ?? '') === 'print' ? 'print' : kreabankMonthlyReportView($argv[3] ?? 'summary');
 	$langs = new MonthlyViewLangs($locale);
 	$state['view'] = $view;
 	$user = new MonthlyViewUser();

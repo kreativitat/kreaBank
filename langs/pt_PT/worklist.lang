@@ -63,3 +63,4 @@ KreaBankWorklistMovementUnavailable=Criação indisponível. Reveja primeiro os 
 KreaBankWorklistMovementCreated=Movimento bancário criado e reconciliado.
 
 KreaBankWorklistPlannedPaymentAccount=Banco do pagamento a criar
+KreaBankWorklistPaymentRequired=Registe o pagamento antes de reconciliar.

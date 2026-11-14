@@ -9,7 +9,8 @@ business data or a replacement matching algorithm.
   items on both sides, adjusted balances and unexplained/opening/month differences.
 - **Quality checks:** source integrity, exact currencies and amounts, duplicate or
   conflicting links, supplied balance continuity, missing evidence and ageing.
-- **Closing pending items:** both sides, including unresolved earlier periods.
+- **Pending bank / Pending ERP:** separate subtabs for each side, including
+  unresolved earlier periods; each keeps its own filters and page.
 - **Bank statement / Dolibarr bank ledger:** monthly detail plus carried open items.
 - **CSV:** complete report, independent of the visible page; exact decimal values
   and formula-injection protection for untrusted text. **Print view** includes the
@@ -80,7 +81,7 @@ See the [2026-11-14 production deployment record](deployment-2026-11-14.md) for
 verified runtime identity, checks and rollback locations.
 
 Summary and Checks show complete compact tables without list filters or pagination.
-The four transaction tables across Pending, Bank and Dolibarr use native Dolibarr
+The four transaction tables in Pending bank, Pending ERP, Bank and Dolibarr use native Dolibarr
 header filters, sortable headers and pagination (configured list size, maximum
 5,000). Each transaction table owns independent namespaced state. Filters and sorting
 apply to the complete prepared display rows before paging; loader inputs, totals,
@@ -92,3 +93,4 @@ Phone layouts retain readable transaction columns with horizontal scrolling conf
 to each table frame; native headings and page controls wrap above them.
 Deploy the shared `lib/kreabank_worklist_view.lib.php` label helper with these views.
 See `lib/kreabank_monthly_list.lib.php` and the pure/native view suites.
+Legacy `view=pending` links open Pending bank. Full print and CSV retain both sides.

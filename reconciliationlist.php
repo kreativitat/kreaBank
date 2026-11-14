@@ -61,12 +61,12 @@ $redirect = static function ($extra = array()) use ($url,$baseParams) {
 	header('Location: ' . $url . '?' . http_build_query(array_merge($baseParams,$extra),'','&',PHP_QUERY_RFC3986)); exit;
 };
 $pairDescriptor = static function ($key,$pair,$explicit = false,$searchContext = '') use ($remember,$scope,$secret,$baseParams) {
+	if (!kreabankWorklistPairCanReconcile($pair)) { return array('disabled'=>true,'label'=>'KreaBankWorklistPaymentRequired'); }
 	$expires = time()+900;
 	$signature = kreabankBulkReviewSignature($pair,$scope . '|' . $key,$expires,$secret);
 	$nonce = $remember('pair',array('key'=>$key,'pair'=>$pair,'explicit'=>$explicit,'search'=>$searchContext,'expires'=>$expires,'signature'=>$signature));
 	$type = $pair['suggestion']['doc_type'];
-	$label = in_array($type,array('customer_invoice','supplier_invoice','tax'),true) ? 'KreaBankReviewPayInvoice'
-		: (in_array($type,array('payment','payment_supplier','payment_linked','payment_supplier_linked','payment_tax'),true) ? 'KreaBankWorkspaceReconcilePayment' : 'KreaBankWorklistReconcile');
+	$label = $type === 'native_bank' ? 'KreaBankWorklistReconcile' : 'KreaBankWorkspaceReconcilePayment';
 	return array('action'=>'confirm_pair','fields'=>array_merge($baseParams,array('review'=>$nonce)),'label'=>$label);
 };
 
@@ -75,6 +75,7 @@ if ($post && $action !== '' && !in_array($action, array('advance_scan','more_sca
 	try {
 		if ($action === 'confirm_pair') {
 			$review = $take('pair'); $key = $review['key']; $line = $worklist->load($key);
+			if (!kreabankWorklistPairCanReconcile($review['pair'])) { throw new RuntimeException('KreaBankWorklistPaymentRequired'); }
 			if ($review['explicit']) {
 				$choices = $worklist->candidates($line,$review['search'] ?? '');
 				$target = $review['pair']['suggestion']; $fresh = $choices[$target['doc_type'] . '__' . (int) $target['doc_id']] ?? null;
@@ -82,6 +83,7 @@ if ($post && $action !== '' && !in_array($action, array('advance_scan','more_sca
 			if (!$fresh || !kreabankBulkReviewIsValid($fresh,$scope . '|' . $key,$review['expires'],$review['signature'],$secret,time(),true,(int) $line['bank_account_id'])) {
 				throw new RuntimeException('KreaBankWorklistChanged');
 			}
+			if (!kreabankWorklistPairCanReconcile($fresh)) { throw new RuntimeException('KreaBankWorklistPaymentRequired'); }
 			kreabankExecuteManualReview($service,$fresh);
 			setEventMessages($langs->trans('KreaBankWorklistReconciled'),null,'mesgs');
 			$expand = '';
@@ -143,7 +145,7 @@ if ($post && $action !== '' && !in_array($action, array('advance_scan','more_sca
 		// SQL, source payloads and provider details are never copied into UI errors.
 		dol_syslog('KreaBank worklist action failed: ' . get_class($error),LOG_ERR);
 		$message = $error->getMessage();
-		$key = preg_match('/changed|expired|already|review.*again|unavailable/i',$message) ? 'KreaBankWorklistChanged' : (preg_match('/exact.*amount|exact.*total|total.*equal|at least|requires 2/i',$message) ? 'KreaBankWorklistBatchIncomplete' : 'KreaBankWorklistActionFailed');
+		$key = $message === 'KreaBankWorklistPaymentRequired' ? $message : (preg_match('/changed|expired|already|review.*again|unavailable/i',$message) ? 'KreaBankWorklistChanged' : (preg_match('/exact.*amount|exact.*total|total.*equal|at least|requires 2/i',$message) ? 'KreaBankWorklistBatchIncomplete' : 'KreaBankWorklistActionFailed'));
 		setEventMessages($langs->trans($key),null,'errors');
 	}
 	$redirect($expand !== '' ? array('expand'=>$expand,'mode'=>$mode,'q'=>$search) : array());
@@ -261,7 +263,7 @@ $candidateModel = static function ($pair) {
 	$s = $pair['suggestion']; $account = kreabankWorklistPaymentAccount($pair);
 	return array('key'=>$s['doc_type'] . '__' . (int) $s['doc_id'],'doc_type'=>$s['doc_type'],'doc_id'=>(int) $s['doc_id'],'reference'=>kreabankBulkSuggestionReference($s),'date'=>$s['doc_date'] ?? '',
 		'amount'=>$s['amount_open'],'currency'=>$pair['line']['currency'],'account_ref'=>$account['ref'],'account_planned'=>$account['planned'],
-		'description'=>$s['thirdparty_name'] ?? '', 'consequence'=>in_array($s['doc_type'],array('customer_invoice','supplier_invoice','tax'),true) ? 'KreaBankWorklistRecordsPayment' : '');
+		'description'=>$s['thirdparty_name'] ?? '', 'consequence'=>$account['planned'] ? 'KreaBankWorklistPaymentRequired' : '');
 };
 foreach ($page['rows'] as $indexRow) {
 	$key = $indexRow['key']; $isExpanded = $expand === $key;

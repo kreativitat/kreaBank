@@ -176,7 +176,7 @@ if ($statement) {
 			print '<br><strong class="warning">' . $langs->trans('KreaBankLinkIssues', (int) $row->issue_lines) . '</strong>';
 		}
 		print '</td><td><a href="' . dol_escape_htmltag(kreabankStatementUrl($row->bank_account_id)) . '">' . dol_escape_htmltag($row->bank_account_ref) . '</a></td>';
-		print '<td>' . dol_print_date($db->jdate($row->imported_at), 'dayhour') . '</td><td>' . (int) $row->imported_lines . '</td><td>' . (int) $row->native_lines . '</td><td>' . (int) $row->reconciled_lines . '</td><td></td></tr>';
+		print '<td>' . dol_print_date($db->jdate($row->imported_at), 'dayhour') . '</td><td class="right">' . (int) $row->imported_lines . '</td><td class="right">' . (int) $row->native_lines . '</td><td class="right">' . (int) $row->reconciled_lines . '</td><td></td></tr>';
 	}
 }
 if ($total === 0) {

@@ -105,18 +105,19 @@ checkMonthlyNativeTranslation(strpos($html, '<script>unsafe()') === false && str
 
 // Exercise installed Form, header and pager helpers, including both native limit modes.
 $report['ledger_pending'] = $report['bank_pending'];
-$nativeState = array('account_context'=>101,'month'=>'2026-09','view'=>'pending','bank_balance'=>'20.24691356','balance_account'=>101,'balance_month'=>'2026-09',
+$nativeState = array('account_context'=>101,'month'=>'2026-09','view'=>'bank_pending','bank_balance'=>'20.24691356','balance_account'=>101,'balance_month'=>'2026-09',
 	'ml_bank_pending_limit'=>1,'ml_ledger_pending_limit'=>1,'ml_bank_pending_sortfield'=>'amount','ml_bank_pending_sortorder'=>'DESC');
 foreach (array(0,1) as $html5) {
 	$conf->global->MAIN_USE_HTML5_LIMIT_SELECTOR = $html5;
-	$html = kreabankMonthlyReportHtml($report,$nativeState,$langs);
+	foreach (array('bank_pending','ledger_pending') as $key) {
+	$html = kreabankMonthlyReportHtml($report,array_merge($nativeState,array('view'=>$key)),$langs);
 	$previousLibxml = libxml_use_internal_errors(true); $dom = new DOMDocument(); $dom->loadHTML('<?xml encoding="utf-8" ?>' . $html); $xp = new DOMXPath($dom); libxml_clear_errors(); libxml_use_internal_errors($previousLibxml);
-	checkMonthlyNativeTranslation($xp->query('//form')->length === 2 && $xp->query('//form//form')->length === 0, 'Installed native helpers retain separate non-nested pending GET forms (HTML5=' . $html5 . ')');
+	checkMonthlyNativeTranslation($xp->query('//form')->length === 1 && $xp->query('//form//form')->length === 0
+		&& $xp->query('//table[@id="kb-monthly-table-' . $key . '"]')->length === 1, 'Installed native helpers render only the active pending subtab (HTML5=' . $html5 . ')');
 	$ids = array(); foreach ($xp->query('//*[@id]') as $element) { $ids[] = $element->getAttribute('id'); }
 	checkMonthlyNativeTranslation(count($ids) === count(array_unique($ids)), 'Installed native limit controls and datalists have no duplicate IDs (HTML5=' . $html5 . ')');
 	checkMonthlyNativeTranslation($xp->query('//*[@name="limit" or @name="pageplusone" or @name="pageplusoneold" or @name="button_search_x" or @name="button_removefilter_x"]')->length === 0,
 		'Native generic control names cannot leak between two table namespaces');
-	foreach (array('bank_pending','ledger_pending') as $key) {
 		$prefix = kreabankMonthlyListPrefix($key);
 		checkMonthlyNativeTranslation($xp->query('//form[@id="kb-monthly-list-' . $key . '"]//*[@name="' . $prefix . 'limit"]')->length === 1
 			&& $xp->query('//form[@id="kb-monthly-list-' . $key . '"]//*[@name="' . $prefix . 'pageplusone"]')->length === 1, 'Native page size and page jump belong to ' . $key);
@@ -124,10 +125,10 @@ foreach (array(0,1) as $html5) {
 		checkMonthlyNativeTranslation($nextLinks->length === 1, 'Native limit+1 sentinel exposes the next page for ' . $key);
 		parse_str((string) parse_url($nextLinks->item(0)->getAttribute('href'),PHP_URL_QUERY),$next);
 		checkMonthlyNativeTranslation(($next[$prefix . 'page'] ?? '') === '1' && ($next['account_context'] ?? '') === '101' && ($next['month'] ?? '') === '2026-09'
-			&& ($next['bank_balance'] ?? '') === '20.24691356' && ($next['balance_account'] ?? '') === '101' && ($next['balance_month'] ?? '') === '2026-09' && ($next['view'] ?? '') === 'pending'
+			&& ($next['bank_balance'] ?? '') === '20.24691356' && ($next['balance_account'] ?? '') === '101' && ($next['balance_month'] ?? '') === '2026-09' && ($next['view'] ?? '') === $key
 			&& !isset($next['page'],$next['sortfield'],$next['token'],$next['action']), 'Actual native next links preserve bound report context and only their own page namespace');
-	}
 	checkMonthlyNativeTranslation(strpos($html,'&amp;oacute;') === false && strpos($html,'&amp;atilde;') === false, 'Native table headers and aria labels encode translated Portuguese once');
+	}
 }
 $filteredState = array_merge($nativeState,array('ml_bank_pending_search_amount'=>'<>10.12345678','ml_ledger_pending_search_description'=>'«ação»'));
 $filtered = kreabankMonthlyReportHtml($report,$filteredState,$langs);
@@ -156,7 +157,7 @@ $ledgerRow['reference'] = 'acc_' . str_repeat('0123456789abcdef',24) . '_gocardl
 $displayReport['ledger_pending'] = array($ledgerRow); $displayReport['ledger_rows'] = array($ledgerRow);
 $displayBefore = serialize($displayReport);
 $stream=fopen('php://temp','w+'); kreabankMonthlyReportCsv($stream,$displayReport,$langs); rewind($stream); $beforeDisplayCsv=stream_get_contents($stream); fclose($stream);
-foreach (array('summary','checks','pending','bank','ledger') as $view) {
+foreach (array('summary','checks','bank_pending','ledger_pending','bank','ledger') as $view) {
 	$html = kreabankMonthlyReportHtml($displayReport,array_merge($nativeState,array('view'=>$view)),$langs);
 	$visible = html_entity_decode(strip_tags($html),ENT_QUOTES,'UTF-8');
 	checkMonthlyNativeTranslation(!preg_match('/\bKreaBank[A-Za-z]+|\((?:SupplierInvoicePayment|CustomerInvoicePayment)\)|\b(?:staging|native|legacy_native):\d+/',$visible),

@@ -209,11 +209,11 @@ function runWorklistController($post, $session = array(), $options = array())
 	$terminal = "header('Location: ' . \$url . '?' . http_build_query(array_merge(\$baseParams,\$extra),'','&',PHP_QUERY_RFC3986)); exit;";
 	$branch = str_replace($terminal, 'throw new WorklistControllerRedirect(array_merge($baseParams,$extra));', $branch, $replaced);
 	if ($replaced !== 1) { throw new RuntimeException('Controller terminal redirect contract changed'); }
-	$redirect = null;
-	try { eval($auth); eval($branch); }
+	$redirect = null; $descriptor = null;
+	try { eval($auth); eval($branch); if (isset($options['describe_pair'])) { $descriptor = $pairDescriptor('staged:8',$options['describe_pair']); } }
 	catch (WorklistControllerRedirect $end) { $redirect = $end->params; }
 	catch (WorklistControllerForbidden $end) {}
-	return array('calls'=>$service->calls,'session'=>$_SESSION,'redirect'=>$redirect,'denied'=>$GLOBALS['worklistControllerDenied'],'events'=>$GLOBALS['worklistControllerEvents'],'searches'=>$worklist->candidateSearches);
+	return array('calls'=>$service->calls,'session'=>$_SESSION,'redirect'=>$redirect,'denied'=>$GLOBALS['worklistControllerDenied'],'events'=>$GLOBALS['worklistControllerEvents'],'searches'=>$worklist->candidateSearches,'descriptor'=>$descriptor);
 }
 $confirm = array('action'=>'confirm_pair','review'=>'fixture');
 $result = runWorklistController($confirm,worklistControllerSession());
@@ -222,6 +222,27 @@ checkWorklist(count($result['calls']) === 1 && $result['calls'][0][0] === 'recon
 checkWorklist(!isset($result['session']['kreabank_worklist_reviews']['fixture'],$result['session']['kreabank_worklist_scan']), 'Successful approval consumes its one-use review and invalidates the read scan');
 checkWorklist(!runWorklistController($confirm,$result['session'])['calls'], 'An inline approval cannot be replayed after its review was consumed');
 checkWorklist(count(runWorklistController($confirm,worklistControllerSession(true))['calls']) === 1, 'Explicit candidate choice revalidates and executes its exact shared manual-review target');
+foreach (array('customer_invoice','supplier_invoice','tax') as $type) {
+	$pair = worklistControllerPair(); $pair['suggestion']['doc_type'] = $type;
+	foreach (array(false,true) as $explicit) {
+		$session = worklistControllerSession($explicit); $payload = &$session['kreabank_worklist_reviews']['fixture']['payload'];
+		$payload['pair'] = $pair; $payload['signature'] = kreabankBulkReviewSignature($pair,'1|7|staged:8',$payload['expires'],$session['kreabank_worklist_secret']); unset($payload);
+		$result = runWorklistController($confirm,$session,array('fresh_pair'=>$pair));
+		checkWorklist(!$result['calls'] && !isset($result['session']['kreabank_worklist_reviews']['fixture']) && isset($result['session']['kreabank_worklist_scan'])
+			&& $result['events'] === array(array('KreaBankWorklistPaymentRequired','errors')), 'Authentic pre-update unpaid-document review is consumed and rejected without creating a payment: ' . $type . '/' . (int) $explicit);
+	}
+	$result = runWorklistController(array(),worklistControllerSession(),array('method'=>'GET','describe_pair'=>$pair));
+	checkWorklist($result['descriptor'] === array('disabled'=>true,'label'=>'KreaBankWorklistPaymentRequired') && count($result['session']['kreabank_worklist_reviews']) === 1,
+		'Unpaid document renders a disabled descriptor without issuing a new signed approval: ' . $type);
+}
+foreach (array('native_bank','payment','payment_supplier','payment_linked','payment_supplier_linked','payment_tax') as $type) {
+	$pair = worklistControllerPair(); $pair['suggestion']['doc_type']=$type;
+	$result = runWorklistController(array(),worklistControllerSession(),array('method'=>'GET','describe_pair'=>$pair));
+	checkWorklist(($result['descriptor']['action'] ?? '') === 'confirm_pair' && !isset($result['descriptor']['disabled']) && count($result['session']['kreabank_worklist_reviews']) === 2,
+		'Recorded movement/payment still receives a signed reconciliation approval: ' . $type);
+}
+$unknown = worklistControllerPair(); $unknown['suggestion']['doc_type']='unknown_document';
+checkWorklist(!kreabankWorklistPairCanReconcile($unknown), 'Unknown target types fail closed under the recorded-payment policy');
 $result = runWorklistController($confirm + array('q'=>'changed after display'),worklistControllerSession(true,'OLD-INVOICE-991'));
 checkWorklist(count($result['calls']) === 1 && $result['searches'] === array('OLD-INVOICE-991'), 'Typed search approval repeats the stored displayed search rather than a replacement POST query');
 foreach (array(array('csrf'=>false),array('denied'=>array('kreabank/reconciliation/write')),

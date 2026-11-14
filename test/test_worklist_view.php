@@ -98,7 +98,12 @@ function worklistViewFixture($case)
 		$model['rows'][0]['needs_review'] = true;
 		$model['rows'][0]['notice'] = 'Historical linkage is inconsistent.';
 	}
-	if ($case === 'planned_invoice') { $model['rows'][0]['review']['doc_type']='supplier_invoice'; $model['rows'][0]['review']['account_ref']='STATEMENT-BANK'; $model['rows'][0]['review']['account_planned']=true; $model['rows'][0]['review']['consequence']='KreaBankWorklistRecordsPayment'; }
+	if ($case === 'planned_invoice') {
+		$model['rows'][0]['review']['doc_type']='supplier_invoice'; $model['rows'][0]['review']['account_ref']='STATEMENT-BANK'; $model['rows'][0]['review']['account_planned']=true;
+		$model['rows'][0]['review']['consequence']='KreaBankWorklistPaymentRequired';
+		// Retain the old action to prove unpaid proposals override stale approval descriptors.
+		$model['rows'][0]['expanded']=true; $model['rows'][0]['candidates']=array($model['rows'][0]['review']);
+	}
 	if ($case === 'empty_search') { $model['rows'][0]['expanded']=true; $model['rows'][0]['review']=null; $model['rows'][0]['candidates']=array(); $model['rows'][0]['create_available']=true; }
 	if ($case === 'empty') { $model['rows'] = array(); }
 	if ($case === 'unsafe') {
@@ -173,6 +178,9 @@ foreach (array('en_US','pt_PT') as $locale) {
 			checkWorklistView($planned && strpos($planned->textContent,'STATEMENT-BANK')!==false && $planned->getAttribute('title')===$langs->trans('KreaBankWorklistPlannedPaymentAccount'), 'Unpaid invoice shows the statement bank as a clearly planned payment destination');
 			checkWorklistView($xpath->query('//td/span[@class="kb-wl-planned-account"]//span[contains(@class,"fa-clock")]')->length===1
 				&& $xpath->query('//button[@data-kb-dialog]')->length===0, 'Planned bank has a compact clock hint and no existing-payment correction action');
+			checkWorklistView($xpath->query('//button[@disabled and @type="button" and not(@form) and not(contains(@class,"kb-wl-primary"))]//span[contains(@class,"fa-check")]')->length === 2
+				&& $xpath->query('//input[@name="action" and @value="confirm_pair"]')->length === 0, 'Unpaid row and expanded card retain grey disabled checks without any approval forms or submit binding');
+			checkWorklistView($xpath->query('//button[@disabled and @title="' . $langs->trans('KreaBankWorklistPaymentRequired') . '"]')->length === 2, 'Both unpaid approval hints explain that payment must be recorded first');
 		}
         if ($case === 'empty_search') {
             checkWorklistView($xpath->query('//div[@class="kb-wl-search"]/span[@class="kb-wl-search-actions"]/button[@type="submit"]')->length === 1

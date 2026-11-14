@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.26 — 2026-11-14
+
+- Disable reconciliation of unpaid invoice/tax proposals until a payment is recorded; reject old signed approvals in the separate list.
+- Separate pending bank and ERP movements into individual monthly-report subtabs with independent native list controls.
+- Right-align imported, native and reconciled statement counts with their numeric headings.
+
 ## 1.20.25 — 2026-11-14
 
 - Keep monthly transaction columns readable on phones with scrolling inside the table frame; wrap native list headings and pagination without widening the page.

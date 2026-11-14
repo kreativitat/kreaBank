@@ -759,3 +759,5 @@ KreaBankMonthlyBankCloseShort=Bank closing
 KreaBankMonthlyLedgerCloseShort=Dolibarr closing
 KreaBankMonthlyDifferenceShort=Unexplained difference
 KreaBankMonthlyEvidenceShort=Current evidence · %s
+KreaBankMonthlyBankPendingShort=Pending bank
+KreaBankMonthlyLedgerPendingShort=Pending ERP

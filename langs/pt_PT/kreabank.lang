@@ -758,3 +758,5 @@ KreaBankMonthlyBankCloseShort=Banco no fecho
 KreaBankMonthlyLedgerCloseShort=Dolibarr no fecho
 KreaBankMonthlyDifferenceShort=Diferença não explicada
 KreaBankMonthlyEvidenceShort=Dados atuais · %s
+KreaBankMonthlyBankPendingShort=Pendentes do banco
+KreaBankMonthlyLedgerPendingShort=Pendentes ERP

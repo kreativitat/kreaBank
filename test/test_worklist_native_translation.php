@@ -85,7 +85,8 @@ foreach (array('en_US'=>'Reconciliation list', 'pt_PT'=>'Lista de reconciliaçã
 		$translated = $langs->transnoentities($key);
 		checkWorklistNativeTranslation($translated !== $key && kreabankWorklistNativeLabel('(' . $key . ')', $langs) === $translated, 'Reserved movement marker uses an installed native translation: ' . $locale . '/' . $key);
 	}
-	$model['rows'][0]['review'] = array('reference'=>'INVOICE-1','account_ref'=>'BANK-A','account_planned'=>true);
+	$model['rows'][0]['review'] = array('doc_type'=>'supplier_invoice','reference'=>'INVOICE-1','account_ref'=>'BANK-A','account_planned'=>true,
+		'action'=>array('action'=>'confirm_pair','fields'=>array('review'=>'stale-before-payment-policy')));
 	$planned = kreabankWorklistTable($model, $langs);
 	$previous = libxml_use_internal_errors(true);
 	$dom->loadHTML('<?xml encoding="utf-8" ?>' . $planned);
@@ -93,6 +94,9 @@ foreach (array('en_US'=>'Reconciliation list', 'pt_PT'=>'Lista de reconciliaçã
 	$xpath = new DOMXPath($dom);
 	$account = $xpath->query('//span[@class="kb-wl-planned-account"]')->item(0);
 	checkWorklistNativeTranslation($account && $account->getAttribute('title') === $langs->transnoentities('KreaBankWorklistPlannedPaymentAccount') && strpos($account->textContent, 'BANK-A') !== false, 'Planned destination displays the exact bank and native translated tooltip: ' . $locale);
+	$disabled = $xpath->query('//td[contains(@class,"kb-wl-actions")]/button[@disabled and @type="button" and not(@form)]')->item(0);
+	checkWorklistNativeTranslation($disabled && $disabled->getAttribute('title') === $langs->transnoentities('KreaBankWorklistPaymentRequired') && strpos($disabled->getAttribute('class'),'kb-wl-primary') === false,
+		'Actual native labels explain the disabled unpaid proposal without a green submit action: ' . $locale);
 }
 // Render the actual controller's title block with installed native helpers. The
 // native sort cleanup regex does not consume underscores in existing sort keys.

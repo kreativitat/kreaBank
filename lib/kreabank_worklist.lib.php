@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+/** This list approves recorded movements/payments; unpaid documents remain review-only. */
+function kreabankWorklistPairCanReconcile($pair)
+{
+	return in_array($pair['suggestion']['doc_type'] ?? '', array('native_bank','payment','payment_supplier','payment_linked','payment_supplier_linked','payment_tax'), true);
+}
+
 /** Invoice/tax approval creates its payment in the statement account; other targets retain their recorded account. */
 function kreabankWorklistPaymentAccount($pair)
 {

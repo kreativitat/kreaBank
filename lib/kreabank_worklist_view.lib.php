@@ -263,8 +263,9 @@ function kreabankWorklistTable($model, $langs)
 		$html .= '</td><td><span class="badge ' . ($needsReview ? 'badge-status7' : ($done ? 'badge-status4' : ($draft ? 'badge-status1' : 'badge-status0'))) . '">' . $t($status) . '</span></td><td class="right nowrap kb-wl-actions">';
 		if ($canWrite && !$done && !empty($review['action'])) {
 			$formId = $id . '-approve';
-			$html .= kreabankWorklistButton(kreabankWorklistTranslate($langs, $review['action']['label'] ?? 'KreaBankWorklistReconcile'), 'check', 'type="submit" form="' . $formId . '"', true);
-			$forms .= kreabankWorklistPostForm($formId, $review['action'], $model);
+			$disabled = !empty($review['action']['disabled']) || in_array($review['doc_type'] ?? '',array('customer_invoice','supplier_invoice','tax'),true);
+			$html .= kreabankWorklistButton(kreabankWorklistTranslate($langs, $disabled ? 'KreaBankWorklistPaymentRequired' : ($review['action']['label'] ?? 'KreaBankWorklistReconcile')), 'check', $disabled ? 'type="button"' : 'type="submit" form="' . $formId . '"', !$disabled, $disabled);
+			if (!$disabled) { $forms .= kreabankWorklistPostForm($formId, $review['action'], $model); }
 		}
 		if (!$done) {
 			foreach (array('search'=>'Search', 'batch'=>'KreaBankWorklistCreateBatch', 'create'=>'KreaBankWorklistCreateMovement') as $mode => $label) {
@@ -331,8 +332,9 @@ function kreabankWorklistTable($model, $langs)
 			$html .= '</div><div class="kb-wl-candidate-actions">';
 			if (!$batchMode && !$isOther && !$done && $canWrite && !empty($candidate['action'])) {
 				$actionId = $candidateId . '-approve';
-				$html .= kreabankWorklistButton(kreabankWorklistTranslate($langs, $candidate['action']['label'] ?? 'KreaBankWorklistReconcile'), 'check', 'type="submit" form="' . $actionId . '"', true);
-				$forms .= kreabankWorklistPostForm($actionId, $candidate['action'], $model);
+				$disabled = !empty($candidate['action']['disabled']) || in_array($candidate['doc_type'] ?? '',array('customer_invoice','supplier_invoice','tax'),true);
+				$html .= kreabankWorklistButton(kreabankWorklistTranslate($langs, $disabled ? 'KreaBankWorklistPaymentRequired' : ($candidate['action']['label'] ?? 'KreaBankWorklistReconcile')), 'check', $disabled ? 'type="button"' : 'type="submit" form="' . $actionId . '"', !$disabled, $disabled);
+				if (!$disabled) { $forms .= kreabankWorklistPostForm($actionId, $candidate['action'], $model); }
 			}
 			$html .= $correctionUi['button']; $forms .= $correctionUi['form']; $dialogs .= $correctionUi['dialog'];
 			$html .= '</div></div>';

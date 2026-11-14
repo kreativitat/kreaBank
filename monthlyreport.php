@@ -26,8 +26,7 @@ $month = GETPOSTISSET('month') ? GETPOST('month', 'alphanohtml') : dol_print_dat
 $enteredBankBalance = trim((string) GETPOST('bank_balance', 'alphanohtml'));
 $bankBalance = kreabankMonthlyScopedBalance($enteredBankBalance, $accountId, $month,
 	GETPOSTINT('balance_account'), GETPOST('balance_month', 'alphanohtml'));
-$view = GETPOST('view', 'aZ09');
-if (!in_array($view, array('summary', 'checks', 'pending', 'bank', 'ledger'), true)) { $view = 'summary'; }
+$view = kreabankMonthlyReportView(GETPOST('view', 'aZ09'));
 $state = array('account_context' => $accountId, 'month' => $month, 'bank_balance' => $bankBalance,
 	'balance_account' => $accountId, 'balance_month' => $month,
 	'view' => $view);

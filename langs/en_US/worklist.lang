@@ -63,3 +63,4 @@ KreaBankWorklistMovementUnavailable=Creation is unavailable. Review existing mov
 KreaBankWorklistMovementCreated=Bank movement created and reconciled.
 
 KreaBankWorklistPlannedPaymentAccount=Bank for the payment to be created
+KreaBankWorklistPaymentRequired=Record the payment before reconciling.

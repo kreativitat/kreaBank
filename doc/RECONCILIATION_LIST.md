@@ -21,6 +21,10 @@ Statement and payment bank accounts are separate. Unpaid invoice and tax proposa
 show the statement account as the payment's planned destination, with a clock
 tooltip; existing movements and payments retain their recorded bank. The same
 projection supplies displayed references, payment-bank filters and sorting.
+Unpaid invoice and tax suggestions have a grey disabled Reconcile action until a
+payment is recorded. Neither rows nor expanded search cards issue approval tokens
+for these documents; the controller also rejects earlier signed invoice/tax reviews.
+Existing native movements and recorded payments retain their reviewed approval.
 Unique suggestions and explicit search choices use the
 existing signed manual review and `KreaBankService::reconcileLine()`; ambiguous
 records are never preselected. Typed searches filter eligible native entries,
