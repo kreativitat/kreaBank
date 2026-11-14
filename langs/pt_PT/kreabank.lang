@@ -740,3 +740,5 @@ KreaBankMonthlyStatePending=Pendente
 KreaBankMonthlyStateReview=Rever
 KreaBankMonthlyStateDuplicate=Duplicado (excluído)
 KreaBankMonthlyEmpty=Sem movimentos neste relatório.
+
+KreaBankHistoryNativeEntry=Lançamento

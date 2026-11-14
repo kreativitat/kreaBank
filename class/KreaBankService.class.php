@@ -3877,64 +3877,45 @@ class KreaBankService
 	 * @param string $reason
 	 * @return bool
 	 */
-	public function undoReconciliation($reconciliationId, $reason = '')
+	public function undoReconciliation($reconciliationId, $reason = '', $review = null)
 	{
+		$this->assertAutomaticActor(true);
+		if (!empty($this->user->socid) || !$this->user->hasRight('kreabank', 'reconciliation', 'undo')
+			|| !$this->user->hasRight('banque', 'lire')
+			|| !($this->user->hasRight('banque', 'modifier') || $this->user->hasRight('banque', 'consolidate'))) {
+			throw new Exception('Permission denied');
+		}
 		$lineId = (int) $reconciliationId;
-		if ($lineId <= 0) {
-			throw new Exception('Invalid bank line id');
+		if (!is_array($review) || $lineId <= 0 || (int) ($review['rowid'] ?? 0) !== $lineId
+			|| !in_array($review['line_source'] ?? '', array('staged','native'), true)) {
+			throw new Exception('Review the reconciliation again before undoing it');
 		}
-		if ($this->hasPaymentBatchSchema()) {
-			$p = $this->db->prefix();
-			$groups = $this->transferRows("SELECT g.rowid FROM {$p}kreabank_payment_batch g LEFT JOIN {$p}kreabank_payment_batch_line m ON m.fk_batch=g.rowid AND m.entity=g.entity"
-				. ' WHERE g.entity=' . $this->entity . " AND g.status=1 AND (g.active_statement_line=$lineId OR m.active_bank_line=$lineId)" . $this->db->plimit(1));
-			if ($groups) {
-				if (method_exists($this->langs,'load')) { $this->langs->load('worklist@kreabank'); }
-				throw new Exception($this->langs->trans('KreaBankWorklistUndoGroupRequired'));
-			}
-		}
-
-		$line = $this->getLineById($lineId);
-		if (!$line) {
-			throw new Exception('Bank line not found');
-		}
-
-		$nativeLineId = $this->resolveNativeLineIdFromStatementLine($line, false);
-		if ($nativeLineId <= 0) {
-			throw new Exception('Native bank line not found');
-		}
-
-		if (!$this->db->begin()) {
-			throw new Exception('Failed to start database transaction');
-		}
+		require_once __DIR__ . '/KreaBankHistory.class.php';
+		$source = $review['line_source']; $accountId = (int) $review['bank_account_id'];
+		$nativeLineId = (int) $review['native_bank_line_id'];
+		if ($accountId <= 0 || $nativeLineId <= 0) { throw new Exception('Invalid reconciliation identity'); }
+		if (!$this->db->begin()) { throw new Exception('Failed to start database transaction'); }
 		try {
-			$this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'bank_account WHERE entity=' . $this->entity . ' AND rowid=' . (int) $line['bank_account_id'] . ' FOR UPDATE');
-			$this->lockReconciliationRow('bank',$nativeLineId);
+			$accounts = $this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'bank_account WHERE entity=' . $this->entity . ' AND rowid=' . $accountId . ' FOR UPDATE');
+			if (count($accounts) !== 1) { throw new Exception('Account unavailable in the current company'); }
+			if ($source === 'staged') { $this->lockReconciliationRow('kreabank_statement_line', $lineId); }
+			$this->lockReconciliationRow('bank', $nativeLineId);
 			$this->assertPaymentBatchMovementUnclaimed($nativeLineId);
-			$res = $this->native->unconciliateLine($nativeLineId);
-			if ($res <= 0) {
-				throw new Exception('Failed to undo native bank conciliation');
+			$claims = $this->transferRows('SELECT rowid,entity FROM ' . $this->db->prefix() . 'kreabank_statement_line WHERE fk_native_bank_line=' . $nativeLineId . ' FOR UPDATE');
+			if (($source === 'native' && $claims) || ($source === 'staged' && (count($claims) !== 1
+				|| (int) $claims[0]->rowid !== $lineId || (int) $claims[0]->entity !== $this->entity))) {
+				throw new Exception('The source mapping changed; review the reconciliation again');
 			}
-			if (!$this->native->markStatementLinePending($lineId)) {
-				throw new Exception('Failed to mark statement line as pending');
+			$line = (new KreaBankHistory($this->db, $this->entity))->find($lineId, $source, $accountId);
+			if (!$line || $line['needs_review'] || !empty($line['group_id']) || KreaBankHistory::snapshot($line) !== $review) {
+				throw new Exception('The reconciliation changed; review it again');
 			}
-
-			$this->db->commit();
-		} catch (Exception $e) {
-			$this->db->rollback();
-			throw $e;
-		}
-
-		$this->logAudit(
-			'undo',
-			$lineId,
-			$lineId,
-			array(
-				'reason' => (string) $reason,
-				'native' => 1,
-				'native_bank_line_id' => $nativeLineId,
-			)
-		);
-
+			if ($this->native->unconciliateLine($nativeLineId, $line['statement_ref']) <= 0) { throw new Exception('Failed to undo native bank conciliation'); }
+			if (!$this->native->markStatementLinePending($lineId, $source)) { throw new Exception('Failed to mark statement line as pending'); }
+			if (!$this->logAudit('undo', $lineId, $lineId, array('reason'=>(string) $reason, 'source'=>$source,
+				'native'=>1, 'native_bank_line_id'=>$nativeLineId))) { throw new Exception('Failed to persist undo audit'); }
+			if (!$this->db->commit()) { throw new Exception('Cannot confirm undo commit; inspect its status before retrying'); }
+		} catch (Throwable $e) { $this->db->rollback(); throw $e; }
 		return true;
 	}
 
@@ -4334,7 +4315,8 @@ class KreaBankService
 	 */
 	public function getRecentReconciliations($limit = 200, $offset = 0, $bankAccountId = 0)
 	{
-		return $this->native->getRecentReconciledLines((int) $limit, (int) $offset, (int) $bankAccountId);
+		require_once __DIR__ . '/KreaBankHistory.class.php';
+		return (new KreaBankHistory($this->db, $this->entity))->recent($limit, $offset, $bankAccountId);
 	}
 
 	/**

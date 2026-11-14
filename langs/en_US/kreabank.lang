@@ -741,3 +741,5 @@ KreaBankMonthlyStatePending=Pending
 KreaBankMonthlyStateReview=Needs review
 KreaBankMonthlyStateDuplicate=Duplicate (excluded)
 KreaBankMonthlyEmpty=No movements in this report.
+
+KreaBankHistoryNativeEntry=Bank entry

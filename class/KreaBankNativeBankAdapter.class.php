@@ -703,7 +703,7 @@ class KreaBankNativeBankAdapter
 	 * @param int $lineId
 	 * @return bool
 	 */
-	public function markStatementLinePending($lineId)
+	public function markStatementLinePending($lineId, $source = null)
 	{
 		$this->ensureMetaTable();
 		$this->ensureStagingTables();
@@ -714,7 +714,7 @@ class KreaBankNativeBankAdapter
 		$nativeLineId = 0;
 		$hasStagedRow = false;
 		$clearNativeLineBinding = false;
-		$line = $this->getStagedLineById($lineId);
+		$line = $source === 'native' ? null : $this->getStagedLineById($lineId);
 		if (!empty($line)) {
 			$hasStagedRow = true;
 		}
@@ -756,7 +756,7 @@ class KreaBankNativeBankAdapter
 			$stagingUpdated = true;
 		}
 
-		return ($metaUpdated || $stagingUpdated);
+		return ($metaUpdated || $stagingUpdated || $source === 'native');
 	}
 
 	/**
@@ -921,7 +921,7 @@ class KreaBankNativeBankAdapter
 	 * @param int $lineId
 	 * @return int
 	 */
-	public function unconciliateLine($lineId)
+	public function unconciliateLine($lineId, $statementRef = '')
 	{
 		$lineId = (int) $lineId;
 		if ($lineId <= 0) {
@@ -932,7 +932,7 @@ class KreaBankNativeBankAdapter
 		if ($line->fetch($lineId) <= 0) {
 			return -1;
 		}
-		$line->num_releve = '';
+		$line->num_releve = (string) $statementRef;
 
 		return (int) $line->update_conciliation($this->user, 0, 0);
 	}
@@ -1007,7 +1007,7 @@ class KreaBankNativeBankAdapter
 	 * @param array<int,int> $lineIds
 	 * @return array<int,array<int,array<string,mixed>>>
 	 */
-	public function getLineLinksBatch($lineIds)
+	public function getLineLinksBatch($lineIds, $source = null)
 	{
 		$out = array();
 		$normalizedLineIds = array();
@@ -1023,45 +1023,50 @@ class KreaBankNativeBankAdapter
 			return $out;
 		}
 
-		$this->ensureStagingTables();
-		$lineIdSql = implode(',', $normalizedLineIds);
 		$lineToNative = array();
-		$resolvedAsStaged = array();
-		foreach ($normalizedLineIds as $lineId) {
-			if ($this->hasManagedNativeLine((int) $lineId)) {
-				$lineToNative[(int) $lineId] = (int) $lineId;
+		if ($source === 'native') {
+			// Explicit native IDs must never pass through the mixed staging lookup.
+			$lineToNative = $normalizedLineIds;
+		} else {
+			$this->ensureStagingTables();
+			$lineIdSql = implode(',', $normalizedLineIds);
+			$resolvedAsStaged = array();
+			foreach ($normalizedLineIds as $lineId) {
+				if ($this->hasManagedNativeLine((int) $lineId)) {
+					$lineToNative[(int) $lineId] = (int) $lineId;
+				}
 			}
-		}
-		$sqlLineMap = 'SELECT l.rowid as line_id, l.fk_native_bank_line as native_line_id';
-		$sqlLineMap .= ' FROM ' . $this->db->prefix() . 'kreabank_statement_line as l';
-		$sqlLineMap .= ' WHERE l.entity = ' . ((int) $this->entity);
-		$sqlLineMap .= ' AND l.rowid IN (' . $lineIdSql . ')';
-		$resLineMap = $this->db->query($sqlLineMap);
-		if (!$resLineMap) {
-			throw new Exception($this->db->lasterror());
-		}
-		while ($objMap = $this->db->fetch_object($resLineMap)) {
-			$lineId = (int) $objMap->line_id;
-			if (isset($lineToNative[$lineId])) {
-				continue;
+			$sqlLineMap = 'SELECT l.rowid as line_id, l.fk_native_bank_line as native_line_id';
+			$sqlLineMap .= ' FROM ' . $this->db->prefix() . 'kreabank_statement_line as l';
+			$sqlLineMap .= ' WHERE l.entity = ' . ((int) $this->entity);
+			$sqlLineMap .= ' AND l.rowid IN (' . $lineIdSql . ')';
+			$resLineMap = $this->db->query($sqlLineMap);
+			if (!$resLineMap) {
+				throw new Exception($this->db->lasterror());
 			}
-			$nativeLineId = (int) $objMap->native_line_id;
-			$resolvedAsStaged[$lineId] = true;
-			if ($nativeLineId > 0) {
-				$lineToNative[$lineId] = $nativeLineId;
+			while ($objMap = $this->db->fetch_object($resLineMap)) {
+				$lineId = (int) $objMap->line_id;
+				if (isset($lineToNative[$lineId])) {
+					continue;
+				}
+				$nativeLineId = (int) $objMap->native_line_id;
+				$resolvedAsStaged[$lineId] = true;
+				if ($nativeLineId > 0) {
+					$lineToNative[$lineId] = $nativeLineId;
+				}
 			}
-		}
 
-		// Legacy-native calls can still send native line ids directly.
-		foreach ($normalizedLineIds as $lineId) {
-			if (!isset($resolvedAsStaged[$lineId])) {
-				$lineToNative[$lineId] = (int) $lineId;
+			// Legacy-native calls can still send native line ids directly.
+			foreach ($normalizedLineIds as $lineId) {
+				if (!isset($resolvedAsStaged[$lineId])) {
+					$lineToNative[$lineId] = (int) $lineId;
+				}
 			}
-		}
-		if (empty($lineToNative)) {
-			return $out;
-		}
+			if (empty($lineToNative)) {
+				return $out;
+			}
 
+		}
 		$nativeToLineIds = array();
 		foreach ($lineToNative as $lineId => $nativeLineId) {
 			if ($nativeLineId <= 0) {
@@ -1080,8 +1085,8 @@ class KreaBankNativeBankAdapter
 		$nativeIdSql = implode(',', $nativeIds);
 		$lineDateByNative = array();
 		$sqlDates = 'SELECT rowid, dateo';
-		$sqlDates .= ' FROM ' . $this->db->prefix() . 'bank';
-		$sqlDates .= ' WHERE rowid IN (' . $nativeIdSql . ')';
+		$sqlDates .= ' FROM ' . $this->db->prefix() . 'bank WHERE fk_account IN (SELECT rowid FROM ' . $this->db->prefix() . 'bank_account WHERE entity=' . $this->entity . ')';
+		$sqlDates .= ' AND rowid IN (' . $nativeIdSql . ')';
 		$resDates = $this->db->query($sqlDates);
 		if (!$resDates) {
 			throw new Exception($this->db->lasterror());
@@ -1093,7 +1098,7 @@ class KreaBankNativeBankAdapter
 		$linksByNative = array();
 		$sqlLinks = 'SELECT fk_bank, url_id, url, label, type';
 		$sqlLinks .= ' FROM ' . $this->db->prefix() . 'bank_url';
-		$sqlLinks .= ' WHERE fk_bank IN (' . $nativeIdSql . ')';
+		$sqlLinks .= ' WHERE fk_bank IN (' . $nativeIdSql . ') AND fk_bank IN (SELECT b.rowid FROM ' . $this->db->prefix() . 'bank b JOIN ' . $this->db->prefix() . 'bank_account ba ON ba.rowid=b.fk_account WHERE ba.entity=' . $this->entity . ')';
 		$sqlLinks .= ' ORDER BY fk_bank ASC, rowid ASC';
 		$resLinks = $this->db->query($sqlLinks);
 		if (!$resLinks) {

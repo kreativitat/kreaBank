@@ -150,3 +150,33 @@ php test/test_bank_statement_filters.php
 # ONLY the guarded disposable localhost:33317/kreabank_auto_test fixture:
 php test/test_bank_statement_filters_database.php
 ```
+
+## History verification and Undo
+
+History reads both storage generations through `KreaBankHistory` and the shared
+statement projection; it never initializes the execution service on a GET. The
+fixed recent window remains 5,000 source rows, selected by booking date before
+event sorting/filtering. Reconciliation event dates, strategies and operators
+come from source/native-verified audit identities. Ambiguous untagged old events
+fall back to the booking date rather than borrowing another source's audit.
+
+The Type filter selects the displayed reconciliation strategy. Audit action,
+date, user, line and summary filters stay independent of History column filters;
+global search includes audit JSON. Credit/debit summaries retain each currency.
+Group rows verify all members and expose their individual native/document links;
+Review opens the existing account-scoped group controller. Invalid mappings are
+flagged for review and have no scalar Undo.
+
+Undo uses a private, single-use, 15-minute displayed snapshot, current company and
+permissions, exact source/native IDs, account/source/native locks and claim checks.
+It preserves the import's statement reference, changes only native conciliation
+and imported matching status, and commits its audit atomically. A stale review,
+audit failure or failed commit cannot report success. No schema migration or
+scheduler change is required. Deploy `history.php`, `class/KreaBankHistory.class.php`,
+`lib/kreabank_history.lib.php`, the service/adapter and the new translation key
+together; retain preimages for source-only rollback.
+
+Run `php test/test_history.php` without application bootstrap or a database. Run
+`php test/test_history_database.php` only against the guarded disposable
+`127.0.0.1:33317/kreabank_auto_test` fixture. Never exercise Undo on business data
+as a test.

@@ -91,9 +91,9 @@ if ($undoBody === '') {
 	$errors[] = 'Unable to parse undoReconciliation body';
 } else {
 	$assertContains($undoBody, 'if (!$this->db->begin()) {', 'undo should validate DB transaction start', $errors);
-	$assertContains($undoBody, '$this->db->commit();', 'undo should commit DB transaction', $errors);
+	$assertContains($undoBody, 'if (!$this->db->commit())', 'undo should validate DB commit', $errors);
 	$assertContains($undoBody, '$this->db->rollback();', 'undo should rollback on failure', $errors);
-	$assertContains($undoBody, 'if (!$this->native->markStatementLinePending($lineId))', 'undo should validate staged line reset', $errors);
+	$assertContains($undoBody, 'if (!$this->native->markStatementLinePending($lineId, $source))', 'undo should validate staged line reset', $errors);
 }
 
 $reconcileBody = $extractFunctionBody($serviceSource, 'reconcileLine');
@@ -302,7 +302,7 @@ if (strpos($serviceSource, 'ensureSupplierInvoicePaidAfterPayment') !== false) {
 $assertContains($nativeSource, 'public function getLineLinksBatch(', 'native adapter should expose batch links API', $errors);
 $assertContains($nativeSource, 'protected function hasManagedNativeLine(', 'native adapter should distinguish imported native lines from reused external ones', $errors);
 $assertContains($nativeSource, "'operation_date' => 'l.operation_date'", 'native adapter pending sort allowlist should expose logical operation_date key', $errors);
-$assertContains($historySource, 'getLineLinksBatch(', 'history should use batch link retrieval', $errors);
+$assertContains($historySource, '$historyReader->links(', 'history should use namespaced batch link retrieval', $errors);
 $assertContains($importSource, 'KREABANK_IMPORT_WIZARD_TTL', 'import wizard should support stale session TTL', $errors);
 $assertContains($importSource, "glob(\$wizardImportTempDir . '/wiz_*')", 'import wizard should garbage-collect stale temp files', $errors);
 $assertContains($importSource, 'setEventMessages($langs->trans(\'ErrorFieldRequired\', $langs->trans(\'BankAccount\')), null, \'warnings\');', 'import analysis should warn but not abort when bank account is missing', $errors);
@@ -324,9 +324,9 @@ foreach (array('preparedRecentRows', 'preparedAuditRows') as $rowsVariable) {
 		$errors[] = 'History and audit must sort their complete bounded result before pagination: ' . $rowsVariable;
 	}
 }
-$assertContains($historySource, '$recent = $service->getRecentReconciliations($historyPoolLimit, 0, $navigationAccountId);', 'history should fetch account-scoped reconciliations using bounded pool limit', $errors);
-$assertContains($historySource, '$auditRows = $service->getAuditHistory($auditPoolLimit);', 'history should fetch audit rows using bounded pool limit', $errors);
-$assertContains($historySource, '$isAllowedAbsoluteUrlPrefix = static function ($urlPrefix) use ($currentHttpHost)', 'history should validate absolute document URL host before rendering links', $errors);
+$assertContains($historySource, '$recent = $historyReader->recent($historyPoolLimit, 0, $navigationAccountId);', 'history should fetch account-scoped reconciliations using bounded pool limit', $errors);
+$assertContains($historySource, '$auditRows = $historyReader->audits($auditPoolLimit);', 'history should fetch audit rows using bounded pool limit', $errors);
+$assertContains($historySource, 'kreabankHistoryDocumentUrl(', 'history should validate absolute document URL host before rendering links', $errors);
 $assertContains($historySource, '$auditDateLabel = ($auditDateTs !== false && $auditDateTs > 0) ? dol_print_date($auditDateTs, \'dayhour\') : \'<span class="opacitymedium">-</span>\';', 'history should guard invalid audit timestamps before rendering date', $errors);
 if (strpos($historySource, 'while (true)') !== false && strpos($historySource, 'getRecentReconciliations($historyFetchChunk, $recentOffset)') !== false) {
 	$errors[] = 'history should not scan the full reconciliation dataset with unbounded chunk loops';

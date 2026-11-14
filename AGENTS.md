@@ -346,3 +346,15 @@
   options when stock-on-invoice requires warehouse selection. Pure/controller/UI
   checks and `test/test_draft_invoice_review_database.php` cover this flow; the
   latter uses only the guarded disposable localhost:33317 fixture.
+
+## History safety
+
+- `KreaBankHistory` reuses the read-only combined statement projection, preserves
+  source/native namespaces and verifies audit association and payment-group members.
+  History GETs never construct the execution service. Keep independent table
+  filters/pagers, the fixed 5,000-source window and per-currency totals.
+- Scalar Undo requires a single-use displayed snapshot, current owner company and
+  permissions, exact locked source/native facts and atomic audit/commit. Preserve
+  imported statement references so undone lines remain available for review.
+  Groups use the existing group controller. See `doc/LISTS.md`; regression checks
+  are `test/test_history.php` and guarded disposable `test/test_history_database.php`.

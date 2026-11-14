@@ -10,6 +10,10 @@ php_files=(
   "pending.php"
   "reconcile.php"
   "history.php"
+  "class/KreaBankHistory.class.php"
+  "lib/kreabank_history.lib.php"
+  "test/test_history.php"
+  "test/test_history_database.php"
   "kreabankindex.php"
   "lib/kreabank.lib.php"
   "lib/kreabank_manual_review.lib.php"
@@ -99,6 +103,7 @@ php "${ROOT_DIR}/test/test_format_consistency.php"
 
 echo "[6/7] Reconciliation guard checks"
 php "${ROOT_DIR}/test/test_reconciliation_guards.php"
+php "${ROOT_DIR}/test/test_history.php"
 php "${ROOT_DIR}/test/test_reconcile_document.php"
 php "${ROOT_DIR}/test/test_account_correction.php"
 

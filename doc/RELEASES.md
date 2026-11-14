@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.4 — 2026-11-14
+
+- Show staged and legacy reconciliations together with verified event identities, document links and account scope.
+- Bind Undo to a private displayed snapshot, revalidate under locks, preserve pending imports and commit its audit atomically.
+- Correct History type filtering, independent audit filters/search, currency totals and narrow search layout. No migration or scheduler changes.
+
 ## 1.20.3 — 2026-11-14
 
 - Hide the old reconciliation tab and separate-list sidebar shortcut; preserve both features and their direct routes.
