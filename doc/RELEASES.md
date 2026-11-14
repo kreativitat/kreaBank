@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.43 — 2026-11-14
+
+- Export monthly report labels as native UTF-8 text instead of HTML entities,
+  preserving original evidence, exact decimal amounts and formula protection.
+
 ## 1.19.42 — 2026-11-14
 
 - Render the missing bank-balance date once through native translation escaping,

@@ -51,6 +51,7 @@ permissions and denies external users. The renderer/export are shared in
 ```sh
 php test/test_monthly_report.php
 php test/test_monthly_report_view.php
+php test/test_monthly_report_native_translation.php
 node test/test_monthly_report_client.cjs
 php test/test_monthly_report_database.php
 php test/test_navigation.php

@@ -128,23 +128,23 @@ function kreabankMonthlyCsvCell($value)
 function kreabankMonthlyReportCsv($stream, $report, $langs)
 {
 	$write = static function ($cells) use ($stream) { fputcsv($stream, array_map('kreabankMonthlyCsvCell', $cells), ';', '"', ''); };
-	$write(array($langs->trans('KreaBankMonthlyTitle'), $report['company'] ?? '', $report['entity'] ?? '', $report['account']['ref'], $report['account']['rowid'], $report['month'], $report['account']['currency_code']));
-	$write(array($langs->trans('KreaBankMonthlyCurrentEvidence', $report['end'], $report['generated_at'])));
-	$write(array($langs->trans('KreaBankMonthlyLedgerBasis')));
-	$write(array($langs->trans('KreaBankMonthlyBalanceBasis', $report['map']['balance_date'] ?: '—'), $report['map']['balance_confirmed'] ? $langs->trans('KreaBankMonthlyConfirmed') : $langs->trans('KreaBankMonthlyUnconfirmed')));
-	foreach (kreabankMonthlyMapRows($report) as $row) { $write(array($langs->trans('KreaBankMonthly' . $row[0]), $row[1])); }
-	$write(array($langs->trans('KreaBankMonthlyIndicators'), $langs->trans('KreaBankMonthlyBank'), $langs->trans('KreaBankMonthlyLedger')));
+	$write(array($langs->transnoentities('KreaBankMonthlyTitle'), $report['company'] ?? '', $report['entity'] ?? '', $report['account']['ref'], $report['account']['rowid'], $report['month'], $report['account']['currency_code']));
+	$write(array($langs->transnoentities('KreaBankMonthlyCurrentEvidence', $report['end'], $report['generated_at'])));
+	$write(array($langs->transnoentities('KreaBankMonthlyLedgerBasis')));
+	$write(array($langs->transnoentities('KreaBankMonthlyBalanceBasis', $report['map']['balance_date'] ?: '—'), $report['map']['balance_confirmed'] ? $langs->transnoentities('KreaBankMonthlyConfirmed') : $langs->transnoentities('KreaBankMonthlyUnconfirmed')));
+	foreach (kreabankMonthlyMapRows($report) as $row) { $write(array($langs->transnoentities('KreaBankMonthly' . $row[0]), $row[1])); }
+	$write(array($langs->transnoentities('KreaBankMonthlyIndicators'), $langs->transnoentities('KreaBankMonthlyBank'), $langs->transnoentities('KreaBankMonthlyLedger')));
 	foreach (array('count' => 'MovementCount', 'matched' => 'MatchedCount', 'pending' => 'PendingCount', 'over30' => 'Over30', 'over90' => 'Over90') as $key => $label) {
-		$write(array($langs->trans('KreaBankMonthly' . $label), $report['bank'][$key], $report['ledger'][$key]));
+		$write(array($langs->transnoentities('KreaBankMonthly' . $label), $report['bank'][$key], $report['ledger'][$key]));
 	}
 	$write(array());
-	foreach ($report['checks'] as $check) { $write(array($langs->trans('KreaBankMonthlyCheck' . $check['key']), $langs->trans('KreaBankMonthlyCheckState' . ucfirst($check['status'])), $check['value'])); }
+	foreach ($report['checks'] as $check) { $write(array($langs->transnoentities('KreaBankMonthlyCheck' . $check['key']), $langs->transnoentities('KreaBankMonthlyCheckState' . ucfirst($check['status'])), $check['value'])); }
 	foreach (array('bank_rows' => 'Bank', 'ledger_rows' => 'Ledger', 'bank_pending' => 'BankPending', 'ledger_pending' => 'LedgerPending') as $key => $label) {
 		$write(array());
-		$write(array($langs->trans('KreaBankMonthly' . $label)));
-		$write(array('ID', $langs->trans('KreaBankMonthlyDate'), $langs->trans('KreaBankMonthlyDescription'), $langs->trans('KreaBankMonthlyReference'), $langs->trans('KreaBankMonthlyAmount'), $langs->trans('KreaBankCurrency'), $langs->trans(strpos($key, 'ledger_') === 0 ? 'KreaBankMonthlyRunningBalance' : 'KreaBankMonthlyBalance'), $langs->trans('Status'), $langs->trans('KreaBankMonthlyAge'), $langs->trans('KreaBankMonthlyCarried')));
+		$write(array($langs->transnoentities('KreaBankMonthly' . $label)));
+		$write(array('ID', $langs->transnoentities('KreaBankMonthlyDate'), $langs->transnoentities('KreaBankMonthlyDescription'), $langs->transnoentities('KreaBankMonthlyReference'), $langs->transnoentities('KreaBankMonthlyAmount'), $langs->transnoentities('KreaBankCurrency'), $langs->transnoentities(strpos($key, 'ledger_') === 0 ? 'KreaBankMonthlyRunningBalance' : 'KreaBankMonthlyBalance'), $langs->transnoentities('Status'), $langs->transnoentities('KreaBankMonthlyAge'), $langs->transnoentities('KreaBankMonthlyCarried')));
 		foreach ($report[$key] as $row) {
-			$write(array($row['id'], $row['date'], $row['description'], $row['reference'], $row['amount'], $row['currency'], $row['balance'], $langs->trans('KreaBankMonthlyState' . ucfirst($row['status'])), $row['age'], $row['carried'] ? '1' : '0'));
+			$write(array($row['id'], $row['date'], $row['description'], $row['reference'], $row['amount'], $row['currency'], $row['balance'], $langs->transnoentities('KreaBankMonthlyState' . ucfirst($row['status'])), $row['age'], $row['carried'] ? '1' : '0'));
 		}
 	}
 }

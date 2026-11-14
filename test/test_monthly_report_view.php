@@ -24,6 +24,7 @@ class MonthlyViewLangs
 		}
 	}
 	public function trans($key, ...$args) { return $args ? vsprintf($this->messages[$key] ?? $key, $args) : ($this->messages[$key] ?? $key); }
+	public function transnoentities($key, ...$args) { return $this->trans($key, ...$args); }
 	public function loadLangs($files) {}
 }
 $account = array('rowid' => 101, 'entity' => 1, 'ref' => 'ST_TEST', 'label' => 'Synthetic account', 'currency_code' => 'EUR');
