@@ -46,7 +46,7 @@ if (!$res) {
 
 
 require_once __DIR__ . '/lib/kreabank.lib.php';
-$langs->loadLangs(array('banks', 'kreabank@kreabank'));
+$langs->loadLangs(array('banks', 'kreabank@kreabank', 'worklist@kreabank'));
 if (!isModEnabled('kreabank') || !isModEnabled('banque') || !$user->hasRight('banque', 'lire') || !$user->hasRight('kreabank', 'reconciliation', 'read')) {
 	accessforbidden();
 }
@@ -128,6 +128,9 @@ if ($statement) {
 			if ($state === 'KreaBankLinkNeedsReview') {
 				print '<br>' . kreabankPrice($row->native_amount) . ' ' . dol_escape_htmltag($row->native_currency);
 			}
+		} elseif (!empty($row->group_id)) {
+			$batchUrl = dol_buildpath('/custom/kreabank/reconciliationlist.php',1) . '?' . http_build_query(array('mainmenu'=>'bank','leftmenu'=>'kreabank_worklist','search_account'=>$navigationAccountId,'search_status'=>'all','expand'=>'staged:' . (int) $row->rowid,'mode'=>'batch'),'','&',PHP_QUERY_RFC3986);
+			print '<a href="' . dol_escape_htmltag($batchUrl) . '">' . $langs->trans('KreaBankWorklistViewBatch') . ' (' . (int) $row->group_count . ')</a>';
 		} else {
 			print $langs->trans((int) $row->expected_native_id > 0 ? 'KreaBankNativeMissing' : 'KreaBankAwaitingReconciliation');
 		}

@@ -87,6 +87,10 @@ Batch review and pending lines are tools inside reconciliation. Native statement
 numbering remains a separate, clearly labelled account tool. See
 [navigation and upgrade instructions](doc/NAVIGATION.md).
 
+## Reconciliation list
+
+The separate **Reconciliation list** combines owned bank accounts with native header filters and pagination, inline approval/search, a reviewed bank-account correction dialog, and payment batches for existing movements such as salaries. The original reconciliation workspace remains available. Existing installations need the additive batch migration; see [the feature guide](doc/RECONCILIATION_LIST.md).
+
 ## Operational flow
 
 ### Import

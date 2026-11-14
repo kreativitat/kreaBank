@@ -50,7 +50,7 @@ class modKreaBank extends DolibarrModules
 		$this->descriptionlong = 'ModuleKreaBankDescLong';
 		$this->editor_name = 'Kreativität Works';
 		$this->editor_url = 'http://kreativitat.com';
-		$this->version = '1.19.43';
+		$this->version = '1.20.0';
 		$this->const_name = 'MAIN_MODULE_' . strtoupper($this->name);
 		$this->picto = 'kreaproducts@kreaproducts';
 
@@ -147,6 +147,15 @@ class modKreaBank extends DolibarrModules
 		$r++;
 
 		$this->menu = array();
+		$this->menu[] = array(
+			'fk_menu'=>'fk_mainmenu=bank,fk_leftmenu=bank','type'=>'left','titre'=>'KreaBankWorklistTitle',
+			'mainmenu'=>'bank','leftmenu'=>'kreabank_worklist',
+			'url'=>'/custom/kreabank/reconciliationlist.php?mainmenu=bank&leftmenu=kreabank_worklist',
+			'langs'=>'worklist@kreabank','position'=>1945,
+			'enabled'=>'isModEnabled("kreabank") && isModEnabled("banque")',
+			'perms'=>'$user->hasRight("banque", "lire") && $user->hasRight("kreabank", "reconciliation", "read") && !$user->socid',
+			'target'=>'','user'=>2,
+		);
 
 		// Keep the existing bank-feed entry available to bank readers without workspace rights.
 		$this->menu[] = array(

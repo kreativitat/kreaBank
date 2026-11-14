@@ -1286,6 +1286,15 @@ class KreaBankNativeBankAdapter
 		}
 
 		try {
+			require_once __DIR__ . '/KreaBankPaymentBatchProjection.class.php';
+			if (KreaBankPaymentBatchProjection::available($this->db)) {
+				$p = $this->db->prefix();
+				$lock = $this->db->query("SELECT rowid FROM {$p}bank_account WHERE entity=" . (int) $this->entity . " AND rowid=$bankAccountId FOR UPDATE");
+				if (!$lock) { throw new Exception('Cannot lock bank statement owner'); }
+				$groups = $this->db->query("SELECT g.rowid FROM {$p}kreabank_payment_batch g JOIN {$p}kreabank_statement_line l ON l.rowid=g.fk_statement_line AND l.entity=g.entity"
+					. ' WHERE g.entity=' . (int) $this->entity . " AND l.fk_statement=$statementId AND g.status=1 FOR UPDATE");
+				if (!$groups || $this->db->fetch_object($groups)) { throw new Exception('Undo payment batches before deleting their statement'); }
+			}
 			foreach ($rows as $obj) {
 				$lineId = (int) $obj->rowid;
 				$nativeLineId = (int) $obj->fk_native_bank_line;

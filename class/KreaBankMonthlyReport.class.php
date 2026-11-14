@@ -4,6 +4,7 @@
  */
 
 require_once __DIR__ . '/kreabankintegration.class.php';
+require_once __DIR__ . '/KreaBankPaymentBatchProjection.class.php';
 
 /** Current, read-only evidence for a calendar-month reconciliation report. */
 class KreaBankMonthlyReport
@@ -39,9 +40,16 @@ class KreaBankMonthlyReport
 		}
 		// Claims deliberately include future and foreign-account statements in this
 		// company: they cannot make an already claimed movement safe by date filtering.
-		$claims = "SELECT l.fk_native_bank_line,COUNT(*) claim_count FROM {$p}kreabank_statement_line l"
+		$hasGroups = KreaBankPaymentBatchProjection::available($this->db);
+		$claimRows = "SELECT l.fk_native_bank_line FROM {$p}kreabank_statement_line l"
 			. " JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
-			. " WHERE l.entity=$e AND l.fk_native_bank_line IS NOT NULL AND l.is_duplicate=0 GROUP BY l.fk_native_bank_line";
+			. " WHERE l.entity=$e AND l.fk_native_bank_line IS NOT NULL AND l.is_duplicate=0";
+		if ($hasGroups) {
+			$claimRows .= " UNION ALL SELECT m.fk_bank_line FROM {$p}kreabank_payment_batch_line m"
+				. " JOIN {$p}kreabank_payment_batch g ON g.rowid=m.fk_batch AND g.entity=m.entity"
+				. " WHERE m.entity=$e AND g.status=1 AND g.active_statement_line IS NOT NULL AND m.active_bank_line IS NOT NULL";
+		}
+		$claims = 'SELECT claims.fk_native_bank_line,COUNT(*) claim_count FROM (' . $claimRows . ') claims GROUP BY claims.fk_native_bank_line';
 		$source = '(' . $projection->bankStatementSql($accountId) . ') h';
 		$bank = $this->rows($projection, 'SELECT h.*,n.dateo native_operation_date,COALESCE(c.claim_count,0) claim_count FROM ' . $source
 			. " LEFT JOIN {$p}bank n ON n.rowid=h.native_id AND n.fk_account=h.bank_account_id"
@@ -52,6 +60,27 @@ class KreaBankMonthlyReport
 			. " FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account AND ba.entity=$e"
 			. " LEFT JOIN ($claims) c ON c.fk_native_bank_line=b.rowid WHERE ba.rowid=$accountId"
 			. " AND (b.dateo<'$next' OR b.dateo IS NULL OR b.dateo='0000-00-00') ORDER BY b.dateo,b.rowid");
+		if ($hasGroups) {
+			// Read all components of in-scope sources, including future posting dates.
+			// Foreign/moved native rows do not disclose their current account or values.
+			$components = $this->rows($projection, "SELECT g.fk_statement_line,g.rowid group_id,m.fk_bank_line expected_native_id,"
+				. " m.active_bank_line active_native_id,m.amount expected_amount,n.rowid,n.fk_account bank_account_id,n.dateo operation_date,"
+				. " n.amount,n.rappro,n.num_releve,ba.currency_code currency,COALESCE(c.claim_count,0) claim_count"
+				. " FROM {$p}kreabank_payment_batch g JOIN {$p}kreabank_statement_line l ON l.rowid=g.fk_statement_line AND l.entity=g.entity"
+				. " JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
+				. " JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=l.entity AND ba.rowid=$accountId"
+				. " LEFT JOIN {$p}kreabank_payment_batch_line m ON m.fk_batch=g.rowid AND m.entity=g.entity"
+				. " LEFT JOIN {$p}bank n ON n.rowid=m.fk_bank_line AND n.fk_account=ba.rowid"
+				. " LEFT JOIN ($claims) c ON c.fk_native_bank_line=m.fk_bank_line"
+				. " WHERE g.entity=$e AND g.status=1 AND (l.operation_date<'$next' OR l.operation_date IS NULL OR l.operation_date='0000-00-00')"
+				. ' ORDER BY g.fk_statement_line,m.fk_bank_line');
+			$bySource = array();
+			foreach ($components as $component) { $bySource[(int) $component['fk_statement_line']][] = $component; }
+			foreach ($bank as &$row) {
+				if (!empty($row['group_id'])) { $row['group_components'] = $bySource[(int) $row['rowid']] ?? array(); }
+			}
+			unset($row);
+		}
 		return $this->assemble((array) $account, $month, $bank, $native, $confirmedBankBalance);
 	}
 
@@ -100,6 +129,12 @@ class KreaBankMonthlyReport
 				$key = (int) $raw['expected_native_id'];
 				$claims[$key] = ($claims[$key] ?? 0) + 1;
 			}
+			if (empty($raw['is_duplicate']) && !empty($raw['group_id'])) {
+				foreach ((array) ($raw['group_components'] ?? array()) as $component) {
+					$key = (int) ($component['expected_native_id'] ?? 0);
+					if ($key > 0) { $claims[$key] = ($claims[$key] ?? 0) + 1; }
+				}
+			}
 			$bank[] = $raw;
 		}
 		foreach ($nativeRows as $raw) {
@@ -125,6 +160,7 @@ class KreaBankMonthlyReport
 		});
 		$covered = array();
 		$openingCovered = array();
+		$timingNative = array();
 		$bankDetails = array();
 		$bankPending = array();
 		$bankSummary = $this->summary();
@@ -140,37 +176,52 @@ class KreaBankMonthlyReport
 			if ($duplicate) {
 				$issues['DuplicateEvidence']++;
 			}
-			$nativeId = (int) ($raw['expected_native_id'] ?? $raw['native_id'] ?? 0);
-			$n = $native[$nativeId] ?? null;
-			$conflict = $nativeId > 0 && max($claims[$nativeId] ?? 0, (int) ($raw['claim_count'] ?? 0), (int) ($n['claim_count'] ?? 0)) > 1;
-			if ($conflict) {
-				$issues['ConflictingLinks']++;
-			}
-			$matched = !$duplicate && !$conflict && $raw['_valid'] && $n && $n['_valid']
-				&& ((int) ($raw['status'] ?? 0) === 2 || ($raw['source_storage'] ?? '') === 'legacy_native') && (int) ($n['rappro'] ?? 0) === 1
-				&& (int) ($raw['native_id'] ?? 0) === $nativeId
-				&& $raw['_units'] === $n['_units']
-				&& (string) ($raw['statement_ref'] ?? '') !== ''
-				&& (string) ($raw['statement_ref'] ?? '') === (string) ($n['num_releve'] ?? '');
-			// A valid native counterpart beyond cutoff is timing evidence, not a
-			// broken match. The source remains open in this period.
-			$review = !$raw['_valid'] || $conflict;
-			$linkInvalid = $nativeId > 0 && (empty($raw['native_id'])
-				|| (string) ($raw['native_currency'] ?? '') !== (string) $account['currency_code']
-				|| $this->safeUnits($raw['native_amount'] ?? '', $issues) !== $raw['_units']);
-			$futureDate = $this->date($raw['native_operation_date'] ?? ($futureNative[$nativeId]['_date'] ?? ''));
-			if ($nativeId > 0 && !$n && ($futureDate === '' || $futureDate < $next)) { $linkInvalid = true; }
-			$flagsInvalid = (int) ($raw['status'] ?? 0) === 2 && ($nativeId <= 0 || $linkInvalid
-				|| (int) ($raw['rappro'] ?? 0) !== 1 || (string) ($raw['num_releve'] ?? '') !== (string) ($raw['statement_ref'] ?? ''));
-			if (($raw['source_storage'] ?? '') === 'staging' && (int) ($raw['status'] ?? 0) !== 2 && $nativeId > 0 && (int) ($raw['rappro'] ?? 0) === 1) { $flagsInvalid = true; }
-			if (!$duplicate && ($linkInvalid || $flagsInvalid || ((int) ($raw['status'] ?? 0) === 2 && $n && !$matched))) {
-				$matched = false;
-				$review = true;
-				$issues['ReconciliationFlags']++;
-			}
-			if ($matched) {
-				$covered[$nativeId] = true;
-				if ($raw['_date'] < $start && $n['_date'] < $start) { $openingCovered[$nativeId] = true; }
+			$openingMatched = false;
+			if (!empty($raw['group_id'])) {
+				$group = $this->groupState($raw, $account, $native, $futureNative, $claims, $start, $next, $issues);
+				$matched = !$duplicate && $group['matched'];
+				$review = $group['review'];
+				$openingMatched = $matched && $group['opening'];
+				foreach ($group['ids'] as $id) {
+					if ($matched) { $covered[$id] = true; }
+					if ($openingMatched) { $openingCovered[$id] = true; }
+					if (!$duplicate && $group['timing']) { $timingNative[$id] = true; }
+				}
+				$raw['native_ids'] = $group['ids'];
+			} else {
+				$nativeId = (int) ($raw['expected_native_id'] ?? $raw['native_id'] ?? 0);
+				$n = $native[$nativeId] ?? null;
+				$conflict = $nativeId > 0 && max($claims[$nativeId] ?? 0, (int) ($raw['claim_count'] ?? 0), (int) ($n['claim_count'] ?? 0)) > 1;
+				if ($conflict) {
+					$issues['ConflictingLinks']++;
+				}
+				$matched = !$duplicate && !$conflict && $raw['_valid'] && $n && $n['_valid']
+					&& ((int) ($raw['status'] ?? 0) === 2 || ($raw['source_storage'] ?? '') === 'legacy_native') && (int) ($n['rappro'] ?? 0) === 1
+					&& (int) ($raw['native_id'] ?? 0) === $nativeId
+					&& $raw['_units'] === $n['_units']
+					&& (string) ($raw['statement_ref'] ?? '') !== ''
+					&& (string) ($raw['statement_ref'] ?? '') === (string) ($n['num_releve'] ?? '');
+				// A valid native counterpart beyond cutoff is timing evidence, not a
+				// broken match. The source remains open in this period.
+				$review = !$raw['_valid'] || $conflict;
+				$linkInvalid = $nativeId > 0 && (empty($raw['native_id'])
+					|| (string) ($raw['native_currency'] ?? '') !== (string) $account['currency_code']
+					|| $this->safeUnits($raw['native_amount'] ?? '', $issues) !== $raw['_units']);
+				$futureDate = $this->date($raw['native_operation_date'] ?? ($futureNative[$nativeId]['_date'] ?? ''));
+				if ($nativeId > 0 && !$n && ($futureDate === '' || $futureDate < $next)) { $linkInvalid = true; }
+				$flagsInvalid = (int) ($raw['status'] ?? 0) === 2 && ($nativeId <= 0 || $linkInvalid
+					|| (int) ($raw['rappro'] ?? 0) !== 1 || (string) ($raw['num_releve'] ?? '') !== (string) ($raw['statement_ref'] ?? ''));
+				if (($raw['source_storage'] ?? '') === 'staging' && (int) ($raw['status'] ?? 0) !== 2 && $nativeId > 0 && (int) ($raw['rappro'] ?? 0) === 1) { $flagsInvalid = true; }
+				if (!$duplicate && ($linkInvalid || $flagsInvalid || ((int) ($raw['status'] ?? 0) === 2 && $n && !$matched))) {
+					$matched = false;
+					$review = true;
+					$issues['ReconciliationFlags']++;
+				}
+				if ($matched) {
+					$covered[$nativeId] = true;
+					if ($raw['_date'] < $start && $n['_date'] < $start) { $openingCovered[$nativeId] = true; }
+				}
+				$openingMatched = isset($openingCovered[$nativeId]);
 			}
 			$status = $duplicate ? 'duplicate' : ($matched ? 'matched' : ($review ? 'review' : 'pending'));
 			$detail = $this->detail($raw, $raw['_id'], $status, $end, $start, (string) ($raw['source_storage'] ?? 'staging'), (int) ($raw['native_id'] ?? 0), $issues);
@@ -181,7 +232,7 @@ class KreaBankMonthlyReport
 				$bankPending[] = $detail;
 			}
 			if (!$duplicate && $raw['_valid']) {
-				$this->accumulate($bankSummary, $raw, $matched, $start, $detail['age'], isset($openingCovered[$nativeId]));
+				$this->accumulate($bankSummary, $raw, $matched, $start, $detail['age'], $openingMatched);
 				$balanceRows[] = $raw;
 			}
 		}
@@ -197,8 +248,8 @@ class KreaBankMonthlyReport
 			$matched = isset($covered[$id]);
 			$conflict = max((int) ($raw['claim_count'] ?? 0), $claims[$id] ?? 0) > 1;
 			if ($conflict) { $issues['ConflictingLinks']++; }
-			$review = !$raw['_valid'] || $conflict || (!$matched && (int) ($raw['rappro'] ?? 0) === 1);
-			if (!$matched && (int) ($raw['rappro'] ?? 0) === 1) {
+			$review = !$raw['_valid'] || $conflict || (!$matched && (int) ($raw['rappro'] ?? 0) === 1 && !isset($timingNative[$id]));
+			if (!$matched && (int) ($raw['rappro'] ?? 0) === 1 && !isset($timingNative[$id])) {
 				$issues['UnreconciledNative']++;
 			}
 			$detail = $this->detail($raw, 'native:' . $id, $matched ? 'matched' : ($review ? 'review' : 'pending'), $end, $start, 'native', $id, $issues);
@@ -247,6 +298,64 @@ class KreaBankMonthlyReport
 			'checks'=>$checks,'bank_rows'=>$bankDetails,'ledger_rows'=>$ledgerDetails,'bank_pending'=>$bankPending,'ledger_pending'=>$ledgerPending);
 	}
 
+	/** Verify the whole group against its actual members; a future leg is timing evidence. */
+	private function groupState($raw, $account, $native, $futureNative, $claims, $start, $next, &$issues)
+	{
+		$components = (array) ($raw['group_components'] ?? array());
+		$valid = $raw['_valid'] && (int) ($raw['status'] ?? 0) === 2 && (int) ($raw['group_valid'] ?? 0) === 1
+			&& (int) ($raw['group_count'] ?? 0) >= 2 && count($components) === (int) $raw['group_count']
+			&& empty($raw['native_id']) && empty($raw['expected_native_id'])
+			&& (string) ($raw['statement_ref'] ?? '') !== '' && (string) ($raw['num_releve'] ?? '') === (string) $raw['statement_ref']
+			&& (int) ($raw['rappro'] ?? 0) === 1 && $raw['_units'] !== null && $raw['_units'] !== 0;
+		$sum = 0; $ids = array(); $conflict = false; $future = false; $opening = $raw['_date'] < $start;
+		foreach ($components as $component) {
+			$component = (array) $component;
+			$id = (int) ($component['expected_native_id'] ?? 0);
+			if ($id <= 0 || (int) ($component['rowid'] ?? 0) !== $id
+				|| (int) ($component['bank_account_id'] ?? 0) !== (int) $account['rowid']) {
+				$valid = false;
+				continue;
+			}
+			$ids[] = $id;
+			$known = $native[$id] ?? $futureNative[$id] ?? null;
+			if (max((int) ($component['claim_count'] ?? 0), $claims[$id] ?? 0, (int) ($known['claim_count'] ?? 0)) > 1) { $conflict = true; }
+			$date = $this->date($component['operation_date'] ?? '');
+			if ($date === '') { $valid = false; }
+			if ($date >= $next) { $future = true; }
+			if ($date === '' || $date >= $start) { $opening = false; }
+			try {
+				$units = $this->units($component['amount'] ?? '');
+				$expected = $this->units($component['expected_amount'] ?? '');
+				$sum = $this->add($sum, $units);
+			} catch (InvalidArgumentException $e) {
+				$valid = false;
+				continue;
+			}
+			if ($units !== $expected || $units === 0 || ($units < 0) !== ($raw['_units'] < 0)
+				|| (string) ($component['currency'] ?? '') !== (string) $account['currency_code']
+				|| (int) ($component['active_native_id'] ?? 0) !== $id
+				|| (int) ($component['group_id'] ?? 0) !== (int) $raw['group_id']
+				|| (int) ($component['rappro'] ?? 0) !== 1 || (string) ($component['num_releve'] ?? '') !== (string) $raw['statement_ref']) {
+				$valid = false;
+			}
+			if ($known) {
+				if (!$known['_valid'] || $known['_units'] !== $units || $known['_date'] !== $date
+					|| (int) ($known['rappro'] ?? 0) !== 1 || (string) ($known['num_releve'] ?? '') !== (string) $raw['statement_ref']) { $valid = false; }
+			} elseif ($date === '' || $date < $next) {
+				// Every current-period component must also be present in the complete ledger.
+				$valid = false;
+			}
+		}
+		if ($sum !== $raw['_units'] || count(array_unique($ids)) !== count($components)) { $valid = false; }
+		try { if ($this->units($raw['native_amount'] ?? '') !== $sum) { $valid = false; } }
+		catch (InvalidArgumentException $e) { $valid = false; }
+		if ($conflict) { $issues['ConflictingLinks']++; }
+		$review = !$valid || $conflict;
+		if ($review && empty($raw['is_duplicate'])) { $issues['ReconciliationFlags']++; }
+		return array('matched'=>$valid && !$conflict && !$future,'review'=>$review,'ids'=>array_values(array_unique($ids)),
+			'opening'=>$opening,'timing'=>$valid && !$conflict && $future);
+	}
+
 	private function validRow($raw, $account, &$issues)
 	{
 		$valid = $raw['_units'] !== null;
@@ -264,7 +373,8 @@ class KreaBankMonthlyReport
 		$age = $date !== '' ? max(0, (int) ((strtotime($end . ' UTC') - strtotime($date . ' UTC')) / 86400)) : 0;
 		$balance = $raw['_balance_units'] ?? null;
 		if (isset($raw['running_balance']) && $raw['running_balance'] !== '') { $balance = $this->safeUnits($raw['running_balance'], $issues); }
-		return array('id'=>$id,'rowid'=>(int) $raw['rowid'],'date'=>$date,'description'=>(string) ($raw['description'] ?? ''),'reference'=>(string) (($raw['payment_reference'] ?? '') ?: ($raw['bank_reference'] ?? '') ?: ($raw['num_releve'] ?? '')),'amount'=>$this->nullableDecimal($raw['_units']),'currency'=>(string) ($raw['currency'] ?? ''),'status'=>$status,'age'=>$age,'carried'=>$date !== '' && $date < $start,'native_id'=>$nativeId,'source_storage'=>$storage,'balance'=>$this->nullableDecimal($balance));
+		return array('id'=>$id,'rowid'=>(int) $raw['rowid'],'date'=>$date,'description'=>(string) ($raw['description'] ?? ''),'reference'=>(string) (($raw['payment_reference'] ?? '') ?: ($raw['bank_reference'] ?? '') ?: ($raw['num_releve'] ?? '')),'amount'=>$this->nullableDecimal($raw['_units']),'currency'=>(string) ($raw['currency'] ?? ''),'status'=>$status,'age'=>$age,'carried'=>$date !== '' && $date < $start,'native_id'=>$nativeId,'source_storage'=>$storage,'balance'=>$this->nullableDecimal($balance))
+			+ (!empty($raw['group_id']) ? array('group_id'=>(int) $raw['group_id'],'native_ids'=>$raw['native_ids'] ?? array()) : array());
 	}
 
 	private function summary()

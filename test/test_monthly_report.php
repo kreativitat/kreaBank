@@ -112,6 +112,7 @@ checkMonthly($r['map']['ledger_close']===null && monthlyIssue($r,'InvalidDates')
 $boundedDb=new class {
 	public $queries=array();
 	public function prefix() { return 'kbmonthly_'; }
+	public function escape($value) { return addslashes((string) $value); }
 	public function plimit($limit) { return ' LIMIT ' . (int) $limit; }
 	public function query($sql) {
 		if (!preg_match('/^SELECT\\b/', $sql)) { throw new RuntimeException('Report attempted a write'); }

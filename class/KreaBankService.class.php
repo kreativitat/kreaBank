@@ -13,6 +13,7 @@ require_once __DIR__ . '/KreaBankNativeBankAdapter.class.php';
 require_once __DIR__ . '/KreaBankReconciliationScope.class.php';
 require_once __DIR__ . '/KreaBankTaxReconciliation.class.php';
 require_once __DIR__ . '/KreaBankStatementEvidence.class.php';
+require_once __DIR__ . '/KreaBankPaymentBatchTrait.php';
 require_once __DIR__ . '/../lib/kreabank.lib.php';
 
 /**
@@ -35,6 +36,8 @@ class KreaBankNullLangs
  */
 class KreaBankService
 {
+	use KreaBankPaymentBatchTrait;
+
 	/** Legacy samples were repeatedly scaled and cannot be reconstructed safely. */
 	const BATCH_ML_FEATURE_VERSION = 2;
 
@@ -1084,6 +1087,7 @@ class KreaBankService
 		$sql .= ' AND ba.clos = 0';
 		$sql .= ' AND ba.rappro = 1';
 		$sql .= ' AND b.rappro = 0';
+		$sql .= $this->paymentBatchUnclaimedSql();
 		if ($bankAccountId > 0) {
 			$sql .= ' AND b.fk_account = ' . $bankAccountId;
 		}
@@ -1174,7 +1178,7 @@ class KreaBankService
 	 * @param int|null $intervalDays
 	 * @return array<int,array<string,mixed>>
 	 */
-	protected function getOpenPaymentDocuments($direction = 0, $limit = 250, $anchorDate = null, $intervalDays = null)
+	protected function getOpenPaymentDocuments($direction = 0, $limit = 250, $anchorDate = null, $intervalDays = null, $search = '')
 	{
 		$documents = array();
 		$limit = max(20, (int) $limit);
@@ -1194,6 +1198,7 @@ class KreaBankService
 			$sql .= ' AND NOT EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'paiement_facture kpl JOIN ' . $this->db->prefix() . 'facture kf ON kf.rowid=kpl.fk_facture WHERE kpl.fk_paiement=p.rowid AND kf.entity<>p.entity)';
 			$sql .= ' AND (p.fk_bank IS NULL OR p.fk_bank = 0)';
 			$sql .= ' AND ABS(p.amount) > 0.0000001';
+			$sql .= $this->worklistDocumentSearchSql($search,"CONCAT_WS(' ',p.ref,p.num_paiement,p.note,f.ref,s.nom,CAST(p.datep AS CHAR))",'p.amount');
 			if (!empty($dateRange['enabled'])) {
 				$sql .= ' AND p.datep >= ' . $this->sqlDate($dateRange['start']);
 				$sql .= ' AND p.datep <= ' . $this->sqlDate($dateRange['end']);
@@ -1203,6 +1208,7 @@ class KreaBankService
 			$sql .= $this->db->plimit($limit, 0);
 
 			$resql = $this->db->query($sql);
+			if ($search !== '' && !$resql) { throw new RuntimeException('Unable to search current documents'); }
 			if ($resql) {
 				while ($obj = $this->db->fetch_object($resql)) {
 					$ref = trim((string) (!empty($obj->ref) ? $obj->ref : $obj->num_paiement));
@@ -1238,6 +1244,7 @@ class KreaBankService
 			$sqlf .= ' AND NOT EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'paiementfourn_facturefourn kpl JOIN ' . $this->db->prefix() . 'facture_fourn kf ON kf.rowid=kpl.fk_facturefourn WHERE kpl.fk_paiementfourn=p.rowid AND kf.entity<>p.entity)';
 			$sqlf .= ' AND (p.fk_bank IS NULL OR p.fk_bank = 0)';
 			$sqlf .= ' AND ABS(p.amount) > 0.0000001';
+			$sqlf .= $this->worklistDocumentSearchSql($search,"CONCAT_WS(' ',p.ref,p.num_paiement,p.note,ff.ref,s.nom,CAST(p.datep AS CHAR))",'p.amount');
 			if (!empty($dateRange['enabled'])) {
 				$sqlf .= ' AND p.datep >= ' . $this->sqlDate($dateRange['start']);
 				$sqlf .= ' AND p.datep <= ' . $this->sqlDate($dateRange['end']);
@@ -1247,6 +1254,7 @@ class KreaBankService
 			$sqlf .= $this->db->plimit($limit, 0);
 
 			$resqlf = $this->db->query($sqlf);
+			if ($search !== '' && !$resqlf) { throw new RuntimeException('Unable to search current documents'); }
 			if ($resqlf) {
 				while ($obj = $this->db->fetch_object($resqlf)) {
 					$ref = trim((string) (!empty($obj->ref) ? $obj->ref : $obj->num_paiement));
@@ -1313,6 +1321,7 @@ class KreaBankService
 			$sql .= ' WHERE p.entity = ' . ((int) $this->entity);
 			$sql .= ' AND NOT EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'paiement_facture kpl JOIN ' . $this->db->prefix() . 'facture kf ON kf.rowid=kpl.fk_facture WHERE kpl.fk_paiement=p.rowid AND kf.entity<>p.entity)';
 			$sql .= ' AND p.fk_bank IS NOT NULL AND p.fk_bank > 0';
+			$sql .= $this->paymentBatchUnclaimedSql();
 			$sql .= ' AND ABS(p.amount) > 0.0000001';
 			if ($bankAccountId > 0) {
 				$sql .= ' AND b.fk_account = ' . $bankAccountId;
@@ -1376,6 +1385,7 @@ class KreaBankService
 			$sqlf .= ' WHERE p.entity = ' . ((int) $this->entity);
 			$sqlf .= ' AND NOT EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'paiementfourn_facturefourn kpl JOIN ' . $this->db->prefix() . 'facture_fourn kf ON kf.rowid=kpl.fk_facturefourn WHERE kpl.fk_paiementfourn=p.rowid AND kf.entity<>p.entity)';
 			$sqlf .= ' AND p.fk_bank IS NOT NULL AND p.fk_bank > 0';
+			$sqlf .= $this->paymentBatchUnclaimedSql();
 			$sqlf .= ' AND ABS(p.amount) > 0.0000001';
 			if ($bankAccountId > 0) {
 				$sqlf .= ' AND b.fk_account = ' . $bankAccountId;
@@ -1438,7 +1448,7 @@ class KreaBankService
 	 * @param bool $draftOnly Review-only drafts; ordinary matching remains validated-only
 	 * @return array<int,array<string,mixed>>
 	 */
-	protected function getOpenInvoiceDocuments($direction = 0, $limit = 250, $anchorDate = null, $intervalDays = null, $draftOnly = false)
+	protected function getOpenInvoiceDocuments($direction = 0, $limit = 250, $anchorDate = null, $intervalDays = null, $draftOnly = false, $search = '')
 	{
 		$documents = array();
 		$limit = max(20, (int) $limit);
@@ -1460,6 +1470,7 @@ class KreaBankService
 			$sql .= $draftOnly ? ' AND f.fk_statut = 0 AND f.paye = 0' : ' AND f.fk_statut = 1 AND f.paye = 0';
 			$sql .= ' AND f.type <> 2';
 			$sql .= ' AND ' . $customerAmountOpenSql . ' > 0.0000001';
+			$sql .= $this->worklistDocumentSearchSql($search,"CONCAT_WS(' ',f.ref,f.ref_client,s.nom,CAST(f.datef AS CHAR))",$customerAmountOpenSql);
 			if (!empty($dateRange['enabled'])) {
 				$sql .= ' AND f.datef >= ' . $this->sqlDate($dateRange['start']);
 				$sql .= ' AND f.datef <= ' . $this->sqlDate($dateRange['end']);
@@ -1471,6 +1482,7 @@ class KreaBankService
 			$sql .= $this->db->plimit($limit, 0);
 
 			$resql = $this->db->query($sql);
+			if ($search !== '' && !$resql) { throw new RuntimeException('Unable to search current documents'); }
 			if ($resql) {
 				while ($obj = $this->db->fetch_object($resql)) {
 					$amountOpen = (float) $obj->amount_open;
@@ -1507,6 +1519,7 @@ class KreaBankService
 			$sqlf .= $draftOnly ? ' AND f.fk_statut = 0 AND f.paye = 0' : ' AND f.fk_statut = 1 AND f.paye = 0';
 			$sqlf .= ' AND f.type <> 2';
 			$sqlf .= ' AND ' . $supplierAmountOpenSql . ' > 0.0000001';
+			$sqlf .= $this->worklistDocumentSearchSql($search,"CONCAT_WS(' ',f.ref,f.ref_supplier,s.nom,CAST(f.datef AS CHAR))",$supplierAmountOpenSql);
 			if (!empty($dateRange['enabled'])) {
 				$sqlf .= ' AND f.datef >= ' . $this->sqlDate($dateRange['start']);
 				$sqlf .= ' AND f.datef <= ' . $this->sqlDate($dateRange['end']);
@@ -1518,6 +1531,7 @@ class KreaBankService
 			$sqlf .= $this->db->plimit($limit, 0);
 
 			$resqlf = $this->db->query($sqlf);
+			if ($search !== '' && !$resqlf) { throw new RuntimeException('Unable to search current documents'); }
 			if ($resqlf) {
 				while ($obj = $this->db->fetch_object($resqlf)) {
 					$amountOpen = (float) $obj->amount_open;
@@ -2265,6 +2279,10 @@ class KreaBankService
 				$links[0]['match_reasons'] = $fresh['suggestion']['details'];
 			}
 			$scope->assertLine($line);
+			if (!empty($line['fk_statement']) && $this->paymentBatchMapsAvailable()) {
+				$active = $this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'kreabank_payment_batch WHERE entity=' . $this->entity . ' AND active_statement_line=' . (int) $line['rowid'] . ' FOR UPDATE');
+				if ($active) { throw new DomainException('An active payment batch already owns this statement line'); }
+			}
 			foreach ($links as $link) {
 				$scope->assertDocument((string) $link['doc_type'], (int) $link['fk_doc'], (int) $line['bank_account_id']);
 			}
@@ -2811,6 +2829,7 @@ class KreaBankService
 			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_bankmeta m WHERE m.fk_bank_line=b.rowid)"
 			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement_line mapped WHERE mapped.fk_native_bank_line=b.rowid)";
 		$sql .= KreaBankTaxReconciliation::bankOwnershipSql($p);
+		$sql .= $this->paymentBatchUnclaimedSql();
 		// A foreign/missing parent is never made visible through an owned native bank row.
 		foreach (array(array('paiement','paiement_facture','facture','fk_paiement','fk_facture','payment'),
 			array('paiementfourn','paiementfourn_facturefourn','facture_fourn','fk_paiementfourn','fk_facturefourn','payment_supplier')) as $tables) {
@@ -2884,6 +2903,7 @@ class KreaBankService
 			if (count($accounts) !== 2) { throw new Exception('Bank account correction requires two current-company accounts'); }
 			$this->lockReconciliationRow('kreabank_statement_line', (int) $stagingId);
 			$this->lockReconciliationRow('bank', (int) $bankLineId);
+			$this->assertPaymentBatchMovementUnclaimed((int) $bankLineId);
 			$this->transferRows("SELECT rowid FROM {$p}bank_url WHERE fk_bank=" . (int) $bankLineId . ' FOR UPDATE');
 			$this->transferRows("SELECT rowid FROM {$p}accounting_bookkeeping WHERE doc_type='bank' AND fk_doc=" . (int) $bankLineId . ' FOR UPDATE');
 			foreach (array(array('paiement','paiement_facture','facture','fk_paiement','fk_facture'),
@@ -3863,6 +3883,15 @@ class KreaBankService
 		if ($lineId <= 0) {
 			throw new Exception('Invalid bank line id');
 		}
+		if ($this->hasPaymentBatchSchema()) {
+			$p = $this->db->prefix();
+			$groups = $this->transferRows("SELECT g.rowid FROM {$p}kreabank_payment_batch g LEFT JOIN {$p}kreabank_payment_batch_line m ON m.fk_batch=g.rowid AND m.entity=g.entity"
+				. ' WHERE g.entity=' . $this->entity . " AND g.status=1 AND (g.active_statement_line=$lineId OR m.active_bank_line=$lineId)" . $this->db->plimit(1));
+			if ($groups) {
+				if (method_exists($this->langs,'load')) { $this->langs->load('worklist@kreabank'); }
+				throw new Exception($this->langs->trans('KreaBankWorklistUndoGroupRequired'));
+			}
+		}
 
 		$line = $this->getLineById($lineId);
 		if (!$line) {
@@ -3878,6 +3907,9 @@ class KreaBankService
 			throw new Exception('Failed to start database transaction');
 		}
 		try {
+			$this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'bank_account WHERE entity=' . $this->entity . ' AND rowid=' . (int) $line['bank_account_id'] . ' FOR UPDATE');
+			$this->lockReconciliationRow('bank',$nativeLineId);
+			$this->assertPaymentBatchMovementUnclaimed($nativeLineId);
 			$res = $this->native->unconciliateLine($nativeLineId);
 			if ($res <= 0) {
 				throw new Exception('Failed to undo native bank conciliation');
@@ -6817,6 +6849,7 @@ class KreaBankService
 		}
 
 		$this->lockReconciliationRow('bank', $sourceLineId);
+		$this->assertPaymentBatchMovementUnclaimed($sourceLineId);
 		$sourceLine = $this->native->getBankLineById($sourceLineId);
 		if (!$sourceLine) {
 			throw new Exception('Source native bank line not found #' . $sourceLineId);
@@ -6852,6 +6885,65 @@ class KreaBankService
 			'source_line_id' => $sourceLineId,
 			'source_ref' => $this->resolveNativeBankLineRef($sourceLine),
 		);
+	}
+
+	/** Active normalized claims remain authoritative even if native flags are manually changed. */
+	protected function paymentBatchMapsAvailable()
+	{
+		require_once __DIR__ . '/KreaBankPaymentBatchProjection.class.php';
+		return KreaBankPaymentBatchProjection::available($this->db);
+	}
+
+	/** Explicit list search reuses the ordinary eligible document providers and matcher. */
+	public function searchWorklistOpenDocuments($line, $search)
+	{
+		$this->assertAutomaticActor(true);
+		$source = !empty($line['fk_statement']) ? 'staged' : 'native';
+		$fresh = $this->getBulkReviewLine((int) ($line['rowid'] ?? 0),$source);
+		if (!$fresh || (int) $fresh['status'] !== 0 || !is_string($search) || strlen($search) > 256) { throw new DomainException('Statement search changed'); }
+		$direction = (float) $fresh['amount'] < 0 ? -1 : 1;
+		$payments = $this->getOpenPaymentDocuments($direction,101,null,0,$search);
+		$invoices = $this->getOpenInvoiceDocuments($direction,101,null,0,false,$search);
+		$documents = array_merge(array_slice($payments,0,100),array_slice($invoices,0,100));
+		return array('line'=>$fresh,'suggestions'=>$this->matcher->getSuggestions($fresh,$documents,$this->getPatterns(),max(1,(int) getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE',3)),0),
+			'truncated'=>count($payments)>100 || count($invoices)>100);
+	}
+
+	public function getWorklistCorrectedSuggestions($line, $bankLineId)
+	{
+		$this->assertAutomaticActor(true);
+		if (empty($line['fk_statement'])) { return array(); }
+		$fresh = $this->getBulkReviewLine((int) $line['rowid'],'staged');
+		if (!$fresh || (int) $fresh['status'] !== 0) { throw new DomainException('Statement correction review changed'); }
+		$document = $this->getCorrectedAccountMovement((int) $fresh['rowid'],(int) $bankLineId);
+		return $document ? $this->matcher->getSuggestions($fresh,array($document),$this->getPatterns(),max(1,(int) getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE',3)),0) : array();
+	}
+
+	/** Only fixed provider expressions enter SQL; user tokens are escaped literal searches. */
+	protected function worklistDocumentSearchSql($search, $textExpression, $amountExpression)
+	{
+		if ($search === '') { return ''; }
+		if (!is_string($search) || strlen($search)>256) { throw new DomainException('Invalid document search'); }
+		$sql = '';
+		foreach (preg_split('/\s+/u',trim($search),-1,PREG_SPLIT_NO_EMPTY) as $token) {
+			$needle = strtr($token,array('!'=>'!!','%'=>'!%','_'=>'!_'));
+			$clause = $textExpression . ' LIKE ' . $this->sqlText('%'.$needle.'%') . " ESCAPE '!'";
+			if (preg_match('/^[+-]?\d{1,16}(?:[.,]\d{1,8})?$/D',$token)) { $clause .= ' OR ABS(' . $amountExpression . ')=' . ltrim(str_replace(',','.',$token),'+-'); }
+			$sql .= ' AND (' . $clause . ')';
+		}
+		return $sql;
+	}
+
+	protected function paymentBatchUnclaimedSql()
+	{
+		return $this->paymentBatchMapsAvailable() ? ' AND NOT EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'kreabank_payment_batch_line kbclaim WHERE kbclaim.active_bank_line=b.rowid)' : '';
+	}
+
+	protected function assertPaymentBatchMovementUnclaimed($bankLineId)
+	{
+		if (!$this->paymentBatchMapsAvailable()) { return; }
+		$claims = $this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'kreabank_payment_batch_line WHERE active_bank_line=' . (int) $bankLineId . ' FOR UPDATE');
+		if ($claims) { throw new DomainException('An active payment batch owns this bank movement'); }
 	}
 
 	/**

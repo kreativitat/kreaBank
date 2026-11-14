@@ -1,5 +1,17 @@
 # AGENTS.md — KreaBank
 
+## Separate reconciliation list
+
+- `reconciliationlist.php` is additive; keep `reconcile.php` and its assets unchanged
+  when maintaining this feature. Use native header filters/pagination, explicit
+  staged/native IDs, signed row reviews and the existing matcher/service.
+- Payment batches group existing native movements through the shared service
+  trait and normalized mappings. Preserve exact signed amounts, all components,
+  atomic audit/undo, private drafts and claim guards. Never create a duplicate
+  aggregate movement. Read projections/monthly reports must verify every member.
+- See [the reconciliation list](doc/RECONCILIATION_LIST.md) for migration,
+  rollback and strictly disposable database checks. No GET-time batch DDL or jobs.
+
 ## Monthly reports
 
 - `monthlyreport.php` and `KreaBankMonthlyReport` are read-only current-evidence

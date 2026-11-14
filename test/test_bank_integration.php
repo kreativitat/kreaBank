@@ -9,9 +9,15 @@ foreach (array('statement.php', 'lib/kreabank_integration.lib.php', 'accounts.ph
 	preg_match_all("/'(KreaBank[A-Za-z0-9_]+)'/", file_get_contents(__DIR__ . '/../' . $file), $matches);
 	$keys = array_merge($keys, $matches[1]);
 }
+// Feed labels are composed from the display helper's allowlisted states.
+$keys = array_values(array_diff($keys, array('KreaBankFeedState_')));
+foreach (array('ready','stale','failed','refresh_wait','mapping_review','unavailable','unmapped') as $state) {
+	$keys[] = 'KreaBankFeedState_' . $state;
+}
 $checks = 0;
 foreach (array('en_US', 'pt_PT') as $locale) {
-	$text = file_get_contents(__DIR__ . '/../langs/' . $locale . '/kreabank.lang');
+	$text = file_get_contents(__DIR__ . '/../langs/' . $locale . '/kreabank.lang') . "\n"
+		. file_get_contents(__DIR__ . '/../langs/' . $locale . '/worklist.lang');
 	foreach (array_unique($keys) as $key) {
 		if (!preg_match('/^' . preg_quote($key, '/') . '=(.+)$/m', $text)) {
 			throw new RuntimeException('Missing statement label: ' . $locale . '/' . $key);

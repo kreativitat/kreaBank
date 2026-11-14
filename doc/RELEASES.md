@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20.0 — 2026-11-14
+
+- Add a separate reconciliation list with native header filters/pagination, both bank accounts, inline signed approval/search and a protected bank-correction modal.
+- Add private payment-batch drafts, exact grouped approval/undo and normalized component mappings; preserve existing payments and the original reconciliation screen.
+- Verify groups in statements and monthly reports, preserve decimal source precision and prevent active components being reused by scalar flows.
+- Existing installations require the additive payment-batch migration and native menu registration refresh; no scheduler changes. See [reconciliation list](RECONCILIATION_LIST.md).
+
 ## 1.19.43 — 2026-11-14
 
 - Export monthly report labels as native UTF-8 text instead of HTML entities,

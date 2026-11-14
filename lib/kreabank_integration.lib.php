@@ -88,6 +88,9 @@ function kreabankMovementFilter()
 /** Only a verified native match is presented as reconciled. */
 function kreabankIntegrationLineState($line, $reference)
 {
+	if (!empty($line->group_id)) {
+		return (int) ($line->group_valid ?? 0) === 1 && (int) $line->status === 2 ? 'KreaBankReconciled' : 'KreaBankLinkNeedsReview';
+	}
 	if ((int) $line->status === 2 || (int) $line->expected_native_id > 0) {
 		if (empty($line->native_id) || (string) $line->currency !== (string) $line->native_currency || abs((float) $line->amount - (float) $line->native_amount) > 0.01
 			|| ((int) $line->status === 2 && ((int) $line->rappro !== 1 || (string) $line->num_releve !== (string) $reference))) {

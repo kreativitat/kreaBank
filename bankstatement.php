@@ -47,7 +47,7 @@ if (!$res) {
 
 require_once __DIR__ . '/lib/kreabank.lib.php';
 require_once __DIR__ . '/lib/kreabank_statement_list.lib.php';
-$langs->loadLangs(array('banks', 'kreabank@kreabank'));
+$langs->loadLangs(array('banks', 'kreabank@kreabank', 'worklist@kreabank'));
 if (!isModEnabled('kreabank') || !isModEnabled('banque') || !empty($user->socid)
 	|| !$user->hasRight('banque', 'lire') || !$user->hasRight('kreabank', 'reconciliation', 'read')) {
 	accessforbidden();
@@ -157,6 +157,9 @@ while ($shown < $limit && ($row = $db->fetch_object($result))) {
 	}
 	if ((int) $row->native_id > 0) {
 		print '<br><a href="' . dol_escape_htmltag(dol_buildpath('/compta/bank/line.php', 1) . '?rowid=' . (int) $row->native_id) . '">#' . (int) $row->native_id . '</a>';
+	} elseif (!empty($row->group_id)) {
+		$batchUrl = dol_buildpath('/custom/kreabank/reconciliationlist.php',1) . '?' . http_build_query(array('mainmenu'=>'bank','leftmenu'=>'kreabank_worklist','search_account'=>(int) $row->bank_account_id,'search_status'=>'all','expand'=>'staged:' . (int) $row->rowid,'mode'=>'batch'),'','&',PHP_QUERY_RFC3986);
+		print '<br><a href="' . dol_escape_htmltag($batchUrl) . '">' . $langs->trans('KreaBankWorklistViewBatch') . ' (' . (int) $row->group_count . ')</a>';
 	}
 	print '</td><td></td></tr>';
 }
