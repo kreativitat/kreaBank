@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.22 — 2026-11-14
+
+- Translate native customer/supplier payment markers in expanded reconciliation and batch candidates.
+
 ## 1.20.21 — 2026-11-14
 
 - Add native column filters, sorting, page-size controls and pagination to every monthly-report table; retain complete totals, CSV and print. Close the final table border.

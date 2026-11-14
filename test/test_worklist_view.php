@@ -223,6 +223,8 @@ foreach (array('en_US','pt_PT') as $locale) {
 	foreach (array(
 		'(banktransfert)'=>$langs->trans('BankTransfer'),
 		'(paiement)'=>$langs->trans('Payment'),
+		'(SupplierInvoicePayment)'=>$langs->trans('SupplierInvoicePayment'),
+		'(CustomerInvoicePayment)'=>$langs->trans('CustomerInvoicePayment'),
 		'DG01-PAY-0001 / (paiement) / Ação & Filhos'=>'DG01-PAY-0001 / ' . $langs->trans('Payment') . ' / Ação & Filhos',
 		' (BANKTRANSFERT) '=>' ' . $langs->trans('BankTransfer') . ' ',
 		'Customer (paiement) department'=>'Customer (paiement) department',

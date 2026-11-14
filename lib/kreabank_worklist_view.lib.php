@@ -22,9 +22,9 @@ function kreabankWorklistNativeLabel($value, $langs)
 {
 	$parts = preg_split('/(\s+\/\s+)/u', (string) $value, -1, PREG_SPLIT_DELIM_CAPTURE);
 	if ($parts === false) { return (string) $value; }
-	$keys = array('banktransfert'=>'BankTransfer', 'paiement'=>'Payment');
+	$keys = array('banktransfert'=>'BankTransfer', 'paiement'=>'Payment', 'supplierinvoicepayment'=>'SupplierInvoicePayment', 'customerinvoicepayment'=>'CustomerInvoicePayment');
 	foreach ($parts as &$part) {
-		if (preg_match('/^(\s*)\((banktransfert|paiement)\)(\s*)$/iuD', $part, $match)) {
+		if (preg_match('/^(\s*)\((banktransfert|paiement|SupplierInvoicePayment|CustomerInvoicePayment)\)(\s*)$/iuD', $part, $match)) {
 			$part = $match[1] . kreabankWorklistTranslate($langs, $keys[strtolower($match[2])]) . $match[3];
 		}
 	}
