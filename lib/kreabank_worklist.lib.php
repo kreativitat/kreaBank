@@ -63,6 +63,8 @@ function kreabankWorklistState($request, $defaultLimit = 25)
 	foreach (array('button_removefilter','button_removefilter_x','button_removefilter.x') as $button) { if (isset($request[$button])) { $clear = true; } }
 	$status = is_scalar($request['search_status'] ?? '') ? (string) ($request['search_status'] ?? '') : '';
 	$status = in_array($status,array('pending','draft','reconciled','review','all'),true) ? $status : 'pending';
+	$accountContext = is_scalar($request['search_account'] ?? '') ? trim((string) ($request['search_account'] ?? '')) : '';
+	$accountContext = ctype_digit($accountContext) && (int) $accountContext > 0 ? (string) (int) $accountContext : '';
 	$filters = array();
 	foreach (array('date_from','date_to','account','description','amount','match','payment_account','status') as $name) {
 		$value = $clear ? '' : ($request['search_' . $name] ?? '');
@@ -78,7 +80,7 @@ function kreabankWorklistState($request, $defaultLimit = 25)
 	if ($filters['date_from'] !== '' && $filters['date_to'] !== '' && $filters['date_from'] > $filters['date_to']) {
 		throw new InvalidArgumentException('KreaBankWorklistInvalidFilter');
 	}
-	$filters['account'] = ctype_digit($filters['account']) ? (string) max(0, (int) $filters['account']) : '';
+	$filters['account'] = $clear ? $accountContext : (ctype_digit($filters['account']) ? (string) max(0, (int) $filters['account']) : '');
 	if ($filters['account'] === '0') { $filters['account'] = ''; }
 	if ($filters['payment_account'] !== 'none') {
 		$filters['payment_account'] = ctype_digit($filters['payment_account']) ? (string) max(0, (int) $filters['payment_account']) : '';
@@ -104,6 +106,7 @@ function kreabankWorklistState($request, $defaultLimit = 25)
 			if (strpos($button, 'removefilter') !== false) {
 				$filters = array_fill_keys(array_keys($filters), '');
 				$filters['status'] = $status;
+				$filters['account'] = $accountContext;
 			}
 		}
 	}

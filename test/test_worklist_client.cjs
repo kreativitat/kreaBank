@@ -296,9 +296,13 @@ async function navigationBrowserChecks() {
         const context = JSON.stringify([state.get('sortorder'),state.get('limit'),state.get('search_description'),state.get('search_account'),state.get('search_status')]);
         let forms = '';
         let html = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding-top:80px;font:16px Arial}#id-top{position:fixed;inset:0 0 auto;height:60px;background:#ddd;z-index:5}.kb-worklist{margin:16px}.spacer{height:260px}.bottom{height:1000px}.div-table-responsive{overflow:auto}table{border-collapse:collapse;min-width:1000px;width:100%}.kb-wl-row{height:90px}td{border-bottom:1px solid #ddd;padding:10px}a,button{display:inline-block;margin:4px;padding:8px}dialog{max-width:400px}.kb-wl-detail{padding:16px}.kb-wl-dialog:not([open]){display:none}</style><div id="id-top">Native fixed header</div><div class="kb-worklist" data-navigation-scope="fixture-' + escape(state.get('company')) + '" data-navigation-context="' + escape(context) + '" data-navigation-page="' + number + '">';
-        html += '<select id="account-filter" aria-label="Account" name="search_account" form="searchFormList"' + (state.get('search_account') ? ' data-kb-account-filter' : '') + '>';
-        for (const [value,label] of [['','All'],['101','Bank A'],['102','Bank B']]) html += '<option value="' + value + '"' + (state.get('search_account')===value ? ' selected' : '') + '>' + label + '</option>';
-        html += '</select><form id="searchFormList" method="get" action="' + app + '"><input name="company" type="hidden" value="' + escape(state.get('company')) + '"><input name="page" type="hidden" value="' + number + '"><input name="sortorder" type="hidden" value="' + escape(state.get('sortorder')) + '"><input name="search_status" type="hidden" value="' + escape(state.get('search_status')) + '"><input name="search_description" aria-label="Filter" value="' + escape(state.get('search_description')) + '"><input name="pageplusone" aria-label="Page" value="' + (number+1) + '"><select name="limit" aria-label="Page size"><option>24</option><option>12</option></select><button name="button_search" value="1">Filter</button><a id="sort" href="' + href({sortorder:'ASC'}) + '">Sort</a><a id="next" href="' + href({page:String(number+1)}) + '">Next page</a><div class="spacer"></div><div class="div-table-responsive"><table class="kb-wl-table"><tbody>';
+        if (state.get('search_account')) html += '<input type="hidden" name="search_account" form="searchFormList" value="' + escape(state.get('search_account')) + '">';
+        else {
+            html += '<select id="account-filter" aria-label="Account" name="search_account" form="searchFormList">';
+            for (const [value,label] of [['','All'],['101','Bank A'],['102','Bank B']]) html += '<option value="' + value + '">' + label + '</option>';
+            html += '</select>';
+        }
+        html += '<form id="searchFormList" method="get" action="' + app + '"><input name="company" type="hidden" value="' + escape(state.get('company')) + '"><input name="page" type="hidden" value="' + number + '"><input name="sortorder" type="hidden" value="' + escape(state.get('sortorder')) + '"><input name="search_status" type="hidden" value="' + escape(state.get('search_status')) + '"><input name="search_description" aria-label="Filter" value="' + escape(state.get('search_description')) + '"><input name="pageplusone" aria-label="Page" value="' + (number+1) + '"><select name="limit" aria-label="Page size"><option>24</option><option>12</option></select><button name="button_search" value="1">Filter</button><a id="sort" href="' + href({sortorder:'ASC'}) + '">Sort</a><a id="next" href="' + href({page:String(number+1)}) + '">Next page</a><div class="spacer"></div><div class="div-table-responsive"><table class="kb-wl-table"><tbody>';
         const ids = Array.from({length:60},(_,index)=>index+1).filter(id=>!removed.has(id)).slice(number*24,number*24+24);
         for (const id of ids) {
             const key = 'staged:' + id;
@@ -518,32 +522,14 @@ async function navigationBrowserChecks() {
         await page.getByRole('combobox',{name:'Account',exact:true}).selectOption('101');
         await page.waitForTimeout(80);
         assert.equal(page.url(),app,'The original unmarked all-account selector remains manual'); count++;
-        const scopedAccountUrl = app+'?page=1&search_account=101&search_description=Preserved&search_status=all';
-        const accountState = async () => {
-            const target=new URL(page.url());
-            return [await page.locator('.kb-worklist').getAttribute('data-navigation-page'),target.searchParams.get('search_account'),target.searchParams.get('search_description'),target.searchParams.get('search_status')];
-        };
-        for (const name of ['button_search','button_search_x','button_search.x']) {
-            await page.goto(scopedAccountUrl);
-            await page.locator('button[name="button_search"]').evaluate((button,value)=>{button.name=value;},name);
-            await cycle(()=>page.getByRole('combobox',{name:'Account',exact:true}).selectOption('102'));
-            assert.deepEqual(await accountState(),['0','102','Preserved','all'],'Marked account selection uses the native Search owner/submitter'); count++;
-            assert.equal(new URL(page.url()).searchParams.get(name),'1'); count++;
-        }
-        await page.goto(scopedAccountUrl);
-        await page.locator('#searchFormList').evaluate(form=>{form.requestSubmit=undefined;});
-        await cycle(()=>page.getByRole('combobox',{name:'Account',exact:true}).selectOption('102'));
-        assert.deepEqual(await accountState(),['0','102','Preserved','all'],'Older clients fall back to the actual GET Search button'); count++;
-        await page.goto(scopedAccountUrl);
-        await page.locator('button[name="button_search"]').evaluate(button=>button.remove());
-        await cycle(()=>page.getByRole('combobox',{name:'Account',exact:true}).selectOption('102'));
-        assert.deepEqual(await accountState(),['0','102','Preserved','all'],'A missing Search submitter uses only a temporary read-only search marker'); count++;
-        await page.goto(scopedAccountUrl);
-        await page.getByRole('combobox',{name:'Account',exact:true}).evaluate(select=>select.setAttribute('form','approve-30'));
-        await page.getByRole('combobox',{name:'Account',exact:true}).selectOption('102');
-        await page.waitForTimeout(80);
-        assert.equal(page.url(),scopedAccountUrl); count++;
-        assert.equal(posts.length,3,'Account filtering cannot submit a row financial form'); count++;
+        await page.goto(app+'?page=1&search_account=101&search_description=Preserved&search_status=all');
+        assert.equal(await page.getByRole('combobox',{name:'Account',exact:true}).count(),0,'A selected bank has no redundant selector'); count++;
+        await cycle(()=>page.getByRole('button',{name:'Filter',exact:true}).click());
+        const scopedAccount = new URL(page.url());
+        assert.deepEqual([scopedAccount.searchParams.get('search_account'),scopedAccount.searchParams.get('search_description'),scopedAccount.searchParams.get('search_status')],['101','Preserved','all'],'Native filtering retains the hidden bank context'); count++;
+        await cycle(()=>page.getByRole('link',{name:'Next page',exact:true}).click());
+        assert.equal(new URL(page.url()).searchParams.get('search_account'),'101','Native pagination retains the hidden bank context'); count++;
+        assert.equal(posts.length,3,'Bank context and pagination do not submit financial forms'); count++;
 
         analysed = false; scanDelay = 800;
         const scanCount = scanRequests;

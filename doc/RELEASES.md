@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.29 — 2026-11-14
+
+- Remove the redundant bank selector from selected-bank reconciliation views; retain the bank through native header filtering, status tabs and pagination.
+- Remove the reconciliation Status column and selected-bank statement source column/filter; retain exceptional review warnings beside their match evidence.
+
 ## 1.20.28 — 2026-11-14
 
 - Retain linked record IDs when History contains generic native reference markers; avoid repeating the translated document type as its reference.

@@ -161,7 +161,7 @@ foreach (array('en_US','pt_PT') as $locale) {
 		checkWorklistView($xpath->query('//form[@id="searchFormList"]//*[@name="limit"]')->length === 1, $case . ': exactly one native page-size control');
 		checkWorklistView($xpath->query('//form//form')->length === 0, $case . ': no nested forms');
 		checkWorklistView($xpath->query('//form[@method="get"]//input[@name="token" or @name="action" or @name="review_signature"]')->length === 0, $case . ': no write evidence in GET forms');
-		checkWorklistView($xpath->query('//thead/tr[@class="liste_titre_filter"]/td')->length === ($case==='single_bank'?7:8), $case . ': column header filters');
+		checkWorklistView($xpath->query('//thead/tr[@class="liste_titre_filter"]/td')->length === ($case==='single_bank'?6:7), $case . ': column header filters');
 		checkWorklistView($xpath->query('//select[@name="search_payment_account"]/option[@value="none"]')->length === 1, $case . ': unbanked payment filter');
 		checkWorklistView($xpath->query('//nav[contains(@class,"kb-wl-status-tabs")]/a')->length === 5 && $xpath->query('//nav[contains(@class,"kb-wl-status-tabs")]/a[@aria-current="page"]')->length === 1
 			&& $xpath->query('//select[@name="search_status"]')->length===0 && $xpath->query('//input[@type="hidden" and @name="search_status"]')->length>=1, $case . ': status tabs replace the dropdown and retain native form state');
@@ -202,8 +202,8 @@ foreach (array('en_US','pt_PT') as $locale) {
 			checkWorklistView(count(array_unique($ids))===2 && $xpath->query('//input[@name="action" and @value="confirm_pair"]')->length===0, 'Native payment dialogs are unique and do not re-enable unpaid reconciliation');
 		}
 		if ($case==='single_bank') {
-			checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-row")]/td')->length===7 && $xpath->query('//tr[@class="kb-wl-detail-row"]/td[@colspan="7"]')->length===1, 'Selected-bank rows and expanded details omit the repeated account column');
-			checkWorklistView($xpath->query('//select[@name="search_account" and @form="searchFormList" and @data-kb-account-filter]')->length===1 && $xpath->query('//thead//select[@name="search_account"]')->length===0, 'One external owned-account selector remains available without duplicating the column');
+			checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-row")]/td')->length===6 && $xpath->query('//tr[@class="kb-wl-detail-row"]/td[@colspan="6"]')->length===1, 'Selected-bank rows and expanded details omit the repeated account/status columns');
+			checkWorklistView($xpath->query('//select[@name="search_account"]')->length===0 && $xpath->query('//form[@id="searchFormList"]/input[@type="hidden" and @name="search_account" and @value="10"]')->length===1, 'The selected-bank view has no redundant selector and preserves its native GET filter');
 		}
         if ($case === 'empty_search') {
             checkWorklistView($xpath->query('//div[@class="kb-wl-search"]/span[@class="kb-wl-search-actions"]/button[@type="submit"]')->length === 1
@@ -252,7 +252,7 @@ foreach (array('en_US','pt_PT') as $locale) {
 			checkWorklistView(strpos($html,'A saved payment needs review.') !== false, 'Row notice remains visible beside its proposal');
 		}
 		if ($case === 'needs_review') {
-			$badges = $xpath->query('//span[contains(@class,"badge-status7")]');
+			$badges = $xpath->query('//td[@class="kb-wl-match"]/span[contains(@class,"warning") and @role="status"]');
 			checkWorklistView($badges->length === 1 && $badges->item(0)->textContent === $langs->trans('KreaBankLinkNeedsReview'), 'Inconsistent historical reconciliation never receives a green success badge');
 		}
 		if ($case === 'other') {

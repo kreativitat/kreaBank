@@ -40,11 +40,12 @@ tax proposals do not use this shortcut: the native tax form does not provide the
 required parent ownership and remaining-balance locking contract. No core payment
 controller or financial lifecycle is replaced.
 
-Compact status tabs replace the status column dropdown while preserving native
+Compact status tabs replace the redundant status column while preserving native
 header filters and pagination. A selected bank hides the repeated statement-bank
-column; its compact selector remains above the list. The all-bank view retains
-the bank column and its filter. Statements follows the same conditional-column
+column and selector, retaining the bank as hidden native list state. The all-bank
+view retains the bank column and its filter. Statements follows the same conditional-column
 rule and drops stale filters for its hidden column.
+Exceptional review warnings remain beside the match evidence.
 
 Unique suggestions and explicit search choices use the
 existing signed manual review and `KreaBankService::reconcileLine()`; ambiguous

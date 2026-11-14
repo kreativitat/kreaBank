@@ -394,7 +394,7 @@ $headers = array();
 $headerParams = $state['params'];
 // Native title links add sort state themselves; their cleanup truncates underscores.
 unset($headerParams['sortfield'], $headerParams['sortorder']);
-foreach (array('operation_date'=>'KreaBankDate','bank_account_ref'=>'KreaBankWorklistStatementAccount','description'=>'KreaBankReviewStatementLine','amount'=>'Amount','match'=>'KreaBankWorklistMatch','payment_account'=>'KreaBankWorklistPaymentAccount','status'=>'Status') as $field=>$label) {
+foreach (array('operation_date'=>'KreaBankDate','bank_account_ref'=>'KreaBankWorklistStatementAccount','description'=>'KreaBankReviewStatementLine','amount'=>'Amount','match'=>'KreaBankWorklistMatch','payment_account'=>'KreaBankWorklistPaymentAccount') as $field=>$label) {
 	ob_start(); print_liste_field_titre($langs->trans($label),$_SERVER['PHP_SELF'],$field,'','&' . http_build_query($headerParams,'','&',PHP_QUERY_RFC3986),'',$state['sort']['field'],$state['sort']['order'],$field === 'amount' ? 'right ' : ''); $headers[$field] = ob_get_clean();
 }
 $scan = null;

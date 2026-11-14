@@ -45,6 +45,9 @@ foreach (array('button_removefilter','button_removefilter_x','button_removefilte
 	checkWorklist($state['page'] === 0 && $state['limit'] === 15 && $state['filters']['status'] === 'pending'
 		&& count(array_filter($state['filters'], static function ($value, $key) { return $key !== 'status' && $value !== ''; }, ARRAY_FILTER_USE_BOTH)) === 0,
 		'Clear filters recovers even from malformed inputs without retaining a hidden filter');
+	$state = kreabankWorklistState(array('page'=>5,'search_account'=>'101','search_status'=>'reconciled','search_description'=>'old',$button=>'x'),25);
+	checkWorklist($state['filters']['account']==='101' && $state['filters']['status']==='reconciled' && $state['filters']['description']==='' && $state['page']===0,
+		'Clearing column filters preserves the selected bank and status view');
 }
 $state = kreabankWorklistState(array('page'=>-9,'limit'=>99999,'sortfield'=>'amount; DROP TABLE bank','sortorder'=>'DESC; SELECT 1','token'=>'secret','action'=>'approve','review'=>'signed','line_id'=>123,'account_context'=>2,'kind'=>'all','selected'=>array(9),'search_description'=>array('injected')), 25);
 checkWorklist($state['page'] === 0 && $state['limit'] === 100, 'The page and list size are bounded');

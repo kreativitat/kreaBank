@@ -244,26 +244,6 @@
             // Closing means re-read actual state; it never signals payment success.
             refresh(url.href);
         });
-        root.querySelectorAll('select[data-kb-account-filter]').forEach(select => select.addEventListener('change', () => {
-            const form = select.form;
-            if (select.disabled || !form || form.id !== 'searchFormList' || (form.getAttribute('method') || 'get').toLowerCase() !== 'get') return;
-            let url;
-            try { url = new URL(form.getAttribute('action') || window.location.href, window.location.href); } catch (_) { return; }
-            if (url.origin !== window.location.origin || url.pathname !== window.location.pathname || url.username || url.password) return;
-            const submitter = [...form.elements].find(control => ['button_search','button_search_x','button_search.x'].includes(control.name)
-                && ['submit','image'].includes(control.type) && !control.disabled);
-            if (submitter) {
-                if (typeof form.requestSubmit === 'function') form.requestSubmit(submitter);
-                else submitter.click();
-                return;
-            }
-            const marker = document.createElement('input');
-            marker.type = 'hidden'; marker.name = 'button_search'; marker.value = '1'; form.append(marker);
-            try {
-                if (typeof form.requestSubmit === 'function') form.requestSubmit();
-                else window.HTMLFormElement.prototype.submit.call(form);
-            } finally { marker.remove(); }
-        }));
         const scanForm = root.querySelector('form[data-kb-scan]');
         const scan = root.querySelector('.kb-wl-scan');
         if (scanForm && scan && scanForm.elements.action && scanForm.elements.action.value === 'advance_scan' && typeof fetch === 'function') {

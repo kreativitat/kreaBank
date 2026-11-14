@@ -63,6 +63,7 @@ $columns = array('operation_date' => 'KreaBankOperationDate', 'value_date' => 'K
 	'description' => 'KreaBankDescription', 'debit' => 'KreaBankHistorySummaryDebits', 'credit' => 'KreaBankHistorySummaryCredits',
 	'running_balance' => 'KreaBankStatementBalance', 'currency' => 'KreaBankCurrency', 'bank_account_ref' => 'BankAccount',
 	'statement_ref' => 'KreaBankSourceStatement', 'status' => 'Status');
+if ($account) { unset($columns['statement_ref']); }
 $sort = kreabankListSort($columns, 'operation_date', 'DESC');
 // Signed decimal expressions sort the complete scoped result before pagination.
 $fields = array('debit' => 'CASE WHEN h.amount<0 THEN -h.amount ELSE NULL END',
@@ -77,6 +78,8 @@ foreach (array('page','pageplusone','pageplusoneold','limit','button_search','bu
 	if (GETPOSTISSET($field)) { $request[$field] = GETPOST($field, 'alphanohtml'); }
 }
 $list = kreabankStatementListState($request, $conf->liste_limit);
+// A selected owned account hides the source column and its otherwise invisible filter.
+if ($account) { $list['filters']['statement_ref'] = ''; }
 $filters = $list['filters'];
 $limit = $list['limit'];
 $page = $list['page'];
@@ -145,11 +148,13 @@ while ($shown < $limit && ($row = $db->fetch_object($result))) {
 	print '<td class="right nowrap"' . ($row->balance_calculated ? ' title="' . dol_escape_htmltag($langs->trans('KreaBankCalculatedBalanceHelp', $row->balance_updated_at)) . '"' : '') . '>'
 		. ($row->display_balance !== null ? kreabankPrice($row->display_balance) : '—') . '</td>';
 	print '<td>' . dol_escape_htmltag($row->currency) . '</td><td>' . dol_escape_htmltag($row->bank_account_ref) . '</td>';
-	print '<td><a href="' . dol_escape_htmltag(kreabankStatementUrl($row->bank_account_id, $row->statement_ref)) . '">' . dol_escape_htmltag($row->statement_ref) . '</a>';
-	if (!empty($row->evidence_statement_ref) && $row->evidence_statement_ref !== $row->statement_ref) {
-		print '<br><small><a href="' . dol_escape_htmltag(kreabankStatementUrl($row->bank_account_id, $row->evidence_statement_ref)) . '">' . dol_escape_htmltag($row->evidence_statement_ref) . '</a></small>';
+	if (isset($columns['statement_ref'])) {
+		print '<td><a href="' . dol_escape_htmltag(kreabankStatementUrl($row->bank_account_id, $row->statement_ref)) . '">' . dol_escape_htmltag($row->statement_ref) . '</a>';
+		if (!empty($row->evidence_statement_ref) && $row->evidence_statement_ref !== $row->statement_ref) {
+			print '<br><small><a href="' . dol_escape_htmltag(kreabankStatementUrl($row->bank_account_id, $row->evidence_statement_ref)) . '">' . dol_escape_htmltag($row->evidence_statement_ref) . '</a></small>';
+		}
+		print '</td>';
 	}
-	print '</td>';
 	print '<td' . ($state === 'KreaBankLinkNeedsReview' ? ' class="warning"' : '') . '>' . $langs->trans($state);
 	if ((int) $row->is_duplicate > 0) {
 		print '<br><span class="warning">' . $langs->trans('KreaBankDuplicate') . '</span>';
