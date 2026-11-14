@@ -32,6 +32,7 @@ checkAuto($row->feed_balance === '0.00000000', 'A real zero balance survives as 
 checkAuto($row->bank_updated_at === '2026-11-03T08:00:00Z' && $row->feed_collected_at === '2026-11-03 08:45:00', 'Bank and balance collection times remain distinct');
 $native = $db->fetch_object($report->accounts('all',101));
 checkAuto(!property_exists($native,'feed_balance') && $native->balance === $row->balance, 'Default/API native balance contract is unchanged');
+checkAuto((int)$row->account_type === 1 && !property_exists($native,'account_type'), 'Workspace account type is opt-in and does not change the REST projection');
 checkAuto(!$read(202), 'Foreign-company feed account is denied');
 $rows = $report->accounts('bank',0,'feed_balance','ASC',1,0,true);
 checkAuto($db->num_rows($rows) === 1 && (int)$db->fetch_object($rows)->rowid === 102, 'Numeric feed sorting occurs before pagination');

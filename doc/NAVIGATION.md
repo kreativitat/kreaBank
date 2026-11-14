@@ -7,7 +7,9 @@ account. Its standalone page does not render the operational tab bar. Reconcile 
 direct route without an operational tab. Bank statement combines all imported
 movements; Statements retains the individual import list and details. Account
 management is separate: the native Banks/Cash heading opens the accounts
-overview. Account references open movements; the pencil icon in the right-aligned
+overview. Bank references and pending counts open the account-scoped Reconcile
+workspace with its four tabs. Cash accounts retain native Movements because they
+are excluded from bank reconciliation. The pencil icon in the right-aligned
 Actions column opens the account’s native details and tool tabs.
 The accounts overview and account-tool pages do not display the operational tabs.
 Internal transfers and new-account creation keep the native layout without a

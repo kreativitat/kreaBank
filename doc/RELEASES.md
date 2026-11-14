@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.15 — 2026-11-14
+
+- Open the selected-bank reconciliation workspace from account names and pending counts, restoring access to its four tabs. Cash accounts retain native Movements; account tools and reconciliation eligibility are unchanged.
+
 ## 1.20.14 — 2026-11-14
 
 - Keep the standalone Movements list free of reconciliation/statement/history tabs, retaining its own filters and balances.

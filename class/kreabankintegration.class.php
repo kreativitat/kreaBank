@@ -91,6 +91,8 @@ class KreaBankIntegration
 					. ' AND ba.courant<>2';
 				$connected = "f.rowid IS NOT NULL AND f.status NOT IN ('mapping_review','unavailable')";
 			}
+			// Workspace routing needs the type; keep the default REST projection unchanged.
+			$feedColumns .= ',ba.courant account_type';
 			$columns['feed_balance'] = 'feed_balance';
 			$columns['bank_updated_at'] = 'bank_updated_at';
 			$columns['overview'] = "CASE WHEN UPPER(LEFT(ba.ref,3))='CO_' THEN 0 WHEN $connected THEN 1 ELSE 2 END";
