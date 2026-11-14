@@ -129,13 +129,30 @@ automatic-reconciliation database on port 33317; see
 The navigation UI reference is the existing banking workspace and installed
 Dolibarr UI documentation (`admin/tools/ui/index.php`, form components and
 `core/lib/bank.lib.php`); retain its current header, tabs and native menu shell.
-For 1.20.1, installed-source PHP checks cover navigation/account scope, native
-menu permissions, connected-view translations, list sorting and reconciliation
-guards. Synthetic previews of the actual navigation renderer passed desktop and
-390px checks in English/Portuguese, including tab navigation and no page overflow.
-Full ERP rendering remains UNVERIFIED: the local test installation returned its
-technical-error page before authentication in both the internal browser and the
-authorized Chrome fallback. No business operation was submitted.
+Production 1.20.14 was verified on Dolibarr 24.0.2 / PHP 8.1 after deploying
+source `c94d995fd8ae4e3b76b51fe9fdcd571a76d7f4b9`. Guarded preimage checks,
+production PHP lint and deployed hashes passed; configuration, scheduler/menu
+registration and financial state were unchanged during each source deployment.
+Private preimage rollback archives remain outside the webroot. This update needs
+no schema migration or registration refresh.
+
+The internal browser and dedicated Chrome checks confirmed native menu ordering,
+standalone Movements without operational tabs, retained filters/pagination and
+balances, consistent selected-account headers, and removal of the accounts-list
+creation button. History entry/Undo controls and the reason input each measured
+112 by 28 CSS pixels, with centred button labels and distinct Undo colour.
+The new list stopped at 25/25 with no automatic worker form; explicit More opened
+the next unanalysed native page and stopped at 25/25 again. Existing reconciliation
+controller/assets remained byte-identical. No financial approval, correction,
+batch execution or Undo was submitted in production.
+
+Focused verification passed: 277 navigation/scope checks; installed native-menu
+rendering and four authorization checks; 166 connected-view labels; 110 separate
+list/controller guards; 30 batch-quota and 31 actual-controller admission/redirect
+checks; 354 view and 67 installed-native render checks; 22 History checks; and
+26 exact-allocation plus 73 Chromium interactions. Modal opening, keyboard focus,
+close/return focus and correction POST wiring used intercepted synthetic records;
+no eligible correction was present on the live pages inspected.
 
 The dormant-tab/header update is covered by `php test/test_navigation.php` and
 `php test/test_navigation_native_menu.php`. The latter renders the installed
