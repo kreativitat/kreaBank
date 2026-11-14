@@ -141,6 +141,8 @@ The script includes:
 
 ## Additional documentation
 
+- [Monthly reconciliation reports](doc/MONTHLY_REPORTS.md)
+
 - [Machine learning and validation](doc/MACHINE_LEARNING.md)
 - [List sorting and validation](doc/LISTS.md)
 - Native assistant architecture note (Portuguese): `doc/KREABANK_NATIVE_ASSISTANT.md`

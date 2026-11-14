@@ -148,7 +148,7 @@ function kreabankAccountFilterSelect($accountId = 0, $statementsOnly = false)
 }
 
 /** Account management and operations have separate navigation; filters follow the header. */
-function kreabankBankingHeader($page, $account = null)
+function kreabankBankingHeader($page, $account = null, $showFilters = true)
 {
 	global $db, $conf, $langs, $user, $mysoc;
 	$accountId = $account ? (int) $account->id : 0;
@@ -190,7 +190,7 @@ function kreabankBankingHeader($page, $account = null)
 		$html .= '</div>';
 	}
 	$html .= '</header><script nonce="' . dol_escape_htmltag(function_exists('getNonce') ? getNonce() : '') . '">document.body.classList.add("kreabank-banking");</script>';
-	return $html . ($page === 'accounts' || ($active === 'account' && !$accountId) ? '' : kreabankBankingFilters($page, $accountId));
+	return $html . (!$showFilters || $page === 'accounts' || ($active === 'account' && !$accountId) ? '' : kreabankBankingFilters($page, $accountId));
 }
 
 function kreabankPrintWorkspaceNavigation($page, $account = null)

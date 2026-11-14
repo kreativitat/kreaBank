@@ -1,5 +1,14 @@
 # AGENTS.md — KreaBank
 
+## Monthly reports
+
+- `monthlyreport.php` and `KreaBankMonthlyReport` are read-only current-evidence
+  reports, not a second matcher or historical close/approval system. Keep exact
+  owned-account amounts, both booking-date cutoffs, carried open items and explicit
+  unknown/provisional bank balances. Never use the native ledger as a bank anchor.
+- See [monthly reporting](doc/MONTHLY_REPORTS.md) for the report contract, UI
+  reference, guarded disposable database suite and deployment file set.
+
 ## Purpose & Scope
 
 - 2026-07-16: KreaBank imports bank statement data into module staging tables, proposes matches against Dolibarr bank, payment, and invoice records, and materializes or reuses native bank lines only during reconciliation.

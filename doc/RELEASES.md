@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.19.41 — 2026-11-14
+
+- Add read-only monthly reconciliation maps, quality checks, carried open items,
+  ageing and bank/native detail from existing company-owned evidence. Preserve
+  calendar cutoffs and exact amounts; flag unknown balances and conflicting links.
+- Export complete reports as CSV or print the map, checks and closing pending
+  items. No schema, matching, financial record or scheduler changes.
+
 ## 1.19.40 — 2026-11-06
 
 - Carry explicit all-accounts context on pending transaction links so Next and

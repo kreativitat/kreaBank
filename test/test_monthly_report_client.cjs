@@ -1,0 +1,34 @@
+/* Copyright (C) 2026 Kreativität Works <mail@kreativitat.com>; GPL-3.0-or-later */
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync(require('node:path').join(__dirname, '../js/monthly-report.js'), 'utf8');
+const nodes = {};
+const element = (id, value) => {
+  const handlers = {};
+  nodes[id] = { value, addEventListener(name, callback) { handlers[name] = callback; }, emit(name) { handlers[name](); } };
+  return nodes[id];
+};
+const account = element('kreabank-account-context', '101');
+const month = element('kb-monthly-month', '2026-09');
+const balance = element('kb-monthly-balance', '123.45000001');
+const scopeAccount = element('kb-monthly-balance-account', '101');
+const scopeMonth = element('kb-monthly-balance-month', '2026-09');
+const printButton = element('kb-monthly-print', '');
+const classes = [];
+let prints = 0;
+const document = { getElementById(id) { return nodes[id] || null; }, body: { classList: { add(name) { classes.push(name); } } }, addEventListener(name, callback) { assert.equal(name, 'DOMContentLoaded'); callback(); } };
+vm.runInNewContext(source, { document, window: { print() { prints++; } } });
+assert.equal(balance.value, '123.45000001', 'Opening the existing report does not change its entered balance');
+month.value = '2026-10'; month.emit('change');
+assert.equal(balance.value, ''); assert.equal(scopeMonth.value, '2026-10');
+balance.value = '55.00000001'; balance.emit('input');
+assert.equal(balance.value, '55.00000001', 'Editing confirmation preserves exact decimal precision');
+assert.equal(scopeAccount.value, '101');
+account.value = '102'; account.emit('change');
+assert.equal(balance.value, ''); assert.equal(scopeAccount.value, '102');
+assert.equal(prints, 0, 'Print dialogs require an explicit action');
+printButton.emit('click'); assert.equal(prints, 1); assert.ok(classes.includes('kb-monthly-print'));
+vm.runInNewContext(source, { document: { ...document, getElementById() { return null; } } });
+console.log('OK: monthly report balance-scope and explicit-print client checks');

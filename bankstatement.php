@@ -94,6 +94,7 @@ $param = '&' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
 $form = new Form($db);
 llxHeader('', $langs->trans('KreaBankBankStatement'));
 kreabankPrintWorkspaceNavigation('bankstatement', $account);
+print '<div class="tabsAction"><a class="butAction" href="' . dol_escape_htmltag(dol_buildpath('/custom/kreabank/monthlyreport.php', 1) . '?mainmenu=bank&leftmenu=kreabank_bankstatement&account_context=' . $accountId) . '">' . $langs->trans('KreaBankMonthlyTitle') . '</a></div>';
 print '<form method="GET" id="searchFormList" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 print kreabankNavigationHiddenFields($accountId);
 foreach (array('mainmenu'=>'bank', 'leftmenu'=>'kreabank_bankstatement', 'sortfield'=>$sort['field'], 'sortorder'=>$sort['order'], 'page'=>$page) as $field=>$value) {
