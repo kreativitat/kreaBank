@@ -70,3 +70,6 @@ operational tabs; monthly reporting is an action within Bank statement.
 Deploy the controller, class, library, CSS, JS and translations together. No schema
 migration, job or module reactivation is required. Source publication does not
 deploy production. Roll back these files and the Bank statement action together.
+
+See the [2026-11-14 production deployment record](deployment-2026-11-14.md) for
+verified runtime identity, checks and rollback locations.
