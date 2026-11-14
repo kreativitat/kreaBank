@@ -179,9 +179,6 @@ function kreabankBankingHeader($page, $account = null, $showFilters = true)
 		$accountLabel = implode(' — ', array_filter($parts, static function ($value) { return $value !== ''; }));
 	}
 	$html .= '<span class="kb-account-context" title="' . dol_escape_htmltag($accountLabel) . '">' . dol_escape_htmltag($accountLabel) . '</span>';
-	if ($page !== 'worklist' && empty($user->socid) && $user->hasRight('banque', 'lire') && $user->hasRight('kreabank', 'reconciliation', 'read')) {
-		$html .= '<a class="butAction kb-reconcile-action" href="' . dol_escape_htmltag(kreabankBankingUrl('worklist', $accountId)) . '"><span class="fas fa-check-double" aria-hidden="true"></span>' . $langs->trans('KreaBankReconcile') . '</a>';
-	}
 	$html .= '</div></div>';
 	$accountTools = $accountId > 0 ? kreabankAccountToolEntries($accountId) : array();
 	$active = in_array($page, array('card', 'documents', 'reports', 'forecast', 'native_statements', 'numbering'), true) ? 'account' : (in_array($page, array('matched', 'bulkmatch', 'pending'), true) ? 'reconcile' : ($page === 'import' ? 'statement' : $page));

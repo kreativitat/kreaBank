@@ -1,8 +1,8 @@
 # Banking workspace
 
-Operational banking pages share four tabs: Movements, Bank statement, Statements
-and History. The former Reconciliation tab is dormant: its controllers and direct
-routes remain intact, without a replacement tab. Connections also retains its
+Operational banking pages share five tabs: Movements, Bank statement, Statements,
+Reconcile and History. Reconcile opens the new `reconciliationlist.php`. The legacy
+`reconcile.php` controllers and direct routes remain dormant and intact. Connections also retains its
 direct route without an operational tab. Bank statement combines all imported
 movements; Statements retains the individual import list and details. Account
 management is separate: the native Banks/Cash heading opens the accounts
@@ -134,9 +134,8 @@ retain their own section. Deploy the descriptor, shared navigation libraries,
 hook/CSS and worklist controller together. The hook also hides an existing
 registered worklist link, so this update needs no menu refresh.
 
-The native **Reconcile** header action opens the separate reconciliation list
-from account and banking views. It retains an owned selected account using the
-list's `search_account` filter, or opens all accounts when unscoped. It adds no
-operational tab or sidebar item and does not reactivate the old reconciliation UI.
-Native bank and module read rights are both required; the list keeps its own
-column filters and omits the redundant self-action.
+The **Reconcile** operational tab opens the separate reconciliation list. It retains
+an owned selected account using `search_account`, or opens all accounts when
+unscoped. It adds no header button or sidebar item. The old reconciliation UI
+remains dormant. Native bank and module read rights are both required, and the
+new list keeps its own column filters.

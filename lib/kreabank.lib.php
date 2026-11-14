@@ -150,6 +150,9 @@ function kreabankPrepareHead($accountId = 0)
 		}
 	}
 	if ($user->hasRight('kreabank', 'reconciliation', 'read') && $user->hasRight('banque', 'lire')) {
+		if (empty($user->socid)) {
+			$head[] = array(kreabankBankingUrl('worklist', $accountId), $langs->trans('KreaBankReconcile'), 'worklist');
+		}
 		$head[] = array(kreabankWorkspaceUrl('history', $accountId), $langs->trans('KreaBankNavHistory'), 'history');
 	}
 	return $head;

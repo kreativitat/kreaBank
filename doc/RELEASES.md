@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.9 — 2026-11-14
+
+- Open the new reconciliation list from the Reconcile banking tab and remove the header button. Preserve account scope and keep the legacy reconciliation controller dormant.
+
 ## 1.20.8 — 2026-11-14
 
 - Keep the new Reconcile header action beside the bank identity when native tables extend beyond the viewport.
