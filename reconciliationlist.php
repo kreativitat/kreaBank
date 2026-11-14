@@ -259,7 +259,7 @@ $baseParams['page'] = $page['page'];
 $accounts = $worklist->accounts(); $modelRows = array();
 $candidateModel = static function ($pair) {
 	$s = $pair['suggestion'];
-	return array('key'=>$s['doc_type'] . '__' . (int) $s['doc_id'],'reference'=>kreabankBulkSuggestionReference($s),'date'=>$s['doc_date'] ?? '',
+	return array('key'=>$s['doc_type'] . '__' . (int) $s['doc_id'],'doc_type'=>$s['doc_type'],'doc_id'=>(int) $s['doc_id'],'reference'=>kreabankBulkSuggestionReference($s),'date'=>$s['doc_date'] ?? '',
 		'amount'=>$s['amount_open'],'currency'=>$pair['line']['currency'],'account_ref'=>$s['bank_account_ref'] ?? '',
 		'description'=>$s['thirdparty_name'] ?? '', 'consequence'=>in_array($s['doc_type'],array('customer_invoice','supplier_invoice','tax'),true) ? 'KreaBankWorklistRecordsPayment' : '');
 };
@@ -278,7 +278,7 @@ foreach ($page['rows'] as $indexRow) {
 				if ($canWrite) { $row['review']['action'] = $pairDescriptor($key,$prepared['pair']); }
 			} elseif (count($prepared['account_candidates']) === 1) {
 				$c = $prepared['account_candidates'][0];
-				$row['review'] = array('reference'=>$c['payment_ref'],'date'=>$c['date'],'amount'=>$c['amount'],'currency'=>$row['line']['currency'],'account_ref'=>$c['account_ref']);
+				$row['review'] = array('doc_type'=>$c['payment_type'],'doc_id'=>(int) $c['payment_id'],'reference'=>$c['payment_ref'],'date'=>$c['date'],'amount'=>$c['amount'],'currency'=>$row['line']['currency'],'account_ref'=>$c['account_ref']);
 			}
 			if (!empty($prepared['completed'])) { $row['review'] = $prepared['completed']; }
 			$batch = $prepared['batch'];
@@ -294,7 +294,7 @@ foreach ($page['rows'] as $indexRow) {
 				$row['batch_active'] = true; $row['reconciled'] = true; $row['batch_unavailable'] = true; $row['payment_account_ref'] = implode(', ',array_unique(array_column($batch['active']['components'],'bank_account_ref')));
 				$row['review'] = array('reference'=>$batch['active']['name'] ?: kreabankWorklistTranslate($langs, 'KreaBankWorklistPaymentBatch'),'date'=>$row['line']['operation_date'],
 					'amount'=>$row['needs_review'] ? null : $row['line']['amount_decimal'],'currency'=>$row['line']['currency'],'account_ref'=>$row['payment_account_ref']);
-				foreach ($batch['active']['components'] as $c) { $row['batch_components'][] = array('key'=>(string) $c['fk_bank_line'],'reference'=>$c['ref'] ?: '#' . $c['fk_bank_line'],'date'=>$c['doc_date'],'amount'=>$c['current_amount'],'currency'=>$row['line']['currency'],'account_ref'=>$c['bank_account_ref'],'description'=>$c['description']); }
+				foreach ($batch['active']['components'] as $c) { $row['batch_components'][] = array('key'=>(string) $c['fk_bank_line'],'doc_type'=>'native_bank','doc_id'=>(int) $c['fk_bank_line'],'reference'=>$c['ref'] ?: '#' . $c['fk_bank_line'],'date'=>$c['doc_date'],'amount'=>$c['current_amount'],'currency'=>$row['line']['currency'],'account_ref'=>$c['bank_account_ref'],'description'=>$c['description']); }
 				if ($isExpanded && $canUndo) { $row['undo_review'] = array('action'=>'undo_batch','fields'=>array_merge($baseParams,array('review'=>$remember('undo',array('key'=>$key,'batch'=>$service->preparePaymentBatchUndoReview((int) $row['line']['rowid'])))))); }
 			}
 			$row['create_available'] = $canCreate && strpos($key,'staged:') === 0 && !$row['batch_unavailable']
@@ -320,7 +320,7 @@ foreach ($page['rows'] as $indexRow) {
 					$retained = $service->getPaymentBatchSelectedCandidates((int) $line['rowid'],$selectedIds);
 					$batchCandidates = array();
 					foreach (array_merge($retained['rows'],$candidates['rows']) as $c) { $batchCandidates[(int) $c['rowid']] = $c; }
-					foreach ($batchCandidates as $c) { $row['batch_candidates'][] = array('key'=>(string) $c['rowid'],'reference'=>(($c['payment_refs'] ?? '') ?: $c['ref']) ?: '#' . $c['rowid'],'date'=>$c['doc_date'],'amount'=>$c['amount_decimal'],'currency'=>$line['currency'],'account_ref'=>$c['bank_account_ref'],'description'=>$c['description'],'selectable'=>true); }
+					foreach ($batchCandidates as $c) { $row['batch_candidates'][] = array('key'=>(string) $c['rowid'],'doc_type'=>'native_bank','doc_id'=>(int) $c['rowid'],'reference'=>(($c['payment_refs'] ?? '') ?: $c['ref']) ?: '#' . $c['rowid'],'date'=>$c['doc_date'],'amount'=>$c['amount_decimal'],'currency'=>$line['currency'],'account_ref'=>$c['bank_account_ref'],'description'=>$c['description'],'selectable'=>true); }
 					foreach ($retained['unavailable'] as $missing) { $row['batch_candidates'][] = array('key'=>(string) $missing,'reference'=>'#' . $missing,'date'=>'','amount'=>null,'currency'=>$line['currency'],'account_ref'=>'','description'=>kreabankWorklistTranslate($langs, 'KreaBankWorklistUnavailablePayment'),'selectable'=>true,'selected'=>true); }
 					if ($candidates['truncated']) { $row['notice'] = kreabankWorklistTranslate($langs, 'KreaBankWorklistRefineSearch'); }
 					$row['batch_form'] = array('fields'=>array_merge($baseParams,array('source_key'=>$key,'expand'=>$key,'mode'=>'batch')),'selection_name'=>'batch_members[]','name_field'=>'batch_name','save_action'=>'save_draft','review_action'=>'review_batch');
@@ -335,7 +335,7 @@ foreach ($page['rows'] as $indexRow) {
 						$review = $stored['payload']['batch']; $row['batch_components'] = array();
 						$row['draft'] = array('name'=>$review['name'],'member_keys'=>array_map('strval',$review['ids']));
 						$row['batch_form']['selected_total'] = $review['amount']; $row['batch_form']['difference'] = '0.00000000';
-						foreach ($review['components'] as $c) { $row['batch_components'][] = array('key'=>(string) ($c['rowid'] ?? $c['id'] ?? $c['bank_line_id'] ?? ''),'reference'=>($c['payment_refs'] ?? '') ?: ($c['ref'] ?? '') ?: '#' . ($c['rowid'] ?? ''),'date'=>$c['doc_date'] ?? $c['dateo'] ?? '','amount'=>$c['amount'] ?? $c['amount_decimal'],'currency'=>$line['currency'],'account_ref'=>$line['bank_account_ref'],'description'=>$c['description'] ?? $c['label'] ?? ''); }
+						foreach ($review['components'] as $c) { $row['batch_components'][] = array('key'=>(string) ($c['rowid'] ?? $c['id'] ?? $c['bank_line_id'] ?? ''),'doc_type'=>'native_bank','doc_id'=>(int) ($c['rowid'] ?? $c['id'] ?? $c['bank_line_id'] ?? 0),'reference'=>($c['payment_refs'] ?? '') ?: ($c['ref'] ?? '') ?: '#' . ($c['rowid'] ?? ''),'date'=>$c['doc_date'] ?? $c['dateo'] ?? '','amount'=>$c['amount'] ?? $c['amount_decimal'],'currency'=>$line['currency'],'account_ref'=>$line['bank_account_ref'],'description'=>$c['description'] ?? $c['label'] ?? ''); }
 						$row['batch_review'] = array('action'=>'confirm_batch','fields'=>array_merge($baseParams,array('review'=>$reviewNonce)));
 					}
 				} else {
@@ -346,7 +346,7 @@ foreach ($page['rows'] as $indexRow) {
 			if (!empty($row['line']['fk_statement']) && (int) $row['line']['status'] === 0 && ($isExpanded || !empty($prepared['account_candidates']))) {
 				$other = $service->searchOtherAccountMovements((int) $row['line']['rowid'],$isExpanded ? $search : '');
 				foreach ($other as $c) {
-					$item = array('key'=>'native:' . $c['rowid'],'reference'=>($c['payment_refs'] ?: $c['num_chq']) ?: '#' . $c['rowid'],'date'=>$c['dateo'],'amount'=>$c['amount'],'currency'=>$row['line']['currency'],'account_ref'=>$c['account_ref'],'description'=>$c['label'],'selectable'=>false);
+					$item = array('key'=>'native:' . $c['rowid'],'doc_type'=>'native_bank','doc_id'=>(int) $c['rowid'],'reference'=>($c['payment_refs'] ?: $c['num_chq']) ?: '#' . $c['rowid'],'date'=>$c['dateo'],'amount'=>$c['amount'],'currency'=>$row['line']['currency'],'account_ref'=>$c['account_ref'],'description'=>$c['label'],'selectable'=>false);
 					if ($canMove && $c['can_move']) {
 						$item['correction'] = array('action'=>'correct_account','fields'=>array_merge($baseParams,array('review'=>$remember('move',array('key'=>$key,'bank_line'=>(int) $c['rowid'],'snapshot'=>$c['snapshot'],'old'=>(int) $c['fk_account'],'target'=>(int) $c['target_account_id'])))),
 							'from_account_ref'=>$c['account_ref'],'to_account_ref'=>$row['line']['bank_account_ref']);

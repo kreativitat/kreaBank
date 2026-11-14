@@ -25,6 +25,7 @@
 .kb-worklist .kb-wl-detail-heading { justify-content:space-between; margin-bottom:8px; }
 .kb-worklist .kb-wl-search { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
 .kb-worklist .kb-wl-search input { min-width:150px; flex:1; max-width:400px; }
+.kb-worklist .kb-wl-search-actions { display:inline-flex; align-items:center; gap:4px; flex:0 0 auto; }
 .kb-worklist .kb-wl-batch-name { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:8px 0 12px; }
 .kb-worklist .kb-wl-batch-name input { flex:1; max-width:400px; }
 .kb-worklist .kb-wl-candidate { display:flex; align-items:center; gap:12px; padding:11px 0; border-top:1px solid color-mix(in srgb,currentColor 14%,transparent); }

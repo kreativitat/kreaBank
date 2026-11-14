@@ -138,3 +138,10 @@ Existing movement/payment, duplicate, feed, batch, currency, restricted-account
 and ownership conflicts fail closed and are rechecked under locks. The legacy
 reconciliation controller is unchanged. Validate using the guarded disposable
 `test/test_worklist_movement_database.php`; never create live records for testing.
+
+Proposed, searched and completed references open their typed native detail card in
+a new tab. Links use the same constant route mapping as native/bulk review, never
+parsed labels or stored URLs. Batch component references open each existing native
+bank movement; aggregate batch names and unavailable placeholders remain text.
+The eligible Create movement plus icon sits beside the expanded Search control,
+with the existing permission/no-results conditions and row-position navigation.

@@ -299,6 +299,17 @@ checkWorklist(!isset($result['session']['kreabank_worklist_movement_inputs'],$re
 $result=runWorklistController(array(),$movementSession,array('method'=>'GET','get'=>$movementPost));
 checkWorklist($result['denied'] && !$result['calls'], 'Creation is never executed by read navigation');
 
+// The actual candidate projection carries document identity, not the source or linked bank ID.
+$projectionSource=file_get_contents(__DIR__.'/../reconciliationlist.php');
+$projectionStart=strpos($projectionSource,'$candidateModel =');
+$projectionEnd=strpos($projectionSource,'foreach ($page',$projectionStart);
+if ($projectionStart===false || $projectionEnd===false) { throw new RuntimeException('Candidate projection boundary changed'); }
+eval(substr($projectionSource,$projectionStart,$projectionEnd-$projectionStart));
+$pair=worklistControllerPair(); $pair['suggestion']['doc_type']='payment_supplier_linked'; $pair['suggestion']['doc_id']=51;
+$pair['suggestion']['linked_bank_line_id']=81;
+$projected=$candidateModel($pair);
+checkWorklist($projected['doc_type']==='payment_supplier_linked' && $projected['doc_id']===51 && $projected['key']==='payment_supplier_linked__51', 'Projected payment navigation retains the payment ID, independently of source and linked movement IDs');
+
 // Preparing matches retains read permission and CSRF without financial authority.
 foreach (array('advance_scan','more_scan') as $readAction) {
 	$result = runWorklistController(array('action'=>$readAction),worklistControllerSession(),array('denied'=>array('kreabank/reconciliation/write','banque/modifier','banque/consolidate')));

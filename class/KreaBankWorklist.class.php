@@ -138,7 +138,7 @@ class KreaBankWorklist
 			$p = $this->db->prefix();
 			$native = $this->rows("SELECT b.rowid,b.label,b.num_chq,b.dateo,CAST(b.amount AS DECIMAL(24,8)) amount FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account AND ba.entity=" . $this->entity
 				. ' WHERE b.rowid=' . (int) $line['native_bank_line_id'] . ' AND b.fk_account=' . (int) $line['bank_account_id']);
-			if ($native) { $n=$native[0]; $completed = array('reference'=>$n['num_chq'] ?: '#' . $n['rowid'],'date'=>$n['dateo'],'amount'=>$n['amount'],'currency'=>$line['currency'],'account_ref'=>$line['bank_account_ref'],'description'=>$n['label']); }
+			if ($native) { $n=$native[0]; $completed = array('doc_type'=>'native_bank','doc_id'=>(int) $n['rowid'],'reference'=>$n['num_chq'] ?: '#' . $n['rowid'],'date'=>$n['dateo'],'amount'=>$n['amount'],'currency'=>$line['currency'],'account_ref'=>$line['bank_account_ref'],'description'=>$n['label']); }
 		}
 		return array('key'=>$key,'line'=>$line,'pair'=>$pair,'account_candidates'=>$accountCandidates,'batch'=>$batch,'completed'=>$completed);
 	}

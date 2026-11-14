@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.23 — 2026-11-14
+
+- Open proposed and searched record references in a new tab, using explicit native invoice, payment, tax and bank-movement identities. Keep unavailable entries and aggregate batch names unlinked.
+- Place the eligible Create movement shortcut beside Search as a compact plus icon.
+
 ## 1.20.22 — 2026-11-14
 
 - Translate native customer/supplier payment markers in expanded reconciliation and batch candidates.
