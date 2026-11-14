@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.11 — 2026-11-14
+
+- Keep History action colours above the native button gradient, preserving equal dimensions and centred labels.
+
 ## 1.20.10 — 2026-11-14
 
 - Place Reconcile second, after Movements. Share the selected-account balance panel across operational tabs and remove the duplicate native movement banner.
