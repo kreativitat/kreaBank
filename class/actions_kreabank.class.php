@@ -45,45 +45,35 @@ class ActionsKreaBank extends CommonHookActions
 		return 0;
 	}
 
-	/** Keep account navigation and the reconciliation shortcut in the native bank menu. */
+	/** Simplify workspace links without changing native routes or other menu permissions. */
 	public function menuLeftMenuItems($parameters, &$menuitems, &$action, $hookmanager)
 	{
-		global $langs, $user;
+		global $user;
 		$this->results = array();
-		if (($parameters['mainmenu'] ?? '') !== 'bank' || !is_array($menuitems) || !$user->hasRight('banque', 'lire')) {
+		if (($parameters['mainmenu'] ?? '') !== 'bank' || !is_array($menuitems) || !empty($user->socid)
+			|| !$user->hasRight('banque', 'lire') || !$user->hasRight('kreabank', 'reconciliation', 'read')) {
 			return 0;
 		}
-		$langs->load('kreabank@kreabank');
 		$changed = false;
-		$accountListIndex = null;
-		$hasReconcile = false;
-		foreach ($menuitems as $index => &$item) {
-			if (parse_url($item['url'] ?? '', PHP_URL_PATH) === '/custom/kreabank/reconcile.php') {
-				$hasReconcile = true;
+		$visible = array();
+		foreach ($menuitems as $item) {
+			$path = parse_url($item['url'] ?? '', PHP_URL_PATH);
+			if ((int) ($item['level'] ?? 0) === 1 && in_array($path, array('/compta/bank/list.php', '/compta/bank/bankentries_list.php', '/custom/kreabank/reconcile.php'), true)) {
+				$changed = true;
+				continue;
 			}
-			if ((int) ($item['level'] ?? 0) === 1 && parse_url($item['url'] ?? '', PHP_URL_PATH) === '/compta/bank/list.php') {
-				$item['titre'] = $langs->trans('KreaBankAccountList');
-				$accountListIndex = $index;
+			if ($path === '/custom/kreatax/bankreconciliation.php' && (int) ($item['level'] ?? 0) > 1) {
+				$item['level'] = 1;
 				$changed = true;
 			}
-		}
-		unset($item);
-		if ($accountListIndex !== null && !$hasReconcile && empty($user->socid) && $user->hasRight('kreabank', 'reconciliation', 'read')) {
-			// Insert after account children so the shortcut cannot become their parent.
-			$insertIndex = $accountListIndex + 1;
-			while (isset($menuitems[$insertIndex]) && (int) ($menuitems[$insertIndex]['level'] ?? 0) > 1) {
-				$insertIndex++;
-			}
-			require_once DOL_DOCUMENT_ROOT . '/core/class/menu.class.php';
-			$shortcut = new Menu();
-			// Native block closing uses adjacent array keys, so retain the siblings' sort position.
-			$shortcut->add('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile', $langs->trans('KreaBankReconcile'), 1, 1, '', 'bank', 'kreabank_reconcile', (int) ($menuitems[$accountListIndex]['position'] ?? 0));
-			array_splice($menuitems, $insertIndex, 0, $shortcut->liste);
+			$visible[] = $item;
 		}
 		if (!$changed) {
 			return 0;
 		}
-		$this->results = $menuitems;
+		// Native rendering uses adjacent integer keys to determine menu block boundaries.
+		$menuitems = $visible;
+		$this->results = $visible;
 		return 1;
 	}
 

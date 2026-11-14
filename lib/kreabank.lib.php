@@ -149,9 +149,6 @@ function kreabankPrepareHead($accountId = 0)
 			$head[] = array(kreabankBankingUrl($page, $accountId), $langs->trans($label), $page);
 		}
 	}
-	if ($user->hasRight('banque', 'lire')) {
-		$head[] = array(kreabankWorkspaceUrl('feed', $accountId), $langs->trans('KreaBankNavConnections'), 'feed');
-	}
 	if ($user->hasRight('kreabank', 'reconciliation', 'read') && $user->hasRight('banque', 'lire')) {
 		$head[] = array(kreabankWorkspaceUrl('history', $accountId), $langs->trans('KreaBankNavHistory'), 'history');
 	}

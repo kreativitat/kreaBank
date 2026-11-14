@@ -169,7 +169,9 @@ $recent = array();
 $auditRows = array();
 try {
 	$recent = $service->getRecentReconciliations($historyPoolLimit, 0, $navigationAccountId);
-	$auditRows = $service->getAuditHistory($auditPoolLimit);
+	if ($navigationAccountId === 0) {
+		$auditRows = $service->getAuditHistory($auditPoolLimit);
+	}
 } catch (Exception $e) {
 	setEventMessages($e->getMessage(), null, 'errors');
 }
@@ -997,6 +999,8 @@ if ($historyTotalRecords === 0) {
 print '</table>';
 print '</div>';
 
+// The audit log is company-wide and has no reliable account namespace for every event.
+if ($navigationAccountId === 0) {
 print '<br><h3>' . $langs->trans('KreaBankAuditLog') . '</h3>';
 print '<form method="GET" id="kreaAuditFilterForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 print kreabankNavigationHiddenFields($navigationAccountId);
@@ -1086,6 +1090,8 @@ if ($auditTotalRecords === 0) {
 }
 print '</table>';
 print '</div>';
+
+}
 
 print dol_get_fiche_end();
 llxFooter();

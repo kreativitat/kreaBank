@@ -51,15 +51,15 @@ $head = array(array('/card?id=45', 'Account', 'bankname'), array('/entries?id=45
 $newHead = kreabankCompleteAccountHead($head, 45);
 checkNavigation($newHead === $head, 'Shared header replaces native tabs without inserting another navigation layer');
 $tabs = kreabankPrepareHead(45);
-checkNavigation(array_column($tabs, 2) === array('movements', 'bankstatement', 'statement', 'reconcile', 'feed', 'history'), 'Operational tabs exclude account management');
+checkNavigation(array_column($tabs, 2) === array('movements', 'bankstatement', 'statement', 'reconcile', 'history'), 'Operational tabs exclude account management');
 $user->allowed[] = 'kreabank.reconciliation.write';
 $user->allowed[] = 'banque.modifier';
-checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('movements', 'bankstatement', 'statement', 'reconcile', 'feed', 'history'), 'Write actions do not add another navigation layer');
+checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('movements', 'bankstatement', 'statement', 'reconcile', 'history'), 'Write actions do not add another navigation layer');
 foreach (kreabankPrepareHead(45) as $tab) {
 	checkNavigation((strpos($tab[0], 'account_context=45') !== false || preg_match('/[?&]id=45(?:&|$)/', $tab[0])) && strpos($tab[0], 'line_id') === false, 'Carry account without copying a stale line/action');
 }
 $user->allowed = array('banque.lire');
-checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('feed'), 'Bank-only readers retain connections access');
+checkNavigation(kreabankPrepareHead(45) === array(), 'Bank-only feed access does not add an operational tab');
 checkNavigation(count(kreabankCompleteAccountHead($head, 45)) === count($head), 'No workspace tab without module read permission');
 try { kreabankWorkspaceUrl('../admin/setup', 45); throw new RuntimeException('Unsafe page accepted'); } catch (InvalidArgumentException $e) { $checks++; }
 try { kreabankNavigationAccount(45); throw new RuntimeException('Unknown/foreign account accepted'); } catch (LogicException $e) { $checks++; }
@@ -101,13 +101,13 @@ $hooks->printFieldListWhere(array(),$object,$action,null);
 checkNavigation(strpos($hooks->resprints, 'ba.entity=7') !== false, 'Native movements restrict owner company even when accounts are shared');
 $navigationRequest = array('kreabank_matched' => 1);
 $html = kreabankBankingHeader('movements', (object) array('id' => 45));
-checkNavigation(strpos($html, 'name="view"') === false && strpos($html, 'name="account_context"') !== false && strpos($html, 'name="kind"') === false, 'Operational pages use only the account filter without the old redirect form');
+checkNavigation(strpos($html, 'name="view"') === false && strpos($html, 'name="account_context"') === false && strpos($html, 'name="kind"') === false, 'Selected-account pages have no account-switching form');
 checkNavigation(strpos($html, 'id=45&amp;kreabank_matched=1') !== false && strpos($html, 'KreaBankReconciledMovements') !== false, 'Movement views retain selected account and expose reconciled entries');
 checkNavigation(strpos(kreabankNativeEntriesUrl(45, true), 'kreabank_matched=1') !== false && strpos(kreabankNativeEntriesUrl(45, false), 'kreabank_matched=') === false, 'Existing boolean native-entry links retain their matched/all contract');
 $navigationRequest = array('kreabank_matched' => 2, 'account_context' => 45);
 $html = kreabankBankingHeader('movements', (object) array('id' => 45));
 checkNavigation(preg_match('/class="active" aria-current="page" href="[^"]*id=45&amp;kreabank_matched=2/',$html) === 1 && strpos($html, 'KreaBankUnreconciledMovements') !== false, 'Unreconciled view has its own selected control and owned-account link');
-checkNavigation(strpos($html, 'name="kreabank_matched" value="2"') !== false, 'Account changes preserve the unreconciled view');
+checkNavigation(strpos(kreabankBankingFilters('movements'), 'name="kreabank_matched" value="2"') !== false, 'All-account filtering preserves the unreconciled view');
 $param = '';
 $hooks->printFieldListWhere(array(), $object, $action, null);
 checkNavigation(strpos($hooks->resprints, 'ba.entity=7') !== false && strpos($hooks->resprints, 'ba.rowid=45') !== false && strpos($hooks->resprints, 'b.rappro=0') !== false && strpos($hooks->resprints, 'EXISTS') === false, 'Unreconciled filters native status and company/account before rows and counts, without requiring imported metadata');
@@ -121,8 +121,8 @@ checkNavigation(kreabankMovementFilter() === 0 && strpos($hooks->resprints, 'rap
 $navigationRequest = array('kreabank_matched' => 1);
 checkNavigation(strpos($html, 'kb-more') === false && strpos($html, '<details') === false, 'Account tools do not return as a floating header menu');
 $accountTools = kreabankAccountToolEntries(45);
-checkNavigation(count($accountTools) === 6, 'Retain every selected-account tool');
-foreach ($accountTools as $entry) {
+checkNavigation(array_column($accountTools, 'key') === array('card', 'documents', 'reports'), 'Only details, documents and reports remain in account tools');
+foreach (kreabankAccountToolEntries(45, true) as $entry) {
 	checkNavigation(strpos($entry['url'], '/compta/bank/') === 0 && (strpos($entry['url'], 'id=45') !== false || strpos($entry['url'], 'account=45') !== false), 'Native account-tab links keep the selected account and native URL convention');
 	if ($entry['key'] === 'forecast') {
 		parse_str(parse_url($entry['url'], PHP_URL_QUERY), $forecastQuery);
@@ -136,10 +136,10 @@ checkNavigation(strpos($html, 'kb-account-tabs') !== false && preg_match('/aria-
 checkNavigation(strpos($html, '/admin/automation.php') === false, 'Automatic reconciliation is absent from operational tabs');
 $html = kreabankBankingHeader('matched', (object) array('id' => 45));
 checkNavigation(preg_match('/aria-current="page"[^>]*href="[^"]*matched\.php\?[^" ]*account_context=45/', $html) === 1, 'Matched review has its own active subtab and preserves the owned account');
-checkNavigation(strpos($html, 'action="/erp/custom/kreabank/matched.php"') !== false, 'Matched account filtering stays in the individual matched view');
+checkNavigation(strpos($html, '<form') === false, 'Matched review keeps its account without offering a switch');
 checkNavigation(strpos($html, 'KreaBankReviewOneByOne') !== false && strpos($html, 'KreaBankBulkMatch') !== false, 'Existing individual and bulk reviews remain available');
 $html = kreabankBankingHeader('forecast', (object) array('id' => 45));
-checkNavigation(preg_match('/aria-current="page"[^>]*href="[^"]*treso\.php\?account=45&amp;/', $html) === 1 && strpos($html, 'treso.php?id=') === false, 'The rendered treasury tab passes the account parameter expected by Dolibarr');
+checkNavigation(strpos($html, 'treso.php') === false && strpos($html, 'releve.php') === false && strpos($html, 'action=reconcile') === false, 'Legacy native tools remain directly accessible without visible tabs');
 checkNavigation(kreabankBankingUrl('reports', 0) === kreabankWorkspaceUrl('accounts'), 'Clearing the account context returns account-specific pages to the overview');
 function complete_head_from_modules(...$arguments) {}
 checkNavigation(in_array('automation', array_column(kreabankAdminPrepareHead(), 2), true), 'Automatic reconciliation remains available in module configuration');
@@ -156,16 +156,29 @@ $action = 'create';
 checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0 && $hooks->resprints === '' && count($db->queries) === $queryCount, 'New-account creation keeps only the native form without workspace navigation');
 $action = '';
 $navigationRequest = array('kind' => 'cash', 'account_context' => 45);
-foreach (array('movements', 'bankstatement', 'statement', 'reconcile', 'feed', 'history') as $page) {
-	$html = kreabankBankingHeader($page, (object) array('id' => 45));
-	checkNavigation((strpos(end($db->queries), 'EXISTS (SELECT 1 FROM navtest_kreabank_statement') !== false) === in_array($page, array('bankstatement', 'statement'), true), 'Only statement views restrict the account selector to imported statements');
+foreach (array('movements', 'bankstatement', 'statement', 'reconcile', 'matched', 'bulkmatch', 'pending', 'feed', 'history') as $page) {
+	$queriesBefore = count($db->queries);
+	$html = kreabankBankingHeader($page, (object) array('id' => 45, 'ref' => 'Synthetic <account>'));
 	$dom = new DOMDocument();
 	@$dom->loadHTML($html);
 	$xpath = new DOMXPath($dom);
-	checkNavigation($xpath->query('//header//form')->length === 0 && $xpath->query('//form[contains(@class,"kb-accounts-filters")]')->length === 1, 'Each operational page has one separate filter panel');
-	checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a')->length === 6, 'Six operational tabs include the combined bank statement');
-	checkNavigation($xpath->query('//form/input[@name="view"]')->length === 0 && $xpath->query('//form//*[@name="kind"]')->length === 0 && $xpath->query('//select[@name="account_context"]')->length === 1, 'Operational panels contain only the account filter');
-	checkNavigation(strpos($html, 'KreaBankNavAccounts') === false && strpos($html, 'KreaBankAccountOptions') === false, 'Account management stays outside operational tabs');
+	checkNavigation($xpath->query('//form')->length === 0 && $xpath->query('//select[@name="account_context"]')->length === 0, 'Every selected-account view removes the account switch');
+	checkNavigation(count($db->queries) === $queriesBefore, 'Locked account views never load a list of other accounts');
+	checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a')->length === 5, 'Five operational tabs exclude Connections');
+	checkNavigation($xpath->query('//span[@class="kb-account-context"]')->item(0)->textContent === 'Synthetic <account>', 'The chosen account remains visible and escaped');
+	foreach ($xpath->query('//nav/a | //div[contains(@class,"kb-view-switch")]/a') as $link) {
+		checkNavigation(preg_match('/[?&](?:id|account_context)=45(?:&|$)/', $link->getAttribute('href')) === 1, 'All operational and subview links retain the selected account');
+	}
+	$html = kreabankBankingHeader($page);
+	$dom = new DOMDocument();
+	@$dom->loadHTML($html);
+	$xpath = new DOMXPath($dom);
+	$accountField = $page === 'movements' ? 'id' : 'account_context';
+	checkNavigation($xpath->query('//form[contains(@class,"kb-accounts-filters")]')->length === 1 && $xpath->query('//select[@name="' . $accountField . '"]')->length === 1, 'Unscoped pages retain their current-company selector using the destination account parameter');
+	if ($page === 'movements') {
+		checkNavigation($xpath->query('//*[@name="account_context"]')->length === 0 && strpos($html, 'bankentries_list.php') !== false, 'Native account selection submits id without conflicting account_context, locking the destination account control');
+	}
+	checkNavigation((strpos(end($db->queries), 'EXISTS (SELECT 1 FROM navtest_kreabank_statement') !== false) === in_array($page, array('bankstatement', 'statement'), true), 'Only unscoped statement views restrict account choices to imported statements');
 }
 checkNavigation(strpos(kreabankWorkspaceUrl('pending', 45), 'kind=') === false && strpos(kreabankNativeEntriesUrl(45), 'kind=') === false && strpos(kreabankStatementUrl(45), 'kind=') === false, 'Account types do not carry into operational links');
 checkNavigation(kreabankNavigationHiddenFields(0) === '', 'Operational forms never keep a hidden account-type filter');
@@ -190,45 +203,36 @@ try { $hooks->doActions(array(), $object, $action, null); throw new RuntimeExcep
 $navigationRequest = array('kind' => 'invalid');
 checkNavigation(kreabankNavigationKind('bank') === 'bank', 'Unknown account-overview type normalizes to its bank default');
 $navigationRequest = array();
-$menus = array(
-	array('url' => '/compta/bank/list.php?leftmenu=bank&mainmenu=bank&search_status=opened', 'titre' => 'List', 'level' => 1, 'perms' => 'unchanged'),
-	array('url' => '/compta/bank/bankentries_list.php', 'titre' => 'Entries'),
-	array('url' => '/product/list.php', 'titre' => 'List'),
-	array('url' => '/compta/bank/list.php?leftmenu=bank&mainmenu=bank&search_status=opened', 'titre' => 'BankCash', 'level' => 0),
-);
-$originalMenus = $menus;
-$user->allowed = array('banque.lire');
-checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null) === 1 && $hooks->results[0]['titre'] === 'KreaBankAccountList', 'Native account-list label is renamed through the left-menu hook');
-$originalMenus[0]['titre'] = 'KreaBankAccountList';
-checkNavigation($menus === $originalMenus && $hooks->results === $menus, 'Menu URLs, permissions, ordering and unrelated labels remain intact');
-checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'products'), $menus, $action, null) === 0 && $hooks->results === array(), 'Unrelated left menus are untouched');
-$user->allowed = array('banque.lire', 'kreabank.reconciliation.read');
 $bankMenus = array(
-	array('url' => '/compta/bank/list.php', 'titre' => 'BankCash', 'level' => 0),
+	array('url' => '/compta/bank/list.php?leftmenu=bank', 'titre' => 'BankCash', 'level' => 0),
+	array('url' => '/compta/bank/card.php?action=create', 'titre' => 'New', 'level' => 1),
 	array('url' => '/compta/bank/list.php?leftmenu=bank', 'titre' => 'List', 'level' => 1, 'position' => 100),
-	array('url' => '/compta/bank/card.php?id=45', 'titre' => 'Account', 'level' => 2),
+	array('url' => '/custom/kreatax/bankreconciliation.php?mainmenu=bank&leftmenu=kreataxbankreport_bank', 'titre' => 'Fiscal report', 'level' => 2, 'perms' => 'unchanged', 'position' => 180),
+	array('url' => '/custom/kreabank/reconcile.php?mainmenu=bank', 'titre' => 'Reconcile', 'level' => 1),
+	array('url' => '/compta/bank/bankentries_list.php', 'titre' => 'Entries', 'level' => 1),
+	array('url' => '/compta/bank/budget.php', 'titre' => 'Categories', 'level' => 1),
 	array('url' => '/compta/bank/transfer.php', 'titre' => 'Transfer', 'level' => 1),
+	array('url' => '/custom/kreabank/reconciliationlist.php', 'titre' => 'Separate list', 'level' => 1),
+	array('url' => '/product/list.php', 'titre' => 'List', 'level' => 1),
 );
+$user->allowed = array('banque.lire', 'kreabank.reconciliation.read');
 $menus = $bankMenus;
-$hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null);
-checkNavigation(count($menus) === 5 && $menus[3]['titre'] === 'KreaBankReconcile' && $menus[3]['level'] === 1 && $menus[3]['enabled'] === 1, 'Workspace readers get a reconciliation shortcut inside the native bank section');
-checkNavigation($menus[2] === $bankMenus[2] && $menus[4] === $bankMenus[3], 'Account children and native transfer navigation retain their hierarchy');
-checkNavigation($menus[3]['url'] === '/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile' && $menus[3]['target'] === '', 'Shortcut opens the requested local workspace without stale account or action parameters');
-$hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null);
-checkNavigation(count($menus) === 5, 'Repeated menu hooks never duplicate the reconciliation shortcut');
+checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null) === 1, 'Workspace menu changes use the supported final-menu hook');
+$expected = array_values(array_filter($bankMenus, static function ($item) { return !in_array($item['titre'], array('List', 'Reconcile', 'Entries'), true) || $item['url'] === '/product/list.php'; }));
+$expected[2]['level'] = 1;
+checkNavigation($menus === $expected && $hooks->results === $expected, 'Only marked links are removed and fiscal report becomes a sibling with its permissions and URL intact');
+checkNavigation(array_keys($menus) === range(0, count($menus) - 1), 'Filtered menu keeps contiguous keys required by the native renderer');
+checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null) === 0 && $menus === $expected, 'Repeated menu hooks preserve the simplified menu');
+$menus = $bankMenus;
+checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'products'), $menus, $action, null) === 0 && $menus === $bankMenus, 'Unrelated menus are untouched');
 foreach (array(array('banque.lire'), array('kreabank.reconciliation.read'), array()) as $rights) {
 	$user->allowed = $rights;
 	$menus = $bankMenus;
-	$hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null);
-	checkNavigation(count($menus) === 4, 'Reconciliation shortcut requires both native bank and workspace read rights');
+	checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null) === 0 && $menus === $bankMenus, 'Users without both workspace rights retain native navigation');
 }
 $user->allowed = array('banque.lire', 'kreabank.reconciliation.read');
 $user->socid = 9;
 $menus = $bankMenus;
-$hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null);
-checkNavigation(count($menus) === 4, 'External users do not receive the reconciliation shortcut');
+checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null) === 0 && $menus === $bankMenus, 'External-user menus remain untouched');
 $user->socid = 0;
-$menus = array($bankMenus[3]);
-$hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null);
-checkNavigation($menus === array($bankMenus[3]), 'Missing bank account section never creates an orphaned shortcut');
 print "OK: $checks navigation and account-scope checks\n";

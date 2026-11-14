@@ -1,17 +1,22 @@
 # Banking workspace
 
-Operational banking pages share six tabs: Movements, Bank statement, Statements,
-Reconciliation, Connections and History. Bank statement combines all imported
+Operational banking pages share five tabs: Movements, Bank statement, Statements,
+Reconciliation and History. Connections remains directly accessible without an
+operational tab. Bank statement combines all imported
 movements; Statements retains the individual import list and details. Account
-management is separate: the native left-menu Account list opens the accounts
+management is separate: the native Banks/Cash heading opens the accounts
 overview. Account references open movements; the pencil icon in the right-aligned
 Actions column opens the account’s native details and tool tabs.
 The accounts overview and account-tool pages do not display the operational tabs.
 Internal transfers and new-account creation keep the native layout without a
 workspace header or tabs.
 
-A separate Filters panel below the operational navigation contains one bank-account
-selector, listing only current-company accounts. On both statement views it lists
+A separate Filters panel below unscoped operational navigation contains one bank-account
+selector, listing only current-company accounts. Opening an account fixes the
+request-local context across tabs, subviews, search and pagination. The shared
+header shows its reference and removes the account selector on every scoped page,
+including native account tools and direct Connections links. Return through the
+Banks/Cash heading to choose another account. On both unscoped statement views the selector lists
 only accounts with imported statements, including legacy imports. The standalone accounts overview
 uses compact account-type view links (all, bank, cash or closed) and has no filter
 form or account selector.
@@ -22,7 +27,9 @@ Account types belong only to the accounts overview; old operational `kind` param
 are ignored and removed from generated links/forms. The overview ignores stale
 `account_context` parameters, since it no longer has an individual-account filter.
 Closed-account reconciliation and feed eligibility remain unchanged. The audit log
-remains explicitly company-wide, separate from account-filtered reconciliation history.
+remains explicitly company-wide, available only in the all-account History view.
+Scoped History neither loads nor renders that panel; its reconciliation list
+continues to use the selected account before the fixed recent window and paging.
 
 Import is an action under Statements. Reconciliation offers compact view controls
 for single, bulk and pending review. Internal transfers keep the native layout.
@@ -46,15 +53,15 @@ The explicit `kreabank_matched=2` view persists through account/search forms and
 native sort/page links. Existing reconciled-view semantics remain unchanged.
 
 The native Dolibarr left menu remains visible with its standard layout and
-responsive behavior. Its bank section includes a **Reconcile** shortcut
-(pt_PT: **Reconciliar**) to `reconcile.php` for internal users with both native
-bank and KreaBank read access. The existing `leftblock` hook adds it after the
-account list and its children, without a new menu registration or module restart.
-Retain the native siblings' sort position so the rendered shortcut stays inside
-the **Banks/Cash** block (pt_PT: **Bancos Dinheiro**).
+responsive behavior. For internal workspace readers, the existing `leftblock`
+hook removes the duplicate Account list, Reconcile and Entry list links, keeping
+the **Banks/Cash** heading (pt_PT: **Bancos Dinheiro**) as the account-list entry
+point. The existing KreaTax fiscal/bank report becomes a level-one sibling, with
+its URL and permissions preserved. Native-only readers retain their menu.
 Only the duplicate native account tab bar is hidden inside
 this workspace. Global ERP navigation remains available. Selected-account pages
-have tabs for details, documents, annual reports, forecasts and statement numbering.
+have tabs for details, documents and annual reports. Forecasts, native numbered
+statements and statement numbering keep their direct routes without visible tabs.
 These tools do not add left-menu sections or operational tabs. Transfers and
 cheque deposits retain their existing native left-menu entries. Automatic
 reconciliation is accessed only through module configuration, not operational
@@ -88,6 +95,9 @@ updates only registration for already-enabled companies and preserves business
 data, rights, schemas and schedulers. Retain the registration snapshot and source
 preimages for rollback. Do not overwrite an earlier backup file.
 
+The 1.20.1 navigation changes need no schema, scheduler or menu-registration update.
+Deploy the shared libraries, hook, navigation CSS and History controller together.
+
 Verify accounts, account selection, native movements and details, statements,
 reconciliation views, connections and history on desktop/mobile. Check one visible
 banking bar, a visible native left menu, no duplicate account tabs/banner, company
@@ -96,3 +106,14 @@ payments as test data. Run `php test/test_navigation.php` for URL/scope contract
 `php test/test_account_filters_database.php` uses only the guarded disposable
 automatic-reconciliation database on port 33317; see
 [database setup](AUTOMATIC_RECONCILIATION.md#validation).
+
+The navigation UI reference is the existing banking workspace and installed
+Dolibarr UI documentation (`admin/tools/ui/index.php`, form components and
+`core/lib/bank.lib.php`); retain its current header, tabs and native menu shell.
+For 1.20.1, installed-source PHP checks cover navigation/account scope, native
+menu permissions, connected-view translations, list sorting and reconciliation
+guards. Synthetic previews of the actual navigation renderer passed desktop and
+390px checks in English/Portuguese, including tab navigation and no page overflow.
+Full ERP rendering remains UNVERIFIED: the local test installation returned its
+technical-error page before authentication in both the internal browser and the
+authorized Chrome fallback. No business operation was submitted.

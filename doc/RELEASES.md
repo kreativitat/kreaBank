@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.1 — 2026-11-14
+
+- Simplify banking tabs and sidebar links; keep the fiscal/bank report outside nested menus.
+- Keep selected-account pages scoped without an account switch; retain company-wide audit only in all-account History.
+- Retain direct native tool and connection routes. No migration, registration refresh or scheduler change for this update.
+
 ## 1.20.0 — 2026-11-14
 
 - Add a separate reconciliation list with native header filters/pagination, both bank accounts, inline signed approval/search and a protected bank-correction modal.

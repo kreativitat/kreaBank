@@ -65,7 +65,7 @@ function kreabankBankingUrl($page, $accountId = 0)
 		if ((int) $accountId <= 0) {
 			return kreabankWorkspaceUrl('accounts');
 		}
-		foreach (kreabankAccountToolEntries($accountId) as $entry) {
+		foreach (kreabankAccountToolEntries($accountId, true) as $entry) {
 			if ($entry['key'] === $page) {
 				return dol_buildpath($entry['url'], 1);
 			}
@@ -74,8 +74,8 @@ function kreabankBankingUrl($page, $accountId = 0)
 	return $page === 'statement' ? kreabankStatementUrl($accountId) : kreabankWorkspaceUrl($page, $accountId);
 }
 
-/** Native account-tab routes for an account already validated by the caller. */
-function kreabankAccountToolEntries($accountId)
+/** Native account tools; hidden legacy routes remain valid for existing links. */
+function kreabankAccountToolEntries($accountId, $includeHidden = false)
 {
 	if ((int) $accountId <= 0) {
 		throw new InvalidArgumentException('An owned bank account is required');
@@ -90,6 +90,9 @@ function kreabankAccountToolEntries($accountId)
 		'numbering' => array('bankentries_list.php?action=reconcile&search_conciliated=0&id=', 'KreaBankStatementNumbering'),
 	);
 	foreach ($tools as $key => $tool) {
+		if (!$includeHidden && in_array($key, array('forecast', 'native_statements', 'numbering'), true)) {
+			continue;
+		}
 		$entries[] = array('key' => $key, 'url' => '/compta/bank/' . $tool[0] . (int) $accountId . '&mainmenu=bank&leftmenu=bank', 'label' => $tool[1]);
 	}
 	return $entries;
@@ -114,6 +117,9 @@ function kreabankBankingFilters($page, $accountId = 0, $kind = null)
 		}
 		return $html . '</div>';
 	}
+	if ((int) $accountId > 0) {
+		return '';
+	}
 	$accountPages = array('card', 'documents', 'reports', 'forecast', 'native_statements', 'numbering');
 	$isAccountTool = in_array($page, $accountPages, true) || $page === 'import';
 	$action = $isAccountTool ? dol_buildpath('/custom/kreabank/accounts.php', 1) : strtok(kreabankBankingUrl($page), '?');
@@ -126,15 +132,19 @@ function kreabankBankingFilters($page, $accountId = 0, $kind = null)
 		$html .= '<input type="hidden" name="kreabank_matched" value="' . kreabankMovementFilter() . '">';
 	}
 	$html .= '<strong class="kb-filter-title">' . $langs->trans('Filters') . '</strong>';
-	$html .= '<div class="kb-filter-field">' . kreabankAccountFilterSelect($accountId, in_array($page, array('bankstatement', 'statement'), true)) . '</div>';
+	// Native movements need id to load the account and disable their own account control.
+	$html .= '<div class="kb-filter-field">' . kreabankAccountFilterSelect($accountId, in_array($page, array('bankstatement', 'statement'), true), $page === 'movements' ? 'id' : 'account_context') . '</div>';
 	return $html . '<button class="button" type="submit">' . $langs->trans('ToFilter') . '</button></form>';
 }
 
 /** Render the current-company account control for workspace or list filters. */
-function kreabankAccountFilterSelect($accountId = 0, $statementsOnly = false)
+function kreabankAccountFilterSelect($accountId = 0, $statementsOnly = false, $field = 'account_context')
 {
 	global $db, $conf, $langs;
-	$html = '<label for="kreabank-account-context">' . $langs->trans('BankAccount') . '</label><select class="flat" id="kreabank-account-context" name="account_context"><option value="0">' . $langs->trans('KreaBankAllAccounts') . '</option>';
+	if (!in_array($field, array('account_context', 'id'), true)) {
+		throw new InvalidArgumentException('Unknown account filter field');
+	}
+	$html = '<label for="kreabank-account-context">' . $langs->trans('BankAccount') . '</label><select class="flat" id="kreabank-account-context" name="' . $field . '"><option value="0">' . $langs->trans('KreaBankAllAccounts') . '</option>';
 	$result = $statementsOnly
 		? (new KreaBankIntegration($db, $conf->entity))->statementAccounts()
 		: $db->query('SELECT rowid,ref,label FROM ' . $db->prefix() . 'bank_account WHERE entity=' . (int) $conf->entity . ' ORDER BY clos,ref,label');
@@ -157,6 +167,9 @@ function kreabankBankingHeader($page, $account = null, $showFilters = true)
 	$html = kreabankListAssets() . '<link rel="stylesheet" href="' . dol_escape_htmltag($css) . '"><header class="kb-header">';
 	$html .= '<div class="kb-context"><div class="kb-brand"><span class="fas fa-university" aria-hidden="true"></span><strong>' . $langs->trans('KreaBankBanking') . '</strong>';
 	$html .= '<span class="kb-company" title="' . dol_escape_htmltag($mysoc->name ?? '') . '">' . dol_escape_htmltag($mysoc->name ?? '') . '</span></div>';
+	if ($accountId > 0) {
+		$html .= '<span class="kb-account-context" title="' . dol_escape_htmltag($langs->trans('BankAccount')) . '">' . dol_escape_htmltag($account->ref ?? '') . '</span>';
+	}
 	$html .= '</div>';
 	$accountTools = $accountId > 0 ? kreabankAccountToolEntries($accountId) : array();
 	$active = in_array($page, array('card', 'documents', 'reports', 'forecast', 'native_statements', 'numbering'), true) ? 'account' : (in_array($page, array('matched', 'bulkmatch', 'pending'), true) ? 'reconcile' : ($page === 'import' ? 'statement' : $page));
