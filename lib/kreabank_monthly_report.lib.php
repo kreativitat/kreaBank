@@ -45,7 +45,7 @@ function kreabankMonthlySummaryHtml($report, $langs)
 		$highlight = in_array($row[0], array('BankAdjusted', 'LedgerAdjusted', 'UnexplainedDifference'), true);
 		$html .= '<tr class="' . ($highlight ? 'liste_total' : 'oddeven') . '"><th scope="row">' . $langs->trans('KreaBankMonthly' . $row[0]) . '</th><td class="right nowrap">' . kreabankMonthlyAmount($row[1]) . '</td></tr>';
 	}
-	$html .= '</tbody></table></div><p class="opacitymedium">' . $langs->trans('KreaBankMonthlyBalanceBasis', dol_escape_htmltag($report['map']['balance_date'] ?: '—')) . '</p>';
+	$html .= '</tbody></table></div><p class="opacitymedium">' . $langs->trans('KreaBankMonthlyBalanceBasis', $report['map']['balance_date'] ?: '—') . '</p>';
 	$html .= '<h3>' . $langs->trans('KreaBankMonthlyIndicators') . '</h3><div class="div-table-responsive"><table class="tagtable liste centpercent"><thead><tr class="liste_titre"><th scope="col">' . $langs->trans('KreaBankMonthlyIndicators') . '</th><th scope="col" class="right">' . $langs->trans('KreaBankMonthlyBank') . '</th><th scope="col" class="right">' . $langs->trans('KreaBankMonthlyLedger') . '</th></tr></thead><tbody>';
 	foreach (array('count' => 'MovementCount', 'matched' => 'MatchedCount', 'pending' => 'PendingCount', 'over30' => 'Over30', 'over90' => 'Over90') as $key => $label) {
 		$html .= '<tr class="oddeven"><th scope="row">' . $langs->trans('KreaBankMonthly' . $label) . '</th><td class="right">' . (int) $report['bank'][$key] . '</td><td class="right">' . (int) $report['ledger'][$key] . '</td></tr>';

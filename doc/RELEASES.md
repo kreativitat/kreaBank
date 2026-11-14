@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.42 — 2026-11-14
+
+- Render the missing bank-balance date once through native translation escaping,
+  preserving the unknown-date dash in production monthly reports.
+
 ## 1.19.41 — 2026-11-14
 
 - Add read-only monthly reconciliation maps, quality checks, carried open items,
