@@ -61,6 +61,29 @@ No schema, menu-registration or scheduler migration is required. Deploy the full
 module source, including the new list helper, stylesheet and script. Source
 publication alone does not update production.
 
+## Imported statements and History
+
+`statement.php` uses native column filters, sort headers and pagination for both
+its import index and individual statement lines. Import reference, account,
+import date and source/native/reconciled counts filter the complete statement
+aggregate; they never reduce its input rows. Detail filters cover booking dates,
+description and visible references, exact signed amount, displayed evidence status
+and native movement ID. Count and rows share one owner-scoped outer predicate.
+Search/reset preserve the selected account and import reference.
+
+History uses native headers, search/reset and independent History/audit paging.
+Its amount comparison retains exact source decimals; Status follows the displayed
+reconciled/review/reversed state. The compact global search still includes audit
+JSON. Summary totals remain available in an expandable section and keep currencies
+separate. Audit filters preserve the shared page size without a duplicate selector.
+Undo POST forms remain outside both read-only GET forms. Existing fixed 5,000-row
+windows, company/account ownership and signed Undo reviews are unchanged.
+
+Design reference: the installed Dolibarr 24 UI tables/buttons documentation and
+`bankstatement.php`. Run `php test/test_import_list.php`, `php test/test_history.php`
+and guarded `php test/test_import_list_filters_database.php`; the latter uses only
+the disposable localhost:33317 fixture. No schema or menu refresh is required.
+
 ## Combined bank statement
 
 `bankstatement.php` uses `print_barre_liste()` for native page size and navigation,

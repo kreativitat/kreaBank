@@ -10,6 +10,15 @@ function kreabankStatementListStatusOptions()
 		'skipped'=>'KreaBankSkipped', 'duplicate'=>'KreaBankDuplicate');
 }
 
+/** Shared displayed link state; callers supply only an owned statement reference. */
+function kreabankStatementListStatusSql($referenceExpression = 'h.statement_ref')
+{
+	return "CASE WHEN COALESCE(h.group_id,0)>0 THEN CASE WHEN h.group_valid=1 AND h.status=2 THEN 'reconciled' ELSE 'review' END WHEN h.status=2 OR h.expected_native_id>0 THEN CASE"
+			. " WHEN h.native_id IS NULL OR h.native_id=0 OR COALESCE(h.currency,'')<>COALESCE(h.native_currency,'')"
+			. " OR ABS(h.amount-h.native_amount)>0.01 OR (h.status=2 AND (COALESCE(h.rappro,0)<>1 OR COALESCE(h.num_releve,'')<>COALESCE(" . $referenceExpression . ",''))) THEN 'review'"
+			. " WHEN h.rappro=1 THEN 'reconciled' ELSE 'registered' END WHEN h.status=3 THEN 'skipped' ELSE 'pending' END";
+}
+
 /** Reverse the original within-day sequence with the chosen date direction. */
 function kreabankStatementListOrder($order, $expression)
 {
@@ -82,10 +91,7 @@ function kreabankStatementListWhere($db, $filters)
 	elseif ($status !== '') {
 		if (!isset(kreabankStatementListStatusOptions()[$status])) { return $where . ' AND 1=0'; }
 		// Mirror kreabankIntegrationLineState(), including missing/changed native evidence.
-		$state = "CASE WHEN COALESCE(h.group_id,0)>0 THEN CASE WHEN h.group_valid=1 AND h.status=2 THEN 'reconciled' ELSE 'review' END WHEN h.status=2 OR h.expected_native_id>0 THEN CASE"
-			. " WHEN h.native_id IS NULL OR h.native_id=0 OR COALESCE(h.currency,'')<>COALESCE(h.native_currency,'')"
-			. " OR ABS(h.amount-h.native_amount)>0.01 OR (h.status=2 AND (COALESCE(h.rappro,0)<>1 OR COALESCE(h.num_releve,'')<>COALESCE(h.statement_ref,''))) THEN 'review'"
-			. " WHEN h.rappro=1 THEN 'reconciled' ELSE 'registered' END WHEN h.status=3 THEN 'skipped' ELSE 'pending' END";
+		$state = kreabankStatementListStatusSql();
 		$where .= ' AND (' . $state . ")='" . $status . "'";
 	}
 	return $where;

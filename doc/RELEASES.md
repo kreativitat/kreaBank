@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.20 — 2026-11-14
+
+- Give imported statements and their lines native header filters, sort controls and pagination. Filter complete owned projections without changing import totals.
+- Standardize History and audit list controls, add exact amount/status filters and retain independent page state, compact search and signed Undo forms. Match displayed evidence status to SQL at one-cent decimal boundaries.
+
 ## 1.20.19 — 2026-11-14
 
 - Align the monthly report section headings and match toolbar button heights after native-theme review.

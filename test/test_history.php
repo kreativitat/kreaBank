@@ -30,7 +30,9 @@ function load_fiche_titre($title,...$args){return '<h1>'.$title.'</h1>';}
 function llxHeader(...$args){print '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>';}
 function dol_get_fiche_end(){return '';}
 function llxFooter(){print '</body></html>';}
-function print_barre_liste($title,$page,$url,$params,$a,$b,$c,$num,$total,...$args){print '<div class="fixture-pager" data-page="'.$page.'" data-total="'.$total.'">'.$title.' ('.$total.')</div>';}
+function print_barre_liste($title,$page,$url,$params,$a,$b,$c,$num,$total,...$args){print ($args[2] ?? '');print '<div class="fixture-pager" data-page="'.$page.'" data-total="'.$total.'">'.$title.' ('.$total.')</div>';}
+function getTitleFieldOfList($label,...$args){return '<th class="liste_titre">'.$label.'</th>';}
+class Form {public function __construct($db){} public function showFilterButtons(){return '<button name="button_search_x" value="x">Search</button><button name="button_removefilter_x" value="x">Reset</button>';}}
 function setEventMessages($message,...$args){$GLOBALS['fixtureErrors'][]=$message;}
 class HistoryFixtureLangs {
 	public $keys=array();
@@ -106,4 +108,32 @@ historyCheck(kreabankHistoryTakeUndoReview($tokens[0],101)['rowid']==='1' && kre
 $caught=false;try{kreabankHistoryTakeUndoReview($tokens[0],101);}catch(DomainException $e){$caught=true;}historyCheck($caught,'Displayed Undo reviews are single-use');
 foreach(array('javascript:alert(1)','//foreign.test/path?id=','https://foreign.test/path?id=','/\\foreign.test/path?id=') as $prefix){historyCheck(kreabankHistoryDocumentUrl($prefix,7,'fin.example.test')==='','Unsafe document destination is rejected');}
 historyCheck(kreabankHistoryDocumentUrl('/compta/paiement/card.php?id=',7,'fin.example.test')==='/compta/paiement/card.php?id=7','Native document URLs remain available');
+
+foreach (array('>124,99999999'=>true,'=125.00000001'=>false,'<=125'=>true,'<>125'=>false,'1 OR 1=1'=>false) as $filter=>$expected) {
+	historyCheck(kreabankHistoryAmountMatches('125.00000000',$filter)===$expected, 'Exact signed amount comparisons do not round: '.$filter);
+}
+$html=renderHistory(array('hist_amount'=>'<-1'));
+historyCheck(strpos($html,'Synthetic debit')!==false && strpos($html,'Synthetic staged receipt')===false,'Amount header filters before History pagination');
+$html=renderHistory(array('hist_amount'=>'<>125'));
+historyCheck(strpos($html,'Synthetic staged receipt')===false && strpos($html,'Synthetic debit')!==false,'Not-equal amount input retains its comparison operator');
+$html=renderHistory(array('hist_status'=>'review'));
+historyCheck(preg_match('/<tr[^>]*class="[^"]*krea-history-row-top/', $html)===0,'Status header follows displayed review state');
+$html=renderHistory(array('hist_date_from'=>'2026-02-30'));
+historyCheck(preg_match('/<tr[^>]*class="[^"]*krea-history-row-top/', $html)===0,'Invalid dates fail closed instead of silently expanding History');
+$html=renderHistory(array('pageplusone'=>2,'pageplusoneold'=>2,'limit'=>1,'button_search_x'=>'x'));
+historyCheck(strpos($html,'data-page="0" data-total="3"')!==false,'Header search resets the active list page');
+$html=renderHistory(array('pageplusone'=>2,'pageplusoneold'=>1,'limit'=>1,'button_search_x'=>'x'));
+historyCheck(strpos($html,'data-page="1" data-total="3"')!==false,'Native page jump wins over implicit search submit');
+$html=renderHistory(array('hist_amount'=>'<-1','hist_status'=>'review','audit_search_user'=>'absent','button_removefilter.x'=>'x'));
+historyCheck(strpos($html,'data-total="3"')!==false && strpos($html,'data-total="0"')!==false,'History reset clears its header filters while retaining audit filters');
+$html=renderHistory(array('hist_description'=>'debit','audit_search_user'=>'absent','audit_nav'=>'1','button_removefilter_x'=>'x'));
+historyCheck(strpos($html,'Synthetic debit')!==false && strpos($html,'Synthetic staged receipt')===false && strpos($html,'Synthetic tester')!==false,'Audit reset preserves History filters');
+$html=renderHistory(array('hist_amount'=>'>=0','hist_status'=>'reconciled','limit'=>1));
+$previous=libxml_use_internal_errors(true);$dom=new DOMDocument();$dom->loadHTML($html);libxml_clear_errors();libxml_use_internal_errors($previous);$xp=new DOMXPath($dom);
+historyCheck($xp->query('//form//form')->length===0 && $xp->query('//form[@method="POST"]')->length===1,'Native GET owners never nest or absorb Undo POST forms');
+historyCheck($xp->query('//input[@name="hist_amount" and @form="kreaHistoryFilterForm"]')->length===1 && $xp->query('//select[@name="hist_status" and @form="kreaHistoryFilterForm"]')->length===1,'Amount and Status are associated native header controls');
+historyCheck($xp->query('//button[@form="kreaHistoryFilterForm"]')->length===2 && $xp->query('//button[@form="kreaAuditFilterForm"]')->length===2,'Native search/reset controls target their own read-only form');
+historyCheck($xp->query('//form[@id="kreaAuditFilterForm"]/input[@name="limit" and @value="1"]')->length===1,'Audit filters retain the shared native page size when their duplicate selector is hidden');
+$sortLinks=$xp->query('//table[@id="kreaAuditTable"]//th/a');
+foreach($sortLinks as $link){parse_str(parse_url($link->getAttribute('href'),PHP_URL_QUERY),$query);historyCheck(isset($query['audit_sortfield']) && ($query['sortfield']??'')==='event_ts' && ($query['hist_amount']??'')==='>=0' && !isset($query['token'],$query['action']),'Audit sort links preserve History sort/filter and exclude actions');}
 echo "OK: $checks History controller/view checks\n";

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 require_once __DIR__ . '/../class/kreabankintegration.class.php';
+require_once __DIR__ . '/../class/KreaBankPaymentBatchTrait.php';
 
 /** Shared source snapshot presentation for the overview and movement summary. */
 function kreabankAccountFeedDisplay($row)
@@ -85,6 +86,17 @@ function kreabankMovementFilter()
 	return in_array($filter, array(1, 2), true) ? $filter : 0;
 }
 
+/** Match SQL's one-cent evidence tolerance using the original DECIMAL strings. */
+function kreabankIntegrationAmountNeedsReview($amount, $nativeAmount)
+{
+	try {
+		$native = KreaBankPaymentBatchDecimal::normalize((string) $nativeAmount);
+		$delta = KreaBankPaymentBatchDecimal::absolute(KreaBankPaymentBatchDecimal::sum(array((string) $amount, $native[0] === '-' ? substr($native,1) : '-' . $native)));
+		list($whole,$fraction) = explode('.', $delta, 2);
+		return $whole !== '0' || strcmp($fraction, '01000000') > 0;
+	} catch (DomainException $e) { return true; }
+}
+
 /** Only a verified native match is presented as reconciled. */
 function kreabankIntegrationLineState($line, $reference)
 {
@@ -92,7 +104,7 @@ function kreabankIntegrationLineState($line, $reference)
 		return (int) ($line->group_valid ?? 0) === 1 && (int) $line->status === 2 ? 'KreaBankReconciled' : 'KreaBankLinkNeedsReview';
 	}
 	if ((int) $line->status === 2 || (int) $line->expected_native_id > 0) {
-		if (empty($line->native_id) || (string) $line->currency !== (string) $line->native_currency || abs((float) $line->amount - (float) $line->native_amount) > 0.01
+		if (empty($line->native_id) || (string) $line->currency !== (string) $line->native_currency || kreabankIntegrationAmountNeedsReview($line->amount, $line->native_amount)
 			|| ((int) $line->status === 2 && ((int) $line->rappro !== 1 || (string) $line->num_releve !== (string) $reference))) {
 			return 'KreaBankLinkNeedsReview';
 		}
