@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.6 — 2026-11-14
+
+- Use the bounded SimpleXML spreadsheet fallback when PHP disables XMLReader methods; retain all import resource limits.
+
 ## 1.20.5 — 2026-11-14
 
 - Correct CAMT counterparty direction and bound XLSX expansion, sparse columns and rows.

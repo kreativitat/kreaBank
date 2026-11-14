@@ -1382,7 +1382,7 @@ class KreaBankParser
 		$shared = array();
 		$sharedXmlTemp = $this->copyZipEntryToTempFile($zip, 'xl/sharedStrings.xml', 'kreastr_');
 		try {
-			if ($sharedXmlTemp !== '' && class_exists('XMLReader')) {
+			if ($sharedXmlTemp !== '' && method_exists('XMLReader', 'open')) {
 				$reader = new XMLReader();
 				$flags = LIBXML_NONET | LIBXML_COMPACT | LIBXML_NOERROR | LIBXML_NOWARNING;
 				if (@$reader->open($sharedXmlTemp, null, $flags)) {
@@ -1881,7 +1881,7 @@ class KreaBankParser
 			$rows = array();
 			$materializedCells = 0;
 			$sheetXmlTemp = $this->copyZipEntryToTempFile($zip, $sheetPath, 'kreasht_');
-			if ($sheetXmlTemp !== '' && class_exists('XMLReader')) {
+			if ($sheetXmlTemp !== '' && method_exists('XMLReader', 'open')) {
 				$reader = new XMLReader();
 				$flags = LIBXML_NONET | LIBXML_COMPACT | LIBXML_NOERROR | LIBXML_NOWARNING;
 				if (@$reader->open($sheetXmlTemp, null, $flags)) {

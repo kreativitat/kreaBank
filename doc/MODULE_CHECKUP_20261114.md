@@ -53,6 +53,9 @@ suites passed; the focused suites contain 24 import, 50 parser and 37 audit
 database checks. PHP syntax validation passed for 142 module files and JavaScript
 syntax validation for seven browser scripts. The final orphan-identity correction
 also passed payment-batch, separate-list and monthly payment-batch database suites.
+Parser safety also passes all 50 checks with XMLReader disabled, exercising the
+bounded SimpleXML fallback. The availability guard checks usable reader methods
+because disabled PHP classes can still satisfy `class_exists()`.
 
 The historical `test_format_consistency.php` and `test_parser_golden.php` suites
 remain **UNVERIFIED**: all ten original bank-format files are absent from this
