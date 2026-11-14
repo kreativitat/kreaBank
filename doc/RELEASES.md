@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.24 — 2026-11-14
+
+- Show the planned payment bank for unpaid invoice and tax proposals; use the same bank for list filtering and sorting.
+- Translate monthly report movement labels and source captions. Align transaction columns and wrap long references within the browser width.
+- Keep Summary and Checks as complete compact tables; retain native filters and pagination on the transaction subtabs.
+
 ## 1.20.23 — 2026-11-14
 
 - Open proposed and searched record references in a new tab, using explicit native invoice, payment, tax and bank-movement identities. Keep unavailable entries and aggregate batch names unlinked.

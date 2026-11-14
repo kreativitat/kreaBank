@@ -104,7 +104,8 @@ class KreaBankWorklist
 		if (!empty($row['pair'])) {
 			$s = $row['pair']['suggestion'];
 			$references[] = kreabankBulkSuggestionReference($s) . ' ' . ($s['thirdparty_name'] ?? '');
-			if (!empty($s['bank_account_id'])) { $accounts[] = (int) $s['bank_account_id']; $accountRefs[] = $s['bank_account_ref'] ?? ''; }
+			$account = kreabankWorklistPaymentAccount($row['pair']);
+			if ($account['id'] > 0) { $accounts[] = $account['id']; $accountRefs[] = $account['ref']; }
 		}
 		foreach ($row['account_candidates'] as $candidate) {
 			$references[] = ($candidate['payment_ref'] ?? $candidate['reference'] ?? '') . ' ' . ($candidate['reference'] ?? '');

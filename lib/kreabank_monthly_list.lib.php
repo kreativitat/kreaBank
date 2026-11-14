@@ -3,14 +3,11 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-/** Presentation-only schemas. None of these filters may reach the report loader. */
+/** Transaction-only presentation schemas; summary/check tables have no list state. */
 function kreabankMonthlyListDefinitions()
 {
 	$details = array('date'=>'date', 'description'=>'text', 'reference'=>'text', 'amount'=>'decimal', 'balance'=>'decimal', 'status'=>'status', 'age'=>'integer');
 	return array(
-		'map'=>array('label'=>'text','amount'=>'decimal'),
-		'indicators'=>array('label'=>'text','bank'=>'integer','ledger'=>'integer'),
-		'checks'=>array('label'=>'text','status'=>'check_status','value'=>'mixed'),
 		'bank_pending'=>$details, 'ledger_pending'=>$details, 'bank'=>$details, 'ledger'=>$details
 	);
 }
@@ -58,7 +55,7 @@ function kreabankMonthlyListState($request, $key, $defaultLimit = 25)
 		'sortfield'=>$field, 'sortorder'=>in_array($order, array('ASC','DESC'), true) ? $order : 'ASC');
 }
 
-/** Canonical, action-free query state shared by all seven tables. */
+/** Canonical, action-free query state for the four transaction tables only. */
 function kreabankMonthlyListRequestState($request, $defaultLimit = 25)
 {
 	$params = array();
@@ -222,7 +219,15 @@ function kreabankMonthlyListHtml($rows, $key, $title, $labels, $state, $langs, $
 		}
 		$html .= kreabankMonthlyListPager($title, $list, array_merge($state, array($list['prefix'] . 'page'=>$list['page'], $list['prefix'] . 'limit'=>$list['limit'])));
 	}
-	$html .= '<div class="div-table-responsive"><table id="kb-monthly-table-' . $key . '" class="tagtable liste centpercent"><thead>';
+	$details = isset($columns['date']);
+	$html .= '<div class="div-table-responsive"><table id="kb-monthly-table-' . $key . '" class="tagtable liste centpercent' . ($details ? ' kb-monthly-detail-table' : '') . '">';
+	if ($details) {
+		$html .= '<colgroup>';
+		foreach ($columns as $field=>$type) { $html .= '<col class="kb-monthly-col-' . $field . '">'; }
+		if (!$print) { $html .= '<col class="kb-monthly-col-actions">'; }
+		$html .= '</colgroup>';
+	}
+	$html .= '<thead>';
 	if (!$print) {
 		$html .= '<tr class="liste_titre_filter">';
 		foreach ($columns as $field=>$type) {

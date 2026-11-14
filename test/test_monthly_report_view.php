@@ -37,22 +37,37 @@ require_once __DIR__ . '/../lib/kreabank.lib.php';
 class MonthlyViewLangs
 {
 	private $messages = array();
+	private $locale;
 	public function __construct($locale) {
+		$this->locale = $locale;
 		foreach (array('en_US', $locale) as $lang) {
 			foreach (file(__DIR__ . '/../langs/' . $lang . '/kreabank.lang', FILE_IGNORE_NEW_LINES) as $line) {
 				if (strpos($line, '=') !== false && substr($line, 0, 1) !== '#') { list($key, $value) = explode('=', $line, 2); $this->messages[$key] = $value; }
 			}
 		}
+		$this->loadLangs(array('main','banks','bills','salaries','trips','donations','loan'));
 	}
 	public function trans($key, ...$args) { return $args ? vsprintf($this->messages[$key] ?? $key, $args) : ($this->messages[$key] ?? $key); }
 	public function transnoentities($key, ...$args) { return $this->trans($key, ...$args); }
-	public function loadLangs($files) {}
-	public function load($file) {}
+	public function loadLangs($files) {
+		foreach ($files as $file) {
+			foreach (array('en_US',$this->locale) as $locale) {
+				$path = DOL_DOCUMENT_ROOT . '/langs/' . $locale . '/' . $file . '.lang';
+				if (!is_file($path)) { continue; }
+				foreach (file($path,FILE_IGNORE_NEW_LINES) as $line) {
+					if (strpos($line,'=') !== false && substr($line,0,1) !== '#') { list($key,$value)=explode('=',$line,2); $this->messages[$key]=$value; }
+				}
+			}
+		}
+	}
+	public function load($file) { $this->loadLangs(array($file)); }
 }
 $account = array('rowid' => 101, 'entity' => 1, 'ref' => 'ST_TEST', 'label' => 'Synthetic account', 'currency_code' => 'EUR');
 $source = array(monthlyBank(1, '2026-08-01', '1000.00', '1000.00', 11), monthlyBank(2, '2026-09-01', '125.50', '1125.50', 12), monthlyBank(3, '2026-09-30', '-15.80', '1109.70'));
 $source[2]['description'] = '<script>unsafe()</script> Monthly bank fee';
+$source[2]['payment_reference'] = 'acc_' . str_repeat('0123456789abcdef',16) . '_gocardless';
 $native = array(monthlyNative(11, '2026-08-01', '1000.00', true), monthlyNative(12, '2026-09-02', '125.50', true), monthlyNative(13, '2026-09-29', '-50.00'));
+$native[2]['description'] = '(SupplierInvoicePayment)';
 $report = $monthly->assemble($account, '2026-09', $source, $native);
 $report['company'] = 'Synthetic company';
 $report['entity'] = 1;
@@ -177,16 +192,8 @@ monthlyViewCheck($jump['page'] === 2 && $search['page'] === 0, 'Native page jump
 $conf->liste_limit = 50;
 monthlyViewCheck(kreabankMonthlyListPrepare(array_fill(0,127,$detailRows[0]),'bank',array(),$identity)['limit'] === 50, 'The native configured page size supplies the default');
 $conf->liste_limit = 25;
-$mixedChecks = array(array('label'=>'Count','status'=>'ok','value'=>'2'), array('label'=>'Date','status'=>'warning','value'=>'2026-09-30'), array('label'=>'Unknown','status'=>'warning','value'=>''));
-foreach (array('>1'=>array('Count'),'2026-09'=>array('Date'),'—'=>array('Unknown')) as $filter=>$expected) {
-	$list = kreabankMonthlyListPrepare($mixedChecks,'checks',array('ml_checks_search_value'=>$filter),$identity);
-	monthlyViewCheck(array_column($list['rows'],'label') === $expected, 'Mixed check values retain numeric/date/unknown semantics: ' . $filter);
-}
-$indicatorRows = array(array('label'=>'Open items','bank'=>2,'ledger'=>3), array('label'=>'Matched items','bank'=>4,'ledger'=>1));
-$list = kreabankMonthlyListPrepare($indicatorRows,'indicators',array('ml_indicators_search_label'=>'items','ml_indicators_search_bank'=>'>=2','ml_indicators_search_ledger'=>'<2'),$identity);
-monthlyViewCheck(count($list['rows']) === 1 && $list['rows'][0]['label'] === 'Matched items', 'Each indicator data column filters before count and paging');
 $reportBefore = serialize($report);
-foreach (array('summary'=>array('map','indicators'),'checks'=>array('checks'),'pending'=>array('bank_pending','ledger_pending'),'bank'=>array('bank'),'ledger'=>array('ledger')) as $view=>$keys) {
+foreach (array('summary'=>array(),'checks'=>array(),'pending'=>array('bank_pending','ledger_pending'),'bank'=>array('bank'),'ledger'=>array('ledger')) as $view=>$keys) {
 	$html = kreabankMonthlyReportHtml($report, array_merge($state,array('view'=>$view)), $langs);
 	$previousLibxml = libxml_use_internal_errors(true); $dom = new DOMDocument(); $dom->loadHTML($html); $xp = new DOMXPath($dom); libxml_clear_errors(); libxml_use_internal_errors($previousLibxml);
 	monthlyViewCheck($xp->query('//form//form')->length === 0 && $xp->query('//form')->length === count($keys), 'Each ' . $view . ' table has its own non-nested GET owner');
@@ -203,6 +210,24 @@ foreach (array('summary'=>array('map','indicators'),'checks'=>array('checks'),'p
 		}
 	}
 }
+$obsoleteSummaryState = array('ml_map_search_label'=>'absent','ml_map_sortfield'=>'amount','ml_map_sortorder'=>'DESC','ml_map_page'=>999,'ml_map_limit'=>1,
+	'ml_indicators_search_bank'=>'>999','ml_indicators_page'=>999,'ml_indicators_limit'=>1,'ml_checks_search_status'=>'absent','ml_checks_page'=>999,'ml_checks_limit'=>1);
+foreach (array('summary'=>array('map'=>9,'indicators'=>5),'checks'=>array('checks'=>count($report['checks']))) as $view=>$tables) {
+	$html = kreabankMonthlyReportHtml($report,array_merge($state,$obsoleteSummaryState,array('view'=>$view)),$langs);
+	$previousLibxml = libxml_use_internal_errors(true); $dom=new DOMDocument(); $dom->loadHTML($html); $xp=new DOMXPath($dom); libxml_clear_errors(); libxml_use_internal_errors($previousLibxml);
+	monthlyViewCheck($xp->query('//form|//input|//select|//button|//tr[@class="liste_titre_filter"]')->length === 0 && strpos($html,'fixture-native-pager') === false,
+		'Static ' . $view . ' has no native filters, controls or pager');
+	foreach ($tables as $key=>$count) {
+		monthlyViewCheck($xp->query('//table[@id="kb-monthly-table-' . $key . '" and contains(@class,"kb-monthly-static-table")]/tbody/tr')->length === $count
+			&& $xp->query('//table[@id="kb-monthly-table-' . $key . '"]/thead//a')->length === 0, 'Complete original ' . $key . ' rows ignore stale filters, sorting and pages');
+	}
+}
+$withoutObsolete = kreabankMonthlyListRequestState($obsoleteSummaryState + array('ml_bank_page'=>2,'ml_bank_search_description'=>'kept'));
+monthlyViewCheck(!array_intersect_key($withoutObsolete,$obsoleteSummaryState) && $withoutObsolete['ml_bank_page'] === 2 && $withoutObsolete['ml_bank_search_description'] === 'kept',
+	'Only transaction tables participate in canonical list state');
+$cleanUrl = kreabankMonthlyReportUrl(array_merge($state,$obsoleteSummaryState,array('ml_bank_search_description'=>'kept')));
+monthlyViewCheck(strpos($cleanUrl,'ml_map_') === false && strpos($cleanUrl,'ml_indicators_') === false && strpos($cleanUrl,'ml_checks_') === false
+	&& strpos($cleanUrl,'ml_bank_search_description=kept') !== false, 'Report links discard obsolete summary/check list state while retaining transaction filters');
 $manyReport = $report;
 $manyReport['bank_pending'] = $rows;
 $manyReport['ledger_pending'] = array_fill(0,53,$report['ledger_pending'][0]);
@@ -226,6 +251,40 @@ monthlyViewCheck(strpos($print,'kb-monthly-table-map') !== false && strpos($prin
 monthlyViewCheck(serialize($report) === $reportBefore, 'Filtering every view preserves all report facts and KPI totals');
 monthlyViewCheck(strpos($controller,'kreabankMonthlyListRequestState(array_merge($_GET, $_POST)') !== false
 	&& strpos($controller,'->load($accountId, $month, $bankBalance)') !== false, 'Controller confines unrounded list inputs to presentation state, outside the financial loader');
+
+// All detail lists share widths and translate only reserved display tokens.
+foreach (array('en_US','pt_PT') as $locale) {
+	$langs = new MonthlyViewLangs($locale);
+	foreach (array('summary','checks','pending','bank','ledger') as $view) {
+		$html = kreabankMonthlyReportHtml($report,array_merge($state,array('view'=>$view)),$langs);
+		$text = html_entity_decode(strip_tags($html),ENT_QUOTES,'UTF-8');
+		monthlyViewCheck(!preg_match('/\bKreaBank[A-Za-z]+|\(SupplierInvoicePayment\)|\b(?:staging|native|legacy_native):\d+/',$text), 'No raw module keys, native placeholders or source namespaces in ' . $locale . '/' . $view);
+	}
+	$translated = $langs->transnoentities('SupplierInvoicePayment');
+	$html = kreabankMonthlyDetailsHtml($report['ledger_pending'],'ledger','Synthetic',array_merge($state,array('ml_ledger_search_description'=>$translated)),$langs);
+	monthlyViewCheck(strpos($html,'data-total="1"') !== false && strpos($html,dol_escape_htmltag($translated)) !== false, 'Description search matches the visible native translation in ' . $locale);
+	$sourceLabel = $langs->transnoentities('KreaBankReviewStatementLine') . ' #3';
+	$html = kreabankMonthlyDetailsHtml($report['bank_pending'],'bank','Synthetic',array_merge($state,array('ml_bank_search_description'=>$sourceLabel)),$langs);
+	monthlyViewCheck(strpos($html,'data-total="1"') !== false && strpos($html,dol_escape_htmltag($sourceLabel)) !== false, 'Source-identity search matches the visible translated label in ' . $locale);
+	$referenceRow = $report['bank_pending'][0]; $referenceRow['reference'] = '(banktransfert)';
+	$html = kreabankMonthlyDetailsHtml(array($referenceRow),'bank','Synthetic',array_merge($state,array('ml_bank_search_reference'=>$langs->transnoentities('BankTransfer'))),$langs);
+	monthlyViewCheck(strpos($html,'data-total="1"') !== false && strpos($html,'(banktransfert)') === false, 'Reference search uses the same translated text as its visible cells in ' . $locale);
+}
+$langs = new MonthlyViewLangs('pt_PT');
+$prose = 'Original note contains (SupplierInvoicePayment), acc_token and literal staging:123 text';
+monthlyViewCheck(kreabankWorklistNativeLabel($prose,$langs) === $prose, 'Arbitrary source prose containing reserved words is preserved exactly');
+$pendingHtml = kreabankMonthlyReportHtml($report,array_merge($state,array('view'=>'pending')),$langs);
+monthlyViewCheck(strpos($pendingHtml,$source[2]['payment_reference']) !== false, 'Long bank references remain complete rather than clipped or abbreviated');
+$previousLibxml = libxml_use_internal_errors(true); $dom = new DOMDocument(); $dom->loadHTML($pendingHtml); $xp = new DOMXPath($dom); libxml_clear_errors(); libxml_use_internal_errors($previousLibxml);
+$columnSets = array();
+foreach ($xp->query('//table[contains(@class,"kb-monthly-detail-table")]') as $table) {
+	$columns = array(); foreach ($xp->query('./colgroup/col',$table) as $column) { $columns[] = $column->getAttribute('class'); } $columnSets[] = $columns;
+}
+monthlyViewCheck(count($columnSets) === 2 && count($columnSets[0]) === 8 && $columnSets[0] === $columnSets[1], 'Both Pending detail tables use identical column definitions');
+$stream = fopen('php://temp','w+'); kreabankMonthlyReportCsv($stream,$report,$langs); rewind($stream); $originalCsv=stream_get_contents($stream); fclose($stream);
+monthlyViewCheck(strpos($originalCsv,'(SupplierInvoicePayment)') !== false && strpos($originalCsv,'staging:3') !== false && strpos($originalCsv,'native:13') !== false
+	&& strpos($originalCsv,$source[2]['payment_reference']) !== false, 'CSV retains original placeholders, source identities and complete long references');
+monthlyViewCheck(serialize($report) === $reportBefore, 'Translated presentation leaves all original report evidence and amounts unchanged');
 if (($argv[1] ?? '') === '--html') {
 	$locale = in_array($argv[2] ?? '', array('en_US', 'pt_PT'), true) ? $argv[2] : 'en_US';
 	$view = in_array($argv[3] ?? '', array('summary', 'checks', 'pending', 'bank', 'ledger', 'print'), true) ? $argv[3] : 'summary';

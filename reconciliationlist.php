@@ -12,7 +12,7 @@ require_once __DIR__ . '/lib/kreabank.lib.php';
 require_once __DIR__ . '/class/KreaBankService.class.php';
 require_once __DIR__ . '/class/KreaBankWorklist.class.php';
 require_once __DIR__ . '/lib/kreabank_worklist_view.lib.php';
-$langs->loadLangs(array('banks','bills','kreabank@kreabank','worklist@kreabank'));
+$langs->loadLangs(array('banks','bills','salaries','trips','donations','loan','kreabank@kreabank','worklist@kreabank'));
 if (!isModEnabled('kreabank') || !isModEnabled('banque') || !empty($user->socid)
 	|| !$user->hasRight('banque','lire') || !$user->hasRight('kreabank','reconciliation','read')) { accessforbidden(); }
 $service = new KreaBankService($db, $user, $langs);
@@ -156,7 +156,7 @@ $requiresComplete = $state['filters']['match'] !== '' || $state['filters']['paym
 	|| in_array($state['sort']['field'],array('match','payment_account','status'),true);
 $scanFilters = $state['filters']; unset($scanFilters['match'],$scanFilters['payment_account']);
 if ($scanFilters['status'] === 'draft') { $scanFilters['status'] = 'pending'; }
-$scanScope = hash('sha256',json_encode(array($scope,$scanFilters,array_map(static function ($s) {
+$scanScope = hash('sha256',json_encode(array('planned-payment-bank-v1',$scope,$scanFilters,array_map(static function ($s) {
 	return array($s['rowid'],$s['source_storage'],$s['amount'],$s['currency'],$s['operation_date'],$s['description'],$s['payment_reference'],$s['bank_reference'],$s['status'],$s['native_id'],$s['native_amount'],$s['native_currency'],$s['num_releve'],$s['rappro'],$s['group_id'],$s['group_valid'],$s['group_count'],$s['group_date']);
 },array_values($sources)))));
 $cache = $_SESSION['kreabank_worklist_scan'] ?? array();
@@ -258,9 +258,9 @@ $page = kreabankWorklistPage($filtered,$state);
 $baseParams['page'] = $page['page'];
 $accounts = $worklist->accounts(); $modelRows = array();
 $candidateModel = static function ($pair) {
-	$s = $pair['suggestion'];
+	$s = $pair['suggestion']; $account = kreabankWorklistPaymentAccount($pair);
 	return array('key'=>$s['doc_type'] . '__' . (int) $s['doc_id'],'doc_type'=>$s['doc_type'],'doc_id'=>(int) $s['doc_id'],'reference'=>kreabankBulkSuggestionReference($s),'date'=>$s['doc_date'] ?? '',
-		'amount'=>$s['amount_open'],'currency'=>$pair['line']['currency'],'account_ref'=>$s['bank_account_ref'] ?? '',
+		'amount'=>$s['amount_open'],'currency'=>$pair['line']['currency'],'account_ref'=>$account['ref'],'account_planned'=>$account['planned'],
 		'description'=>$s['thirdparty_name'] ?? '', 'consequence'=>in_array($s['doc_type'],array('customer_invoice','supplier_invoice','tax'),true) ? 'KreaBankWorklistRecordsPayment' : '');
 };
 foreach ($page['rows'] as $indexRow) {

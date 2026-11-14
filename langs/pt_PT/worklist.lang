@@ -61,3 +61,5 @@ KreaBankWorklistCreateAndReconcile=Criar e reconciliar
 KreaBankWorklistMovementEffect=Cria um movimento bancário a partir desta linha do extrato e reconcilia-o.
 KreaBankWorklistMovementUnavailable=Criação indisponível. Reveja primeiro os movimentos, pagamentos e dados do extrato existentes.
 KreaBankWorklistMovementCreated=Movimento bancário criado e reconciliado.
+
+KreaBankWorklistPlannedPaymentAccount=Banco do pagamento a criar

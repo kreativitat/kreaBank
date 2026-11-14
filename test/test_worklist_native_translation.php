@@ -34,7 +34,7 @@ foreach (array('en_US'=>'Reconciliation list', 'pt_PT'=>'Lista de reconciliaçã
 	$langs = new Translate(DOL_DOCUMENT_ROOT, $conf);
 	$langs->defaultlang = $locale;
 	$langs->dir = array(dirname(__DIR__), DOL_DOCUMENT_ROOT);
-	foreach (array('main','banks','bills','kreabank','worklist') as $file) { $langs->load($file, 2, 0, $locale, 1); }
+	foreach (array('main','banks','bills','salaries','trips','donations','loan','kreabank','worklist') as $file) { $langs->load($file, 2, 0, $locale, 1); }
 	checkWorklistNativeTranslation(kreabankWorklistTranslate($langs, 'KreaBankWorklistTitle') === $title, 'Native translation uses the shipped title in ' . $locale);
 	if ($locale === 'pt_PT') {
 		checkWorklistNativeTranslation(strpos($langs->trans('KreaBankWorklistTitle'), '&ccedil;') !== false, 'The native HTML translator exposes the double-encoding regression condition');
@@ -81,6 +81,18 @@ foreach (array('en_US'=>'Reconciliation list', 'pt_PT'=>'Lista de reconciliaçã
 	checkWorklistNativeTranslation($xpath->query('//input[@name="review_label"]')->item(0)->getAttribute('value') === $paymentRef
 		&& $xpath->query('//input[@name="search_match"]')->item(0)->getAttribute('value') === '(banktransfert)', 'Translated display never rewrites signed review or search evidence: ' . $locale);
 	checkWorklistNativeTranslation(serialize($model) === $before && strpos($html, '&amp;ecirc;') === false, 'Native label translations preserve the original model and Portuguese encoding: ' . $locale);
+	foreach (array('SupplierInvoicePayment','CustomerInvoicePayment','SocialContributionPayment','VariousPayment','SalaryPayment','ExpenseReportPayment','DonationPayment','LoanPayment','WithdrawalPayment','BankTransferPayment') as $key) {
+		$translated = $langs->transnoentities($key);
+		checkWorklistNativeTranslation($translated !== $key && kreabankWorklistNativeLabel('(' . $key . ')', $langs) === $translated, 'Reserved movement marker uses an installed native translation: ' . $locale . '/' . $key);
+	}
+	$model['rows'][0]['review'] = array('reference'=>'INVOICE-1','account_ref'=>'BANK-A','account_planned'=>true);
+	$planned = kreabankWorklistTable($model, $langs);
+	$previous = libxml_use_internal_errors(true);
+	$dom->loadHTML('<?xml encoding="utf-8" ?>' . $planned);
+	libxml_clear_errors(); libxml_use_internal_errors($previous);
+	$xpath = new DOMXPath($dom);
+	$account = $xpath->query('//span[@class="kb-wl-planned-account"]')->item(0);
+	checkWorklistNativeTranslation($account && $account->getAttribute('title') === $langs->transnoentities('KreaBankWorklistPlannedPaymentAccount') && strpos($account->textContent, 'BANK-A') !== false, 'Planned destination displays the exact bank and native translated tooltip: ' . $locale);
 }
 // Render the actual controller's title block with installed native helpers. The
 // native sort cleanup regex does not consume underscores in existing sort keys.

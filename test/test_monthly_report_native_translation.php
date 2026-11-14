@@ -31,6 +31,7 @@ $langs->defaultlang = 'pt_PT';
 $langs->dir = array(dirname(__DIR__), DOL_DOCUMENT_ROOT);
 $langs->load('main', 2, 0, 'pt_PT', 1);
 $langs->load('kreabank', 2, 0, 'pt_PT', 1);
+foreach (array('banks','bills','salaries','trips','donations','loan') as $domain) { $langs->load($domain, 2, 0, 'pt_PT', 1); }
 
 $checks = 0;
 function checkMonthlyNativeTranslation($ok, $message)
@@ -135,5 +136,51 @@ checkMonthlyNativeTranslation(strpos($filtered,'name="ml_bank_pending_search_amo
 $print = kreabankMonthlyReportHtml($report,$filteredState,$langs,true);
 checkMonthlyNativeTranslation(substr_count($print,'&lt;script&gt;unsafe()&lt;/script&gt;') === 2 && strpos($print,'<form') === false,
 	'Actual native translations preserve both full pending lists during filtered printing');
+
+$markerKeys = array('banktransfert'=>'BankTransfer','paiement'=>'Payment','SupplierInvoicePayment'=>'SupplierInvoicePayment','CustomerInvoicePayment'=>'CustomerInvoicePayment',
+	'SocialContributionPayment'=>'SocialContributionPayment','VariousPayment'=>'VariousPayment','SalaryPayment'=>'SalaryPayment','payment_salary'=>'SalaryPayment',
+	'ExpenseReportPayment'=>'ExpenseReportPayment','DonationPayment'=>'DonationPayment','LoanPayment'=>'LoanPayment','WithdrawalPayment'=>'WithdrawalPayment','BankTransferPayment'=>'BankTransferPayment');
+foreach ($markerKeys as $marker=>$key) {
+	$translated = $langs->transnoentities($key);
+	checkMonthlyNativeTranslation($translated !== $key && kreabankWorklistNativeLabel('(' . $marker . ')',$langs) === $translated, 'Monthly display has a native Portuguese translation for ' . $marker);
+	$prose = 'Original note mentions (' . $marker . ') inside arbitrary source prose';
+	checkMonthlyNativeTranslation(kreabankWorklistNativeLabel($prose,$langs) === $prose, 'A native marker substring does not rewrite arbitrary prose: ' . $marker);
+}
+$displayReport = $report;
+$displayReport['bank_rows'][0]['description'] = '(CustomerInvoicePayment)';
+$displayReport['bank_pending'][0] = $displayReport['bank_rows'][0];
+$ledgerRow = $displayReport['bank_rows'][0];
+$ledgerRow['id'] = 'native:99'; $ledgerRow['rowid'] = 99; $ledgerRow['source_storage'] = 'native'; $ledgerRow['native_id'] = 99;
+$ledgerRow['description'] = '(SupplierInvoicePayment)';
+$ledgerRow['reference'] = 'acc_' . str_repeat('0123456789abcdef',24) . '_gocardless';
+$displayReport['ledger_pending'] = array($ledgerRow); $displayReport['ledger_rows'] = array($ledgerRow);
+$displayBefore = serialize($displayReport);
+$stream=fopen('php://temp','w+'); kreabankMonthlyReportCsv($stream,$displayReport,$langs); rewind($stream); $beforeDisplayCsv=stream_get_contents($stream); fclose($stream);
+foreach (array('summary','checks','pending','bank','ledger') as $view) {
+	$html = kreabankMonthlyReportHtml($displayReport,array_merge($nativeState,array('view'=>$view)),$langs);
+	$visible = html_entity_decode(strip_tags($html),ENT_QUOTES,'UTF-8');
+	checkMonthlyNativeTranslation(!preg_match('/\bKreaBank[A-Za-z]+|\((?:SupplierInvoicePayment|CustomerInvoicePayment)\)|\b(?:staging|native|legacy_native):\d+/',$visible),
+		'Every monthly subtab localizes native descriptions and source identity using actual native translations: ' . $view);
+	if (in_array($view,array('summary','checks'),true)) {
+		$previousLibxml=libxml_use_internal_errors(true); $dom=new DOMDocument(); $dom->loadHTML($html); $xp=new DOMXPath($dom); libxml_clear_errors(); libxml_use_internal_errors($previousLibxml);
+		checkMonthlyNativeTranslation($xp->query('//form|//input|//select|//button|//tr[@class="liste_titre_filter"]')->length === 0,
+			'Actual native ' . $view . ' displays compact static tables without list controls');
+		$expected = $view === 'summary' ? array('map'=>9,'indicators'=>5) : array('checks'=>count($displayReport['checks']));
+		foreach ($expected as $key=>$count) {
+			checkMonthlyNativeTranslation($xp->query('//table[@id="kb-monthly-table-' . $key . '"]/tbody/tr')->length === $count,
+				'Actual native static ' . $key . ' keeps every summary/check row');
+		}
+	}
+}
+$html = kreabankMonthlyDetailsHtml(array($ledgerRow),'ledger','Synthetic',array_merge($nativeState,array('ml_ledger_search_description'=>$langs->transnoentities('SupplierInvoicePayment'))),$langs);
+checkMonthlyNativeTranslation(strpos($html,dol_escape_htmltag($langs->transnoentities('SupplierInvoicePayment'))) !== false && strpos($html,'<tbody><tr class="oddeven">') !== false,
+	'Filtering uses the same plain Portuguese native description that the row displays');
+checkMonthlyNativeTranslation(strpos($html,dol_escape_htmltag($langs->transnoentities('KreaBankHistoryNativeEntry') . ' #99')) !== false && strpos($html,'native:99') === false,
+	'Native source identities use a translated bank-entry label rather than an internal namespace');
+checkMonthlyNativeTranslation(strpos($html,$ledgerRow['reference']) !== false && strpos($html,'class="kb-monthly-reference"') !== false,
+	'Complete long references remain in their own wrapping detail column');
+$stream=fopen('php://temp','w+'); kreabankMonthlyReportCsv($stream,$displayReport,$langs); rewind($stream); $rawCsv=stream_get_contents($stream); fclose($stream);
+checkMonthlyNativeTranslation(strpos($rawCsv,'(SupplierInvoicePayment)') !== false && strpos($rawCsv,'native:99') !== false && strpos($rawCsv,$ledgerRow['reference']) !== false
+	&& $rawCsv === $beforeDisplayCsv && serialize($displayReport) === $displayBefore, 'UI localization changes neither original exported evidence nor report facts');
 
 print "OK: $checks native monthly translation/render/CSV checks\n";

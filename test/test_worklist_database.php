@@ -171,4 +171,14 @@ $db->query("UPDATE kbauto_bank SET dateo='2024-01-01' WHERE rowid=31906");
 $correctedSource = $searched->load('staged:31006');
 $corrected = $service->getWorklistCorrectedSuggestions($correctedSource,31906);
 checkAuto(in_array(31906,array_map('intval',array_column($corrected,'doc_id')),true), 'A reviewed corrected native movement remains discoverable outside the ordinary date window');
+// A proposed invoice payment uses the statement bank in the derived list index.
+$db->query("UPDATE kbauto_kreabank_statement_line SET operation_date='2024-01-01',value_date='2024-01-01' WHERE rowid=33600");
+$plannedList=new KreaBankWorklist($db,1,$service);
+$plannedPair=$plannedList->prepare('staged:33600');
+$plannedSummary=$plannedList->compact('staged:33600');
+checkAuto(($plannedPair['pair']['suggestion']['doc_type'] ?? '')==='customer_invoice' && $plannedSummary['payment_accounts']===array(30101) && $plannedSummary['payment_account']==='WL A', 'Invoice proposal indexes its planned owned statement bank before payment creation');
+$plannedSummary['line']=$plannedPair['line'];
+checkAuto(count(kreabankWorklistFilterRows(array($plannedSummary),worklistDbState(array('search_description'=>'','search_payment_account'=>'30101'))))===1
+    && !kreabankWorklistFilterRows(array($plannedSummary),worklistDbState(array('search_description'=>'','search_payment_account'=>'none'))), 'Payment-bank filters agree with the displayed planned bank and do not classify it as unbanked');
+checkAuto($scalar['completed']['doc_type']==='native_bank' && $scalar['completed']['doc_id']===31002, 'Completed navigation retains its verified native ID independently of the staged namespace');
 print "OK: $checks separate worklist database checks\n";

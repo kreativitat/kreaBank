@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/kreabank_csv.lib.php';
 require_once __DIR__ . '/kreabank_monthly_list.lib.php';
+require_once __DIR__ . '/kreabank_worklist_view.lib.php';
 
 /** Read-only report links carry only the displayed report's filter state. */
 function kreabankMonthlyReportUrl($state, $changes = array())
@@ -70,6 +71,24 @@ function kreabankMonthlyAmount($value)
 	return $value === null ? '—' : kreabankPrice($value);
 }
 
+/** Localized source identity for display/search only; report and CSV IDs stay original. */
+function kreabankMonthlySourceLabel($row, $langs)
+{
+	$storage = (string) ($row['source_storage'] ?? '');
+	if (in_array($storage, array('staging','native','legacy_native'), true) && (int) ($row['rowid'] ?? 0) > 0) {
+		return $langs->transnoentities($storage === 'staging' ? 'KreaBankReviewStatementLine' : 'KreaBankHistoryNativeEntry') . ' #' . (int) $row['rowid'];
+	}
+	return (string) $row['id'];
+}
+
+/** Reuse the reserved-segment native translator without changing arbitrary bank prose. */
+function kreabankMonthlyDetailFacts($row, $langs)
+{
+	return array('date'=>$row['date'],'description'=>kreabankWorklistNativeLabel($row['description'], $langs) . ' ' . kreabankMonthlySourceLabel($row, $langs),
+		'reference'=>kreabankWorklistNativeLabel($row['reference'], $langs) . ($row['native_id'] > 0 ? ' #' . $row['native_id'] : ''),
+		'amount'=>$row['amount'],'balance'=>$row['balance'],'status'=>$row['status'],'age'=>$row['status'] === 'matched' ? null : $row['age']);
+}
+
 /** Prepare the map once so screen, print and CSV use identical figures. */
 function kreabankMonthlyMapRows($report)
 {
@@ -86,58 +105,68 @@ function kreabankMonthlyMapRows($report)
 	);
 }
 
+/** Complete compact summary/check tables never acquire filters, sorting or pagination. */
+function kreabankMonthlyStaticTableHtml($rows, $key, $labels, $langs, $render)
+{
+	$html = '<div class="div-table-responsive"><table id="kb-monthly-table-' . $key . '" class="tagtable liste centpercent kb-monthly-static-table"><thead><tr class="liste_titre">';
+	foreach ($labels as $field=>$label) {
+		$html .= '<th scope="col"' . (in_array($field,array('amount','bank','ledger','value'),true) ? ' class="right"' : '') . '>' . dol_escape_htmltag($label) . '</th>';
+	}
+	$html .= '</tr></thead><tbody>';
+	foreach ($rows as $row) { $html .= $render($row, ''); }
+	if (!$rows) { $html .= '<tr><td colspan="' . count($labels) . '">' . $langs->trans('KreaBankMonthlyEmpty') . '</td></tr>'; }
+	return $html . '</tbody></table></div>';
+}
+
 function kreabankMonthlySummaryHtml($report, $langs, $state = array(), $print = false)
 {
 	$label = static function ($key) use ($langs) { return $langs->transnoentities('KreaBankMonthly' . $key); };
 	$html = '<section id="kb-monthly-summary" aria-label="' . dol_escape_htmltag($label('Summary')) . '"><div class="kb-monthly-summary-grid"><div class="kb-monthly-map">';
-	if ($print) { $html .= '<h2>' . $langs->trans('KreaBankMonthlySummary') . '</h2>'; }
-	$html .= kreabankMonthlyListHtml(kreabankMonthlyMapRows($report), 'map', $label('Summary'),
-		array('label'=>$label('Summary'),'amount'=>$report['account']['currency_code']), $state, $langs,
-		static function ($row) use ($label) { return array('label'=>$label($row[0]),'amount'=>$row[1]); }, static function ($row, $extra) use ($langs) {
+	$html .= '<h2>' . $langs->trans('KreaBankMonthlySummary') . '</h2>';
+	$html .= kreabankMonthlyStaticTableHtml(kreabankMonthlyMapRows($report), 'map',
+		array('label'=>$label('Summary'),'amount'=>$report['account']['currency_code']), $langs, static function ($row, $extra) use ($langs) {
 		$highlight = in_array($row[0], array('BankAdjusted', 'LedgerAdjusted', 'UnexplainedDifference'), true);
 		return '<tr class="' . ($highlight ? 'liste_total' : 'oddeven') . '"><th scope="row">' . $langs->trans('KreaBankMonthly' . $row[0]) . '</th><td class="right nowrap">' . kreabankMonthlyAmount($row[1]) . '</td>' . $extra . '</tr>';
-	}, $print);
+	});
 	$html .= '<p class="opacitymedium">' . $langs->trans('KreaBankMonthlyBalanceBasis', $report['map']['balance_date'] ?: '—') . '</p></div><div class="kb-monthly-indicators">';
-	if ($print) { $html .= '<h3>' . $langs->trans('KreaBankMonthlyIndicators') . '</h3>'; }
+	$html .= '<h3>' . $langs->trans('KreaBankMonthlyIndicators') . '</h3>';
 	$indicators = array();
 	foreach (array('count' => 'MovementCount', 'matched' => 'MatchedCount', 'pending' => 'PendingCount', 'over30' => 'Over30', 'over90' => 'Over90') as $key => $label) {
 		$indicators[] = array('label'=>$langs->transnoentities('KreaBankMonthly' . $label),'bank'=>$report['bank'][$key],'ledger'=>$report['ledger'][$key]);
 	}
-	$html .= kreabankMonthlyListHtml($indicators, 'indicators', $langs->transnoentities('KreaBankMonthlyIndicators'),
-		array('label'=>$langs->transnoentities('KreaBankMonthlyIndicators'),'bank'=>$langs->transnoentities('KreaBankMonthlyBank'),'ledger'=>$langs->transnoentities('KreaBankMonthlyLedger')), $state, $langs,
-		static function ($row) { return $row; }, static function ($row, $extra) {
+	$html .= kreabankMonthlyStaticTableHtml($indicators, 'indicators',
+		array('label'=>$langs->transnoentities('KreaBankMonthlyIndicators'),'bank'=>$langs->transnoentities('KreaBankMonthlyBank'),'ledger'=>$langs->transnoentities('KreaBankMonthlyLedger')), $langs, static function ($row, $extra) {
 			return '<tr class="oddeven"><th scope="row">' . dol_escape_htmltag($row['label']) . '</th><td class="right">' . (int) $row['bank'] . '</td><td class="right">' . (int) $row['ledger'] . '</td>' . $extra . '</tr>';
-		}, $print);
+		});
 	return $html . '</div></div></section>';
 }
 
 function kreabankMonthlyChecksHtml($report, $langs, $state = array(), $print = false)
 {
 	$html = '<section id="kb-monthly-checks" aria-label="' . dol_escape_htmltag($langs->transnoentities('KreaBankMonthlyChecks')) . '">';
-	if ($print) { $html .= '<h2>' . $langs->trans('KreaBankMonthlyChecks') . '</h2>'; }
-	$html .= kreabankMonthlyListHtml($report['checks'], 'checks', $langs->transnoentities('KreaBankMonthlyChecks'),
-		array('label'=>$langs->transnoentities('KreaBankMonthlyCheck'),'status'=>$langs->transnoentities('Status'),'value'=>$langs->transnoentities('Value')), $state, $langs,
-		static function ($check) use ($langs) { return array('label'=>$langs->transnoentities('KreaBankMonthlyCheck' . $check['key']),'status'=>$check['status'],'value'=>$check['value']); }, static function ($check, $extra) use ($langs) {
+	$html .= '<h2>' . $langs->trans('KreaBankMonthlyChecks') . '</h2>';
+	$html .= kreabankMonthlyStaticTableHtml($report['checks'], 'checks',
+		array('label'=>$langs->transnoentities('KreaBankMonthlyCheck'),'status'=>$langs->transnoentities('Status'),'value'=>$langs->transnoentities('Value')), $langs, static function ($check, $extra) use ($langs) {
 		$status = in_array($check['status'], array('ok', 'warning', 'error'), true) ? $check['status'] : 'error';
 		$value = $check['value'] !== '' && in_array($check['key'], array('OpeningDifference', 'UnexplainedDifference', 'BankBalance'), true) ? kreabankPrice($check['value']) : dol_escape_htmltag($check['value']);
 		return '<tr class="oddeven"><th scope="row">' . $langs->trans('KreaBankMonthlyCheck' . $check['key']) . '</th><td><span class="badge ' . ($status === 'ok' ? 'badge-status4' : ($status === 'error' ? 'badge-status8' : 'badge-status1')) . '">' . $langs->trans('KreaBankMonthlyCheckState' . ucfirst($status)) . '</span></td><td class="right">' . $value . '</td>' . $extra . '</tr>';
-	}, $print);
+	});
 	return $html . '</section>';
 }
 
 /** Paginate presentation only; totals and export always use the complete report. */
 function kreabankMonthlyDetailsHtml($rows, $side, $title, $state, $langs, $print = false, $listKey = '')
 {
+	$langs->loadLangs(array('banks','bills','salaries','trips','donations','loan'));
 	$listKey = $listKey ?: $side;
 	$html = '<section id="kb-monthly-' . $listKey . '" aria-label="' . dol_escape_htmltag($title) . '">';
 	if ($print) { $html .= '<h2>' . dol_escape_htmltag($title) . ' <span class="opacitymedium">(' . count($rows) . ')</span></h2>'; }
 	$labels = array();
 	foreach (array('date'=>'Date','description'=>'Description','reference'=>'Reference','amount'=>'Amount','balance'=>$side === 'ledger' ? 'RunningBalance' : 'Balance','status'=>'Status','age'=>'Age') as $field=>$label) { $labels[$field] = $langs->transnoentities('KreaBankMonthly' . $label); }
-	$html .= kreabankMonthlyListHtml($rows, $listKey, $title, $labels, $state, $langs, static function ($row) {
-		return array('date'=>$row['date'],'description'=>$row['description'] . ' ' . $row['id'], 'reference'=>$row['reference'] . ($row['native_id'] > 0 ? ' #' . $row['native_id'] : ''),
-			'amount'=>$row['amount'],'balance'=>$row['balance'],'status'=>$row['status'],'age'=>$row['status'] === 'matched' ? null : $row['age']);
+	$html .= kreabankMonthlyListHtml($rows, $listKey, $title, $labels, $state, $langs, static function ($row) use ($langs) {
+		return kreabankMonthlyDetailFacts($row, $langs);
 	}, static function ($row, $extra) use ($langs) {
-		$html = '<tr class="oddeven"><td class="nowrap">' . dol_escape_htmltag($row['date'] ?: '—') . ($row['carried'] ? '<br><small>' . $langs->trans('KreaBankMonthlyCarried') . '</small>' : '') . '</td><td class="kb-monthly-description">' . dol_escape_htmltag($row['description']) . '<br><small>' . dol_escape_htmltag($row['id']) . '</small></td><td>' . dol_escape_htmltag($row['reference']);
+		$html = '<tr class="oddeven"><td class="nowrap">' . dol_escape_htmltag($row['date'] ?: '—') . ($row['carried'] ? '<br><small>' . $langs->trans('KreaBankMonthlyCarried') . '</small>' : '') . '</td><td class="kb-monthly-description">' . dol_escape_htmltag(kreabankWorklistNativeLabel($row['description'], $langs)) . '<br><small>' . dol_escape_htmltag(kreabankMonthlySourceLabel($row, $langs)) . '</small></td><td class="kb-monthly-reference">' . dol_escape_htmltag(kreabankWorklistNativeLabel($row['reference'], $langs));
 		if ($row['native_id'] > 0) {
 			$html .= '<br><a href="' . dol_escape_htmltag(dol_buildpath('/compta/bank/line.php?rowid=' . (int) $row['native_id'], 1)) . '">#' . (int) $row['native_id'] . '</a>';
 		}

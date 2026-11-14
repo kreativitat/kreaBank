@@ -310,6 +310,17 @@ $pair['suggestion']['linked_bank_line_id']=81;
 $projected=$candidateModel($pair);
 checkWorklist($projected['doc_type']==='payment_supplier_linked' && $projected['doc_id']===51 && $projected['key']==='payment_supplier_linked__51', 'Projected payment navigation retains the payment ID, independently of source and linked movement IDs');
 
+$pair['line']['bank_account_ref']='STATEMENT-BANK'; $pair['suggestion']['bank_account_id']=102; $pair['suggestion']['bank_account_ref']='RECORDED-BANK';
+foreach (array('customer_invoice','supplier_invoice','tax') as $type) {
+	$pair['suggestion']['doc_type']=$type; $projected=$candidateModel($pair);
+	checkWorklist($projected['account_ref']==='STATEMENT-BANK' && $projected['account_planned']===true && kreabankWorklistPaymentAccount($pair)['id']===101,
+		'New payment displays and indexes its explicit statement destination instead of any invoice default bank: '.$type);
+}
+$pair['suggestion']['doc_type']='native_bank'; $projected=$candidateModel($pair);
+checkWorklist($projected['account_ref']==='RECORDED-BANK' && $projected['account_planned']===false && kreabankWorklistPaymentAccount($pair)['id']===102,
+	'Existing movements preserve their actual recorded bank');
+
+
 // Preparing matches retains read permission and CSRF without financial authority.
 foreach (array('advance_scan','more_scan') as $readAction) {
 	$result = runWorklistController(array('action'=>$readAction),worklistControllerSession(),array('denied'=>array('kreabank/reconciliation/write','banque/modifier','banque/consolidate')));

@@ -45,9 +45,24 @@
 .kb-monthly-report th[scope="row"] { font-weight:normal; text-align:left; }
 .kb-monthly-report .liste_total th { font-weight:600; }
 .kb-monthly-report th, .kb-monthly-report td { padding:12px; }
+.kb-monthly-report .kb-monthly-static-table th, .kb-monthly-report .kb-monthly-static-table td { padding:7px 10px; }
 .kb-monthly-report tbody tr:last-child > th, .kb-monthly-report tbody tr:last-child > td { border-bottom:1px solid #d8e2e9; }
 .kb-monthly-report td.right { font-variant-numeric:tabular-nums; }
-.kb-monthly-report .kb-monthly-description { min-width:15em; max-width:38em; overflow-wrap:anywhere; }
+.kb-monthly-report .kb-monthly-detail-table { table-layout:fixed; width:100%; min-width:0; }
+.kb-monthly-detail-table .kb-monthly-col-date { width:12%; }
+.kb-monthly-detail-table .kb-monthly-col-description { width:23%; }
+.kb-monthly-detail-table .kb-monthly-col-reference { width:18%; }
+.kb-monthly-detail-table .kb-monthly-col-amount, .kb-monthly-detail-table .kb-monthly-col-balance { width:11%; }
+.kb-monthly-detail-table .kb-monthly-col-status { width:11%; }
+.kb-monthly-detail-table .kb-monthly-col-age { width:6%; }
+.kb-monthly-detail-table .kb-monthly-col-actions { width:8%; }
+.kb-monthly-report .kb-monthly-detail-table th, .kb-monthly-report .kb-monthly-detail-table td { padding:8px; min-width:0; white-space:normal; overflow-wrap:anywhere; }
+.kb-monthly-report .kb-monthly-detail-table tbody td { vertical-align:top; }
+.kb-monthly-report .kb-monthly-detail-table .kb-monthly-description,
+.kb-monthly-report .kb-monthly-detail-table .kb-monthly-reference { min-width:0; max-width:none; overflow-wrap:anywhere; word-break:normal; }
+.kb-monthly-detail-table .liste_titre_filter .flat { width:100%; min-width:0; max-width:100%; }
+.kb-monthly-detail-table .maxwidthsearch { max-width:none; white-space:normal; }
+.kb-monthly-detail-table .maxwidthsearch .nowraponall { display:flex; flex-wrap:wrap; justify-content:center; }
 .kb-monthly-report .div-table-responsive { width:0; min-width:100%; max-width:100%; overflow-x:auto; }
 .kb-monthly-map > p { font-size:.88em; line-height:1.5; margin:12px 0 0; }
 .kb-monthly-empty { padding:24px; text-align:center; color:var(--colortexttitlenotab,#526579); }

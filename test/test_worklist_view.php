@@ -18,7 +18,7 @@ function worklistFixtureLanguages($locale)
 	$messages = array();
 	$nativeRoot = getenv('KREABANK_DOLIBARR_ROOT') ?: dirname(__DIR__, 3);
 	$files = array();
-	foreach (array('main', 'banks', 'bills') as $native) { $files[] = $nativeRoot . '/langs/' . $locale . '/' . $native . '.lang'; }
+	foreach (array('main', 'banks', 'bills', 'salaries', 'trips', 'donations', 'loan') as $native) { $files[] = $nativeRoot . '/langs/' . $locale . '/' . $native . '.lang'; }
 	$files[] = __DIR__ . '/../langs/' . $locale . '/kreabank.lang';
 	$files[] = __DIR__ . '/../langs/' . $locale . '/worklist.lang';
 	foreach ($files as $file) {
@@ -98,6 +98,7 @@ function worklistViewFixture($case)
 		$model['rows'][0]['needs_review'] = true;
 		$model['rows'][0]['notice'] = 'Historical linkage is inconsistent.';
 	}
+	if ($case === 'planned_invoice') { $model['rows'][0]['review']['doc_type']='supplier_invoice'; $model['rows'][0]['review']['account_ref']='STATEMENT-BANK'; $model['rows'][0]['review']['account_planned']=true; $model['rows'][0]['review']['consequence']='KreaBankWorklistRecordsPayment'; }
 	if ($case === 'empty_search') { $model['rows'][0]['expanded']=true; $model['rows'][0]['review']=null; $model['rows'][0]['candidates']=array(); $model['rows'][0]['create_available']=true; }
 	if ($case === 'empty') { $model['rows'] = array(); }
 	if ($case === 'unsafe') {
@@ -134,7 +135,7 @@ $checks = 0;
 function checkWorklistView($condition, $message) { global $checks; if (!$condition) { throw new RuntimeException($message); } $checks++; }
 foreach (array('en_US','pt_PT') as $locale) {
 	$langs = worklistFixtureLanguages($locale);
-	foreach (array('ready','batch','reviewed','other','readonly','empty','unsafe','ambiguous','loading','direct_correction','completed','unavailable','needs_review','creation','creation_unavailable','empty_search') as $case) {
+	foreach (array('ready','batch','reviewed','other','readonly','empty','unsafe','ambiguous','loading','direct_correction','completed','unavailable','needs_review','creation','creation_unavailable','empty_search','planned_invoice') as $case) {
 		$html = kreabankWorklistTable(worklistViewFixture($case), $langs);
 		$dom = new DOMDocument();
 		$previous = libxml_use_internal_errors(true);
@@ -163,28 +164,34 @@ foreach (array('en_US','pt_PT') as $locale) {
             checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-detail-row")]//input[@name="q"]')->length===0, 'Creation panel is separate from candidate search');
             checkWorklistView($xpath->query('//a[contains(@href,"mode=create") and @aria-expanded="true"]')->length===1, 'Only the active creation action is expanded');
             checkWorklistView($xpath->query('//textarea[@name="movement_note"]')->item(0)->textContent==='<reviewed note>', 'Sticky note is escaped and retained');
-        }
+		}
         if ($case==='creation_unavailable') {
             checkWorklistView($xpath->query('//input[@name="action" and @value="create_movement"]')->length===0, 'Unavailable source has no financial creation action');
-        }
+		}
+		if ($case === 'planned_invoice') {
+			$planned=$xpath->query('//td/span[@class="kb-wl-planned-account"]')->item(0);
+			checkWorklistView($planned && strpos($planned->textContent,'STATEMENT-BANK')!==false && $planned->getAttribute('title')===$langs->trans('KreaBankWorklistPlannedPaymentAccount'), 'Unpaid invoice shows the statement bank as a clearly planned payment destination');
+			checkWorklistView($xpath->query('//td/span[@class="kb-wl-planned-account"]//span[contains(@class,"fa-clock")]')->length===1
+				&& $xpath->query('//button[@data-kb-dialog]')->length===0, 'Planned bank has a compact clock hint and no existing-payment correction action');
+		}
         if ($case === 'empty_search') {
             checkWorklistView($xpath->query('//div[@class="kb-wl-search"]/span[@class="kb-wl-search-actions"]/button[@type="submit"]')->length === 1
                 && $xpath->query('//div[@class="kb-wl-search"]/span[@class="kb-wl-search-actions"]/a[contains(@href,"mode=create") and @data-kb-row-navigation]')->length === 1,
                 'Search and create are adjacent compact controls in the same toolbar');
             checkWorklistView($xpath->query('//section[contains(@class,"kb-wl-detail")]/a[contains(@href,"mode=create")]')->length === 0,
                 'Creation is not repeated below the empty search result');
-        }
+		}
         if ($case === 'ready' || $case === 'readonly') {
             $link = $xpath->query('//tr[contains(@class,"kb-wl-row")]//td[contains(@class,"kb-wl-match")]//strong/a')->item(0);
             checkWorklistView($link && $link->getAttribute('href') === '/fourn/paiement/card.php?id=51'
                 && $link->getAttribute('target') === '_blank' && $link->getAttribute('rel') === 'noopener noreferrer',
                 'Displayed linked-payment reference opens its payment ID in an isolated new tab');
-        }
+		}
         if (in_array($case,array('batch','reviewed','completed'),true)) {
             $links=$xpath->query('//div[contains(@class,"kb-wl-candidate-evidence")]//strong/a');
             checkWorklistView($links->length===3 && $links->item(0)->getAttribute('href')==='/compta/bank/line.php?rowid=21',
                 'Batch members open their own native movement, never the group or staging ID');
-        }
+		}
 		if ($case === 'ready') {
 			checkWorklistView(strpos($html, 'STATEMENT-BANK') !== false && strpos($html, 'PAYMENT-BANK') !== false, 'Actual source/payment banks are distinct');
 			checkWorklistView($xpath->query('//button[@form and @type="submit"]')->length === 1, 'Sole signed proposed pair has direct approval');
@@ -237,6 +244,15 @@ foreach (array('en_US','pt_PT') as $locale) {
 		'(paiement)'=>$langs->trans('Payment'),
 		'(SupplierInvoicePayment)'=>$langs->trans('SupplierInvoicePayment'),
 		'(CustomerInvoicePayment)'=>$langs->trans('CustomerInvoicePayment'),
+		'(SocialContributionPayment)'=>$langs->trans('SocialContributionPayment'),
+		'(VariousPayment)'=>$langs->trans('VariousPayment'),
+		'(SalaryPayment)'=>$langs->trans('SalaryPayment'),
+		'(payment_salary)'=>$langs->trans('SalaryPayment'),
+		'(ExpenseReportPayment)'=>$langs->trans('ExpenseReportPayment'),
+		'(DonationPayment)'=>$langs->trans('DonationPayment'),
+		'(LoanPayment)'=>$langs->trans('LoanPayment'),
+		'(WithdrawalPayment)'=>$langs->trans('WithdrawalPayment'),
+		'(BankTransferPayment)'=>$langs->trans('BankTransferPayment'),
 		'DG01-PAY-0001 / (paiement) / Ação & Filhos'=>'DG01-PAY-0001 / ' . $langs->trans('Payment') . ' / Ação & Filhos',
 		' (BANKTRANSFERT) '=>' ' . $langs->trans('BankTransfer') . ' ',
 		'Customer (paiement) department'=>'Customer (paiement) department',

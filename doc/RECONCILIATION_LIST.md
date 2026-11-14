@@ -17,8 +17,11 @@ Analysis stops during editing and after a bounded automatic request count.
 Scans include both staged and recognizable legacy imports with distinct IDs.
 An oversized population requires narrower filters rather than silently dropping rows.
 
-Statement and payment bank accounts are separate. An unbanked document has no
-recorded payment bank. Unique suggestions and explicit search choices use the
+Statement and payment bank accounts are separate. Unpaid invoice and tax proposals
+show the statement account as the payment's planned destination, with a clock
+tooltip; existing movements and payments retain their recorded bank. The same
+projection supplies displayed references, payment-bank filters and sorting.
+Unique suggestions and explicit search choices use the
 existing signed manual review and `KreaBankService::reconcileLine()`; ambiguous
 records are never preselected. Typed searches filter eligible native entries,
 existing payments and invoices before their bounded limits, across all dates.

@@ -3,6 +3,15 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+/** Invoice/tax approval creates its payment in the statement account; other targets retain their recorded account. */
+function kreabankWorklistPaymentAccount($pair)
+{
+	$suggestion = $pair['suggestion'];
+	$planned = in_array($suggestion['doc_type'], array('customer_invoice','supplier_invoice','tax'), true);
+	return array('id'=>(int) ($planned ? ($pair['line']['bank_account_id'] ?? 0) : ($suggestion['bank_account_id'] ?? 0)),
+		'ref'=>(string) ($planned ? ($pair['line']['bank_account_ref'] ?? '') : ($suggestion['bank_account_ref'] ?? '')), 'planned'=>$planned);
+}
+
 /** Request state for the separate list. Financial actions never enter read URLs. */
 function kreabankWorklistState($request, $defaultLimit = 25)
 {

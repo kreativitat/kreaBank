@@ -61,3 +61,5 @@ KreaBankWorklistCreateAndReconcile=Create and reconcile
 KreaBankWorklistMovementEffect=Creates one bank movement from this statement line and reconciles it.
 KreaBankWorklistMovementUnavailable=Creation is unavailable. Review existing movements, payments and statement evidence first.
 KreaBankWorklistMovementCreated=Bank movement created and reconciled.
+
+KreaBankWorklistPlannedPaymentAccount=Bank for the payment to be created
