@@ -185,11 +185,7 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 
 		$lineDate = !empty($line['operation_date']) ? (string) $line['operation_date'] : (!empty($line['value_date']) ? (string) $line['value_date'] : '');
 		$lineTimestamp = ($lineDate !== '' ? strtotime($lineDate) : false);
-		try {
-			$linkedDocuments = $service->getLinkedPaymentDocuments(0, 150, ($lineDate !== '' ? $lineDate : null), 365, $outstanding, (int) (!empty($line['bank_account_id']) ? $line['bank_account_id'] : 0), false);
-		} catch (Exception $e) {
-			return array();
-		}
+		$linkedDocuments = $service->getLinkedPaymentDocuments(0, 150, ($lineDate !== '' ? $lineDate : null), 365, $outstanding, (int) (!empty($line['bank_account_id']) ? $line['bank_account_id'] : 0), false);
 
 		$fallbackSuggestions = array();
 		foreach ((array) $linkedDocuments as $document) {

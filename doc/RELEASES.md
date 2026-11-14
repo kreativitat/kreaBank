@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.20.5 — 2026-11-14
+
+- Correct CAMT counterparty direction and bound XLSX expansion, sparse columns and rows.
+- Protect statement CSV exports from formulas and require POST/CSRF for every import wizard mutation.
+- Revalidate exact feed identities and current mappings under automatic execution locks, retaining orphan duplicates in automatic and grouped review.
+- Include the complete final payment-search day and stop reconciliation review on candidate-query failures. No migration or scheduler changes.
+- See [module checkup and validation](MODULE_CHECKUP_20261114.md).
+
 ## 1.20.4 — 2026-11-14
 
 - Show staged and legacy reconciliations together with verified event identities, document links and account scope.

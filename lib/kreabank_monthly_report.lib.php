@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+require_once __DIR__ . '/kreabank_csv.lib.php';
+
 /** Read-only report links carry only the displayed report's filter state. */
 function kreabankMonthlyReportUrl($state, $changes = array())
 {
@@ -120,8 +122,7 @@ function kreabankMonthlyReportHtml($report, $state, $langs, $print = false)
 /** Prevent spreadsheet formula execution in exported untrusted evidence cells. */
 function kreabankMonthlyCsvCell($value)
 {
-	$value = (string) $value;
-	return !preg_match('/^-?[0-9]+(?:\.[0-9]+)?$/D', $value) && preg_match('/^[\s\x00-\x1f]*[=+@-]/u', $value) ? "'" . $value : $value;
+	return kreabankCsvCell($value);
 }
 
 /** CSV retains exact decimal strings; never export rounded display amounts. */

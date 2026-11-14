@@ -46,6 +46,7 @@ if (!$res) {
 
 require_once DOL_DOCUMENT_ROOT . '/core/lib/files.lib.php';
 require_once __DIR__ . '/lib/kreabank.lib.php';
+require_once __DIR__ . '/lib/kreabank_csv.lib.php';
 require_once __DIR__ . '/class/KreaBankService.class.php';
 require_once __DIR__ . '/class/kreabankintegration.class.php';
 
@@ -259,7 +260,9 @@ $buildReconcileRedirectUrl = function ($lineId = 0) use (&$navigationAccountId) 
 	return $url;
 };
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (in_array($action, array('analyze', 'confirm', 'import_selected_duplicates', 'cancel', 'finish_duplicate_review'), true)) {
+	$enforcePostActionWithToken();
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	if (!kreabankIsTokenValid()) {
 		accessforbidden('Invalid token');
 	}
@@ -383,7 +386,7 @@ if ($action === 'download_statement_csv') {
 		$lineRank = 0;
 		while ($objLine = $db->fetch_object($resLines)) {
 			$lineRank++;
-			fputcsv($out, array(
+			fputcsv($out, array_map('kreabankCsvCell', array(
 				$lineRank,
 				(string) (!empty($objLine->operation_date) ? $objLine->operation_date : ''),
 				(string) (!empty($objLine->value_date) ? $objLine->value_date : ''),
@@ -397,7 +400,7 @@ if ($action === 'download_statement_csv') {
 				(string) (!empty($objLine->description) ? $objLine->description : ''),
 				(int) (!empty($objLine->status) ? $objLine->status : 0),
 				(int) (!empty($objLine->is_duplicate) ? $objLine->is_duplicate : 0),
-			), $separator);
+			)), $separator, '"', '');
 		}
 		fclose($out);
 		$db->close();

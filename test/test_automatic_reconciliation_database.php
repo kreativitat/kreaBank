@@ -90,6 +90,7 @@ foreach (array('bank_account','bank','bank_url','const','cronjob','paiement','pa
 	}
 }
 $db->query('CREATE TABLE kbauto_entity (rowid INT PRIMARY KEY,active INT NOT NULL)');
+$db->query('CREATE TABLE kbauto_user (rowid INT PRIMARY KEY,login VARCHAR(80))');
 $db->query('INSERT INTO kbauto_entity VALUES (1,1),(2,1),(3,0)');
 $db->query("INSERT INTO kbauto_bank_account (rowid,entity,ref,label,iban_prefix,currency_code,clos,courant,rappro,fk_pays) VALUES (101,1,'TEST A','Test account','GB82WEST12345698765432','EUR',0,1,1,1),(202,2,'TEST B','Other company','DE89370400440532013000','EUR',0,1,1,1),(102,1,'TEST C','Second account','NL91ABNA0417164300','EUR',0,1,1,1)");
 $service = new KreaBankService($db, $user, $langs);
@@ -182,7 +183,8 @@ require_once __DIR__ . '/../class/KreaBankFintableSync.class.php';
 (new KreaBankFintableSync($db))->ensureSchema();
 stageAuto(6, '31.00', 'SOURCE123456', 101, 1, 'fintable'); bankAuto(16, '31.00', 'SOURCE123456');
 checkAuto($service->getAutomaticNativeSuggestion(6, array(101)) === null, 'Feed line without imported source identity rejected');
-$db->query("INSERT INTO kbauto_kreabank_feed_transaction (entity,fk_feed_account,provider_transaction_id,source_uid,financial_hash,content_hash,fk_statement_line,source_payload,status,datec) VALUES (1,1,'tx_test','uid',SHA2('a',256),SHA2('b',256),6,'{}','imported',NOW())");
+$db->query("INSERT INTO kbauto_kreabank_feed_account (rowid,entity,fk_bank_account,workspace_id,provider_account_id,provider_connection_id,iban,currency,status,datec) VALUES (1,1,101,'ws_test','account_test','connection_test','GB82WEST12345698765432','EUR','ready',NOW())");
+$db->query("INSERT INTO kbauto_kreabank_feed_transaction (entity,fk_feed_account,provider_transaction_id,source_uid,financial_hash,content_hash,fk_statement_line,source_payload,status,datec) VALUES (1,1,'tx_test','fixture-6',SHA2('31|2026-11-01|EUR',256),SHA2('b',256),6,'{}','imported',NOW())");
 checkAuto($service->getAutomaticNativeSuggestion(6, array(101)) !== null, 'Confirmed posted feed line eligible');
 $db->query("UPDATE kbauto_kreabank_feed_transaction SET status='review',conflict_payload='{}'");
 checkAuto($service->getAutomaticNativeSuggestion(6, array(101)) === null, 'Known source conflict excluded');

@@ -75,17 +75,14 @@ class KreaBankCamt053ParseStrategy implements KreaBankParseStrategyInterface
 			$bankReference = (string) $entry->NtryRef;
 
 			if ($details) {
-				if (isset($details->RltdPties->Cdtr->Nm)) {
-					$counterpartyName = (string) $details->RltdPties->Cdtr->Nm;
+				// The other side of an outflow is the creditor; an inflow's is the debtor.
+				$party = $direction < 0 ? 'Cdtr' : 'Dbtr';
+				$account = $party . 'Acct';
+				if (isset($details->RltdPties->{$party}->Nm)) {
+					$counterpartyName = (string) $details->RltdPties->{$party}->Nm;
 				}
-				if (isset($details->RltdPties->Dbtr->Nm)) {
-					$counterpartyName = (string) $details->RltdPties->Dbtr->Nm;
-				}
-				if (isset($details->RltdPties->CdtrAcct->Id->IBAN)) {
-					$counterpartyIban = (string) $details->RltdPties->CdtrAcct->Id->IBAN;
-				}
-				if (isset($details->RltdPties->DbtrAcct->Id->IBAN)) {
-					$counterpartyIban = (string) $details->RltdPties->DbtrAcct->Id->IBAN;
+				if (isset($details->RltdPties->{$account}->Id->IBAN)) {
+					$counterpartyIban = (string) $details->RltdPties->{$account}->Id->IBAN;
 				}
 				if (isset($details->RmtInf->Ustrd)) {
 					$description = trim($description . ' ' . (string) $details->RmtInf->Ustrd);

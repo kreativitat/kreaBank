@@ -24,6 +24,13 @@ require_once __DIR__ . '/parser/KreaBankDeterministicLineParser.class.php';
  */
 class KreaBankParser
 {
+	/** Bound expanded XLSX inputs independently of the compressed upload limit. */
+	const MAX_XLSX_ENTRY_BYTES = 33554432; // 32 MiB per expanded ZIP entry.
+	const MAX_XLSX_UNCOMPRESSED_BYTES = 67108864; // 64 MiB for all ZIP entries.
+	const MAX_XLSX_COLUMNS = 16384; // Native XLSX limit: XFD.
+	const MAX_XLSX_MATERIALIZED_CELLS = 1000000; // Includes empty cells expanded from sparse rows.
+	const MAX_XLSX_ROWS = 100000; // Bound per-row array overhead independently of cell width.
+
 	/** @var object|null */
 	protected $mlHeaderClassifier = null;
 
@@ -1374,64 +1381,67 @@ class KreaBankParser
 	{
 		$shared = array();
 		$sharedXmlTemp = $this->copyZipEntryToTempFile($zip, 'xl/sharedStrings.xml', 'kreastr_');
-		if ($sharedXmlTemp !== '' && class_exists('XMLReader')) {
-			$reader = new XMLReader();
-			$flags = LIBXML_NONET | LIBXML_COMPACT | LIBXML_NOERROR | LIBXML_NOWARNING;
-			if (@$reader->open($sharedXmlTemp, null, $flags)) {
-				$insideString = false;
-				$current = '';
-				while (@$reader->read()) {
-					if ($reader->nodeType === XMLReader::ELEMENT) {
-						$nodeName = (string) $reader->localName;
-						if ($nodeName === 'si') {
-							$insideString = true;
-							$current = '';
-							if ($reader->isEmptyElement) {
-								$shared[] = '';
-								$insideString = false;
+		try {
+			if ($sharedXmlTemp !== '' && class_exists('XMLReader')) {
+				$reader = new XMLReader();
+				$flags = LIBXML_NONET | LIBXML_COMPACT | LIBXML_NOERROR | LIBXML_NOWARNING;
+				if (@$reader->open($sharedXmlTemp, null, $flags)) {
+					$insideString = false;
+					$current = '';
+					while (@$reader->read()) {
+						if ($reader->nodeType === XMLReader::ELEMENT) {
+							$nodeName = (string) $reader->localName;
+							if ($nodeName === 'si') {
+								$insideString = true;
+								$current = '';
+								if ($reader->isEmptyElement) {
+									$shared[] = '';
+									$insideString = false;
+								}
+							} elseif ($insideString && $nodeName === 't') {
+								$current .= (string) $reader->readString();
 							}
-						} elseif ($insideString && $nodeName === 't') {
-							$current .= (string) $reader->readString();
+						} elseif ($reader->nodeType === XMLReader::END_ELEMENT && (string) $reader->localName === 'si') {
+							$shared[] = $current;
+							$insideString = false;
 						}
-					} elseif ($reader->nodeType === XMLReader::END_ELEMENT && (string) $reader->localName === 'si') {
-						$shared[] = $current;
-						$insideString = false;
 					}
 				}
-				$reader->close();
-			}
-			$this->removeTempFile($sharedXmlTemp, 'xlsx_shared_strings');
-			if (!empty($shared)) {
-				return $shared;
-			}
-		}
-
-		$sharedXmlContent = $zip->getFromName('xl/sharedStrings.xml');
-		if ($sharedXmlContent === false) {
-			return $shared;
-		}
-
-		$sharedXmlContent = preg_replace('/\sxmlns(:[A-Za-z0-9_]+)?="[^"]*"/', '', (string) $sharedXmlContent);
-		$sharedXmlContent = preg_replace('/(<\/?)[A-Za-z0-9_]+:/', '$1', (string) $sharedXmlContent);
-		$sharedXml = @simplexml_load_string((string) $sharedXmlContent);
-		if (!$sharedXml || !isset($sharedXml->si)) {
-			return $shared;
-		}
-
-		foreach ($sharedXml->si as $si) {
-			$value = '';
-			if (isset($si->t)) {
-				$value = (string) $si->t;
-			}
-			if ($value === '' && isset($si->r)) {
-				foreach ($si->r as $run) {
-					$value .= (string) $run->t;
+				if (!empty($shared)) {
+					return $shared;
 				}
 			}
-			$shared[] = $value;
-		}
 
-		return $shared;
+			$sharedXmlContent = $sharedXmlTemp !== '' ? file_get_contents($sharedXmlTemp) : false;
+			if ($sharedXmlContent === false) {
+				return $shared;
+			}
+
+			$sharedXmlContent = preg_replace('/\sxmlns(:[A-Za-z0-9_]+)?="[^"]*"/', '', (string) $sharedXmlContent);
+			$sharedXmlContent = preg_replace('/(<\/?)[A-Za-z0-9_]+:/', '$1', (string) $sharedXmlContent);
+			$sharedXml = @simplexml_load_string((string) $sharedXmlContent);
+			if (!$sharedXml || !isset($sharedXml->si)) {
+				return $shared;
+			}
+
+			foreach ($sharedXml->si as $si) {
+				$value = '';
+				if (isset($si->t)) {
+					$value = (string) $si->t;
+				}
+				if ($value === '' && isset($si->r)) {
+					foreach ($si->r as $run) {
+						$value .= (string) $run->t;
+					}
+				}
+				$shared[] = $value;
+			}
+
+			return $shared;
+		} finally {
+			if (isset($reader)) { $reader->close(); }
+			$this->removeTempFile($sharedXmlTemp, 'xlsx_shared_strings');
+		}
 	}
 
 	/**
@@ -1554,6 +1564,7 @@ class KreaBankParser
 	 */
 	protected function loadExcelRowsWithPhpSpreadsheet($filePath)
 	{
+		$this->assertSpreadsheetArchiveLimits($filePath);
 		$this->loadPhpSpreadsheetAutoloader();
 		$ioFactoryClass = '\\PhpOffice\\PhpSpreadsheet\\IOFactory';
 		if (!class_exists($ioFactoryClass)) {
@@ -1591,6 +1602,14 @@ class KreaBankParser
 
 		if (!is_object($sheet) || !method_exists($sheet, 'toArray')) {
 			return array();
+		}
+		// Check before the extraction fallback: a resource rejection must never reach toArray().
+		if (method_exists($sheet, 'getHighestDataRow') && method_exists($sheet, 'getHighestDataColumn')) {
+			$width = $this->columnIndexFromCellRef((string) $sheet->getHighestDataColumn() . '1') + 1;
+			$height = (int) $sheet->getHighestDataRow();
+			if ($height > static::MAX_XLSX_ROWS || $height > 0 && $width > intdiv(static::MAX_XLSX_MATERIALIZED_CELLS, $height)) {
+				throw new RuntimeException('Spreadsheet rows or expanded cells exceed the import limit');
+			}
 		}
 
 		try {
@@ -1843,155 +1862,162 @@ class KreaBankParser
 			return array();
 		}
 
-		$sheetPath = '';
-		for ($i = 0; $i < $zip->numFiles; $i++) {
-			$name = (string) $zip->getNameIndex($i);
-			if ($name !== '' && preg_match('#^xl/worksheets/[^/]+\.xml$#', $name)) {
-				$sheetPath = $name;
-				break;
+		$sheetXmlTemp = '';
+		try {
+			$this->assertXlsxArchiveLimits($zip);
+			$sheetPath = '';
+			for ($i = 0; $i < $zip->numFiles; $i++) {
+				$name = (string) $zip->getNameIndex($i);
+				if ($name !== '' && preg_match('#^xl/worksheets/[^/]+\.xml$#', $name)) {
+					$sheetPath = $name;
+					break;
+				}
 			}
-		}
-		if ($sheetPath === '') {
-			$sheetPath = 'xl/worksheets/sheet1.xml';
-		}
+			if ($sheetPath === '') {
+				$sheetPath = 'xl/worksheets/sheet1.xml';
+			}
 
-		$sharedStrings = $this->readXlsxSharedStrings($zip);
-		$rows = array();
-		$sheetXmlTemp = $this->copyZipEntryToTempFile($zip, $sheetPath, 'kreasht_');
-		if ($sheetXmlTemp !== '' && class_exists('XMLReader')) {
-			$reader = new XMLReader();
-			$flags = LIBXML_NONET | LIBXML_COMPACT | LIBXML_NOERROR | LIBXML_NOWARNING;
-			if (@$reader->open($sheetXmlTemp, null, $flags)) {
-				while (@$reader->read()) {
-					if ($reader->nodeType !== XMLReader::ELEMENT || (string) $reader->localName !== 'row') {
-						continue;
-					}
-					if ($reader->isEmptyElement) {
-						continue;
-					}
-
-					$row = array();
-					$maxCol = -1;
-					$rowDepth = $reader->depth;
-
+			$sharedStrings = $this->readXlsxSharedStrings($zip);
+			$rows = array();
+			$materializedCells = 0;
+			$sheetXmlTemp = $this->copyZipEntryToTempFile($zip, $sheetPath, 'kreasht_');
+			if ($sheetXmlTemp !== '' && class_exists('XMLReader')) {
+				$reader = new XMLReader();
+				$flags = LIBXML_NONET | LIBXML_COMPACT | LIBXML_NOERROR | LIBXML_NOWARNING;
+				if (@$reader->open($sheetXmlTemp, null, $flags)) {
 					while (@$reader->read()) {
-						if ($reader->nodeType === XMLReader::END_ELEMENT && (string) $reader->localName === 'row' && $reader->depth === $rowDepth) {
-							break;
+						if ($reader->nodeType !== XMLReader::ELEMENT || (string) $reader->localName !== 'row') {
+							continue;
 						}
-						if ($reader->nodeType !== XMLReader::ELEMENT || (string) $reader->localName !== 'c') {
+						if ($reader->isEmptyElement) {
 							continue;
 						}
 
-						$cellRef = (string) $reader->getAttribute('r');
-						$colIndex = $this->columnIndexFromCellRef($cellRef);
-						if ($colIndex < 0) {
-							$colIndex = $maxCol + 1;
-						}
-						$maxCol = max($maxCol, $colIndex);
+						$row = array();
+						$maxCol = -1;
+						$rowDepth = $reader->depth;
 
-						$type = (string) $reader->getAttribute('t');
-						$value = '';
-						if (!$reader->isEmptyElement) {
-							$cellDepth = $reader->depth;
-							while (@$reader->read()) {
-								if ($reader->nodeType === XMLReader::END_ELEMENT && (string) $reader->localName === 'c' && $reader->depth === $cellDepth) {
-									break;
-								}
-								if ($reader->nodeType !== XMLReader::ELEMENT) {
-									continue;
-								}
-								$cellNodeName = (string) $reader->localName;
-								if ($cellNodeName === 'v') {
-									$value = (string) $reader->readString();
-								} elseif ($type === 'inlineStr' && $cellNodeName === 't') {
-									$value .= (string) $reader->readString();
+						while (@$reader->read()) {
+							if ($reader->nodeType === XMLReader::END_ELEMENT && (string) $reader->localName === 'row' && $reader->depth === $rowDepth) {
+								break;
+							}
+							if ($reader->nodeType !== XMLReader::ELEMENT || (string) $reader->localName !== 'c') {
+								continue;
+							}
+
+							$cellRef = (string) $reader->getAttribute('r');
+							$colIndex = $this->columnIndexFromCellRef($cellRef);
+							if ($colIndex < 0) {
+								$colIndex = $maxCol + 1;
+							}
+							if ($colIndex >= static::MAX_XLSX_COLUMNS) { throw new RuntimeException('Spreadsheet column exceeds the XLSX limit (XFD)'); }
+							$maxCol = max($maxCol, $colIndex);
+
+							$type = (string) $reader->getAttribute('t');
+							$value = '';
+							if (!$reader->isEmptyElement) {
+								$cellDepth = $reader->depth;
+								while (@$reader->read()) {
+									if ($reader->nodeType === XMLReader::END_ELEMENT && (string) $reader->localName === 'c' && $reader->depth === $cellDepth) {
+										break;
+									}
+									if ($reader->nodeType !== XMLReader::ELEMENT) {
+										continue;
+									}
+									$cellNodeName = (string) $reader->localName;
+									if ($cellNodeName === 'v') {
+										$value = (string) $reader->readString();
+									} elseif ($type === 'inlineStr' && $cellNodeName === 't') {
+										$value .= (string) $reader->readString();
+									}
 								}
 							}
+
+							if ($type === 's') {
+								$stringIndex = (int) $value;
+								$value = isset($sharedStrings[$stringIndex]) ? $sharedStrings[$stringIndex] : '';
+							}
+
+							$row[$colIndex] = $value;
 						}
 
-						if ($type === 's') {
-							$stringIndex = (int) $value;
-							$value = isset($sharedStrings[$stringIndex]) ? $sharedStrings[$stringIndex] : '';
+						if ($maxCol >= 0) {
+							$this->assertXlsxRowBudget($maxCol + 1, count($rows), $materializedCells);
+							$normalizedRow = array();
+							for ($i = 0; $i <= $maxCol; $i++) {
+								$normalizedRow[] = isset($row[$i]) ? $row[$i] : '';
+							}
+							$rows[] = $normalizedRow;
 						}
-
-						$row[$colIndex] = $value;
-					}
-
-					if ($maxCol >= 0) {
-						$normalizedRow = array();
-						for ($i = 0; $i <= $maxCol; $i++) {
-							$normalizedRow[] = isset($row[$i]) ? $row[$i] : '';
-						}
-						$rows[] = $normalizedRow;
 					}
 				}
-				$reader->close();
 			}
-			$this->removeTempFile($sheetXmlTemp, 'xlsx_sheet_xml');
-		}
 
-		if (!empty($rows)) {
-			$zip->close();
+			if (!empty($rows)) {
+				return $rows;
+			}
+
+			$sheetXmlContent = $sheetXmlTemp !== '' ? file_get_contents($sheetXmlTemp) : false;
+			if ($sheetXmlContent === false) {
+				return array();
+			}
+
+			$sheetXmlContent = preg_replace('/\sxmlns(:[A-Za-z0-9_]+)?="[^"]*"/', '', (string) $sheetXmlContent);
+			$sheetXmlContent = preg_replace('/(<\/?)[A-Za-z0-9_]+:/', '$1', (string) $sheetXmlContent);
+			$sheetXml = @simplexml_load_string((string) $sheetXmlContent);
+			if (!$sheetXml || !isset($sheetXml->sheetData)) {
+				return array();
+			}
+
+			foreach ($sheetXml->sheetData->row as $rowNode) {
+				$row = array();
+				$maxCol = -1;
+				foreach ($rowNode->c as $cellNode) {
+					$cellRef = (string) $cellNode['r'];
+					$colIndex = $this->columnIndexFromCellRef($cellRef);
+					if ($colIndex < 0) {
+						$colIndex = $maxCol + 1;
+					}
+					if ($colIndex >= static::MAX_XLSX_COLUMNS) { throw new RuntimeException('Spreadsheet column exceeds the XLSX limit (XFD)'); }
+					$maxCol = max($maxCol, $colIndex);
+
+					$type = (string) $cellNode['t'];
+					$value = '';
+					if ($type === 's') {
+						$stringIndex = (int) ((string) $cellNode->v);
+						$value = isset($sharedStrings[$stringIndex]) ? $sharedStrings[$stringIndex] : '';
+					} elseif ($type === 'inlineStr' && isset($cellNode->is)) {
+						foreach ($cellNode->is->t as $inlineText) {
+							$value .= (string) $inlineText;
+						}
+						if ($value === '' && isset($cellNode->is->r)) {
+							foreach ($cellNode->is->r as $run) {
+								$value .= (string) $run->t;
+							}
+						}
+					} else {
+						$value = (string) $cellNode->v;
+					}
+
+					$row[$colIndex] = $value;
+				}
+
+				if ($maxCol >= 0) {
+					$this->assertXlsxRowBudget($maxCol + 1, count($rows), $materializedCells);
+					$normalizedRow = array();
+					for ($i = 0; $i <= $maxCol; $i++) {
+						$normalizedRow[] = isset($row[$i]) ? $row[$i] : '';
+					}
+					$rows[] = $normalizedRow;
+				}
+			}
+
 			return $rows;
-		}
-
-		$sheetXmlContent = $zip->getFromName($sheetPath);
-		if ($sheetXmlContent === false) {
+		} finally {
+			if (isset($reader)) { $reader->close(); }
+			$this->removeTempFile($sheetXmlTemp, 'xlsx_sheet_xml');
 			$zip->close();
-			return array();
 		}
-
-		$sheetXmlContent = preg_replace('/\sxmlns(:[A-Za-z0-9_]+)?="[^"]*"/', '', (string) $sheetXmlContent);
-		$sheetXmlContent = preg_replace('/(<\/?)[A-Za-z0-9_]+:/', '$1', (string) $sheetXmlContent);
-		$sheetXml = @simplexml_load_string((string) $sheetXmlContent);
-		if (!$sheetXml || !isset($sheetXml->sheetData)) {
-			$zip->close();
-			return array();
-		}
-
-		foreach ($sheetXml->sheetData->row as $rowNode) {
-			$row = array();
-			$maxCol = -1;
-			foreach ($rowNode->c as $cellNode) {
-				$cellRef = (string) $cellNode['r'];
-				$colIndex = $this->columnIndexFromCellRef($cellRef);
-				if ($colIndex < 0) {
-					$colIndex = $maxCol + 1;
-				}
-				$maxCol = max($maxCol, $colIndex);
-
-				$type = (string) $cellNode['t'];
-				$value = '';
-				if ($type === 's') {
-					$stringIndex = (int) ((string) $cellNode->v);
-					$value = isset($sharedStrings[$stringIndex]) ? $sharedStrings[$stringIndex] : '';
-				} elseif ($type === 'inlineStr' && isset($cellNode->is)) {
-					foreach ($cellNode->is->t as $inlineText) {
-						$value .= (string) $inlineText;
-					}
-					if ($value === '' && isset($cellNode->is->r)) {
-						foreach ($cellNode->is->r as $run) {
-							$value .= (string) $run->t;
-						}
-					}
-				} else {
-					$value = (string) $cellNode->v;
-				}
-
-				$row[$colIndex] = $value;
-			}
-
-			if ($maxCol >= 0) {
-				$normalizedRow = array();
-				for ($i = 0; $i <= $maxCol; $i++) {
-					$normalizedRow[] = isset($row[$i]) ? $row[$i] : '';
-				}
-				$rows[] = $normalizedRow;
-			}
-		}
-
-		$zip->close();
-		return $rows;
 	}
 
 	/**
@@ -2027,7 +2053,17 @@ class KreaBankParser
 			return '';
 		}
 
-		@stream_copy_to_stream($stream, $out);
+		try {
+			$copied = stream_copy_to_stream($stream, $out, static::MAX_XLSX_ENTRY_BYTES + 1);
+			if ($copied === false || $copied > static::MAX_XLSX_ENTRY_BYTES || !feof($stream)) {
+				throw new RuntimeException('Expanded XLSX entry exceeds the import limit (32 MiB)');
+			}
+		} catch (Throwable $error) {
+			fclose($out);
+			fclose($stream);
+			$this->removeTempFile($tmpFile, 'xlsx_entry_limit');
+			throw $error;
+		}
 		fclose($out);
 		fclose($stream);
 
@@ -2037,6 +2073,41 @@ class KreaBankParser
 		}
 
 		return $tmpFile;
+	}
+
+	/** Reject oversized archive metadata before reading or converting any entry. */
+	protected function assertXlsxArchiveLimits($zip)
+	{
+		$total = 0;
+		for ($index = 0; $index < $zip->numFiles; $index++) {
+			$entry = $zip->statIndex($index);
+			if (!is_array($entry) || !isset($entry['size']) || $entry['size'] < 0
+				|| $entry['size'] > static::MAX_XLSX_ENTRY_BYTES) {
+				throw new RuntimeException('Expanded XLSX entry exceeds the import limit (32 MiB)');
+			}
+			$total += $entry['size'];
+			if ($total > static::MAX_XLSX_UNCOMPRESSED_BYTES) {
+				throw new RuntimeException('Expanded XLSX archive exceeds the import limit (64 MiB)');
+			}
+		}
+	}
+
+	/** Bound ZIP input before alternate readers/converters, including renamed XLSX files. */
+	protected function assertSpreadsheetArchiveLimits($filePath)
+	{
+		if (!class_exists('ZipArchive')) { return; }
+		$zip = new ZipArchive();
+		if ($zip->open($filePath) !== true) { return; }
+		try { $this->assertXlsxArchiveLimits($zip); } finally { $zip->close(); }
+	}
+
+	/** Sparse coordinates may expand to many empty cells; count before allocating. */
+	protected function assertXlsxRowBudget($width, $rowCount, &$materializedCells)
+	{
+		if ($rowCount >= static::MAX_XLSX_ROWS || $width > static::MAX_XLSX_MATERIALIZED_CELLS - $materializedCells) {
+			throw new RuntimeException('Spreadsheet rows or expanded cells exceed the import limit');
+		}
+		$materializedCells += $width;
 	}
 
 	/**
@@ -2125,6 +2196,7 @@ class KreaBankParser
 	 */
 	protected function loadExcelRowsByCommandConversion($filePath)
 	{
+		$this->assertSpreadsheetArchiveLimits($filePath);
 		if (!function_exists('exec')) {
 			return array();
 		}
@@ -3895,9 +3967,15 @@ class KreaBankParser
 		}
 
 		$letters = strtoupper($match[1]);
+		if (strlen($letters) > 3) {
+			throw new RuntimeException('Spreadsheet column exceeds the XLSX limit (XFD)');
+		}
 		$index = 0;
 		for ($i = 0; $i < strlen($letters); $i++) {
 			$index = ($index * 26) + (ord($letters[$i]) - 64);
+		}
+		if ($index > static::MAX_XLSX_COLUMNS) {
+			throw new RuntimeException('Spreadsheet column exceeds the XLSX limit (XFD)');
 		}
 
 		return $index - 1;

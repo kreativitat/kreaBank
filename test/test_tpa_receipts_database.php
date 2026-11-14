@@ -85,7 +85,7 @@ $db->query("UPDATE kbauto_kreabank_statement_line SET currency='USD' WHERE rowid
 checkAuto($service->getAutomaticTpaSuggestion(60010,array(101))===null, 'Currency mismatch is excluded');
 tpaFixture(60011,'789.23',101,1,'fintable');
 checkAuto($service->getAutomaticTpaSuggestion(60011,array(101))===null, 'Fintable receipts require an independently imported source identity');
-$db->query("INSERT INTO kbauto_kreabank_feed_transaction(entity,fk_feed_account,provider_transaction_id,source_uid,financial_hash,content_hash,fk_statement_line,source_payload,status,datec) VALUES(1,1,'tpa_fixture','tpa-fixture-60011',SHA2('tpa-a',256),SHA2('tpa-b',256),60011,'{}','imported',NOW())");
+$db->query("INSERT INTO kbauto_kreabank_feed_transaction(entity,fk_feed_account,provider_transaction_id,source_uid,financial_hash,content_hash,fk_statement_line,source_payload,status,datec) VALUES(1,1,'tpa_fixture','fixture-60011',SHA2('789.23|2026-11-01|EUR',256),SHA2('tpa-b',256),60011,'{}','imported',NOW())");
 checkAuto($service->getAutomaticTpaSuggestion(60011,array(101))!==null, 'Valid Fintable source uses the same TPA path');
 $db->query("UPDATE kbauto_kreabank_feed_transaction SET conflict_payload='{}' WHERE fk_statement_line=60011");
 checkAuto($service->getAutomaticTpaSuggestion(60011,array(101))===null, 'Provider source conflicts remain pending');

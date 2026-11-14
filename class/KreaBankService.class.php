@@ -1201,14 +1201,14 @@ class KreaBankService
 			$sql .= $this->worklistDocumentSearchSql($search,"CONCAT_WS(' ',p.ref,p.num_paiement,p.note,f.ref,s.nom,CAST(p.datep AS CHAR))",'p.amount');
 			if (!empty($dateRange['enabled'])) {
 				$sql .= ' AND p.datep >= ' . $this->sqlDate($dateRange['start']);
-				$sql .= ' AND p.datep <= ' . $this->sqlDate($dateRange['end']);
+				$sql .= ' AND p.datep < ' . $this->sqlDate(gmdate('Y-m-d', strtotime($dateRange['end'] . ' UTC') + 86400));
 			}
 			$sql .= ' GROUP BY p.rowid, p.ref, p.num_paiement, p.datep, p.amount, p.note';
 			$sql .= ' ORDER BY p.datep ASC, p.rowid ASC';
 			$sql .= $this->db->plimit($limit, 0);
 
 			$resql = $this->db->query($sql);
-			if ($search !== '' && !$resql) { throw new RuntimeException('Unable to search current documents'); }
+			if (!$resql) { throw new RuntimeException('Unable to load current reconciliation candidates'); }
 			if ($resql) {
 				while ($obj = $this->db->fetch_object($resql)) {
 					$ref = trim((string) (!empty($obj->ref) ? $obj->ref : $obj->num_paiement));
@@ -1247,14 +1247,14 @@ class KreaBankService
 			$sqlf .= $this->worklistDocumentSearchSql($search,"CONCAT_WS(' ',p.ref,p.num_paiement,p.note,ff.ref,s.nom,CAST(p.datep AS CHAR))",'p.amount');
 			if (!empty($dateRange['enabled'])) {
 				$sqlf .= ' AND p.datep >= ' . $this->sqlDate($dateRange['start']);
-				$sqlf .= ' AND p.datep <= ' . $this->sqlDate($dateRange['end']);
+				$sqlf .= ' AND p.datep < ' . $this->sqlDate(gmdate('Y-m-d', strtotime($dateRange['end'] . ' UTC') + 86400));
 			}
 			$sqlf .= ' GROUP BY p.rowid, p.ref, p.num_paiement, p.datep, p.amount, p.note';
 			$sqlf .= ' ORDER BY p.datep ASC, p.rowid ASC';
 			$sqlf .= $this->db->plimit($limit, 0);
 
 			$resqlf = $this->db->query($sqlf);
-			if ($search !== '' && !$resqlf) { throw new RuntimeException('Unable to search current documents'); }
+			if (!$resqlf) { throw new RuntimeException('Unable to load current reconciliation candidates'); }
 			if ($resqlf) {
 				while ($obj = $this->db->fetch_object($resqlf)) {
 					$ref = trim((string) (!empty($obj->ref) ? $obj->ref : $obj->num_paiement));
@@ -1331,7 +1331,7 @@ class KreaBankService
 			}
 			if (!empty($dateRange['enabled'])) {
 				$sql .= ' AND p.datep >= ' . $this->sqlDate($dateRange['start']);
-				$sql .= ' AND p.datep <= ' . $this->sqlDate($dateRange['end']);
+				$sql .= ' AND p.datep < ' . $this->sqlDate(gmdate('Y-m-d', strtotime($dateRange['end'] . ' UTC') + 86400));
 			}
 			if ($hasTargetAmount) {
 				$sql .= ' AND ABS(ABS(p.amount) - ' . $targetAmountAbs . ') <= 0.01';
@@ -1341,6 +1341,7 @@ class KreaBankService
 			$sql .= $this->db->plimit($limit, 0);
 
 			$resql = $this->db->query($sql);
+			if (!$resql) { throw new RuntimeException('Unable to load current reconciliation candidates'); }
 			if ($resql) {
 				while ($obj = $this->db->fetch_object($resql)) {
 					$ref = trim((string) (!empty($obj->ref) ? $obj->ref : $obj->num_paiement));
@@ -1395,7 +1396,7 @@ class KreaBankService
 			}
 			if (!empty($dateRange['enabled'])) {
 				$sqlf .= ' AND p.datep >= ' . $this->sqlDate($dateRange['start']);
-				$sqlf .= ' AND p.datep <= ' . $this->sqlDate($dateRange['end']);
+				$sqlf .= ' AND p.datep < ' . $this->sqlDate(gmdate('Y-m-d', strtotime($dateRange['end'] . ' UTC') + 86400));
 			}
 			if ($hasTargetAmount) {
 				$sqlf .= ' AND ABS(ABS(p.amount) - ' . $targetAmountAbs . ') <= 0.01';
@@ -1405,6 +1406,7 @@ class KreaBankService
 			$sqlf .= $this->db->plimit($limit, 0);
 
 			$resqlf = $this->db->query($sqlf);
+			if (!$resqlf) { throw new RuntimeException('Unable to load current reconciliation candidates'); }
 			if ($resqlf) {
 				while ($obj = $this->db->fetch_object($resqlf)) {
 					$ref = trim((string) (!empty($obj->ref) ? $obj->ref : $obj->num_paiement));
@@ -1482,7 +1484,7 @@ class KreaBankService
 			$sql .= $this->db->plimit($limit, 0);
 
 			$resql = $this->db->query($sql);
-			if ($search !== '' && !$resql) { throw new RuntimeException('Unable to search current documents'); }
+			if (!$resql) { throw new RuntimeException('Unable to load current reconciliation candidates'); }
 			if ($resql) {
 				while ($obj = $this->db->fetch_object($resql)) {
 					$amountOpen = (float) $obj->amount_open;
@@ -1531,7 +1533,7 @@ class KreaBankService
 			$sqlf .= $this->db->plimit($limit, 0);
 
 			$resqlf = $this->db->query($sqlf);
-			if ($search !== '' && !$resqlf) { throw new RuntimeException('Unable to search current documents'); }
+			if (!$resqlf) { throw new RuntimeException('Unable to load current reconciliation candidates'); }
 			if ($resqlf) {
 				while ($obj = $this->db->fetch_object($resqlf)) {
 					$amountOpen = (float) $obj->amount_open;
@@ -2269,7 +2271,7 @@ class KreaBankService
 				}
 			}
 			if ($isAutomaticNative) {
-				$fresh = $this->getAutomaticNativeSuggestion((int) $lineId, (array) $automaticAccounts);
+				$fresh = $this->getAutomaticNativeSuggestion((int) $lineId, (array) $automaticAccounts, true);
 				if (!$fresh || (int) $fresh['suggestion']['doc_id'] !== (int) $selectedNativeBankLink['fk_doc']) {
 					throw new Exception('Automatic match changed or needs manual review');
 				}
@@ -2581,7 +2583,7 @@ class KreaBankService
 	 * @param int[] $accountIds Company-owned accounts selected by the administrator
 	 * @return array|null
 	 */
-	public function getAutomaticNativeSuggestion($lineId, $accountIds)
+	public function getAutomaticNativeSuggestion($lineId, $accountIds, $lock = false)
 	{
 		$this->assertAutomaticActor();
 		if ($this->getPaymentAccountReview($lineId, $accountIds)) { return null; }
@@ -2590,7 +2592,7 @@ class KreaBankService
 			return null;
 		}
 		// Eligibility is checked on raw persisted amounts; file mapping repair must not select an automatic match.
-		$sql = 'SELECT l.amount FROM ' . $this->db->prefix() . 'kreabank_statement_line l'
+		$sql = 'SELECT l.amount,s.source_type FROM ' . $this->db->prefix() . 'kreabank_statement_line l'
 			. ' INNER JOIN ' . $this->db->prefix() . 'kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity'
 			. ' INNER JOIN ' . $this->db->prefix() . 'bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=l.entity'
 			. ' WHERE l.entity=' . $this->entity . ' AND l.rowid=' . (int) $lineId
@@ -2609,7 +2611,7 @@ class KreaBankService
 			throw new Exception($this->db->lasterror());
 		}
 		$raw = $this->db->fetch_object($res);
-		if (!$raw) {
+		if (!$raw || ($raw->source_type === 'fintable' && !$this->automaticFeedEvidenceValid((int) $lineId, $lock))) {
 			return null;
 		}
 		$line = $this->native->getStatementLineById((int) $lineId);
@@ -2944,6 +2946,29 @@ class KreaBankService
 		if (isModEnabled('multicompany') && !$this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'entity WHERE rowid=' . $this->entity . ' AND active=1')) {
 			throw new Exception('Automatic reconciliation requires an active company');
 		}
+	}
+
+	/** Provider identities and their current owned mappings must remain exact, including under execution locks. */
+	private function automaticFeedEvidenceValid($lineId, $lock = false)
+	{
+		$p = $this->db->prefix(); $id = (int) $lineId;
+		$sources = $this->transferRows("SELECT l.line_uid,l.amount,l.operation_date,l.currency,s.bank_account_id,s.currency statement_currency,s.source_type"
+			. " FROM {$p}kreabank_statement_line l JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
+			. ' WHERE l.entity=' . $this->entity . " AND l.rowid=$id" . ($lock ? ' FOR UPDATE' : ''));
+		if (count($sources) !== 1) { return false; }
+		$source = $sources[0];
+		if ($source->source_type !== 'fintable') { return true; }
+		if (!$this->tableExists($p . 'kreabank_feed_transaction') || !$this->tableExists($p . 'kreabank_feed_account')) { return false; }
+		$facts = $this->transferRows("SELECT ft.source_uid,ft.financial_hash,ft.status,ft.conflict_payload,fa.fk_bank_account,fa.currency,fa.status account_status"
+			. " FROM {$p}kreabank_feed_transaction ft LEFT JOIN {$p}kreabank_feed_account fa ON fa.rowid=ft.fk_feed_account AND fa.entity=ft.entity"
+			. ' WHERE ft.entity=' . $this->entity . " AND ft.fk_statement_line=$id ORDER BY ft.rowid" . ($lock ? ' FOR UPDATE' : ''));
+		require_once __DIR__ . '/KreaBankFintableMapper.class.php';
+		$hash = hash('sha256', KreaBankFintableMapper::decimal($source->amount) . '|' . $source->operation_date . '|' . $source->currency);
+		return count($facts) === 1 && $facts[0]->status === 'imported' && $facts[0]->conflict_payload === null
+			&& (int) $facts[0]->fk_bank_account === (int) $source->bank_account_id
+			&& $facts[0]->currency === $source->currency && $source->statement_currency === $source->currency
+			&& !in_array($facts[0]->account_status, array('mapping_review','unavailable'), true)
+			&& $facts[0]->source_uid === $source->line_uid && hash_equals($facts[0]->financial_hash, $hash);
 	}
 
 	/** Read-only TPA classification. An existing or conflicting financial record always needs matching/review. */
@@ -3993,7 +4018,7 @@ class KreaBankService
 	private function transferStatementRows($where, $lock = false)
 	{
 		$p = $this->db->prefix();
-		$sql = "SELECT l.*,s.bank_account_id,ba.iban_prefix AS account_iban FROM {$p}kreabank_statement_line l"
+		$sql = "SELECT l.*,s.bank_account_id,s.source_type,ba.iban_prefix AS account_iban FROM {$p}kreabank_statement_line l"
 			. " JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
 			. " JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=l.entity"
 			. ' WHERE l.entity=' . $this->entity . ' AND l.status=0 AND l.is_duplicate=0 AND l.allocated_amount=0 AND l.amount<>0'
@@ -4004,9 +4029,10 @@ class KreaBankService
 			: " AND s.source_type<>'fintable'";
 		$rows = $this->transferRows($sql . $where . ' ORDER BY l.rowid' . $this->db->plimit(501) . ($lock ? ' FOR UPDATE' : ''));
 		if (count($rows) >= 501) { return array(); }
-		return array_values(array_filter($rows, function ($row) {
+		return array_values(array_filter($rows, function ($row) use ($lock) {
 			$date = (string) $row->operation_date;
 			if (!preg_match('/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D', $date, $parts) || !checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])) { return false; }
+			if ($row->source_type === 'fintable' && !$this->automaticFeedEvidenceValid((int) $row->rowid, $lock)) { return false; }
 			$mapped = $this->native->getStatementLineById((int) $row->rowid);
 			return $mapped && self::automaticDecimal($row->amount) === self::automaticDecimal($mapped['amount']);
 		}));

@@ -324,7 +324,7 @@ trait KreaBankPaymentBatchTrait
 		if ($source['statement_source'] === 'fintable') {
 			if (!$this->tableExists($p . 'kreabank_feed_transaction') || !$this->tableExists($p . 'kreabank_feed_account')) { throw new DomainException('Bank feed source requires current, conflict-free evidence'); }
 			$source['feed_facts'] = $this->paymentBatchRows("SELECT ft.rowid,ft.fk_feed_account,ft.source_uid,ft.financial_hash,ft.content_hash,ft.status,ft.conflict_payload,fa.fk_bank_account,fa.entity,fa.currency,fa.status AS account_status"
-				. " FROM {$p}kreabank_feed_transaction ft JOIN {$p}kreabank_feed_account fa ON fa.rowid=ft.fk_feed_account AND fa.entity=ft.entity"
+				. " FROM {$p}kreabank_feed_transaction ft LEFT JOIN {$p}kreabank_feed_account fa ON fa.rowid=ft.fk_feed_account AND fa.entity=ft.entity"
 				. ' WHERE ft.entity=' . $this->entity . " AND ft.fk_statement_line=$id" . ($lock ? ' FOR UPDATE' : ''));
 			require_once __DIR__ . '/KreaBankFintableMapper.class.php';
 			$financialHash = hash('sha256', KreaBankFintableMapper::decimal($source['amount']) . '|' . $source['operation_date'] . '|' . $source['currency']);
