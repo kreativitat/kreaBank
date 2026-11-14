@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.12 — 2026-11-14
+
+- Open the reviewed change-bank modal by clicking the payment bank reference in list rows and expanded candidates. Retain the icon shortcut, permissions and signed correction review.
+- Keep native movement table scrolling inside the page so the shared banking header fits the viewport.
+
 ## 1.20.11 — 2026-11-14
 
 - Keep History action colours above the native button gradient, preserving equal dimensions and centred labels.

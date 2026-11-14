@@ -85,7 +85,7 @@ async function browserChecks(directory) {
 
         await page.setViewportSize({width:1280,height:900});
         await open('direct_correction');
-        const opener = page.getByRole('button',{name:'Change bank',exact:true});
+        const opener = page.getByRole('button',{name:'PAYMENT-BANK',exact:true});
         await opener.click();
         const dialog = page.getByRole('dialog');
         assert.equal(await dialog.isVisible(), true); browserCount++;
@@ -97,10 +97,23 @@ async function browserChecks(directory) {
         await page.keyboard.press('Escape');
         assert.equal(await dialog.isVisible(), false); browserCount++;
         assert.equal(await opener.evaluate(button => document.activeElement === button), true); browserCount++;
+        const iconOpener = page.getByRole('button',{name:'Change bank',exact:true});
+        await iconOpener.click();
+        assert.equal(await dialog.isVisible(), true); browserCount++;
+        await page.keyboard.press('Escape');
+        assert.equal(await iconOpener.evaluate(button => document.activeElement === button), true); browserCount++;
         await opener.click();
         await page.getByRole('button',{name:'Save',exact:true}).click();
         submission = await page.locator('#fixture-submit').innerText();
         assert.ok(submission.includes('correct_account') && submission.includes('synthetic-direct-review') && !submission.includes('confirm_pair')); browserCount++;
+
+        await open('other');
+        const candidateAccount = page.getByRole('button',{name:'OTHER-BANK',exact:true});
+        await candidateAccount.focus();
+        await page.keyboard.press('Enter');
+        assert.equal(await page.getByRole('dialog').isVisible(), true); browserCount++;
+        await page.getByRole('button',{name:'Cancel',exact:true}).click();
+        assert.equal(await candidateAccount.evaluate(button => document.activeElement === button), true); browserCount++;
 
         await open('reviewed');
         assert.equal(await page.locator('[data-kb-member]').count(), 0); browserCount++;
@@ -183,7 +196,7 @@ async function browserChecks(directory) {
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)); browserCount++;
         await page.setViewportSize({width:1280,height:900});
         await open('direct_correction-pt_PT');
-        await page.getByRole('button',{name:'Alterar banco',exact:true}).click();
+        await page.getByRole('button',{name:'PAYMENT-BANK',exact:true}).click();
         assert.equal(await page.getByRole('dialog').isVisible(),true); browserCount++;
         assert.equal(await page.getByRole('button',{name:'Guardar',exact:true}).count(),1); browserCount++;
         await page.screenshot({path:path.join(directory,'worklist-account-dialog-pt_PT.png'),fullPage:true});

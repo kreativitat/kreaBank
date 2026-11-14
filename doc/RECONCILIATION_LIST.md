@@ -102,3 +102,8 @@ as a functional reference. All-account scope, reviewed correction dialog and
 named private drafts are KreaBank adaptations. Synthetic rendering was inspected
 at desktop/mobile widths in English and European Portuguese. Installation/theme
 acceptance and migration execution remain deployment steps.
+
+Payment bank references with a prepared account correction open the same reviewed
+change-bank modal as the exchange icon, in both list rows and expanded candidates.
+Read-only, reconciled and ineligible references remain text. Opening or cancelling
+the modal changes no records; Save retains the existing signed POST review.

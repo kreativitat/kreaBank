@@ -16,6 +16,7 @@
 .kb-worklist .button.kb-wl-icon { display:inline-flex; align-items:center; justify-content:center; min-width:30px; min-height:30px; width:30px; height:30px; box-sizing:border-box; padding:5px; margin:2px; vertical-align:middle; font-size:13px; text-decoration:none; }
 .kb-worklist .kb-wl-icon.kb-wl-primary { color:#fff; background:#2c6c4f; border-color:#2c6c4f; }
 .kb-worklist .kb-wl-icon.kb-wl-primary:disabled { opacity:.45; }
+.kb-worklist .kb-wl-account-ref { appearance:none; border:0; background:transparent; padding:3px 0; margin:0; color:#1769aa; font:inherit; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
 .kb-worklist :is(button,a,input,select):focus-visible { outline:2px solid var(--kb-wl-focus); outline-offset:3px; }
 .kb-worklist .kb-wl-sr { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 .kb-worklist .kb-wl-detail-row > td { padding:0 12px 14px; }

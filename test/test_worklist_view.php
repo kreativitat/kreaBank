@@ -157,7 +157,8 @@ foreach (array('en_US','pt_PT') as $locale) {
 			checkWorklistView(($xpath->query('//input[@name="action" and @value="confirm_batch"]')->length === 1) === ($case === 'reviewed'), 'Only a fresh server-reviewed group can expose final approval');
 		}
 		if ($case === 'direct_correction') {
-			checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-row")]//button[@data-kb-dialog]')->length === 1, 'Wrong-bank proposal opens correction directly from list row');
+			checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-row")]//button[@data-kb-dialog]')->length === 2, 'Wrong-bank proposal opens correction from the payment bank reference and icon');
+			checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-row")]//button[@class="kb-wl-account-ref"]')->item(0)->textContent === 'PAYMENT-BANK', 'The clickable payment bank reference retains the exact displayed account');
 			checkWorklistView($xpath->query('//input[@name="action" and @value="confirm_pair"]')->length === 0, 'Wrong-bank proposal has no executable approval');
 		}
 		if ($case === 'completed') {

@@ -66,6 +66,8 @@
             const dialog = document.getElementById(opener.dataset.kbDialog);
             if (!dialog || typeof dialog.showModal !== 'function') { opener.disabled = true; return; }
             opener.addEventListener('click', () => { dialog.__kbOpener = opener; dialog.showModal(); });
+        });
+        root.querySelectorAll('.kb-wl-dialog').forEach(dialog => {
             dialog.querySelectorAll('[data-kb-dialog-close]').forEach(button => button.addEventListener('click', () => dialog.close()));
             dialog.addEventListener('keydown', event => {
                 if (event.key !== 'Tab') return;
