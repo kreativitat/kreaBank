@@ -82,8 +82,12 @@ and native movement ID. Count and rows share one owner-scoped outer predicate.
 Search/reset preserve the selected account and import reference.
 
 History uses native headers, search/reset and independent History/audit paging.
-Its amount comparison retains exact source decimals; Status follows the displayed
-reconciled/review/reversed state. The compact global search still includes audit
+Compact status tabs replace the repeated Status column and dropdown, following
+the displayed reconciled/review/reversed state. Tabs preserve the selected account,
+remaining filters, page size, both sort orders and independent audit page, while
+restarting History at page one. Header reset retains the selected status tab;
+All clears it. Review/reversal warnings remain beside the description. Its amount
+comparison retains exact source decimals. The compact global search still includes audit
 JSON. Summary totals remain available in an expandable section and keep currencies
 separate. Audit filters preserve the shared page size without a duplicate selector.
 Undo POST forms remain outside both read-only GET forms. Existing fixed 5,000-row

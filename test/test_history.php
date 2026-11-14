@@ -118,6 +118,7 @@ function renderHistory($request=array(),$method='GET'){
 }
 $checks=0;
 function historyCheck($ok,$label){global $checks;if(!$ok){throw new RuntimeException($label);} $checks++;}
+function historyXPath($html){$previous=libxml_use_internal_errors(true);$dom=new DOMDocument();$dom->loadHTML('<?xml encoding="utf-8" ?>'.$html);libxml_clear_errors();libxml_use_internal_errors($previous);return new DOMXPath($dom);}
 $html=renderHistory();
 historyCheck(!$fixtureErrors && preg_match_all('/<tr\b[^>]*class="[^"]*\bkrea-history-row-top\b/', $html)===3,'History renders actual rows without errors');
 historyCheck(strpos($html,'125,00 EUR')!==false && strpos($html,'17,00 USD')!==false && strpos($html,'142,00')===false,'Summary amounts remain separated by currency');
@@ -156,7 +157,7 @@ historyCheck(strpos($html,'Synthetic debit')!==false && strpos($html,'Synthetic 
 $html=renderHistory(array('hist_amount'=>'<>125'));
 historyCheck(strpos($html,'Synthetic staged receipt')===false && strpos($html,'Synthetic debit')!==false,'Not-equal amount input retains its comparison operator');
 $html=renderHistory(array('hist_status'=>'review'));
-historyCheck(preg_match('/<tr[^>]*class="[^"]*krea-history-row-top/', $html)===0,'Status header follows displayed review state');
+historyCheck(preg_match('/<tr[^>]*class="[^"]*krea-history-row-top/', $html)===0,'Status tab follows displayed review state');
 $html=renderHistory(array('hist_date_from'=>'2026-02-30'));
 historyCheck(preg_match('/<tr[^>]*class="[^"]*krea-history-row-top/', $html)===0,'Invalid dates fail closed instead of silently expanding History');
 $html=renderHistory(array('pageplusone'=>2,'pageplusoneold'=>2,'limit'=>1,'button_search_x'=>'x'));
@@ -164,17 +165,47 @@ historyCheck(strpos($html,'data-page="0" data-total="3"')!==false,'Header search
 $html=renderHistory(array('pageplusone'=>2,'pageplusoneold'=>1,'limit'=>1,'button_search_x'=>'x'));
 historyCheck(strpos($html,'data-page="1" data-total="3"')!==false,'Native page jump wins over implicit search submit');
 $html=renderHistory(array('hist_amount'=>'<-1','hist_status'=>'review','audit_search_user'=>'absent','button_removefilter.x'=>'x'));
-historyCheck(strpos($html,'data-total="3"')!==false && strpos($html,'data-total="0"')!==false,'History reset clears its header filters while retaining audit filters');
+historyCheck(strpos($html,'data-total="3"')===false && strpos($html,'data-total="0"')!==false && strpos($html,'name="hist_status" value="review"')!==false,'History reset clears its header filters while retaining the selected status tab and audit filters');
 $html=renderHistory(array('hist_description'=>'debit','audit_search_user'=>'absent','audit_nav'=>'1','button_removefilter_x'=>'x'));
 historyCheck(strpos($html,'Synthetic debit')!==false && strpos($html,'Synthetic staged receipt')===false && strpos($html,'Synthetic tester')!==false,'Audit reset preserves History filters');
 $html=renderHistory(array('hist_amount'=>'>=0','hist_status'=>'reconciled','limit'=>1));
 $previous=libxml_use_internal_errors(true);$dom=new DOMDocument();$dom->loadHTML($html);libxml_clear_errors();libxml_use_internal_errors($previous);$xp=new DOMXPath($dom);
 historyCheck($xp->query('//form//form')->length===0 && $xp->query('//form[@method="POST"]')->length===1,'Native GET owners never nest or absorb Undo POST forms');
-historyCheck($xp->query('//input[@name="hist_amount" and @form="kreaHistoryFilterForm"]')->length===1 && $xp->query('//select[@name="hist_status" and @form="kreaHistoryFilterForm"]')->length===1,'Amount and Status are associated native header controls');
+historyCheck($xp->query('//input[@name="hist_amount" and @form="kreaHistoryFilterForm"]')->length===1 && $xp->query('//form[@id="kreaHistoryFilterForm"]/input[@type="hidden" and @name="hist_status" and @value="reconciled"]')->length===1 && $xp->query('//select[@name="hist_status"]')->length===0,'Amount retains its native header control while exactly one hidden status preserves the active tab');
 historyCheck($xp->query('//button[@form="kreaHistoryFilterForm"]')->length===2 && $xp->query('//button[@form="kreaAuditFilterForm"]')->length===2,'Native search/reset controls target their own read-only form');
 historyCheck($xp->query('//form[@id="kreaAuditFilterForm"]/input[@name="limit" and @value="1"]')->length===1,'Audit filters retain the shared native page size when their duplicate selector is hidden');
 $sortLinks=$xp->query('//table[@id="kreaAuditTable"]//th/a');
 foreach($sortLinks as $link){parse_str(parse_url($link->getAttribute('href'),PHP_URL_QUERY),$query);historyCheck(isset($query['audit_sortfield']) && ($query['sortfield']??'')==='event_ts' && ($query['hist_amount']??'')==='>=0' && !isset($query['token'],$query['action']),'Audit sort links preserve History sort/filter and exclude actions');}
+historyCheck($xp->query('//form[@method="POST"]/input[@name="hist_status" and @value="reconciled"]')->length===1,'Signed Undo forms retain the active status tab');
+historyCheck($xp->query('//table[@id="kreaHistoryTable"]/tr[contains(@class,"liste_titre")]/th')->length===6,'History has six headings after removing the Status column');
+foreach($xp->query('//table[@id="kreaHistoryTable"]/tr') as $row){historyCheck($xp->query('./td|./th',$row)->length===6,'History filters, headings and rendered rows retain six-column alignment');}
+$savedRows=$fixtureRows;$savedAudits=$fixtureAudits;
+$fixtureRows[0]['rappro']=0;$fixtureRows[0]['is_reversed']=1;
+$fixtureRows[1]['is_reversed']=1;
+foreach(array('all'=>3,'reconciled'=>1,'review'=>1,'reversed'=>1,'unsupported'=>0) as $status=>$expectedRows){
+	$statusHtml=renderHistory(array('hist_status'=>$status));
+	$statusXp=historyXPath($statusHtml);
+	historyCheck($statusXp->query('//table[@id="kreaHistoryTable"]/tr[contains(@class,"krea-history-row-top")]')->length===$expectedRows,'Status tabs retain the current derived-state priority and invalid values fail closed: '.$status);
+	historyCheck($statusXp->query('//nav[contains(@class,"kb-history-status-tabs")]/a')->length===4 && $statusXp->query('//nav[contains(@class,"kb-history-status-tabs")]/a[@aria-current="page"]')->length===($status==='unsupported'?0:1),'Status navigation exposes the four existing states and one current valid tab');
+	if($status==='all'){
+		historyCheck($statusXp->query('//tr[contains(@class,"krea-history-row-top")]/td[2]/span[contains(@class,"badge-status3")]')->length===1 && $statusXp->query('//tr[contains(@class,"krea-history-row-top")]/td[2]/span[contains(@class,"badge-status7")]')->length===1,'All keeps review and reversal warnings beside their descriptions');
+	}elseif($expectedRows===0){historyCheck($statusXp->query('//table[@id="kreaHistoryTable"]//td[@colspan="6"]')->length===1,'Empty History spans all six columns');}
+}
+$fixtureRows=$savedRows;
+for($i=1;$i<=4;$i++){$payload=json_decode($savedAudits[0]['payload_json'],true);$payload['marker']='receipt';$fixtureAudits[]=array_merge($savedAudits[0],array('rowid'=>100+$i,'payload_json'=>json_encode($payload)));}
+$tabHtml=renderHistory(array('hist_status'=>'reconciled','hist_description'=>'Synthetic','hist_amount'=>'>=0','hist_search'=>'receipt','audit_search_user'=>'Synthetic tester','audit_page'=>1,'limit'=>1,'page'=>1,'sortfield'=>'amount','sortorder'=>'ASC','audit_sortfield'=>'login','audit_sortorder'=>'DESC','action'=>'view','token'=>'must-not-leak','button_search_x'=>'x'));
+$tabXp=historyXPath($tabHtml);
+foreach($tabXp->query('//nav[contains(@class,"kb-history-status-tabs")]/a') as $index=>$link){
+	parse_str(parse_url($link->getAttribute('href'),PHP_URL_QUERY),$query);
+	historyCheck($query['hist_status']===array('all','reconciled','review','reversed')[$index] && $query['page']==='0' && $query['history_page']==='0','Status changes reset History to its first native page');
+	historyCheck($query['mainmenu']==='bank' && $query['leftmenu']==='kreabank_history' && $query['account_context']==='0' && $query['limit']==='1' && $query['audit_page']==='1','Status links retain native menu, page size and the independent audit page');
+	historyCheck($query['hist_description']==='Synthetic' && $query['hist_amount']==='>=0' && $query['hist_search']==='receipt' && $query['audit_search_user']==='Synthetic tester' && $query['sortfield']==='amount' && $query['sortorder']==='ASC' && $query['audit_sortfield']==='login' && $query['audit_sortorder']==='DESC','Status links preserve both lists\' filters and sort orders');
+	historyCheck(!isset($query['action']) && !isset($query['token']) && !isset($query['button_search_x']) && !isset($query['pageplusone']) && !isset($query['audit_nav']),'Status links cannot replay actions, tokens, submit buttons or stale native page inputs');
+}
+$fixtureAudits=$savedAudits;
+$scopedHtml=renderHistory(array('account_context'=>101,'hist_status'=>'review','sortfield'=>'status','sortorder'=>'ASC'));
+$scopedXp=historyXPath($scopedHtml);
+foreach($scopedXp->query('//nav[contains(@class,"kb-history-status-tabs")]/a') as $link){parse_str(parse_url($link->getAttribute('href'),PHP_URL_QUERY),$query);historyCheck($query['account_context']==='101' && $query['sortfield']==='event_ts','Account-scoped status links preserve ownership context and discard the removed column sort');}
 
 // The actual controller translates reserved labels only, never persisted evidence.
 $payload = array('strategy'=>'bulk_manual','source'=>'staged','native_bank_line_id'=>6001,'confidence_score'=>100,

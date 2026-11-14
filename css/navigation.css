@@ -78,6 +78,6 @@ body.kreabank-banking.kb-native-movements #id-right > .fiche > form > .div-table
 .kb-bank-statement td { vertical-align:top; }
 .kb-bank-statement .kb-statement-description { min-width:22ch; overflow-wrap:anywhere; }
 .kb-bank-statement .kb-statement-date-filter { display:flex; flex-direction:column; gap:4px; }
-.kb-statement-status-tabs { margin:0 0 18px; max-width:100%; overflow-x:auto; }
-.kb-statement-status-tabs a { flex:none; white-space:nowrap; }
-.kb-statement-status-tabs a:focus-visible { outline:2px solid #1769aa; outline-offset:-2px; }
+.kb-statement-status-tabs, .kb-history-status-tabs { margin:0 0 18px; max-width:100%; overflow-x:auto; }
+.kb-statement-status-tabs a, .kb-history-status-tabs a { flex:none; white-space:nowrap; }
+.kb-statement-status-tabs a:focus-visible, .kb-history-status-tabs a:focus-visible { outline:2px solid #1769aa; outline-offset:-2px; }

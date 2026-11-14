@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.31 — 2026-11-14
+
+- Replace the History Status column with compact filter tabs; preserve native filters, independent pagination and signed Undo state. Keep exceptional review/reversal warnings beside each description.
+
 ## 1.20.30 — 2026-11-14
 
 - Replace the combined statement Status column with compact evidence-filter tabs; retain native column filters, pagination, review warnings and movement/batch links.

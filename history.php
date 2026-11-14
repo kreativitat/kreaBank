@@ -68,7 +68,7 @@ $navigationAccountId = max(0, GETPOSTINT('account_context'));
 $navigationAccount = kreabankNavigationAccount($navigationAccountId);
 $historyReader = new KreaBankHistory($db, $conf->entity);
 $canNativeWrite = ($user->hasRight('banque', 'modifier') || $user->hasRight('banque', 'consolidate'));
-$historyColumns = array('event_ts' => 'KreaBankWhen', 'description' => 'KreaBankDescription', 'amount' => 'KreaBankAmount', 'links' => 'KreaBankLinkedDocuments', 'strategy' => 'Type', 'status' => 'KreaBankStatus');
+$historyColumns = array('event_ts' => 'KreaBankWhen', 'description' => 'KreaBankDescription', 'amount' => 'KreaBankAmount', 'links' => 'KreaBankLinkedDocuments', 'strategy' => 'Type');
 $auditColumns = array('datec' => 'KreaBankWhen', 'audit_type' => 'KreaBankAction', 'login' => 'KreaBankUser', 'fk_statement_line' => 'KreaBankLine', 'summary' => 'KreaBankAuditPayloadSummary');
 $historySort = kreabankListSort($historyColumns, 'event_ts', 'DESC');
 $auditSort = kreabankListSort($auditColumns, 'datec', 'DESC', 'audit_');
@@ -162,7 +162,7 @@ $jump = GETPOSTISSET('pageplusone') && GETPOSTISSET('pageplusoneold') && GETPOST
 if ($hasListButton('button_removefilter') || GETPOSTISSET('removefilter')) {
 	if (!$isAuditNav) {
 		$historySearch = $historyDescription = $historyDateFrom = $historyDateTo = $historyAmount = '';
-		$historyDirection = $historyLinkType = $historyAuditType = $historyStatus = 'all';
+		$historyDirection = $historyLinkType = $historyAuditType = 'all';
 		$page = $offset = 0;
 	} else {
 		$auditSearchWhenFrom = $auditSearchWhenTo = $auditSearchAction = $auditSearchUser = $auditSearchLine = $auditSearchSummary = '';
@@ -364,7 +364,6 @@ $preparedRecentRows = kreabankListOrderRows($preparedRecentRows, $historySort, s
 	if ($field === 'links') { return implode(' ', array_map(static function ($link) { return $link['doc_type_label'] . ' ' . $link['doc_ref_label']; }, $item['links'])); }
 	if ($field === 'strategy') { return $item['strategy_label']; }
 	if ($field === 'description') { return $item['description_label']; }
-	if ($field === 'status') { return (int) ($item['row']['needs_review'] ?? 0); }
 	return $item[$field] ?? $item['row'][$field] ?? '';
 });
 $historyTotalRecords = count($preparedRecentRows);
@@ -679,6 +678,14 @@ print '<div class="item"><div class="label">' . $langs->trans('KreaBankHistorySu
 print '<div class="item"><div class="label">' . $langs->trans('KreaBankHistorySummaryLinks') . '</div><div class="value">' . ((int) $summaryLinkedDocs) . '</div></div>';
 print '</div></details>';
 
+print '<nav class="kb-view-switch kb-history-status-tabs" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankStatus')) . '">';
+foreach (array('all'=>'All','reconciled'=>'KreaBankStatusReconciled','review'=>'KreaBankLinkNeedsReview','reversed'=>'KreaBankReversed') as $status => $label) {
+	$tabParams = array_merge($historyHeaderParams, array('hist_status'=>$status, 'page'=>0, 'history_page'=>0));
+	print '<a href="' . dol_escape_htmltag($_SERVER['PHP_SELF'] . '?' . http_build_query($tabParams, '', '&', PHP_QUERY_RFC3986)) . '"'
+		. ($historyStatus === $status ? ' class="active" aria-current="page"' : '') . '>' . dol_escape_htmltag($langs->trans($label)) . '</a>';
+}
+print '</nav>';
+
 print '<form method="GET" id="kreaHistoryFilterForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 print kreabankNavigationHiddenFields($navigationAccountId);
 foreach (array('sortfield' => $historySort['field'], 'sortorder' => $historySort['order'], 'audit_sortfield' => $auditSort['field'], 'audit_sortorder' => $auditSort['order']) as $key => $value) {
@@ -686,6 +693,7 @@ foreach (array('sortfield' => $historySort['field'], 'sortorder' => $historySort
 }
 print '<input type="hidden" name="mainmenu" value="bank">';
 print '<input type="hidden" name="leftmenu" value="kreabank_history">';
+print '<input type="hidden" name="hist_status" value="' . dol_escape_htmltag($historyStatus) . '">';
 print '<input type="hidden" name="history_page" value="' . ((int) $page) . '">';
 print '<input type="hidden" name="audit_page" value="' . ((int) $auditPage) . '">';
 print '<input type="hidden" name="audit_search_when_from" value="' . dol_escape_htmltag($auditSearchWhenFrom) . '">';
@@ -737,11 +745,6 @@ foreach ($availableAuditTypeOptions as $auditTypeOption) {
 }
 print '</select>';
 print '</td>';
-print '<td class="liste_titre center"><select class="flat maxwidth150" name="hist_status" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankStatus')) . '" form="kreaHistoryFilterForm">';
-foreach (array('all'=>'All','reconciled'=>'KreaBankStatusReconciled','review'=>'KreaBankLinkNeedsReview','reversed'=>'KreaBankUndo') as $value=>$label) {
-	print '<option value="' . $value . '"' . ($historyStatus === $value ? ' selected' : '') . '>' . $langs->trans($label) . '</option>';
-}
-print '</select></td>';
 print '<td class="liste_titre center maxwidthsearch">' . kreabankHistoryFilterButtons($form, 'kreaHistoryFilterForm') . '</td>';
 print '</tr>';
 print '<tr class="liste_titre">';
@@ -774,7 +777,7 @@ print '</tr>';
 	};
 
 if ($historyTotalRecords === 0) {
-	print '<tr class="oddeven"><td colspan="7"><span class="opacitymedium">' . $langs->trans('None') . '</span></td></tr>';
+	print '<tr class="oddeven"><td colspan="6"><span class="opacitymedium">' . $langs->trans('None') . '</span></td></tr>';
 } else {
 	foreach ($preparedRecentRowsPage as $preparedRow) {
 		$row = $preparedRow['row'];
@@ -807,6 +810,11 @@ if ($historyTotalRecords === 0) {
 
 		print '<td>';
 		print '<strong>' . dol_escape_htmltag($description !== '' ? $description : ('#' . $lineId)) . '</strong>';
+		if ($row['needs_review']) {
+			print '<br><span class="badge badge-status3">' . dol_escape_htmltag($langs->trans('KreaBankLinkNeedsReview')) . '</span>';
+		} elseif ($isReversed) {
+			print '<br><span class="badge badge-status7">' . dol_escape_htmltag($langs->trans('KreaBankReversed')) . '</span>';
+		}
 		print '</td>';
 		print '<td class="right nowrap"><strong>' . kreabankPrice($amount) . ' ' . dol_escape_htmltag($currency) . '</strong></td>';
 
@@ -892,14 +900,6 @@ if ($historyTotalRecords === 0) {
 			print '<br><span class="krea-history-sub">' . dol_escape_htmltag(kreabankWorklistTranslate($langs,'KreaBankHistoryScore')) . ' ' . $confidence . '</span>';
 		}
 		print '</td>';
-
-		if ($row['needs_review']) {
-			print '<td><span class="badge badge-status3">' . $langs->trans('KreaBankLinkNeedsReview') . '</span></td>';
-		} elseif ($isReversed) {
-			print '<td><span class="badge badge-status7">' . $langs->trans('KreaBankUndo') . '</span></td>';
-		} else {
-			print '<td><span class="badge badge-status4">' . $langs->trans('KreaBankStatusReconciled') . '</span></td>';
-		}
 
 		print '<td class="center">';
 		if ($nativeLineUrl !== '') {
