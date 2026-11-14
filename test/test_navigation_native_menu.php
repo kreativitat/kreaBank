@@ -97,8 +97,8 @@ if ($after->query('//a[normalize-space(.)="Reconciliation list"]')->length !== 0
 }
 $labels = array();
 foreach ($after->query($bankBlock . '//a') as $link) { $labels[] = trim($link->textContent); }
-if ($labels !== array('Banks', 'New account', 'Movements', 'Categories', 'Transfer', 'Fiscal report')) {
-	throw new RuntimeException('Native sorting must keep Movements directly below New account: ' . implode(', ', $labels));
+if ($labels !== array('Banks', 'New account', 'Movements', 'Fiscal report', 'Categories', 'Transfer')) {
+	throw new RuntimeException('Native sorting must keep Fiscal report directly below Movements: ' . implode(', ', $labels));
 }
 if ($after->query($bankBlock . '//div[contains(@class,"menu_contenu_compta_bank_bankentries_list")]/a')->length !== 1) {
 	throw new RuntimeException('Movements must retain the native URL-derived menu identity');
@@ -108,6 +108,9 @@ foreach (array('en_US'=>'Movements', 'pt_PT'=>'Movimentos') as $locale=>$label) 
 	$localized = nativeMenuXPath(renderNativeMenuFixture($fixture->liste, true));
 	if ($localized->query($bankBlock . '//a[normalize-space(.)="New account"]/parent::div/following-sibling::div[1]/a[normalize-space(.)="' . $label . '"]')->length !== 1) {
 		throw new RuntimeException('The native movement entry must follow New account in ' . $locale);
+	}
+	if ($localized->query($bankBlock . '//a[normalize-space(.)="' . $label . '"]/parent::div/following-sibling::div[1]/a[normalize-space(.)="Fiscal report"]')->length !== 1) {
+		throw new RuntimeException('Fiscal report must follow Movements in ' . $locale);
 	}
 }
 $langs = new NativeMenuTestLangs('en_US');

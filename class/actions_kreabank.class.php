@@ -114,6 +114,22 @@ class ActionsKreaBank extends CommonHookActions
 					if ((int) ($item['level'] ?? 0) === 0 && parse_url($item['url'] ?? '', PHP_URL_PATH) === '/compta/bank/list.php') {
 						$insert = $index + 1;
 						while (isset($ordinary[$insert]) && (int) ($ordinary[$insert]['level'] ?? 0) > 0) { $insert++; }
+						$position = null;
+						for ($sibling = $index + 1; isset($ordinary[$sibling]) && (int) ($ordinary[$sibling]['level'] ?? 0) > 0; $sibling++) {
+							$query = array();
+							parse_str(html_entity_decode((string) (parse_url($ordinary[$sibling]['url'] ?? '', PHP_URL_QUERY) ?? ''), ENT_QUOTES, 'UTF-8'), $query);
+							if ((int) ($ordinary[$sibling]['level'] ?? 0) === 1
+								&& parse_url($ordinary[$sibling]['url'] ?? '', PHP_URL_PATH) === '/compta/bank/bankentries_list.php' && empty($query['action'])) {
+								$position = (int) ($ordinary[$sibling]['position'] ?? 0);
+								$insert = $sibling + 1;
+								while (isset($ordinary[$insert]) && (int) ($ordinary[$insert]['level'] ?? 0) > 1) { $insert++; }
+								break;
+							}
+						}
+						if ($position !== null) {
+							foreach ($reports as &$report) { $report['position'] = $position; }
+							unset($report);
+						}
 						array_splice($ordinary, $insert, 0, $reports);
 						break;
 					}

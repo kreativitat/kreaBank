@@ -1,5 +1,15 @@
 # List sorting
 
+The combined Bank statement uses compact status links matching Reconcile's view
+switch. They preserve the selected bank, remaining column filters, sort and page
+size, and start at page one. Native column reset retains the selected status;
+the All link clears it. Existing pending/registered/reconciled/review/skipped/
+duplicate evidence semantics are unchanged; Duplicate overlaps the other states.
+Selected-bank views omit repeated bank/source columns and ignore stale filters
+or sorts for them. All-bank views keep both. Review/duplicate warnings and native
+movement/batch links remain beside the statement description. Balance projection
+inputs remain complete and owner-scoped before either count or row filtering.
+
 Accounts align balances and actions with their column headings. Click a data
 heading to order a list; click it again to reverse direction. Arrows show the
 active order. Action and selection columns are not sortable.

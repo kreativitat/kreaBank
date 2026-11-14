@@ -7,12 +7,13 @@ account. Its standalone page does not render the operational tab bar. Reconcile 
 direct route without an operational tab. Bank statement combines all imported
 movements; Statements retains the individual import list and details. Account
 management is separate: the native Banks/Cash heading opens the accounts
-overview. Bank references and pending counts open the account-scoped Reconcile
-workspace with its five tabs. Cash accounts retain native Movements because they
+overview. Bank references and the statement icon open the account-scoped Bank
+statement with its five tabs; pending counts open Reconcile. An owned account
+without imports keeps its empty statement view and account context. Cash accounts retain native Movements because they
 are excluded from bank reconciliation. The pencil icon in the right-aligned
 Actions column opens the account’s native details and tool tabs.
-Bank rows also have a reconciliation icon beside the pencil, using the same
-scoped list URL as the account reference and pending count.
+Bank rows have a statement icon beside the pencil, using the same scoped
+statement URL as the account reference.
 The accounts overview and account-tool pages do not display the operational tabs.
 Internal transfers and new-account creation keep the native layout without a
 workspace header or tabs.
@@ -76,7 +77,7 @@ hook retains the native Entry list as **Movements** (pt_PT: **Movimentos**) dire
 below New financial account, preserving its URL, permissions and enabled state.
 It removes the Account list, old Reconcile and separate Reconciliation list links, keeping
 the **Banks/Cash** heading (pt_PT: **Bancos Dinheiro**) as the account-list entry
-point. The existing KreaTax fiscal/bank report follows the native bank siblings
+point. The existing KreaTax fiscal/bank report follows Movements (and its children)
 as a level-one item, with its URL and permissions preserved. Keep its physical
 array order aligned with native sorting before reindexing: Eldy sorts with
 preserved keys but checks the next integer key when closing blocks. This avoids

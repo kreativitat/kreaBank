@@ -88,17 +88,18 @@ $count=0;
 while ($row=$db->fetch_object($rows)) {
 	if ($count++ < $paging['offset']) { continue; }
 	if ($count > $paging['offset'] + $paging['limit']) { break; }
-	$accountWorkspaceUrl = (int) $row->account_type === 2 ? kreabankNativeEntriesUrl($row->rowid) : kreabankBankingUrl('worklist', $row->rowid);
+	$accountWorkspaceUrl = (int) $row->account_type === 2 ? kreabankNativeEntriesUrl($row->rowid) : kreabankBankingUrl('bankstatement', $row->rowid);
+	$pendingUrl = (int) $row->account_type === 2 ? $accountWorkspaceUrl : kreabankBankingUrl('worklist', $row->rowid);
 	print '<tr><td><a class="kb-account-name" href="' . dol_escape_htmltag($accountWorkspaceUrl) . '">' . dol_escape_htmltag($row->ref) . '</a>';
 	print '<small>' . dol_escape_htmltag($row->label) . '</small></td>';
 	print '<td>' . dol_escape_htmltag($row->currency_code) . '</td>';
 	print kreabankAccountFeedCells($row);
 	print '<td class="kb-money">' . kreabankPrice($row->balance) . '</td>';
-	print '<td><a class="kb-count" href="' . dol_escape_htmltag($accountWorkspaceUrl) . '">' . (int) $row->pending_count . '</a></td>';
+	print '<td><a class="kb-count" href="' . dol_escape_htmltag($pendingUrl) . '">' . (int) $row->pending_count . '</a></td>';
 	print '<td class="kb-accounts-action-cell">';
 	if ((int) $row->account_type !== 2) {
-		$reconcileLabel = $langs->trans('KreaBankReconcile') . ' ' . $row->ref;
-		print '<a class="kb-account-reconcile" href="' . dol_escape_htmltag($accountWorkspaceUrl) . '" aria-label="' . dol_escape_htmltag($reconcileLabel) . '" title="' . dol_escape_htmltag($reconcileLabel) . '">' . img_picto('', 'fa-check-double', 'aria-hidden="true"') . '</a>';
+		$statementLabel = $langs->trans('KreaBankBankStatement') . ' ' . $row->ref;
+		print '<a class="kb-account-statement" href="' . dol_escape_htmltag($accountWorkspaceUrl) . '" aria-label="' . dol_escape_htmltag($statementLabel) . '" title="' . dol_escape_htmltag($statementLabel) . '">' . img_picto('', 'fa-file-alt', 'aria-hidden="true"') . '</a>';
 	}
 	print '<a class="kb-account-edit" href="' . dol_escape_htmltag(kreabankBankingUrl('card', $row->rowid)) . '" aria-label="' . dol_escape_htmltag($langs->trans('Modify') . ' ' . $row->ref) . '" title="' . dol_escape_htmltag($langs->trans('Modify')) . '">' . img_picto('', 'edit') . '</a></td>';
 	print '</tr>';

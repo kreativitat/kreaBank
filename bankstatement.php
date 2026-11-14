@@ -55,15 +55,11 @@ if (!isModEnabled('kreabank') || !isModEnabled('banque') || !empty($user->socid)
 $accountId = max(0, GETPOSTINT('account_context'));
 $account = kreabankNavigationAccount($accountId);
 $report = new KreaBankIntegration($db, $conf->entity);
-if ($accountId > 0 && $db->num_rows($report->statementAccounts($accountId)) === 0) {
-	header('Location: ' . kreabankWorkspaceUrl('bankstatement'));
-	exit;
-}
 $columns = array('operation_date' => 'KreaBankOperationDate', 'value_date' => 'KreaBankStatementValueDate',
 	'description' => 'KreaBankDescription', 'debit' => 'KreaBankHistorySummaryDebits', 'credit' => 'KreaBankHistorySummaryCredits',
 	'running_balance' => 'KreaBankStatementBalance', 'currency' => 'KreaBankCurrency', 'bank_account_ref' => 'BankAccount',
-	'statement_ref' => 'KreaBankSourceStatement', 'status' => 'Status');
-if ($account) { unset($columns['statement_ref']); }
+	'statement_ref' => 'KreaBankSourceStatement');
+if ($account) { unset($columns['bank_account_ref'], $columns['statement_ref']); }
 $sort = kreabankListSort($columns, 'operation_date', 'DESC');
 // Signed decimal expressions sort the complete scoped result before pagination.
 $fields = array('debit' => 'CASE WHEN h.amount<0 THEN -h.amount ELSE NULL END',
@@ -77,9 +73,9 @@ foreach (array('operation_from','operation_to','value_from','value_to','descript
 foreach (array('page','pageplusone','pageplusoneold','limit','button_search','button_search_x','button_search.x','button_removefilter','button_removefilter_x','button_removefilter.x') as $field) {
 	if (GETPOSTISSET($field)) { $request[$field] = GETPOST($field, 'alphanohtml'); }
 }
-$list = kreabankStatementListState($request, $conf->liste_limit);
-// A selected owned account hides the source column and its otherwise invisible filter.
-if ($account) { $list['filters']['statement_ref'] = ''; }
+$list = kreabankStatementListState($request, $conf->liste_limit, true);
+// Hidden columns must not retain invisible predicates in a selected owned account.
+if ($account) { $list['filters']['bank_account_ref'] = $list['filters']['statement_ref'] = ''; }
 $filters = $list['filters'];
 $limit = $list['limit'];
 $page = $list['page'];
@@ -97,9 +93,19 @@ $param = '&' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
 $form = new Form($db);
 llxHeader('', $langs->trans('KreaBankBankStatement'));
 kreabankPrintWorkspaceNavigation('bankstatement', $account);
+print '<nav class="kb-view-switch kb-statement-status-tabs" aria-label="' . dol_escape_htmltag($langs->trans('Status')) . '">';
+foreach (array_merge(kreabankStatementListStatusOptions(), array(''=>'All')) as $status=>$label) {
+	$tabParams = array_merge($params, array('sortfield'=>$sort['field'], 'sortorder'=>$sort['order'], 'page'=>0));
+	unset($tabParams['search_status']);
+	if ($status !== '') { $tabParams['search_status'] = $status; }
+	$tabUrl = $_SERVER['PHP_SELF'] . '?' . http_build_query($tabParams, '', '&', PHP_QUERY_RFC3986);
+	print '<a href="' . dol_escape_htmltag($tabUrl) . '"' . ($filters['status'] === $status ? ' class="active" aria-current="page"' : '') . '>'
+		. dol_escape_htmltag($langs->trans($status === 'pending' ? 'KreaBankWorklistPending' : $label)) . '</a>';
+}
+print '</nav>';
 print '<form method="GET" id="searchFormList" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 print kreabankNavigationHiddenFields($accountId);
-foreach (array('mainmenu'=>'bank', 'leftmenu'=>'kreabank_bankstatement', 'sortfield'=>$sort['field'], 'sortorder'=>$sort['order'], 'page'=>$page) as $field=>$value) {
+foreach (array('mainmenu'=>'bank', 'leftmenu'=>'kreabank_bankstatement', 'sortfield'=>$sort['field'], 'sortorder'=>$sort['order'], 'page'=>$page, 'search_status'=>$filters['status']) as $field=>$value) {
 	print '<input type="hidden" name="' . $field . '" value="' . dol_escape_htmltag((string) $value) . '">';
 }
 print_barre_liste($langs->trans('KreaBankBankStatement'), $page, $_SERVER['PHP_SELF'], $param, $sort['field'], $sort['order'], '', $num, $total, 'bank', 0, '', '', $limit, 0, 0, 1);
@@ -115,12 +121,6 @@ foreach ($columns as $field=>$label) {
 		$prefix = $field === 'operation_date' ? 'operation' : 'value';
 		print '<div class="kb-statement-date-filter">' . $input($prefix . '_from', $title . ' — ' . $langs->trans('From'), 'date', 'width125')
 			. $input($prefix . '_to', $title . ' — ' . $langs->trans('To'), 'date', 'width125') . '</div>';
-	} elseif ($field === 'status') {
-		print '<select class="flat maxwidth150" name="search_status" aria-label="' . dol_escape_htmltag($title) . '"><option value="">' . $langs->trans('All') . '</option>';
-		foreach (kreabankStatementListStatusOptions() as $value=>$key) {
-			print '<option value="' . $value . '"' . ($filters['status'] === $value ? ' selected' : '') . '>' . $langs->trans($key) . '</option>';
-		}
-		print '</select>';
 	} else {
 		$class = $field === 'description' ? 'minwidth100 maxwidth150' : ($field === 'currency' ? 'width50' : 'width75');
 		print $input($field, $title, isset($fields[$field]) ? 'text' : 'search', $class . (isset($fields[$field]) ? ' right' : ''));
@@ -143,11 +143,24 @@ while ($shown < $limit && ($row = $db->fetch_object($result))) {
 	foreach (kreabankStatementReferences($row) as $reference) {
 		print '<br><small>' . dol_escape_htmltag($reference) . '</small>';
 	}
+	if ($state === 'KreaBankLinkNeedsReview') {
+		print '<br><small class="warning">' . $langs->trans($state) . '</small>';
+	}
+	if ((int) $row->is_duplicate > 0) {
+		print '<br><small class="warning">' . $langs->trans('KreaBankDuplicate') . '</small>';
+	}
+	if ((int) $row->native_id > 0) {
+		print '<br><small><a href="' . dol_escape_htmltag(dol_buildpath('/compta/bank/line.php', 1) . '?rowid=' . (int) $row->native_id) . '">#' . (int) $row->native_id . '</a></small>';
+	} elseif (!empty($row->group_id)) {
+		$batchUrl = dol_buildpath('/custom/kreabank/reconciliationlist.php',1) . '?' . http_build_query(array('mainmenu'=>'bank','leftmenu'=>'kreabank_worklist','search_account'=>(int) $row->bank_account_id,'search_status'=>'all','expand'=>'staged:' . (int) $row->rowid,'mode'=>'batch'),'','&',PHP_QUERY_RFC3986);
+		print '<br><small><a href="' . dol_escape_htmltag($batchUrl) . '">' . $langs->trans('KreaBankWorklistViewBatch') . ' (' . (int) $row->group_count . ')</a></small>';
+	}
 	print '</td><td class="right nowrap">' . ((float) $row->amount < 0 ? kreabankPrice(-$row->amount) : '—') . '</td>';
 	print '<td class="right nowrap">' . ((float) $row->amount >= 0 ? kreabankPrice($row->amount) : '—') . '</td>';
 	print '<td class="right nowrap"' . ($row->balance_calculated ? ' title="' . dol_escape_htmltag($langs->trans('KreaBankCalculatedBalanceHelp', $row->balance_updated_at)) . '"' : '') . '>'
 		. ($row->display_balance !== null ? kreabankPrice($row->display_balance) : '—') . '</td>';
-	print '<td>' . dol_escape_htmltag($row->currency) . '</td><td>' . dol_escape_htmltag($row->bank_account_ref) . '</td>';
+	print '<td>' . dol_escape_htmltag($row->currency) . '</td>';
+	if (isset($columns['bank_account_ref'])) { print '<td>' . dol_escape_htmltag($row->bank_account_ref) . '</td>'; }
 	if (isset($columns['statement_ref'])) {
 		print '<td><a href="' . dol_escape_htmltag(kreabankStatementUrl($row->bank_account_id, $row->statement_ref)) . '">' . dol_escape_htmltag($row->statement_ref) . '</a>';
 		if (!empty($row->evidence_statement_ref) && $row->evidence_statement_ref !== $row->statement_ref) {
@@ -155,17 +168,7 @@ while ($shown < $limit && ($row = $db->fetch_object($result))) {
 		}
 		print '</td>';
 	}
-	print '<td' . ($state === 'KreaBankLinkNeedsReview' ? ' class="warning"' : '') . '>' . $langs->trans($state);
-	if ((int) $row->is_duplicate > 0) {
-		print '<br><span class="warning">' . $langs->trans('KreaBankDuplicate') . '</span>';
-	}
-	if ((int) $row->native_id > 0) {
-		print '<br><a href="' . dol_escape_htmltag(dol_buildpath('/compta/bank/line.php', 1) . '?rowid=' . (int) $row->native_id) . '">#' . (int) $row->native_id . '</a>';
-	} elseif (!empty($row->group_id)) {
-		$batchUrl = dol_buildpath('/custom/kreabank/reconciliationlist.php',1) . '?' . http_build_query(array('mainmenu'=>'bank','leftmenu'=>'kreabank_worklist','search_account'=>(int) $row->bank_account_id,'search_status'=>'all','expand'=>'staged:' . (int) $row->rowid,'mode'=>'batch'),'','&',PHP_QUERY_RFC3986);
-		print '<br><a href="' . dol_escape_htmltag($batchUrl) . '">' . $langs->trans('KreaBankWorklistViewBatch') . ' (' . (int) $row->group_count . ')</a>';
-	}
-	print '</td><td></td></tr>';
+	print '<td></td></tr>';
 }
 if ($total === 0) {
 	print '<tr><td colspan="' . (count($columns) + 1) . '">' . $langs->trans('KreaBankImportHistoryEmpty') . '</td></tr>';

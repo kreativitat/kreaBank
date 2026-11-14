@@ -29,7 +29,7 @@ function kreabankStatementListOrder($order, $expression)
 }
 
 /** Normalize only read-only list state; native search/reset buttons start at page one. */
-function kreabankStatementListState($request, $defaultLimit)
+function kreabankStatementListState($request, $defaultLimit, $statusTabs = false)
 {
 	$filters = array();
 	foreach (array('operation_from','operation_to','value_from','value_to','description','debit','credit','running_balance','currency','bank_account_ref','statement_ref','status') as $field) {
@@ -41,7 +41,11 @@ function kreabankStatementListState($request, $defaultLimit)
 		return false;
 	};
 	$clear = $has(array('button_removefilter','button_removefilter_x','button_removefilter.x'));
-	if ($clear) { $filters = array_fill_keys(array_keys($filters), ''); }
+	if ($clear) {
+		$status = $filters['status'];
+		$filters = array_fill_keys(array_keys($filters), '');
+		if ($statusTabs && isset(kreabankStatementListStatusOptions()[$status])) { $filters['status'] = $status; }
+	}
 	$page = isset($request['pageplusone']) ? (int) $request['pageplusone'] - 1 : (int) ($request['page'] ?? 0);
 	$jump = isset($request['pageplusone'], $request['pageplusoneold']) && (int) $request['pageplusone'] !== (int) $request['pageplusoneold'];
 	if ($clear || (!$jump && $has(array('button_search','button_search_x','button_search.x')))) { $page = 0; }

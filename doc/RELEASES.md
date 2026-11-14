@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.30 — 2026-11-14
+
+- Replace the combined statement Status column with compact evidence-filter tabs; retain native column filters, pagination, review warnings and movement/batch links.
+- Hide repeated bank/source columns in selected-bank statements. Account references and the statement icon open that account's statement, including empty accounts; pending counts retain reconciliation links.
+- Place the existing fiscal/bank report directly below Movements in the native left menu without changing its permissions or destination.
+
 ## 1.20.29 — 2026-11-14
 
 - Remove the redundant bank selector from selected-bank reconciliation views; retain the bank through native header filtering, status tabs and pagination.
