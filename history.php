@@ -639,6 +639,7 @@ print '.krea-history-row-top .button.krea-history-action-btn:hover{background:#3
 print '.krea-history-row-top .button.krea-history-action-btn.krea-history-undo{background:#9a4b16;border-color:#9a4b16}';
 print '.krea-history-row-top .button.krea-history-action-btn.krea-history-undo:hover{background:#7b3c12;border-color:#7b3c12}';
 print '.krea-history-row-top .button.krea-history-action-btn:focus-visible{outline:2px solid #1769aa;outline-offset:2px}';
+print '.krea-history-row-top .krea-history-reason{box-sizing:border-box;width:112px;height:28px;max-width:112px;min-height:0;margin:4px 0 0;padding:3px 8px;font-family:inherit;font-size:11px;line-height:1}';
 print '@media (max-width: 1100px){.krea-history-kpi{grid-template-columns:repeat(2,minmax(140px,1fr))}}';
 print '@media (max-width: 700px){.krea-history-kpi{grid-template-columns:1fr}}';
 print '</style>';
@@ -951,7 +952,7 @@ if ($historyTotalRecords === 0) {
 			print '<input type="hidden" name="limit" value="' . ((int) $limit) . '">';
 			print '<input type="hidden" name="page" value="' . ((int) $page) . '">';
 			print '<button type="submit" class="button smallpaddingimp krea-history-action-btn krea-history-undo">' . $undoActionLabel . '</button>';
-			print '<br><input type="text" name="reason" class="flat maxwidth100" style="margin-top:4px" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankReason')) . '">';
+			print '<br><input type="text" name="reason" class="flat krea-history-reason" placeholder="' . dol_escape_htmltag($langs->trans('KreaBankReason')) . '">';
 			print '</form>';
 		}
 		print '</td>';

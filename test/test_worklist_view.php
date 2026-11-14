@@ -103,6 +103,10 @@ function worklistViewFixture($case)
 		$model['rows'][0]['pending_analysis'] = true;
 		$model['scan'] = array('message'=>'Analysing pending lines', 'done'=>4, 'total'=>51, 'page_ready'=>$case === 'loading_ready', 'action'=>array('action'=>'advance_scan', 'fields'=>array('scan_generation'=>'synthetic-generation', 'scan_cursor'=>4)));
 		$model['rows'][0]['expanded'] = $case === 'loading_expanded';
+		if ($case === 'loading_ready') {
+			$model['scan']['done'] = 25; $model['scan']['total'] = 25;
+			$model['scan']['action']['action'] = 'more_scan';
+		}
 	}
 	return $model;
 }

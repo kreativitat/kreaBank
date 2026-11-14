@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20.13 — 2026-11-14
+
+- Limit automatic reconciliation-list analysis to the pagination-sized displayed batch. Stop after completion; More explicitly grants only the next bounded batch. Keep global payment filters pending until analysis is complete.
+- Match the History reason input to its action buttons in width and height.
+- Bind the clickable payment-bank correction to the exact reviewed movement, even when several payments share the bank reference.
+- Move Movements from the operational tabs to the native left menu below New financial account. Reconcile becomes the first tab. No financial execution, schema or scheduler change.
+
 ## 1.20.12 — 2026-11-14
 
 - Open the reviewed change-bank modal by clicking the payment bank reference in list rows and expanded candidates. Retain the icon shortcut, permissions and signed correction review.

@@ -48,7 +48,7 @@ class ActionsKreaBank extends CommonHookActions
 	/** Simplify workspace links without changing native routes or other menu permissions. */
 	public function menuLeftMenuItems($parameters, &$menuitems, &$action, $hookmanager)
 	{
-		global $user;
+		global $user, $langs;
 		$this->results = array();
 		if (($parameters['mainmenu'] ?? '') !== 'bank' || !is_array($menuitems) || !empty($user->socid)
 			|| !$user->hasRight('banque', 'lire') || !$user->hasRight('kreabank', 'reconciliation', 'read')) {
@@ -58,7 +58,7 @@ class ActionsKreaBank extends CommonHookActions
 		foreach ($menuitems as $item) {
 			$path = parse_url($item['url'] ?? '', PHP_URL_PATH);
 			if ($path === '/custom/kreabank/reconciliationlist.php' || ((int) ($item['level'] ?? 0) === 1
-				&& in_array($path, array('/compta/bank/list.php', '/compta/bank/bankentries_list.php', '/custom/kreabank/reconcile.php'), true))) {
+				&& in_array($path, array('/compta/bank/list.php', '/custom/kreabank/reconcile.php'), true))) {
 				continue;
 			}
 			$visible[] = $item;
@@ -71,6 +71,32 @@ class ActionsKreaBank extends CommonHookActions
 			}
 		}
 		if ($bankIndex !== null) {
+			$movementIndex = null;
+			$newAccountIndex = null;
+			for ($index = $bankIndex + 1; isset($visible[$index]) && (int) ($visible[$index]['level'] ?? 0) > 0; $index++) {
+				$item = $visible[$index];
+				if ((int) ($item['level'] ?? 0) !== 1) { continue; }
+				$path = parse_url($item['url'] ?? '', PHP_URL_PATH);
+				$query = array();
+				parse_str(html_entity_decode((string) (parse_url($item['url'] ?? '', PHP_URL_QUERY) ?? ''), ENT_QUOTES, 'UTF-8'), $query);
+				if ($path === '/compta/bank/card.php' && ($query['action'] ?? '') === 'create') { $newAccountIndex = $index; }
+				if ($movementIndex === null && $path === '/compta/bank/bankentries_list.php' && empty($query['action'])) { $movementIndex = $index; }
+			}
+			if ($movementIndex !== null) {
+				$langs->load('kreabank@kreabank');
+				$visible[$movementIndex]['titre'] = $langs->trans('KreaBankNavMovements');
+				if ($newAccountIndex !== null) {
+					// Move the native entry with its children, without changing its URL or rights.
+					$end = $movementIndex + 1;
+					while (isset($visible[$end]) && (int) ($visible[$end]['level'] ?? 0) > 1) { $end++; }
+					$movementBlock = array_splice($visible, $movementIndex, $end - $movementIndex);
+					if ($newAccountIndex > $movementIndex) { $newAccountIndex -= count($movementBlock); }
+					$movementBlock[0]['position'] = (int) ($visible[$newAccountIndex]['position'] ?? 0);
+					$insert = $newAccountIndex + 1;
+					while (isset($visible[$insert]) && (int) ($visible[$insert]['level'] ?? 0) > 1) { $insert++; }
+					array_splice($visible, $insert, 0, $movementBlock);
+				}
+			}
 			$reports = array();
 			$ordinary = array();
 			foreach ($visible as $item) {

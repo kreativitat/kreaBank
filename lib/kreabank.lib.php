@@ -145,7 +145,6 @@ function kreabankPrepareHead($accountId = 0)
 	$langs->load('kreabank@kreabank');
 	$head = array();
 	if ($user->hasRight('kreabank', 'reconciliation', 'read') && $user->hasRight('banque', 'lire')) {
-		$head[] = array(kreabankBankingUrl('movements', $accountId), $langs->trans('KreaBankNavMovements'), 'movements');
 		if (empty($user->socid)) {
 			$head[] = array(kreabankBankingUrl('worklist', $accountId), $langs->trans('KreaBankReconcile'), 'worklist');
 		}

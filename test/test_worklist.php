@@ -22,6 +22,12 @@ function rejectWorklist($callable, $message)
 }
 function worklistKeys($rows) { return array_column($rows, 'key'); }
 
+$accountReview = array(array('bank_line_id'=>81,'bank_account_id'=>102));
+checkWorklist(kreabankWorklistCorrectionMatches($accountReview,array('rowid'=>81,'fk_account'=>102)), 'The bank reference opens its exact reviewed native payment');
+checkWorklist(!kreabankWorklistCorrectionMatches($accountReview,array('rowid'=>82,'fk_account'=>102)), 'Another payment in the same bank cannot replace the displayed correction');
+checkWorklist(!kreabankWorklistCorrectionMatches($accountReview,array('rowid'=>81,'fk_account'=>103)), 'A changed payment account cannot reuse the displayed correction');
+checkWorklist(!kreabankWorklistCorrectionMatches(array_merge($accountReview,$accountReview),array('rowid'=>81,'fk_account'=>102)), 'Competing reviewed payments require an explicit choice');
+
 $state = kreabankWorklistState(array(), 25);
 checkWorklist($state['limit'] === 25 && $state['page'] === 0, 'Configured native list size and first page are the defaults');
 checkWorklist($state['filters']['status'] === 'pending' && $state['sort']['field'] === 'operation_date' && $state['sort']['order'] === 'ASC', 'Pending oldest-first is the default list');
@@ -261,6 +267,13 @@ checkWorklist(!$result['calls'] && $result['denied'], 'Batch undo requires its s
 $result = runWorklistController(array('action'=>'undo_batch','review'=>'undo'),$undoSession);
 checkWorklist($result['calls'] === array(array('undoPaymentBatch',array(8,array('signed'=>'undo proof')))), 'Authorized group undo delegates the exact reviewed group to the shared service');
 
+// Preparing matches retains read permission and CSRF without financial authority.
+foreach (array('advance_scan','more_scan') as $readAction) {
+	$result = runWorklistController(array('action'=>$readAction),worklistControllerSession(),array('denied'=>array('kreabank/reconciliation/write','banque/modifier','banque/consolidate')));
+	checkWorklist(!$result['denied'] && !$result['calls'], 'Read-only users retain analysis without entering financial execution: ' . $readAction);
+	$result = runWorklistController(array('action'=>$readAction),worklistControllerSession(),array('csrf'=>false));
+	checkWorklist($result['denied'] && !$result['calls'], 'Read-only analysis still requires CSRF: ' . $readAction);
+}
 // Optional task acceptance evidence; do not permanently freeze legacy source hashes.
 $baselinePath = getenv('KREABANK_PROTECTED_BASELINE');
 if ($baselinePath) {

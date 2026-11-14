@@ -70,10 +70,10 @@ $newHead = kreabankCompleteAccountHead($head, 45);
 checkNavigation($newHead === $head, 'Shared header replaces native tabs without inserting another navigation layer');
 checkNavigation(strpos(kreabankWorkspaceUrl('reconcile', 45), 'reconcile.php') !== false, 'Dormant reconciliation keeps its direct route');
 $tabs = kreabankPrepareHead(45);
-checkNavigation(array_column($tabs, 2) === array('movements', 'worklist', 'bankstatement', 'statement', 'history'), 'Reconcile is the second operational tab');
+checkNavigation(array_column($tabs, 2) === array('worklist', 'bankstatement', 'statement', 'history'), 'Reconcile is first and native Movements is not an operational tab');
 $user->allowed[] = 'kreabank.reconciliation.write';
 $user->allowed[] = 'banque.modifier';
-checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('movements', 'worklist', 'bankstatement', 'statement', 'history'), 'Write actions do not add another navigation layer');
+checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('worklist', 'bankstatement', 'statement', 'history'), 'Write actions do not add another navigation layer');
 foreach (kreabankPrepareHead(45) as $tab) {
 	checkNavigation((strpos($tab[0], 'account_context=45') !== false || strpos($tab[0], 'search_account=45') !== false || preg_match('/[?&]id=45(?:&|$)/', $tab[0])) && strpos($tab[0], 'line_id') === false, 'Carry account without copying a stale line/action');
 }
@@ -182,7 +182,7 @@ foreach (array('movements','bankstatement','statement','worklist','history') as 
 	$xpath = new DOMXPath($dom);
 	$entries = $xpath->query("//nav[contains(@class,'kb-primary')]/a[contains(@href,'reconciliationlist.php')]");
 	checkNavigation($entries->length === 1 && strpos($entries->item(0)->getAttribute('href'), 'search_account=45') !== false, 'Every operational tab bar exposes the new list with its owned account');
-	checkNavigation($xpath->query("//nav[contains(@class,'kb-primary')]/a")->length === 5 && strpos($html, 'kb-reconcile-action') === false, 'Five banking tabs contain the new list without a header button');
+	checkNavigation($xpath->query("//nav[contains(@class,'kb-primary')]/a")->length === 4 && strpos($html, 'kb-reconcile-action') === false, 'Four banking tabs contain the new list without a Movements tab or header button');
 	if ($entryPage === 'worklist') {
 		checkNavigation($entries->item(0)->getAttribute('aria-current') === 'page' && strpos($html, 'KreaBankReviewOneByOne') === false, 'New reconciliation tab is active without legacy review subtabs');
 	}
@@ -216,11 +216,15 @@ foreach (array('movements', 'worklist', 'bankstatement', 'statement', 'reconcile
 	if ($withBalances) {
 		checkNavigation(strpos($balanceQueries[1], ' WHERE ba.entity=7 AND ba.rowid=45 ORDER BY ') !== false && strpos($balanceQueries[1], 'LIMIT 0, 1') !== false, 'Balance reads cannot list other accounts or companies');
 		checkNavigation($xpath->query('//header/nav/following-sibling::dl[@class="kb-movement-balances"]')->length === 1 && strpos($html, '-1234.56') !== false, 'Every selected operational tab shares one balance panel after its tabs');
-		checkNavigation($xpath->query('//nav/a[@aria-current="page"]')->item(0)->textContent === $tabs[array_search($page, array_column($tabs, 2), true)][1], 'Each operational view highlights its own tab');
+		if ($page === 'movements') {
+			checkNavigation($xpath->query('//nav/a[@aria-current="page"]')->length === 0 && strpos($html, 'kb-movement-balances') !== false, 'Native Movements retains its header and balances without selecting another operational tab');
+		} else {
+			checkNavigation($xpath->query('//nav/a[@aria-current="page"]')->item(0)->textContent === $tabs[array_search($page, array_column($tabs, 2), true)][1], 'Each operational view highlights its own tab');
+		}
 	} else {
 		checkNavigation(strpos($html, 'kb-movement-balances') === false, 'Dormant and configuration views retain their existing layout');
 	}
-	checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a')->length === 5, 'Five operational tabs keep the legacy reconciliation controller dormant');
+	checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a')->length === 4, 'Four operational tabs keep native Movements in its menu and legacy reconciliation dormant');
 	checkNavigation($xpath->query('//div[contains(@class,"kb-brand")]/span[@class="kb-account-context"]')->item(0)->textContent === 'Synthetic <account> — Current & savings', 'The bank reference and label remain visible and escaped beside the title');
 	foreach ($xpath->query('//nav/a | //div[contains(@class,"kb-view-switch")]/a') as $link) {
 		checkNavigation(preg_match('/[?&](?:id|account_context|search_account)=45(?:&|$)/', $link->getAttribute('href')) === 1, 'All operational and subview links retain the selected account');
@@ -271,7 +275,7 @@ $bankMenus = array(
 	array('url' => '/compta/bank/list.php?leftmenu=bank', 'titre' => 'List', 'level' => 1, 'position' => 100),
 	array('url' => '/custom/kreatax/bankreconciliation.php?mainmenu=bank&leftmenu=kreataxbankreport_bank', 'titre' => 'Fiscal report', 'level' => 2, 'perms' => 'unchanged', 'position' => 180),
 	array('url' => '/custom/kreabank/reconcile.php?mainmenu=bank', 'titre' => 'Reconcile', 'level' => 1),
-	array('url' => '/compta/bank/bankentries_list.php', 'titre' => 'Entries', 'level' => 1),
+	array('url' => '/compta/bank/bankentries_list.php?mainmenu=bank&leftmenu=bank', 'titre' => 'Entries', 'level' => 1, 'enabled' => 1, 'perms' => 'native-bank-read', 'position' => 75, 'target' => '_self'),
 	array('url' => '/compta/bank/budget.php', 'titre' => 'Categories', 'level' => 1),
 	array('url' => '/compta/bank/transfer.php', 'titre' => 'Transfer', 'level' => 1),
 	array('url' => '/custom/kreabank/reconciliationlist.php', 'titre' => 'Separate list', 'level' => 1),
@@ -280,14 +284,33 @@ $bankMenus = array(
 $user->allowed = array('banque.lire', 'kreabank.reconciliation.read');
 $menus = $bankMenus;
 checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null) === 1, 'Workspace menu changes use the supported final-menu hook');
-$expected = array_values(array_filter($bankMenus, static function ($item) { return !in_array($item['titre'], array('List', 'Reconcile', 'Entries', 'Separate list'), true) || $item['url'] === '/product/list.php'; }));
-$fiscal = $expected[2];
+$movement = $bankMenus[5];
+$movement['titre'] = 'KreaBankNavMovements';
+$movement['position'] = 0;
+$fiscal = $bankMenus[3];
 $fiscal['level'] = 1;
-array_splice($expected, 2, 1);
-$expected[] = $fiscal;
-checkNavigation($menus === $expected && $hooks->results === $expected, 'Marked links disappear and the fiscal report follows native siblings with URL and permissions intact');
+$expected = array($bankMenus[0], $bankMenus[1], $movement, $bankMenus[6], $bankMenus[7], $bankMenus[9], $fiscal);
+checkNavigation($menus === $expected && $hooks->results === $expected, 'Native Movements follows New account and fiscal remains after native siblings');
+checkNavigation($menus[2]['url'] === $bankMenus[5]['url'] && $menus[2]['perms'] === 'native-bank-read' && $menus[2]['enabled'] === 1 && $menus[2]['target'] === '_self', 'Movement URL, permissions, enabled state and target remain native');
 checkNavigation(array_keys($menus) === range(0, count($menus) - 1), 'Filtered menu keeps contiguous keys required by the native renderer');
 checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null) === 0 && $menus === $expected, 'Repeated menu hooks preserve the simplified menu');
+$menus = $bankMenus;
+$menus[5]['enabled'] = 0;
+$hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null);
+checkNavigation($menus[2]['enabled'] === 0 && $menus[2]['perms'] === 'native-bank-read', 'Renaming Movements cannot grant native menu permission');
+$menus = $bankMenus;
+array_splice($menus, 6, 0, array(array('url'=>'/compta/bank/bankentries_list.php?search_conciliated=0', 'titre'=>'Pending native child', 'level'=>2, 'position'=>9)));
+$hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null);
+checkNavigation($menus[2]['titre'] === 'KreaBankNavMovements' && $menus[3]['titre'] === 'Pending native child' && $menus[3]['level'] === 2, 'Movement children move with their parent and retain hierarchy');
+$menus = array_values(array_filter($bankMenus, static function ($item) { return $item['titre'] !== 'New'; }));
+$hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null);
+$movements = array_values(array_filter($menus, static function ($item) { return $item['titre'] === 'KreaBankNavMovements'; }));
+checkNavigation(count($movements) === 1 && $movements[0]['url'] === $bankMenus[5]['url'], 'A missing creation entry does not remove or duplicate native Movements');
+$menus = array_values(array_filter($bankMenus, static function ($item) { return $item['titre'] !== 'Entries'; }));
+$hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null);
+checkNavigation(!in_array('KreaBankNavMovements', array_column($menus, 'titre'), true), 'A missing native entry is never synthesized with invented permissions');
+$menus = array($bankMenus[5]);
+checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'bank'), $menus, $action, null) === 0 && $menus === array($bankMenus[5]), 'Without its native bank heading the entry remains unchanged');
 $menus = $bankMenus;
 checkNavigation($hooks->menuLeftMenuItems(array('mainmenu' => 'products'), $menus, $action, null) === 0 && $menus === $bankMenus, 'Unrelated menus are untouched');
 foreach (array(array('banque.lire'), array('kreabank.reconciliation.read'), array()) as $rights) {

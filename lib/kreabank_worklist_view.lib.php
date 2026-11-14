@@ -146,8 +146,10 @@ function kreabankWorklistTable($model, $langs)
 		if (!empty($scan['action'])) {
 			$id = 'kb-wl-scan-form';
 			$hasExpandedRow = (bool) array_filter((array) ($model['rows'] ?? array()), static function ($row) { return !empty($row['expanded']); });
-			$html .= kreabankWorklistButton(kreabankWorklistTranslate($langs, 'KreaBankWorklistContinueAnalysis'), 'sync-alt', 'type="submit" form="' . $id . '"', false, $hasExpandedRow);
-			$forms .= kreabankWorklistPostForm($id, $scan['action'], $model, ' data-kb-scan');
+			$isMore = ($scan['action']['action'] ?? '') === 'more_scan';
+			$html .= $isMore ? '<button type="submit" class="button" form="' . $id . '"' . ($hasExpandedRow ? ' disabled' : '') . '>' . $t('KreaBankWorklistMoreAnalysis') . '</button>'
+				: kreabankWorklistButton(kreabankWorklistTranslate($langs, 'KreaBankWorklistContinueAnalysis'), 'sync-alt', 'type="submit" form="' . $id . '"', false, $hasExpandedRow);
+			$forms .= kreabankWorklistPostForm($id, $scan['action'], $model, $isMore ? '' : ' data-kb-scan');
 		}
 		$html .= '</div>';
 	}
@@ -300,7 +302,7 @@ function kreabankWorklistTable($model, $langs)
 		}
 		$html .= '</section></td></tr>';
 	}
-	if (empty($model['rows'])) { $html .= '<tr><td colspan="8" class="opacitymedium center">' . $t('KreaBankWorklistEmpty') . '</td></tr>'; }
+	if (empty($model['rows'])) { $html .= '<tr><td colspan="8" class="opacitymedium center">' . $t(!empty($model['analysis_pending']) ? 'KreaBankWorklistMoreForFilters' : 'KreaBankWorklistEmpty') . '</td></tr>'; }
 	$html .= '</tbody></table></div></form>' . $forms . $dialogs . '</div>';
 	return $html;
 }

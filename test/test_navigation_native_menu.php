@@ -20,6 +20,19 @@ class NativeMenuTestUser
 	public function hasRight(...$rights) { return true; }
 }
 $user = new NativeMenuTestUser();
+class NativeMenuTestLangs
+{
+	private $messages = array();
+	public function __construct($locale)
+	{
+		foreach (file(__DIR__ . '/../langs/' . $locale . '/kreabank.lang', FILE_IGNORE_NEW_LINES) as $line) {
+			if (strpos($line, '=') !== false) { list($key, $value) = explode('=', $line, 2); $this->messages[$key] = $value; }
+		}
+	}
+	public function load($domain) {}
+	public function trans($key) { return $this->messages[$key] ?? $key; }
+}
+$langs = new NativeMenuTestLangs('en_US');
 class NativeMenuTestHooks
 {
 	public $resArray = array();
@@ -41,6 +54,7 @@ $fixture->add('/compta/bank/card.php?action=create', 'New account', 1);
 // This is the pre-existing physical order after custom menu registration.
 $fixture->add('/custom/kreatax/bankreconciliation.php?mainmenu=bank', 'Fiscal report', 1, 1, '', 'bank', 'report', 180);
 $fixture->add('/custom/kreabank/reconciliationlist.php', 'Reconciliation list', 1, 1, '', 'bank', 'worklist', 1945);
+$fixture->add('/compta/bank/bankentries_list.php', 'Entry list', 1, 1, '', '', '', 75);
 $fixture->add('/compta/bank/budget.php', 'Categories', 1);
 $fixture->add('/compta/bank/transfer.php', 'Transfer', 1);
 $fixture->add('/compta/paiement/cheque/list.php', 'Cheque deposits', 0, 1, '', 'bank', 'deposit', 100);
@@ -81,6 +95,32 @@ if ($after->query($bankBlock . '//a[normalize-space(.)="Fiscal report"]')->lengt
 if ($after->query('//a[normalize-space(.)="Reconciliation list"]')->length !== 0) {
 	throw new RuntimeException('The existing registered worklist link must be hidden');
 }
+$labels = array();
+foreach ($after->query($bankBlock . '//a') as $link) { $labels[] = trim($link->textContent); }
+if ($labels !== array('Banks', 'New account', 'Movements', 'Categories', 'Transfer', 'Fiscal report')) {
+	throw new RuntimeException('Native sorting must keep Movements directly below New account: ' . implode(', ', $labels));
+}
+if ($after->query($bankBlock . '//div[contains(@class,"menu_contenu_compta_bank_bankentries_list")]/a')->length !== 1) {
+	throw new RuntimeException('Movements must retain the native URL-derived menu identity');
+}
+foreach (array('en_US'=>'Movements', 'pt_PT'=>'Movimentos') as $locale=>$label) {
+	$langs = new NativeMenuTestLangs($locale);
+	$localized = nativeMenuXPath(renderNativeMenuFixture($fixture->liste, true));
+	if ($localized->query($bankBlock . '//a[normalize-space(.)="New account"]/parent::div/following-sibling::div[1]/a[normalize-space(.)="' . $label . '"]')->length !== 1) {
+		throw new RuntimeException('The native movement entry must follow New account in ' . $locale);
+	}
+}
+$langs = new NativeMenuTestLangs('en_US');
+$disabledCreation = $fixture->liste;
+$disabledCreation[1]['enabled'] = 0;
+$conf->global->MAIN_MENU_HIDE_UNAUTHORIZED = 1;
+$disabled = nativeMenuXPath(renderNativeMenuFixture($disabledCreation, true));
+if ($disabled->query($bankBlock . '//a[normalize-space(.)="Movements"]')->length !== 1
+	|| $disabled->query('//a[normalize-space(.)="New account"]')->length !== 0
+	|| $disabled->query($bankBlock . '//a[normalize-space(.)="Fiscal report"]')->length !== 1) {
+	throw new RuntimeException('A hidden native create permission must not hide Movements or break the bank section');
+}
+unset($conf->global->MAIN_MENU_HIDE_UNAUTHORIZED);
 $detached = $fixture->liste;
 $report = $detached[2];
 array_splice($detached, 2, 1);
@@ -91,4 +131,4 @@ if ($relocated->query($bankBlock . '//a[normalize-space(.)="Fiscal report"]')->l
 	throw new RuntimeException('A detached fiscal heading must rejoin the owned bank block');
 }
 if (($argv[1] ?? '') === '--html') { print $afterHtml; exit; }
-print "OK: installed native menu divider regression\n";
+print "OK: installed native movement ordering, permissions, translations and menu divider regressions\n";

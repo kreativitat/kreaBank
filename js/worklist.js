@@ -107,7 +107,7 @@
                 request = new AbortController();
                 try {
                     const response = await fetch(scanForm.getAttribute('action'), {method:'POST', body:new FormData(scanForm), credentials:'same-origin', headers:{'X-KreaBank-Scan':'1'}, signal:request.signal});
-                    if (!response.ok) throw new Error(response.status === 409 ? 'changed' : 'failed');
+                    if (!response.ok && response.status !== 503) throw new Error(response.status === 409 ? 'changed' : 'failed');
                     const result = await response.json();
                     const generation = scanForm.elements.scan_generation;
                     const cursor = scanForm.elements.scan_cursor;
@@ -119,6 +119,7 @@
                     scan.querySelector('[data-kb-scan-count]').textContent = result.processed + ' / ' + result.total;
                     const progress = scan.querySelector('[data-kb-scan-progress]');
                     if (progress) { progress.max = Math.max(1, result.total); progress.value = result.processed; }
+                    if (!response.ok) { message(scan.dataset.failed); return; }
                     if (result.page_ready === true && scan.dataset.pageReady !== '1') {
                         scan.dataset.pageReady = '1';
                         if (!editing()) window.location.reload();
@@ -147,8 +148,8 @@
                 advance();
             });
             window.addEventListener('pagehide', () => { clearTimeout(timer); if (request) request.abort(); }, {once:true});
-            if (!editing()) timer = setTimeout(advance, 200);
-            else message(scan.dataset.paused);
+            if (!editing() && scan.dataset.pageReady !== '1') timer = setTimeout(advance, 200);
+            else if (editing()) message(scan.dataset.paused);
         }
     }
 

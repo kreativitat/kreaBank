@@ -146,6 +146,7 @@ async function browserChecks(directory) {
                 const fields = Object.fromEntries(options.body.entries());
                 window.__scanRequests.push({url,fields,method:options.method,header:options.headers['X-KreaBank-Scan']});
                 if (window.location.hash === '#scan-changed') return new Response('{}', {status:409});
+                if (window.location.hash === '#scan-failed') return new Response(JSON.stringify({done:false,processed:Number(fields.scan_cursor)+1,total:51,generation:fields.scan_generation,cursor:Number(fields.scan_cursor)+1,page_ready:false,error:'failed'}), {status:503,headers:{'Content-Type':'application/json'}});
                 return new Response(JSON.stringify({done:false,processed:Number(fields.scan_cursor)+1,total:51,generation:window.location.hash === '#scan-generation' ? 'another-generation' : fields.scan_generation,cursor:Number(fields.scan_cursor)+1,page_ready:window.location.hash === '#page-ready'}), {status:200,headers:{'Content-Type':'application/json'}});
             };
         });
@@ -176,10 +177,22 @@ async function browserChecks(directory) {
         await page.waitForTimeout(100);
         assert.equal(await page.evaluate(() => window.__scanRequests.length),1); browserCount++;
         assert.equal(await page.locator('[data-kb-scan-count]').innerText(),'4 / 51'); browserCount++;
+        await open('loading','#scan-failed');
+        await page.waitForFunction(() => window.__scanRequests.length === 1);
+        await page.waitForTimeout(100);
+        assert.equal(await page.evaluate(() => window.__scanRequests.length),1); browserCount++;
+        assert.equal(await page.locator('input[name="scan_cursor"]').inputValue(),'5'); browserCount++;
+        await page.getByRole('button',{name:'Continue',exact:true}).click();
+        await page.waitForFunction(() => window.__scanRequests.length === 2);
+        assert.equal(await page.evaluate(() => window.__scanRequests[1].fields.scan_cursor),'5'); browserCount++;
         await open('loading_ready','#page-ready');
-        await page.waitForFunction(() => window.__scanRequests.length === 30);
+        await page.waitForTimeout(100);
+        assert.equal(await page.evaluate(() => window.__scanRequests.length),0); browserCount++;
         assert.equal(await page.locator('.kb-wl-scan').getAttribute('data-page-ready'),'1'); browserCount++;
-        assert.equal(await page.locator('[data-kb-scan-count]').innerText(),'34 / 51'); browserCount++;
+        assert.equal(await page.locator('[data-kb-scan-count]').innerText(),'25 / 25'); browserCount++;
+        await page.getByRole('button',{name:'More',exact:true}).click();
+        assert.ok((await page.locator('#fixture-submit').innerText()).includes('more_scan')); browserCount++;
+        assert.equal(await page.evaluate(() => window.__scanRequests.length),0); browserCount++;
 
         page = await browser.newPage({viewport:{width:1440,height:1000},locale:'pt-PT'});
         page.on('pageerror', error => errors.push(error.message));

@@ -69,7 +69,7 @@ $pairDescriptor = static function ($key,$pair,$explicit = false,$searchContext =
 	return array('action'=>'confirm_pair','fields'=>array_merge($baseParams,array('review'=>$nonce)),'label'=>$label);
 };
 
-if ($post && $action !== '' && $action !== 'advance_scan') {
+if ($post && $action !== '' && !in_array($action, array('advance_scan','more_scan'), true)) {
 	if (!$canWrite) { accessforbidden(); }
 	try {
 		if ($action === 'confirm_pair') {
@@ -136,26 +136,58 @@ catch (Throwable $error) { $sources = array(); setEventMessages($langs->trans($e
 $sourceKeys = array_keys($sources);
 $requiresComplete = $state['filters']['match'] !== '' || $state['filters']['payment_account'] !== '' || in_array($state['filters']['status'],array('draft','review'),true)
 	|| in_array($state['sort']['field'],array('match','payment_account','status'),true);
-$displayKeys = array();
-if (!$requiresComplete) {
-	$baseRows = array();
-	foreach ($sources as $key=>$source) { $baseRows[] = array('key'=>$key,'line'=>$source,'status'=>(int) $source['status'] === 2 ? 'reconciled' : 'pending'); }
-	$displayKeys = array_column(kreabankWorklistPage(kreabankWorklistFilterRows($baseRows,$state),$state)['rows'],'key');
-}
-$pageReady = static function ($scan) use ($requiresComplete,$displayKeys) {
-	if ($requiresComplete) { return false; }
-	foreach ($displayKeys as $key) { if (!isset($scan['summaries'][$key])) { return false; } }
-	return true;
-};
 $scanFilters = $state['filters']; unset($scanFilters['match'],$scanFilters['payment_account']);
 if ($scanFilters['status'] === 'draft') { $scanFilters['status'] = 'pending'; }
 $scanScope = hash('sha256',json_encode(array($scope,$scanFilters,array_map(static function ($s) {
 	return array($s['rowid'],$s['source_storage'],$s['amount'],$s['currency'],$s['operation_date'],$s['description'],$s['payment_reference'],$s['bank_reference'],$s['status'],$s['native_id'],$s['native_amount'],$s['native_currency'],$s['num_releve'],$s['rappro'],$s['group_id'],$s['group_valid'],$s['group_count'],$s['group_date']);
 },array_values($sources)))));
 $cache = $_SESSION['kreabank_worklist_scan'] ?? array();
+$rejectScan = static function () use ($redirect) {
+	if (($_SERVER['HTTP_X_KREABANK_SCAN'] ?? '') === '1') { http_response_code(409); header('Content-Type: application/json'); print json_encode(array('error'=>'changed')); exit; }
+	$redirect();
+};
+$isScanPost = in_array($action, array('advance_scan','more_scan'), true);
+if ($isScanPost && !kreabankWorklistScanAdmitted($cache,$scanScope,GETPOST('scan_generation','aZ09'),GETPOSTINT('scan_cursor'))) { $rejectScan(); }
 if (($cache['scope'] ?? '') !== $scanScope || ($cache['expires'] ?? 0) < time()) {
 	$cache = array('scope'=>$scanScope,'generation'=>bin2hex(random_bytes(16)),'cursor'=>0,'summaries'=>array(),'expires'=>time()+600);
 	$_SESSION['kreabank_worklist_scan'] = $cache;
+}
+// Bind the rendered native page, including an out-of-range or filtered-page reset.
+$scanComplete = count($cache['summaries']) >= count($sourceKeys);
+$previewRows = array();
+foreach ($sources as $key=>$source) {
+	$summary = $cache['summaries'][$key] ?? array('key'=>$key,'status'=>(int) $source['status'] === 2 ? 'reconciled' : 'pending');
+	$summary['line'] = $source; $previewRows[] = $summary;
+}
+$previewFiltered = $requiresComplete && !$scanComplete ? array() : kreabankWorklistFilterRows($previewRows,$state);
+if ($expand !== '') {
+	$position = array_search($expand,array_column($previewFiltered,'key'),true);
+	if ($position !== false) { $state['page'] = intdiv($position,$state['limit']); }
+}
+$previewPage = kreabankWorklistPage($previewFiltered,$state);
+$state['page'] = $previewPage['page']; $baseParams['page'] = $state['page'];
+$displayKeys = $requiresComplete ? array() : array_column($previewPage['rows'],'key');
+$scanView = hash('sha256', json_encode(array($state['params'], $state['page'])));
+if ($isScanPost && !kreabankWorklistScanAdmitted($cache,$scanScope,GETPOST('scan_generation','aZ09'),GETPOSTINT('scan_cursor'),$scanView)) { $rejectScan(); }
+if (($cache['view'] ?? '') !== $scanView || !isset($cache['targets'])) {
+	$cache['view'] = $scanView;
+	$cache['targets'] = kreabankWorklistScanTargets($sourceKeys, $displayKeys, $cache['summaries'], $state['limit']);
+	$cache['generation'] = bin2hex(random_bytes(16)); $cache['cursor'] = 0; unset($cache['lease']);
+	$_SESSION['kreabank_worklist_scan'] = $cache;
+}
+$pageReady = static function ($scan) {
+	foreach ($scan['targets'] as $key) { if (!isset($scan['summaries'][$key])) { return false; } }
+	return true;
+};
+if ($action === 'more_scan') {
+	$moreKeys = $requiresComplete ? $sourceKeys : array_column($previewFiltered,'key');
+	if (!kreabankWorklistMoreScan($cache, $moreKeys, $state['limit'], GETPOST('scan_generation','aZ09'), GETPOSTINT('scan_cursor'))) { $redirect(); }
+	$_SESSION['kreabank_worklist_scan'] = $cache;
+	if (!$requiresComplete && $cache['targets']) {
+		$position = array_search($cache['targets'][0],$moreKeys,true);
+		if ($position !== false) { $baseParams['page'] = intdiv($position,$state['limit']); }
+	}
+	$redirect();
 }
 if ($action === 'advance_scan') {
 	$ajax = ($_SERVER['HTTP_X_KREABANK_SCAN'] ?? '') === '1';
@@ -165,28 +197,28 @@ if ($action === 'advance_scan') {
 		if ($ajax) { http_response_code(409); header('Content-Type: application/json'); print json_encode(array('error'=>'changed')); exit; }
 		$redirect();
 	}
+	if (!kreabankWorklistClaimScan($cache)) { http_response_code(409); header('Content-Type: application/json'); print json_encode(array('error'=>'busy')); exit; }
+	$_SESSION['kreabank_worklist_scan'] = $cache;
 	$sessionId = session_id(); session_write_close();
-	$error = false; $started = microtime(true); $processed = 0; $next = $cache;
+	$error = false; $next = $cache;
 	try {
-		foreach (array_merge($displayKeys,$sourceKeys) as $key) {
-			if (isset($next['summaries'][$key])) { continue; }
-			if ($processed > 0 && (microtime(true)-$started >= 1.2 || $processed >= 8)) { break; }
-			$next['summaries'][$key] = $worklist->compact($key); $processed++;
-		}
+		kreabankWorklistAdvanceScan($next, static function ($key) use ($worklist) { return $worklist->compact($key); });
 	} catch (Throwable $exception) { $error = true; }
 	if (!session_start()) { http_response_code(409); exit; }
 	$currentIdentity = array(session_id(),$_SESSION['dol_login'] ?? '',$_SESSION['dol_entity'] ?? $conf->entity,(int) $user->id);
 	$current = $_SESSION['kreabank_worklist_scan'] ?? array();
-	if ($identity !== $currentIdentity || ($current['generation'] ?? '') !== $cache['generation'] || (int) ($current['cursor'] ?? -1) !== $cache['cursor']) {
+	if ($identity !== $currentIdentity || ($current['generation'] ?? '') !== $cache['generation'] || (int) ($current['cursor'] ?? -1) !== $cache['cursor'] || ($current['lease']['id'] ?? '') !== $cache['lease']['id']) {
 		if ($ajax) { http_response_code(409); header('Content-Type: application/json'); print json_encode(array('error'=>'changed')); exit; }
 		$redirect();
 	}
+	unset($next['lease']);
 	$next['cursor']++;
 	$_SESSION['kreabank_worklist_scan'] = $next;
 	if ($ajax) {
 		header('Content-Type: application/json'); header('Cache-Control: no-store');
-		if ($error) { http_response_code(503); print json_encode(array('error'=>'failed')); }
-		else { print json_encode(array('done'=>count($next['summaries'])>=count($sourceKeys),'processed'=>count($next['summaries']),'total'=>count($sourceKeys),'generation'=>$next['generation'],'cursor'=>$next['cursor'],'page_ready'=>$pageReady($next))); }
+		$progress = array('done'=>$pageReady($next),'processed'=>count(array_intersect_key($next['summaries'],array_fill_keys($next['targets'],true))),'total'=>count($next['targets']),'generation'=>$next['generation'],'cursor'=>$next['cursor'],'page_ready'=>$pageReady($next));
+		if ($error) { http_response_code(503); $progress['error'] = 'failed'; }
+		print json_encode($progress);
 		exit;
 	}
 	if ($error) { setEventMessages($langs->trans('KreaBankWorklistAnalysisFailed'),null,'errors'); }
@@ -287,7 +319,7 @@ foreach ($page['rows'] as $indexRow) {
 							'from_account_ref'=>$c['account_ref'],'to_account_ref'=>$row['line']['bank_account_ref']);
 					}
 					$row['other_accounts'][] = $item;
-					if (!empty($row['review']) && !empty($row['review']['account_ref']) && $row['review']['account_ref'] === $item['account_ref'] && count($prepared['account_candidates']) === 1) { $row['review']['correction'] = $item['correction'] ?? null; }
+					if (!empty($row['review']) && !empty($row['review']['account_ref']) && $row['review']['account_ref'] === $item['account_ref'] && kreabankWorklistCorrectionMatches($prepared['account_candidates'],$c)) { $row['review']['correction'] = $item['correction'] ?? null; }
 				}
 			}
 		}
@@ -311,8 +343,9 @@ foreach (array('operation_date'=>'KreaBankDate','bank_account_ref'=>'KreaBankWor
 }
 $scan = null;
 if (!$scanDone) {
-	$scan = array('message'=>kreabankWorklistTranslate($langs, 'KreaBankWorklistAnalyzing'),'done'=>count($cache['summaries']),'total'=>count($sourceKeys),'page_ready'=>$pageReady($cache),
-		'action'=>array('action'=>'advance_scan','fields'=>array_merge($baseParams,array('scan_generation'=>$cache['generation'],'scan_cursor'=>$cache['cursor']))));
+	$batchDone = $pageReady($cache);
+	$scan = array('message'=>kreabankWorklistTranslate($langs, $batchDone ? 'KreaBankWorklistResultsReady' : 'KreaBankWorklistAnalyzing'),'done'=>count(array_intersect_key($cache['summaries'],array_fill_keys($cache['targets'],true))),'total'=>count($cache['targets']),'page_ready'=>$batchDone,
+		'action'=>array('action'=>$batchDone ? 'more_scan' : 'advance_scan','fields'=>array_merge($baseParams,array('scan_generation'=>$cache['generation'],'scan_cursor'=>$cache['cursor']))));
 }
 $navigationAccount = kreabankNavigationAccount((int) $state['filters']['account']);
 llxHeader('',$langs->trans('KreaBankWorklistTitle'));
@@ -322,5 +355,6 @@ print '<link rel="stylesheet" href="' . dol_escape_htmltag($assetRoot . 'css/wor
 print '<script defer src="' . dol_escape_htmltag($assetRoot . 'js/worklist.js?v=' . filemtime(__DIR__ . '/js/worklist.js')) . '"></script>';
 print kreabankWorklistTable(array('url'=>$url,'token'=>newToken(),'state'=>$baseParams,'filters'=>array_combine(array_map(static function ($k) { return 'search_' . $k; },array_keys($state['filters'])),array_values($state['filters'])),
 	'accounts'=>$accounts,'rows'=>$modelRows,'can_write'=>$canWrite,'sort'=>$state['sort'],'pagination'=>$pagination,'headers'=>$headers,'filter_buttons'=>$form->showFilterButtons(),'scan'=>$scan,
+	'analysis_pending'=>$requiresComplete && !$scanDone,
 	'notice'=>!$worklist->batchesAvailable() ? kreabankWorklistTranslate($langs, 'KreaBankWorklistBatchesUnavailable') : ''),$langs);
 llxFooter(); $db->close();

@@ -130,6 +130,62 @@ function kreabankWorklistPage($rows, $state)
 	return array('rows'=>array_slice($rows, $page * $limit, $limit),'total'=>$total,'page'=>$page,'limit'=>$limit,'num'=>min($limit + 1, max(0, $total - $page * $limit)));
 }
 
+/** Only an explicit More request can grant matching outside the displayed page. */
+function kreabankWorklistScanTargets($sourceKeys, $displayKeys, $summaries, $limit, $more = false)
+{
+	$owned = array_fill_keys($sourceKeys, true);
+	$keys = $more ? array_values(array_filter($sourceKeys, static function ($key) use ($summaries) { return !isset($summaries[$key]); })) : ($displayKeys ?: $sourceKeys);
+	return array_slice(array_values(array_unique(array_filter($keys, static function ($key) use ($owned) { return isset($owned[$key]); }))), 0, max(1, min(100, (int) $limit)));
+}
+
+/** A bounded read worker never widens its server-granted target list. */
+function kreabankWorklistAdvanceScan(&$scan, $prepare)
+{
+	$started = microtime(true); $processed = 0;
+	foreach ($scan['targets'] as $key) {
+		if (isset($scan['summaries'][$key])) { continue; }
+		if ($processed > 0 && (microtime(true) - $started >= 1.2 || $processed >= 8)) { break; }
+		$scan['summaries'][$key] = $prepare($key); $processed++;
+	}
+}
+
+/** One current completed batch review grants at most one further batch. */
+function kreabankWorklistMoreScan(&$scan, $sourceKeys, $limit, $generation, $cursor)
+{
+	if ($generation !== $scan['generation'] || (int) $cursor !== $scan['cursor']) { return false; }
+	if (($scan['lease']['expires'] ?? 0) > time()) { return false; }
+	foreach ($scan['targets'] as $key) { if (!isset($scan['summaries'][$key])) { return false; } }
+	$scan['targets'] = kreabankWorklistScanTargets($sourceKeys, array(), $scan['summaries'], $limit, true);
+	$scan['generation'] = bin2hex(random_bytes(16)); $scan['cursor'] = 0;
+	return true;
+}
+
+/** Reject stale requests before they can replace another page's scan state. */
+function kreabankWorklistScanAdmitted($scan, $scope, $generation, $cursor, $view = null)
+{
+	return ($scan['scope'] ?? '') === $scope && ($scan['expires'] ?? 0) >= time()
+		&& isset($scan['targets']) && ($scan['generation'] ?? '') === $generation
+		&& (int) ($scan['cursor'] ?? -1) === (int) $cursor && ($view === null || ($scan['view'] ?? '') === $view);
+}
+
+/** Reserve read work before releasing the PHP session lock. */
+function kreabankWorklistClaimScan(&$scan)
+{
+	if (($scan['lease']['expires'] ?? 0) > time()) { return false; }
+	$scan['lease'] = array('id'=>bin2hex(random_bytes(16)), 'expires'=>time()+90);
+	return true;
+}
+
+/** A bank reference alone cannot identify which native payment the modal moves. */
+function kreabankWorklistCorrectionMatches($accountCandidates, $movement)
+{
+	if (count($accountCandidates) !== 1) { return false; }
+	$candidate = reset($accountCandidates);
+	return (int) ($candidate['bank_line_id'] ?? 0) > 0
+		&& (int) $candidate['bank_line_id'] === (int) $movement['rowid']
+		&& (int) $candidate['bank_account_id'] === (int) $movement['fk_account'];
+}
+
 /** Source namespaces are mandatory, even when their numeric IDs happen to match. */
 function kreabankWorklistSource($key)
 {

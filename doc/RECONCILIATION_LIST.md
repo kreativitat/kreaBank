@@ -107,3 +107,16 @@ Payment bank references with a prepared account correction open the same reviewe
 change-bank modal as the exchange icon, in both list rows and expanded candidates.
 Read-only, reconciled and ineligible references remain text. Opening or cancelling
 the modal changes no records; Save retains the existing signed POST review.
+
+Automatic analysis is limited server-side to the displayed source IDs and native
+page size (default 25, maximum 100). Completed batches never restart on reload.
+The CSRF-protected More action grants one further page-size batch, using the
+current scope, generation and cursor; replayed or unfinished grants are rejected.
+With source-based filters, More opens the native page containing the next results.
+Each worker request still yields after eight rows or 1.2 seconds between rows.
+Global payment/match filters and derived ordering retain their incomplete state
+until the whole filtered population is analysed; no partial result is labelled
+complete. `php test/test_worklist_scan.php` covers quotas, pages, retries and replay.
+A short in-flight session claim prevents concurrent tabs from matching the same
+batch. Stale views cannot replace newer state; failed workers return their current
+retry cursor while preserving completed summaries.

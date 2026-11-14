@@ -1,7 +1,8 @@
 # Banking workspace
 
-Operational banking pages share five tabs: Movements, Reconcile, Bank statement,
-Statements and History. Reconcile opens the new `reconciliationlist.php`. The legacy
+Operational banking pages share four tabs: Reconcile, Bank statement, Statements
+and History. Movements is in the native left menu directly below New financial
+account, without an operational tab. Reconcile opens the new `reconciliationlist.php`. The legacy
 `reconcile.php` controllers and direct routes remain dormant and intact. Connections also retains its
 direct route without an operational tab. Bank statement combines all imported
 movements; Statements retains the individual import list and details. Account
@@ -44,7 +45,7 @@ pending imported evidence. It never combines balances across currencies. Native
 account-list GETs route here for KreaBank readers. Readers without module rights
 retain the native banking interface.
 
-All five selected-account operational tabs show the current Dolibarr balance, synced bank
+Selected-account Movements and the four operational tabs show the current Dolibarr balance, synced bank
 balance and bank refresh time above the page content. These reuse the accounts
 overview's read-only projection, currency and snapshot status, independently of
 list filters, matched view or pagination. The shared order is bank identity, tabs,
@@ -66,8 +67,9 @@ native sort/page links. Existing reconciled-view semantics remain unchanged.
 
 The native Dolibarr left menu remains visible with its standard layout and
 responsive behavior. For internal workspace readers, the existing `leftblock`
-hook removes the Account list, old Reconcile, Entry list and separate
-Reconciliation list links, keeping
+hook retains the native Entry list as **Movements** (pt_PT: **Movimentos**) directly
+below New financial account, preserving its URL, permissions and enabled state.
+It removes the Account list, old Reconcile and separate Reconciliation list links, keeping
 the **Banks/Cash** heading (pt_PT: **Bancos Dinheiro**) as the account-list entry
 point. The existing KreaTax fiscal/bank report follows the native bank siblings
 as a level-one item, with its URL and permissions preserved. Keep its physical
@@ -139,7 +141,8 @@ The dormant-tab/header update is covered by `php test/test_navigation.php` and
 `php test/test_navigation_native_menu.php`. The latter renders the installed
 Eldy final-menu stage without an ERP bootstrap or database, reproduces the old
 divider and verifies that fiscal remains inside Banks/Cash while cheque deposits
-retain their own section. Deploy the descriptor, shared navigation libraries,
+retain their own section. It also checks the native Movements position, retained
+permissions and English/Portuguese labels. Deploy the descriptor, shared navigation libraries,
 hook/CSS and worklist controller together. The hook also hides an existing
 registered worklist link, so this update needs no menu refresh.
 
