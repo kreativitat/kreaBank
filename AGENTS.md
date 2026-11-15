@@ -415,18 +415,16 @@
 
 ## Line workspace inside the reconciliation list
 
-- 2026-11-15: `reconcile.php` is only a permission-checked redirect. The selected-line
-  workspace lives in `line_workspace.inc.php`, included by `reconciliationlist.php` when
-  `workspace=1` or one of its explicitly listed POST actions is requested. Every mention of
-  `reconcile.php` above now means this workspace; its controller, signed reviews, assets
-  (`css/reconcile.css`, `js/reconcile.js`, `js/reconcile-supplier.js`) and tests are unchanged.
-- Keep workspace and list action names disjoint and the routed list explicit. The include
-  has no bootstrap and refuses direct requests. `kreabankWorkspaceUrl('reconcile')` is the
-  only URL builder; never link to `reconcile.php`. Never remove a workspace feature without
-  first providing it in the list. `php test/test_line_workspace_route.php` checks this contract.
-- 2026-11-15: List rows never link to the workspace. The row **More options** button expands in place
-  (`mode=more`) with only tax entry, supplier invoice, skip (`more_entry`), rule entry (`more_rule`),
-  payment difference (`more_writeoff`) and draft validation (`more_draft`). Each POST is a single-use
-  row-bound review; rule and difference rows are signed and recomputed like the workspace. It reuses
-  `js/reconcile-supplier.js`/`css/reconcile.css` for the invoice dialog and fails closed on possible
-  existing movements. Do not duplicate Search, batch or movement creation there.
+- `reconcile.php` is only a permission-checked redirect. The selected-line workspace
+  lives in `line_workspace.inc.php`, included by `reconciliationlist.php` for
+  `workspace=1` or its explicitly listed POST actions. References to the old
+  controller above mean this workspace. Its surviving assets are
+  `css/reconcile.css` and `js/reconcile.js`.
+- Keep workspace and list action names disjoint and the routed list explicit.
+  The include has no bootstrap and refuses direct requests.
+  `kreabankWorkspaceUrl('reconcile')` is the URL builder; never link to the retired
+  controller. `php test/test_line_workspace_route.php` checks the routing contract.
+- 1.20.49 removes More options and its four list actions, plus skip, tax creation
+  and supplier invoice creation everywhere. Do not restore these retired features
+  or the deleted supplier-dialog script. Preserve Search, batches, ordinary bank
+  movements and the other signed legacy workspace reviews.
