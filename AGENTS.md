@@ -265,7 +265,11 @@
   review evidence only; never feed these records into cross-account execution.
 - Exact signed persisted amount/currency and nearby booking dates are required,
   with a complete payment/check reference or, when the bank reference is absent,
-  the complete name of the single fully allocated invoice counterparty. Names are
+  the complete name of the single fully allocated invoice counterparty or salary
+  employee. Salary visibility follows native base read/hierarchy rights; correction
+  also requires native write and binds exact parent/payment/employee/link facts.
+  Tax warnings require a specific liability/payment reference or a complete
+  period-bearing label. Names are
   review evidence only, never strong identity for unattended matching. Suspected
   errors block automatic-native and TPA execution and bulk approval. Bulk review/correction uses the existing native
   bank movement form; preserve payment allocations, accounting and reconciliation
