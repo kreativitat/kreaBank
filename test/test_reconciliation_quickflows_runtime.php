@@ -145,103 +145,6 @@ class AccountLine
 }
 PHP
 		,
-		'/compta/sociales/class/chargesociales.class.php' => <<<'PHP'
-<?php
-class ChargeSociales
-{
-	const STATUS_UNPAID = 0;
-
-	public $type = 0;
-	public $label = '';
-	public $date_ech = 0;
-	public $period = 0;
-	public $periode = 0;
-	public $amount = 0.0;
-	public $mode_reglement_id = 0;
-	public $fk_account = 0;
-	public $paye = 0;
-	public $type_label = 'Stub Social Type';
-	public $ref = 'CS-STUB';
-	public $fk_user = 0;
-
-	public function __construct($db)
-	{
-	}
-
-	public function create($user)
-	{
-		return 501;
-	}
-
-	public function fetch($id)
-	{
-		$this->ref = 'CS-'.((int) $id);
-		if ($this->type_label === '') {
-			$this->type_label = 'Stub Social Type';
-		}
-
-		return ((int) $id > 0 ? 1 : 0);
-	}
-}
-PHP
-		,
-		'/compta/sociales/class/paymentsocialcontribution.class.php' => <<<'PHP'
-<?php
-class PaymentSocialContribution
-{
-	public $chid = 0;
-	public $datepaye = 0;
-	public $amounts = array();
-	public $paiementtype = 0;
-	public $num_payment = '';
-	public $note = '';
-	public $note_private = '';
-
-	public function __construct($db)
-	{
-	}
-
-	public function create($user, $dummy = 0)
-	{
-		if ($this->num_payment === '') {
-			$this->num_payment = 'PAYSC-STUB';
-		}
-
-		return 601;
-	}
-
-	public function update_fk_bank($lineId)
-	{
-		return ((int) $lineId > 0 ? 1 : 0);
-	}
-
-	public function fetch($id)
-	{
-		return ((int) $id > 0 ? 1 : 0);
-	}
-}
-PHP
-		,
-		'/user/class/user.class.php' => <<<'PHP'
-<?php
-class User
-{
-	public function __construct($db)
-	{
-	}
-
-	public function fetch($id)
-	{
-		return ((int) $id > 0 ? 1 : 0);
-	}
-
-	public function getFullName($langs)
-	{
-		return 'Stub User';
-	}
-}
-PHP
-		,
 	);
 
 	foreach ($stubFiles as $relativePath => $content) {
@@ -274,6 +177,7 @@ class KreaBankQuickFlowFakeDb
 	public $rollbacks = 0;
 	public $queries = array();
 	public $lastError = '';
+	public $failFailureStatusUpdates = false;
 
 	public function begin()
 	{
@@ -299,11 +203,17 @@ class KreaBankQuickFlowFakeDb
 	public function query($sql)
 	{
 		$this->queries[] = (string) $sql;
+		if ($this->failFailureStatusUpdates && strpos($sql, 'UPDATE llx_kreabank_quick_entry SET status = 9') === 0) {
+			$this->lastError = 'Synthetic status update failure';
+			return false;
+		}
 
 		return true;
 	}
 
-	public function fetch_object($result) { return false; } // No configured account pairs in this synthetic fixture.
+	public function fetch_object($result) { return false; } // No existing movements or configured account pairs.
+	public function last_insert_id($table) { return 901; }
+	public function plimit($limit = 0, $offset = 0) { return ' LIMIT ' . (int) $limit; }
 
 	public function prefix()
 	{
@@ -326,145 +236,42 @@ class KreaBankQuickFlowFakeDb
 	}
 }
 
-class KreaBankQuickFlowNativeTaxStub
-{
-	public $linkTypes = array();
-	public $conciliateCalls = 0;
-	public $markReconciledCalls = 0;
-	public $unconciliateCalls = 0;
-	public $markPendingCalls = 0;
-
-	public function addLineLink($nativeLineId, $urlId, $url, $label, $type)
-	{
-		$this->linkTypes[] = (string) $type;
-		return count($this->linkTypes) + 100;
-	}
-
-	public function conciliateLine($nativeLineId, $statementLabel = '', $categoryId = 0)
-	{
-		$this->conciliateCalls++;
-		return 1;
-	}
-
-	public function markStatementLineReconciled($lineId, $allocatedAmount = 0.0, $nativeLineId = 0)
-	{
-		$this->markReconciledCalls++;
-		return false; // Force mid-flow failure after conciliation.
-	}
-
-	public function unconciliateLine($nativeLineId)
-	{
-		$this->unconciliateCalls++;
-		return 1;
-	}
-
-	public function markStatementLinePending($lineId)
-	{
-		$this->markPendingCalls++;
-		return true;
-	}
-}
-
-class KreaBankQuickFlowTaxServiceStub extends KreaBankService
+/** Generic entry wrapper fixture; the delegated executor owns its transaction. */
+class KreaBankQuickFlowMovementServiceStub extends KreaBankService
 {
 	public $stubLine = array();
+	public $schemaChecks = 0;
+	public $lineReads = 0;
+	public $reconcileCalls = array();
+	public $audits = array();
+	public $failReconciliation = false;
 
-	public function __construct()
-	{
-	}
+	public function __construct() {}
+
+	protected function ensureQuickEntryTable() { $this->schemaChecks++; }
 
 	public function getLineById($lineId)
 	{
+		$this->lineReads++;
 		return $this->stubLine;
-	}
-
-	protected function resolveSocialContributionTypeId($preferredTypeId = 0)
-	{
-		$socialTypeId = (int) $preferredTypeId;
-		return ($socialTypeId > 0 ? $socialTypeId : 1);
-	}
-
-	protected function resolveNativeLineIdFromStatementLine($line, $createIfMissing = true, $paymentOperationCode = '')
-	{
-		return 321;
-	}
-
-	protected function buildNativeLineContext($line, $nativeLineId)
-	{
-		$line['bank_account_id'] = 11;
-		return $line;
-	}
-
-	protected function resolveLineDateTimestamp($line)
-	{
-		return 1700000000;
-	}
-
-	protected function resolvePaymentModeId()
-	{
-		return 4;
-	}
-
-	protected function resolveLinePaymentRef($line)
-	{
-		return 'PAY-SC-STUB';
-	}
-
-	protected function extractObjectErrorMessage($object, $default = '')
-	{
-		return (string) $default;
-	}
-
-	protected function logAudit($type, $lineId = null, $reconciliationId = null, $payload = array())
-	{
-		return 1;
-	}
-}
-
-class KreaBankQuickFlowSupplierServiceStub extends KreaBankService
-{
-	public $stubLine = array();
-	public $cleanupCalls = array();
-	public $supplierCreateCalls = 0;
-	public $reconcileCalls = 0;
-
-	public function __construct()
-	{
-	}
-
-	public function getLineById($lineId)
-	{
-		return $this->stubLine;
-	}
-
-	protected function createSupplierInvoiceForBankLine($line, $supplierId, $label, $amount, $note = '', $supplierRef = '', $invoiceProductLines = array())
-	{
-		$this->supplierCreateCalls++;
-		return array(
-			'invoice_id' => 901,
-			'invoice_ref' => 'FS901',
-			'supplier_id' => (int) $supplierId,
-			'supplier_name' => 'Supplier Stub',
-		);
 	}
 
 	public function reconcileLine($lineId, $links, $strategy = 'manual', $isAuto = 0, $note = '', $confidenceScore = 0, $automaticAccounts = null, $reviewedRow = null)
 	{
-		$this->reconcileCalls++;
-		throw new Exception('forced reconcile failure');
-	}
-
-	protected function cleanupFailedQuickSupplierInvoiceFlow($invoiceId, $failureMessage = '')
-	{
-		$this->cleanupCalls[] = array(
-			'invoice_id' => (int) $invoiceId,
-			'message' => (string) $failureMessage,
-		);
+		$this->reconcileCalls[] = array('line_id'=>$lineId, 'links'=>$links, 'strategy'=>$strategy, 'is_auto'=>$isAuto);
+		$this->db->begin();
+		if ($this->failReconciliation) {
+			$this->db->rollback();
+			throw new RuntimeException('Synthetic delegated reconciliation failure');
+		}
+		$this->db->commit();
+		return (int) $lineId;
 	}
 
 	protected function logAudit($type, $lineId = null, $reconciliationId = null, $payload = array())
 	{
-		return 1;
+		$this->audits[] = array('type'=>$type, 'line_id'=>$lineId, 'payload'=>$payload);
+		return true;
 	}
 }
 
@@ -489,7 +296,8 @@ function kreabankSetProtectedProperty($object, $property, $value)
 }
 
 /**
- * Run runtime assertions for quick-flow reconciliation rollback/cleanup paths.
+ * Exercise removed APIs and the surviving generic entry wrapper with synthetic writes.
+ * The fake executor checks wrapper error handling, not native financial lifecycle behavior.
  *
  * @param string $rootDir
  * @return array<int,string>
@@ -497,115 +305,109 @@ function kreabankSetProtectedProperty($object, $property, $value)
 function kreabankRunQuickFlowRuntimeAssertions($rootDir)
 {
 	$errors = array();
-	$assertTrue = static function ($condition, $label) use (&$errors) {
-		if (!$condition) {
-			$errors[] = $label;
-		}
+	$checks = 0;
+	$assertTrue = static function ($condition, $label) use (&$errors, &$checks) {
+		$checks++;
+		if (!$condition) { $errors[] = $label; }
+	};
+	if (!is_readable(rtrim((string) $rootDir, '/') . '/class/KreaBankService.class.php')) {
+		return array('Unable to read reconciliation service');
+	}
+	$makeService = static function () {
+		$service = new KreaBankQuickFlowMovementServiceStub();
+		$service->db = new KreaBankQuickFlowFakeDb();
+		$service->user = (object) array('id'=>1);
+		$service->langs = new KreaBankNullLangs();
+		$service->stubLine = array('rowid'=>77, 'fk_statement'=>8, 'native_bank_line_id'=>0,
+			'bank_account_id'=>11, 'direction'=>-1, 'amount'=>'-125.45000000',
+			'allocated_amount'=>'0', 'status'=>0, 'currency'=>'EUR', 'operation_date'=>'2031-04-10');
+		kreabankSetProtectedProperty($service, 'entity', (int) $GLOBALS['conf']->entity);
+		return $service;
+	};
+	$writes = static function ($db) {
+		return array_values(array_filter($db->queries, static function ($sql) {
+			return preg_match('/^\s*(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|TRUNCATE)\b/i', $sql);
+		}));
 	};
 
-	$serviceFile = rtrim((string) $rootDir, '/').'/class/KreaBankService.class.php';
-	if (!is_readable($serviceFile)) {
-		return array('Unable to read service file: '.$serviceFile);
+	foreach (array('skipLine', 'createQuickTaxContributionAndReconcile', 'createQuickSupplierInvoiceAndReconcile') as $method) {
+		$service = $makeService();
+		$assertTrue(!method_exists(KreaBankService::class, $method), 'Removed API must be absent: ' . $method);
+		$refused = false;
+		try { $service->$method(77, 'Removed synthetic operation', 125.45); }
+		catch (Error $e) { $refused = true; }
+		catch (Exception $e) { /* A still-existing API must fail the absence assertion. */ }
+		$assertTrue($refused && !$service->db->queries && !$service->schemaChecks && !$service->lineReads,
+			'Removed API cannot read sources, install tables or write: ' . $method);
+		$assertTrue(!$service->db->begins && !$service->db->commits && !$service->db->rollbacks && !$service->reconcileCalls && !$service->audits,
+			'Removed API cannot execute or audit a reconciliation: ' . $method);
 	}
 
-	$langsStub = new class {
-		public function trans($key)
-		{
-			return (string) $key;
-		}
-	};
-	$userStub = (object) array('id' => 1);
-
-	// Quick tax flow: simulate failure after native conciliation and assert compensating cleanup behavior.
-	$taxDb = new KreaBankQuickFlowFakeDb();
-	$taxNative = new KreaBankQuickFlowNativeTaxStub();
-	$taxService = new KreaBankQuickFlowTaxServiceStub();
-	$taxService->db = $taxDb;
-	$taxService->user = $userStub;
-	$taxService->langs = $langsStub;
-	$taxService->stubLine = array(
-		'rowid' => 77,
-		'direction' => -1,
-		'amount' => -125.45,
-		'allocated_amount' => 0.0,
-		'description' => 'Tax debit',
-		'payment_reference' => 'AT-REF',
-		'counterparty_name' => 'Tax Authority',
-		'statement_ref' => 'KB-TEST-TAX',
-		'bank_account_id' => 11,
-	);
-	kreabankSetProtectedProperty($taxService, 'entity', 1);
-	kreabankSetProtectedProperty($taxService, 'native', $taxNative);
-
-	$taxExceptionMessage = '';
-	try {
-		$taxService->createQuickTaxContributionAndReconcile(77, 'Tax test', 125.45, 'Tax note', 3);
-		$errors[] = 'Quick tax flow should throw when markStatementLineReconciled fails';
-	} catch (Exception $e) {
-		$taxExceptionMessage = (string) $e->getMessage();
-	}
-	$assertTrue(strpos($taxExceptionMessage, 'Failed to mark statement line as reconciled') !== false, 'Quick tax flow should expose reconciliation-mark failure');
-	$assertTrue($taxDb->begins === 1, 'Quick tax flow should open one outer transaction');
-	$assertTrue($taxDb->commits === 0, 'Quick tax flow should not commit when reconciliation mark fails');
-	$assertTrue($taxDb->rollbacks === 1, 'Quick tax flow should rollback on mid-flow failure');
-	$assertTrue($taxNative->conciliateCalls === 1, 'Quick tax flow should reach native conciliation before forced failure');
-	$assertTrue($taxNative->unconciliateCalls === 1, 'Quick tax flow should undo native conciliation during cleanup');
-	$assertTrue($taxNative->markPendingCalls === 1, 'Quick tax flow should mark statement line pending during cleanup');
-	$assertTrue(in_array('payment_sc', $taxNative->linkTypes, true), 'Quick tax flow should create payment_sc bank link before failure');
-	$assertTrue(in_array('sc', $taxNative->linkTypes, true), 'Quick tax flow should create social contribution bank link before failure');
-	$joinedTaxQueries = implode("\n", (array) $taxDb->queries);
-	$assertTrue(strpos($joinedTaxQueries, 'DELETE FROM llx_paiementcharge') !== false, 'Quick tax cleanup should delete orphan paiementcharge rows');
-	$assertTrue(strpos($joinedTaxQueries, 'DELETE FROM llx_chargesociales') !== false, 'Quick tax cleanup should delete orphan chargesociales rows');
-
-	// Quick supplier invoice flow: simulate reconcile failure and assert compensating cleanup callback.
-	$supplierDb = new KreaBankQuickFlowFakeDb();
-	$supplierService = new KreaBankQuickFlowSupplierServiceStub();
-	$supplierService->db = $supplierDb;
-	$supplierService->user = $userStub;
-	$supplierService->langs = $langsStub;
-	$supplierService->stubLine = array(
-		'rowid' => 88,
-		'bank_account_id' => 11,
-		'direction' => -1,
-		'amount' => -210.00,
-		'allocated_amount' => 0.0,
-		'description' => 'Supplier debit',
-		'payment_reference' => 'INV-TEST',
-		'counterparty_name' => 'Supplier A',
-	);
-	kreabankSetProtectedProperty($supplierService, 'entity', 1);
-
-	$supplierExceptionMessage = '';
-	try {
-		$supplierService->createQuickSupplierInvoiceAndReconcile(88, 'Supplier invoice', 210.00, 44, 'Supplier note', 'SREF-1');
-		$errors[] = 'Quick supplier flow should throw when reconcileLine fails';
-	} catch (Exception $e) {
-		$supplierExceptionMessage = (string) $e->getMessage();
-	}
-	$assertTrue(strpos($supplierExceptionMessage, 'forced reconcile failure') !== false, 'Quick supplier flow should rethrow reconcile failure');
-	$assertTrue($supplierService->supplierCreateCalls === 1, 'Quick supplier flow should create supplier invoice before reconcile attempt');
-	$assertTrue($supplierService->reconcileCalls === 1, 'Quick supplier flow should attempt reconcile once');
-	$assertTrue(count($supplierService->cleanupCalls) === 1, 'Quick supplier flow should trigger compensating cleanup once');
-	if (!empty($supplierService->cleanupCalls[0])) {
-		$cleanupCall = $supplierService->cleanupCalls[0];
-		$assertTrue((int) $cleanupCall['invoice_id'] === 901, 'Quick supplier cleanup should target created invoice id');
-		$assertTrue(strpos((string) $cleanupCall['message'], 'forced reconcile failure') !== false, 'Quick supplier cleanup should receive failure cause');
+	foreach (array('tax', 'tax_entry', 'supplier_invoice', 'skip_line', 'bulk_skip', '', 'PAYMENT') as $type) {
+		$service = $makeService(); $refused = false;
+		try { $service->createQuickEntryAndReconcile(77, $type, 'Synthetic entry', '125.45'); }
+		catch (InvalidArgumentException $e) { $refused = true; }
+		$assertTrue($refused && !$service->schemaChecks && !$service->lineReads && !$service->db->queries,
+			'Unsupported generic type is rejected before table/source access: ' . $type);
+		$assertTrue(!$service->reconcileCalls && !$service->audits && !$service->db->begins,
+			'Unsupported generic type cannot execute financial work: ' . $type);
 	}
 
+	foreach (array('expense', 'bank_fee', 'payment') as $type) {
+		$service = $makeService();
+		$id = $service->createQuickEntryAndReconcile(77, $type, 'Synthetic entry', '125.45', 0, 'Synthetic note');
+		$assertTrue($id === 901 && count($service->reconcileCalls) === 1, 'Supported generic entry delegates once: ' . $type);
+		$call = $service->reconcileCalls[0];
+		$assertTrue($call['line_id'] === 77 && $call['strategy'] === 'quick_entry' && $call['is_auto'] === 0
+			&& $call['links'][0]['doc_type'] === 'quick_entry' && $call['links'][0]['fk_doc'] === 901
+			&& abs((float) $call['links'][0]['allocated_amount'] - 125.45) < 0.00000001,
+			'Generic entry retains its source, allocation and manual execution contract: ' . $type);
+		$assertTrue($service->db->begins === 1 && $service->db->commits === 1 && !$service->db->rollbacks,
+			'Successful delegated execution commits once: ' . $type);
+		$writeSql = $writes($service->db);
+		$assertTrue(count($writeSql) === 2 && strpos($writeSql[0], 'INSERT INTO llx_kreabank_quick_entry (') === 0
+			&& strpos($writeSql[0], "'" . $type . "'") !== false
+			&& strpos($writeSql[1], 'UPDATE llx_kreabank_quick_entry SET status = 1') === 0,
+			'Wrapper writes only its generic quick entry and completion status: ' . $type);
+		$assertTrue(count($service->audits) === 1 && $service->audits[0]['type'] === 'quick_entry'
+			&& $service->audits[0]['payload']['entry_type'] === $type, 'Supported entry retains its audit: ' . $type);
+	}
+
+	foreach (array(false, true) as $failStatus) {
+		$service = $makeService(); $service->failReconciliation = true;
+		$service->db->failFailureStatusUpdates = $failStatus;
+		$message = '';
+		try { $service->createQuickEntryAndReconcile(77, 'bank_fee', 'Synthetic entry', '125.45'); }
+		catch (RuntimeException $e) { $message = $e->getMessage(); }
+		$assertTrue($message === 'Synthetic delegated reconciliation failure', 'Wrapper preserves the delegated failure cause');
+		$assertTrue($service->db->begins === 1 && !$service->db->commits && $service->db->rollbacks === 1,
+			'Failed delegated execution remains rolled back');
+		$assertTrue(!$service->audits, 'Failed entry does not receive a success audit');
+		$writeSql = $writes($service->db);
+		$failureUpdates = array_values(array_filter($writeSql, static function ($sql) {
+			return strpos($sql, 'UPDATE llx_kreabank_quick_entry SET status = 9') === 0;
+		}));
+		$assertTrue(count($failureUpdates) === ($failStatus ? 3 : 1), 'Failure status uses bounded retries');
+		$assertTrue(isset($failureUpdates[0]) && strpos($failureUpdates[0], 'WHERE rowid = 901 AND entity = ' . (int) $GLOBALS['conf']->entity) !== false
+			&& strpos($failureUpdates[0], 'Synthetic delegated reconciliation failure') !== false,
+			'Failure status and cause remain scoped to the created entry');
+		$deletes = array_values(array_filter($writeSql, static function ($sql) { return strpos($sql, 'DELETE ') === 0; }));
+		$assertTrue($failStatus
+			? $deletes === array('DELETE FROM llx_kreabank_quick_entry WHERE rowid = 901 AND entity = ' . (int) $GLOBALS['conf']->entity)
+			: !$deletes, 'Only an entry that cannot retain its failure status is removed');
+		$assertTrue(count($writeSql) === ($failStatus ? 5 : 2), 'Failure cleanup adds no invoice, tax, payment or native-bank writes');
+	}
+	$GLOBALS['__kreabank_quickflow_runtime_checks'] = $checks;
 	return $errors;
 }
 
 if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath((string) $argv[0]) === __FILE__) {
-	$rootDir = dirname(__DIR__);
-	$errors = kreabankRunQuickFlowRuntimeAssertions($rootDir);
-	if (!empty($errors)) {
-		fwrite(STDERR, "Runtime quick-flow reconciliation assertions failed:".PHP_EOL);
-		foreach ($errors as $error) {
-			fwrite(STDERR, ' - '.$error.PHP_EOL);
-		}
+	$errors = kreabankRunQuickFlowRuntimeAssertions(dirname(__DIR__));
+	if ($errors) {
+		fwrite(STDERR, "Runtime bank-entry/removal assertions failed:" . PHP_EOL);
+		foreach ($errors as $error) { fwrite(STDERR, ' - ' . $error . PHP_EOL); }
 		exit(1);
 	}
-
-	echo "OK: runtime quick-flow reconciliation assertions".PHP_EOL;
+	echo 'OK: ' . $GLOBALS['__kreabank_quickflow_runtime_checks'] . " runtime bank-entry/removal checks (synthetic, no database)\n";
 	exit(0);
 }

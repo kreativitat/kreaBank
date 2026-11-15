@@ -12,7 +12,7 @@
  * \ingroup    kreabank
  * \brief      Selected-line reconciliation workspace, served only by reconciliationlist.php.
  *
- * Moved unchanged from the retired reconcile.php in 1.20.47: same controller, permissions,
+ * Extracted from the retired reconcile.php in 1.20.47: shared controller, permissions,
  * signed reviews and shared service calls. It has no bootstrap and must not be requested directly.
  */
 if (!defined('KREABANK_LINE_WORKSPACE')) {
@@ -63,8 +63,6 @@ $documentSort = kreabankListSort($documentColumns, 'suggestion', 'DESC', 'doc_')
 $service = new KreaBankService($db, $user, $langs);
 $form = new Form($db);
 $canNativeWrite = ($user->hasRight('banque', 'modifier') || $user->hasRight('banque', 'consolidate'));
-$canQuickSupplierInvoice = (isModEnabled('supplier_invoice') && $user->hasRight('fournisseur', 'facture', 'lire') && $user->hasRight('fournisseur', 'facture', 'creer'));
-$canQuickTaxEntry = (isModEnabled('tax') && $user->hasRight('tax', 'charges', 'lire') && $user->hasRight('tax', 'charges', 'creer'));
 $quickEntryFailed = false;
 $quickEntryFormState = array();
 $quickCreateSuccessAlert = array(
@@ -477,225 +475,26 @@ if ($action === 'quick_assign' && $user->hasRight('kreabank', 'reconciliation', 
 if ($action === 'quick_entry' && $user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite) {
 	$lineId = GETPOSTINT('line_id');
 	$entryType = trim((string) GETPOST('entry_type', 'alphanohtml'));
+	$submitAction = trim((string) GETPOST('entry_submit_action', 'aZ09'));
+	// Never reinterpret a retired or unknown financial action as movement creation.
+	if ($submitAction !== 'payment_entry' || !in_array($entryType, array('expense', 'bank_fee', 'payment'), true)) { accessforbidden(); }
 	$label = GETPOST('entry_label', 'alphanohtml');
 	$amount = abs((float) price2num(GETPOST('entry_amount', 'alpha'), 'MU'));
-	$submitAction = trim((string) GETPOST('entry_submit_action', 'aZ09'));
-	$supplierSocid = GETPOSTINT('entry_supplier_socid');
-	$supplierPredictedSocid = GETPOSTINT('entry_supplier_predicted_socid');
-	$supplierLookup = trim((string) GETPOST('entry_supplier_lookup', 'alphanohtml'));
-	$supplierRef = trim((string) GETPOST('entry_ref_supplier', 'alphanohtml'));
 	$note = GETPOST('entry_note', 'restricthtml');
-	$invoiceProductLines = array();
-	$invoiceProductLinesJson = trim((string) GETPOST('entry_product_lines_json', 'none'));
-	if ($invoiceProductLinesJson !== '') {
-		$decodedProductLines = json_decode($invoiceProductLinesJson, true);
-		if (is_array($decodedProductLines)) {
-			foreach ($decodedProductLines as $decodedProductLine) {
-				if (!is_array($decodedProductLine)) {
-					continue;
-				}
-				$productId = !empty($decodedProductLine['product_id']) ? (int) $decodedProductLine['product_id'] : 0;
-				$productLabel = trim((string) (!empty($decodedProductLine['label']) ? $decodedProductLine['label'] : ''));
-				$productQty = abs((float) price2num((string) (!empty($decodedProductLine['qty']) ? $decodedProductLine['qty'] : 0), 'MS'));
-				$productAmount = abs((float) price2num((string) (!empty($decodedProductLine['amount']) ? $decodedProductLine['amount'] : 0), 'MU'));
-				if ($productId <= 0 && $productQty <= 0.00001 && $productAmount <= 0.00001) {
-					continue;
-				}
-				$invoiceProductLines[] = array(
-					'product_id' => $productId,
-					'label' => $productLabel,
-					'qty' => $productQty,
-					'amount' => $productAmount,
-				);
-			}
-		}
-	}
-	$productLineSlots = GETPOSTINT('entry_product_line_slots');
-	if ($productLineSlots <= 0 || $productLineSlots > 12) {
-		$productLineSlots = 6;
-	}
-	if (empty($invoiceProductLines)) {
-		for ($productLineIndex = 0; $productLineIndex < $productLineSlots; $productLineIndex++) {
-			$productId = GETPOSTINT('entry_product_line_product_' . $productLineIndex);
-			$productLabel = trim((string) GETPOST('entry_product_line_label_' . $productLineIndex, 'alphanohtml'));
-			$productQty = abs((float) price2num(GETPOST('entry_product_line_qty_' . $productLineIndex, 'alpha'), 'MS'));
-			$productAmount = abs((float) price2num(GETPOST('entry_product_line_amount_' . $productLineIndex, 'alpha'), 'MU'));
-			if ($productId <= 0 && $productQty <= 0.00001 && $productAmount <= 0.00001) {
-				continue;
-			}
-			$invoiceProductLines[] = array(
-				'product_id' => $productId,
-				'label' => $productLabel,
-				'qty' => $productQty,
-				'amount' => $productAmount,
-			);
-		}
-	}
-	if (!in_array($entryType, array('expense', 'bank_fee', 'payment', 'tax'), true)) {
-		$entryType = 'expense';
-	}
-	if (!in_array($submitAction, array('payment_entry', 'supplier_invoice', 'tax_entry', 'skip_line'), true)) {
-		$submitAction = 'payment_entry';
-	}
-
-	if ($submitAction === 'skip_line') {
-		$skipReason = trim((string) GETPOST('entry_note', 'alphanohtml'));
-		if ($lineId > 0) {
-			try {
-				$service->skipLine($lineId, $skipReason);
-				setEventMessages($langs->trans('KreaBankSkipDone'), null, 'mesgs');
-				$queueContinue = true;
-				$lineId = 0;
-			} catch (Exception $e) {
-				$reportActionException($e, 'quick_entry_skip_line');
-			}
-		} else {
-			setEventMessages($langs->trans('KreaBankInvalidInput'), null, 'warnings');
-		}
-	} elseif ($lineId > 0 && $label !== '' && $amount > 0) {
+	if ($lineId > 0 && $label !== '' && $amount > 0) {
 		$confirmedMovementIds = array_filter(array_map('intval', explode(',', (string) GETPOST('confirm_existing_movements', 'alphanohtml'))));
 		try {
-			// Every creation choice would add a native movement: review possible existing ones first.
 			$service->assertNoExistingMovementForCreation($lineId, $confirmedMovementIds);
-			if ($submitAction === 'supplier_invoice') {
-				if (!$canQuickSupplierInvoice) {
-					accessforbidden($langs->trans('KreaBankNoPermission'));
-				}
-				if (empty($invoiceProductLines)) {
-					throw new Exception($langs->trans('KreaBankQuickSupplierLinesNoSelection'));
-				}
-				$resolvedSupplierId = ((int) $supplierSocid > 0 ? (int) $supplierSocid : (int) $supplierPredictedSocid);
-				if ($resolvedSupplierId <= 0 && $supplierLookup !== '') {
-					$resolvedSupplier = $service->resolveSupplierFromVatOrName($supplierLookup, (int) $supplierPredictedSocid);
-					$resolvedSupplierId = !empty($resolvedSupplier['id']) ? (int) $resolvedSupplier['id'] : 0;
-				}
-				if ($resolvedSupplierId <= 0) {
-					throw new Exception($langs->trans('ErrorFieldRequired', $langs->transnoentitiesnoconv('KreaBankQuickSupplierInvoiceSupplier')));
-				}
-				$created = $service->createQuickSupplierInvoiceAndReconcile($lineId, $label, $amount, $resolvedSupplierId, $note, $supplierRef, $invoiceProductLines);
-				$invoiceId = (int) (!empty($created['invoice_id']) ? $created['invoice_id'] : 0);
-				$invoiceRef = (string) (!empty($created['invoice_ref']) ? $created['invoice_ref'] : ($invoiceId > 0 ? '#' . $invoiceId : ''));
-				$quickCreateSuccessAlert = array(
-					'enabled' => 1,
-					'message' => (string) $langs->trans('KreaBankQuickSupplierInvoiceDone'),
-					'url' => ($invoiceId > 0 ? dol_buildpath('/fourn/facture/card.php?facid=' . $invoiceId, 1) : ''),
-					'ref' => $invoiceRef,
-				);
-			} elseif ($submitAction === 'tax_entry') {
-				if (!$canQuickTaxEntry) {
-					accessforbidden($langs->trans('KreaBankNoPermission'));
-				}
-				$created = $service->createQuickTaxContributionAndReconcile($lineId, $label, $amount, $note);
-				$taxId = (int) (!empty($created['social_contribution_id']) ? $created['social_contribution_id'] : 0);
-				$taxRef = (string) (!empty($created['social_contribution_ref']) ? $created['social_contribution_ref'] : ($taxId > 0 ? '#' . $taxId : ''));
-				$quickCreateSuccessAlert = array(
-					'enabled' => 1,
-					'message' => (string) $langs->trans('KreaBankQuickTaxEntryDone'),
-					'url' => ($taxId > 0 ? dol_buildpath('/compta/sociales/card.php?id=' . $taxId, 1) : ''),
-					'ref' => $taxRef,
-				);
-			} else {
-				$fkSoc = ((int) $supplierSocid > 0 ? (int) $supplierSocid : 0);
-				$service->createQuickEntryAndReconcile($lineId, $entryType ?: 'expense', $label, $amount, $fkSoc, $note, null, $confirmedMovementIds);
-				setEventMessages($langs->trans('KreaBankQuickEntryDone'), null, 'mesgs');
-			}
+			$service->createQuickEntryAndReconcile($lineId, $entryType, $label, $amount, 0, $note, null, $confirmedMovementIds);
+			setEventMessages($langs->trans('KreaBankQuickEntryDone'), null, 'mesgs');
 			$queueContinue = true;
 		} catch (Exception $e) {
 			$quickEntryFailed = true;
-			$quickEntryFormState = array(
-				'choice' => $submitAction, 'label' => $label, 'amount' => $amount, 'note' => $note,
-				'supplier_id' => $supplierSocid, 'supplier_lookup' => $supplierLookup,
-				'supplier_ref' => $supplierRef, 'lines' => $invoiceProductLines,
-			);
-			$errorMessage = (string) $e->getMessage();
-			if ($errorMessage === 'Unable to resolve supplier from VAT/name lookup or ML prediction.') {
-				$errorMessage = $langs->trans('ErrorFieldRequired', $langs->transnoentitiesnoconv('KreaBankQuickSupplierInvoiceSupplier'));
-			}
-			$reportActionException($e, 'quick_entry', (string) $sanitizeUiErrorMessage($errorMessage));
-			if ($existingMovementReview) { $quickEntryFormState['existing_movements'] = $existingMovementReview; }
+			$quickEntryFormState = array('label'=>$label, 'amount'=>$amount, 'note'=>$note);
+			$reportActionException($e, 'quick_entry');
+			if (!empty($existingMovementReview)) { $quickEntryFormState['existing_movements'] = $existingMovementReview; }
 		}
-	} else {
-		setEventMessages($langs->trans('KreaBankInvalidInput'), null, 'warnings');
-	}
-}
-
-if ($action === 'skip_line' && $user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite) {
-	$lineId = GETPOSTINT('line_id');
-	$skipReason = trim((string) GETPOST('skip_reason', 'alphanohtml'));
-
-	if ($lineId > 0) {
-		try {
-			$service->skipLine($lineId, $skipReason);
-			setEventMessages($langs->trans('KreaBankSkipDone'), null, 'mesgs');
-			$queueContinue = true;
-			$lineId = 0; // Continue with next pending line after skipping current one
-		} catch (Exception $e) {
-			$reportActionException($e, 'skip_line');
-		}
-	} else {
-		setEventMessages($langs->trans('KreaBankInvalidInput'), null, 'warnings');
-	}
-}
-
-if ($action === 'bulk_skip' && $user->hasRight('kreabank', 'reconciliation', 'write') && $canNativeWrite) {
-	$selectedLineIds = GETPOST('selected_line_ids', 'array');
-	$selectedLineIdsCsv = trim((string) GETPOST('selected_line_ids_csv', 'alphanohtml'));
-	$skipReason = trim((string) GETPOST('skip_reason', 'alphanohtml'));
-	$lineIdsToSkip = array();
-
-	if ($selectedLineIdsCsv !== '') {
-		foreach (explode(',', $selectedLineIdsCsv) as $selectedLineId) {
-			$selectedLineId = (int) trim((string) $selectedLineId);
-			if ($selectedLineId > 0) {
-				$lineIdsToSkip[$selectedLineId] = $selectedLineId;
-			}
-		}
-	}
-
-	if (is_array($selectedLineIds)) {
-		foreach ($selectedLineIds as $selectedLineId) {
-			$selectedLineId = (int) $selectedLineId;
-			if ($selectedLineId > 0) {
-				$lineIdsToSkip[$selectedLineId] = $selectedLineId;
-			}
-		}
-	}
-	if (empty($lineIdsToSkip) && $lineId > 0) {
-		$lineIdsToSkip[$lineId] = $lineId;
-	}
-
-	if (empty($lineIdsToSkip)) {
-		setEventMessages($langs->trans('KreaBankNoLinesSelected'), null, 'warnings');
-	} else {
-		$attempted = count($lineIdsToSkip);
-		$skipped = 0;
-		$errors = array();
-
-		foreach ($lineIdsToSkip as $selectedLineId) {
-			try {
-				$service->skipLine((int) $selectedLineId, $skipReason);
-				$skipped++;
-			} catch (Exception $e) {
-				$errors[] = (string) $sanitizeUiErrorMessage($e->getMessage());
-				if (function_exists('dol_syslog')) {
-					dol_syslog('KreaBank reconcile action error [bulk_skip]: ' . ((string) $e->getMessage()), LOG_ERR);
-				}
-			}
-		}
-
-		if ($skipped > 0 && empty($errors)) {
-			setEventMessages($langs->trans('KreaBankBulkSkipDone', (string) $skipped), null, 'mesgs');
-			$lineId = 0;
-		} elseif ($skipped > 0) {
-			$firstError = (!empty($errors[0]) ? (string) $errors[0] : (string) $langs->trans('Error'));
-			setEventMessages($langs->trans('KreaBankBulkSkipPartial', (string) $skipped, (string) $attempted), null, 'warnings');
-			setEventMessages($langs->trans('Error') . ': ' . $firstError, null, 'errors');
-			$lineId = 0;
-		} else {
-			$firstError = (!empty($errors[0]) ? (string) $errors[0] : (string) $langs->trans('Error'));
-			setEventMessages($langs->trans('Error') . ': ' . $firstError, null, 'errors');
-		}
-	}
+	} else { setEventMessages($langs->trans('KreaBankInvalidInput'), null, 'warnings'); }
 }
 
 $pendingLines = array();
@@ -1410,18 +1209,6 @@ if ($selectedLine && method_exists($service, 'getBankRuleAdvice')) {
 $selectedOutstanding = 0.0;
 $quickEntryPrefillLabel = '';
 $quickEntryPrefillNote = '';
-$quickSupplierLookupPrefill = '';
-$quickSupplierRefSupplier = '';
-$quickSupplierPrediction = array(
-	'enabled' => 0,
-	'is_confident' => 0,
-	'predicted_socid' => 0,
-	'predicted_name' => '',
-	'probability_pct' => 0,
-	'threshold_pct' => 0,
-	'reason' => 'disabled',
-);
-$quickSupplierPredictedSocid = 0;
 $selectedLineDirection = 0;
 if ($selectedLine) {
 	$selectedOutstanding = max(0, abs((float) $selectedLine['amount']) - abs((float) $selectedLine['allocated_amount']));
@@ -1477,151 +1264,28 @@ if ($selectedLine) {
 		$quickEntryNoteLines[] = $langs->trans('Ref') . ': ' . $bankReference;
 	}
 	$quickEntryPrefillNote = implode("\n", $quickEntryNoteLines);
-	$quickSupplierRefSupplier = ($paymentReference !== '' ? $paymentReference : $bankReference);
-	if ($quickSupplierRefSupplier !== '') {
-		$quickSupplierRefSupplier = dol_trunc($quickSupplierRefSupplier, 120, 'right', 'UTF-8', 1);
-	}
-	$quickSupplierLookupPrefill = $counterpartyName;
-	if ($canQuickSupplierInvoice && $selectedLineDirection < 0) {
-		$supplierInferenceCandidates = array();
-		$pushSupplierInferenceCandidate = static function ($value) use (&$supplierInferenceCandidates) {
-			$value = trim((string) preg_replace('/\s+/', ' ', (string) $value));
-			if ($value === '') {
-				return;
-			}
-			$key = strtoupper((string) preg_replace('/[^A-Z0-9]/', '', $value));
-			if ($key === '' || isset($supplierInferenceCandidates[$key])) {
-				return;
-			}
-			$supplierInferenceCandidates[$key] = $value;
-		};
-		$pushSupplierInferenceVariants = static function ($value) use ($pushSupplierInferenceCandidate) {
-			$value = trim((string) preg_replace('/\s+/', ' ', (string) $value));
-			if ($value === '') {
-				return;
-			}
-			$pushSupplierInferenceCandidate($value);
-			$withoutSuffix = trim((string) preg_replace('/[-\s]*[A-Z]?[0-9]{5,}$/', '', $value));
-			if ($withoutSuffix !== '' && $withoutSuffix !== $value) {
-				$pushSupplierInferenceCandidate($withoutSuffix);
-			}
-			if (preg_match('/(?:P\/|PARA)\s*(.+)$/iu', $value, $parts) && !empty($parts[1])) {
-				$afterTransfer = trim((string) $parts[1]);
-				if ($afterTransfer !== '') {
-					$pushSupplierInferenceCandidate($afterTransfer);
-					$afterTransferNoSuffix = trim((string) preg_replace('/[-\s]*[A-Z]?[0-9]{5,}$/', '', $afterTransfer));
-					if ($afterTransferNoSuffix !== '' && $afterTransferNoSuffix !== $afterTransfer) {
-						$pushSupplierInferenceCandidate($afterTransferNoSuffix);
-					}
-				}
-			}
-			if (strpos($value, '-') !== false) {
-				$beforeDash = trim((string) preg_replace('/\s+/', ' ', (string) strstr($value, '-', true)));
-				if ($beforeDash !== '') {
-					$pushSupplierInferenceCandidate($beforeDash);
-				}
-			}
-		};
-		$pushSupplierInferenceVariants($quickSupplierLookupPrefill);
-		$pushSupplierInferenceVariants($quickEntryPrefillLabel);
-		$pushSupplierInferenceVariants($paymentReference);
-		$pushSupplierInferenceVariants($bankReference);
-		$pushSupplierInferenceVariants((string) (!empty($selectedLine['description']) ? $selectedLine['description'] : ''));
-		$pushSupplierInferenceVariants((string) (!empty($selectedLine['counterparty_name']) ? $selectedLine['counterparty_name'] : ''));
-
-		foreach ($supplierInferenceCandidates as $supplierInferenceValue) {
-			try {
-				$resolvedSupplier = $service->resolveSupplierFromVatOrName((string) $supplierInferenceValue, 0);
-				if (!empty($resolvedSupplier['id'])) {
-					$quickSupplierPredictedSocid = (int) $resolvedSupplier['id'];
-					if (!empty($resolvedSupplier['name'])) {
-						$quickSupplierLookupPrefill = $decodeHtmlEntitiesRecursive((string) $resolvedSupplier['name']);
-					}
-					break;
-				}
-			} catch (Exception $e) {
-				// Ignore ambiguous/no-match candidate and try next inference candidate.
-			}
-		}
-
-		$quickSupplierPrediction = $service->predictSupplierForLine($selectedLine);
-		if ($quickSupplierPredictedSocid <= 0 && !empty($quickSupplierPrediction['is_confident']) && !empty($quickSupplierPrediction['predicted_socid'])) {
-			$quickSupplierPredictedSocid = (int) $quickSupplierPrediction['predicted_socid'];
-			if ($quickSupplierLookupPrefill === '' && !empty($quickSupplierPrediction['predicted_name'])) {
-				$quickSupplierLookupPrefill = $decodeHtmlEntitiesRecursive((string) $quickSupplierPrediction['predicted_name']);
-			}
-		}
-	}
 }
-$quickSupplierProductLineSlots = 6;
 $queueNavigationFields = kreabankReconcileQueueHiddenFields($pendingLines, $lineId, $pendingSort, $queueSearch ?? '');
-$renderQuickEntryForm = static function ($line, $openDocSearch, $prefillLabel, $prefillAmount, $prefillNote, $supplierLookupPrefill = '', $supplierRefPrefill = '', $supplierPredictedSocid = 0, $supplierPrediction = array(), $showSupplierInvoiceButton = false, $showTaxEntryButton = false) use ($navigationAccountId, $langs, $forceBatchDetect, $form, $quickSupplierProductLineSlots, $decodeHtmlEntitiesRecursive, $quickEntryFormState, $queueNavigationFields) {
-	if (empty($line)) {
-		return;
-	}
-
-	$lineIdValue = !empty($line['rowid']) ? (int) $line['rowid'] : 0;
-	if ($lineIdValue <= 0) {
-		return;
-	}
-
-	$formDomId = 'krea_quick_entry_form_' . $lineIdValue;
-	$supplierModalId = 'krea_supplier_invoice_modal_' . $lineIdValue;
-	$supplierTargetTotalId = 'krea_supplier_invoice_target_' . $lineIdValue;
-	$supplierCurrentTotalId = 'krea_supplier_invoice_current_' . $lineIdValue;
-	$supplierFeedbackId = 'krea_supplier_invoice_feedback_' . $lineIdValue;
-	$supplierConfirmId = 'krea_supplier_invoice_confirm_' . $lineIdValue;
-	$supplierJsonInputId = 'krea_supplier_invoice_lines_json_' . $lineIdValue;
+$renderQuickEntryForm = static function ($line, $openDocSearch, $prefillLabel, $prefillAmount, $prefillNote) use ($navigationAccountId, $langs, $forceBatchDetect, $quickEntryFormState, $queueNavigationFields) {
+	if (empty($line['rowid'])) { return; }
+	$lineIdValue = (int) $line['rowid'];
 	if ($quickEntryFormState) {
 		$prefillLabel = $quickEntryFormState['label'];
 		$prefillAmount = $quickEntryFormState['amount'];
 		$prefillNote = $quickEntryFormState['note'];
-		$supplierLookupPrefill = $quickEntryFormState['supplier_lookup'];
-		$supplierRefPrefill = $quickEntryFormState['supplier_ref'];
-		$supplierPredictedSocid = $quickEntryFormState['supplier_id'];
 	}
-	$prefillAmountNumber = (float) price2num((string) $prefillAmount, 'MU');
-	if ($prefillAmountNumber <= 0) {
-		$prefillAmountNumber = 0.0;
+	$prefillAmountNumber = max(0, (float) price2num((string) $prefillAmount, 'MU'));
+	print '<form id="krea_quick_entry_form_' . $lineIdValue . '" method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+	print kreabankNavigationHiddenFields($navigationAccountId) . '<input type="hidden" name="workspace" value="1">' . $queueNavigationFields;
+	foreach (array('token'=>newToken(), 'action'=>'quick_entry', 'line_id'=>$lineIdValue, 'open_doc_search'=>$openDocSearch) as $name=>$value) {
+		print '<input type="hidden" name="' . $name . '" value="' . dol_escape_htmltag((string) $value) . '">';
 	}
-	print '<form id="' . $formDomId . '" method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" data-locale="' . dol_escape_htmltag(str_replace('_', '-', $langs->defaultlang)) . '" data-initial-lines="' . dol_escape_htmltag(json_encode($quickEntryFormState['lines'] ?? array())) . '">';
-	print (kreabankNavigationHiddenFields($navigationAccountId) . '<input type="hidden" name="workspace" value="1">');
-	print $queueNavigationFields;
-	print '<input type="hidden" name="token" value="' . newToken() . '">';
-	print '<input type="hidden" name="action" value="quick_entry">';
-	print '<input type="hidden" name="line_id" value="' . $lineIdValue . '">';
-	print '<input type="hidden" name="open_doc_search" value="' . dol_escape_htmltag((string) $openDocSearch) . '">';
-	print '<input type="hidden" name="entry_product_line_slots" value="' . ((int) $quickSupplierProductLineSlots) . '">';
-	print '<input type="hidden" name="entry_supplier_lookup" id="entry_supplier_lookup_' . $lineIdValue . '" value="">';
-	print '<input type="hidden" name="entry_product_lines_json" id="' . $supplierJsonInputId . '" value="">';
-	if ((int) $forceBatchDetect > 0) {
-		print '<input type="hidden" name="force_batch_detect" value="1">';
-	}
-	if ((int) $supplierPredictedSocid > 0) {
-		print '<input type="hidden" name="entry_supplier_predicted_socid" value="' . ((int) $supplierPredictedSocid) . '">';
-	}
-	print '<fieldset class="kb-create-choices"><legend>' . $langs->trans('KreaBankWorkspaceCreateChoice') . '</legend>';
-	$choices = array('payment_entry' => 'Bank');
-	if ($showTaxEntryButton) { $choices['tax_entry'] = 'Tax'; }
-	if ($showSupplierInvoiceButton) { $choices['supplier_invoice'] = 'Invoice'; }
-	foreach ($choices as $choice => $label) {
-		print '<label class="kb-create-choice"><input type="radio" name="creation_choice" value="' . $choice . '"' . ($choice === ($quickEntryFormState['choice'] ?? 'payment_entry') ? ' checked' : '') . '><span><strong>' . $langs->trans('KreaBankWorkspaceChoice' . $label) . '</strong><small>' . $langs->trans('KreaBankWorkspaceConsequence' . $label) . '</small></span></label>';
-	}
-	print '</fieldset>';
+	if ((int) $forceBatchDetect > 0) { print '<input type="hidden" name="force_batch_detect" value="1">'; }
+	print '<p class="kb-panel-intro">' . $langs->trans('KreaBankWorkspaceConsequenceBank') . '</p>';
 	print '<input type="hidden" name="entry_type" value="payment">';
 	print '<div class="kb-entry-fields">';
 	print '<div class="kb-field kb-field-wide"><label for="kb-entry-label">' . $langs->trans('KreaBankQuickEntryLabel') . '</label><input id="kb-entry-label" type="text" name="entry_label" value="' . dol_escape_htmltag((string) $prefillLabel) . '" required maxlength="190"></div>';
 	print '<div class="kb-field"><label for="kb-entry-amount">' . $langs->trans('KreaBankQuickEntryAmount') . ' (' . dol_escape_htmltag($line['currency']) . ')</label><input id="kb-entry-amount" type="number" step="0.01" min="0.01" name="entry_amount" value="' . number_format($prefillAmountNumber, 2, '.', '') . '" required inputmode="decimal"></div>';
-	$selectedSupplierInput = trim((string) $supplierLookupPrefill);
-	if ($selectedSupplierInput === '' && !empty($supplierPrediction['predicted_name'])) { $selectedSupplierInput = $decodeHtmlEntitiesRecursive($supplierPrediction['predicted_name']); }
-	$selectedSupplierId = ((int) $supplierPredictedSocid > 0 ? (int) $supplierPredictedSocid : '');
-	print '<div class="kb-field" data-kb-supplier-field><label for="entry_supplier_socid">' . $langs->trans('KreaBankQuickSupplierInvoiceSupplier') . '</label>';
-	print $form->select_company($selectedSupplierId, 'entry_supplier_socid', '(s.fournisseur:>:0)', 'KreaBankQuickSupplierLookupPlaceholder', 0, 0, array(), 0, 'minwidth300', '', $selectedSupplierInput, 1);
-	if (!empty($supplierPrediction['is_confident']) && !empty($supplierPrediction['predicted_name'])) {
-		print '<small>' . $langs->trans('KreaBankSupplierMlPrediction', dol_escape_htmltag($decodeHtmlEntitiesRecursive($supplierPrediction['predicted_name'])), (int) $supplierPrediction['probability_pct'], (int) $supplierPrediction['threshold_pct']) . '</small>';
-	}
-	print '<small data-kb-supplier-feedback role="alert" hidden></small></div>';
-	print '<div class="kb-field kb-field-wide" data-kb-invoice-field><label for="kb-entry-ref">' . $langs->trans('KreaBankQuickSupplierInvoiceRefSupplier') . '</label><input id="kb-entry-ref" type="text" name="entry_ref_supplier" value="' . dol_escape_htmltag((string) $supplierRefPrefill) . '"></div>';
 	print '<div class="kb-field kb-field-wide"><label for="kb-entry-note">' . $langs->trans('KreaBankReason') . '</label><textarea id="kb-entry-note" name="entry_note" rows="2">' . dol_escape_htmltag((string) $prefillNote, 0, 1) . '</textarea></div></div>';
 	if (!empty($quickEntryFormState['existing_movements'])) {
 		// Explicit, exact-list confirmation; the service rechecks the current list.
@@ -1630,92 +1294,8 @@ $renderQuickEntryForm = static function ($line, $openDocSearch, $prefillLabel, $
 			. dol_escape_htmltag($langs->transnoentitiesnoconv('KreaBankExistingMovementConfirm', '#' . implode(', #', $existingMovementIds))) . '</label></div>';
 	}
 	print '<div class="kb-create-actions">';
-	print '<button class="button kb-primary-action" data-kb-create-action="payment_entry" type="submit" name="entry_submit_action" value="payment_entry">' . $langs->trans('KreaBankWorkspaceCreateBank') . '</button>';
-	if ($showTaxEntryButton) { print '<button class="button kb-primary-action" data-kb-create-action="tax_entry" type="submit" name="entry_submit_action" value="tax_entry">' . $langs->trans('KreaBankWorkspaceCreateTax') . '</button>'; }
-	if ($showSupplierInvoiceButton) {
-		$supplierRequiredMsg = $langs->transnoentitiesnoconv('ErrorFieldRequired', $langs->transnoentitiesnoconv('KreaBankQuickSupplierInvoiceSupplier'));
-		print '<button class="button kb-primary-action" data-kb-create-action="supplier_invoice" type="button" data-krea-supplier-modal-open="' . $supplierModalId . '" data-krea-form-id="' . $formDomId . '" data-krea-msg-supplier="' . dol_escape_htmltag($supplierRequiredMsg) . '">' . $langs->trans('KreaBankWorkspaceReviewInvoice') . '</button>';
-	}
-	print '</div>';
-	if (!empty($showSupplierInvoiceButton)) {
-		print '<div id="' . $supplierModalId . '" class="krea-modal-overlay krea-supplier-lines-modal" role="dialog" aria-modal="true" aria-labelledby="' . $supplierModalId . '_title" tabindex="-1"';
-		print ' data-target-total="' . price2num((string) $prefillAmountNumber, 'MU') . '"';
-		print ' data-target-total-id="' . $supplierTargetTotalId . '"';
-		print ' data-current-total-id="' . $supplierCurrentTotalId . '"';
-		print ' data-feedback-id="' . $supplierFeedbackId . '"';
-		print ' data-confirm-id="' . $supplierConfirmId . '"';
-		print ' data-json-input-id="' . $supplierJsonInputId . '"';
-		print ' data-supplier-lookup-id="entry_supplier_lookup_' . $lineIdValue . '"';
-		print ' data-msg-empty="' . dol_escape_htmltag($langs->transnoentitiesnoconv('KreaBankQuickSupplierLinesNoSelection')) . '"';
-		print ' data-msg-incomplete="' . dol_escape_htmltag($langs->transnoentitiesnoconv('KreaBankQuickSupplierLinesIncomplete')) . '"';
-		print ' data-msg-mismatch="' . dol_escape_htmltag($langs->transnoentitiesnoconv('KreaBankQuickSupplierLinesMismatch')) . '"';
-		print ' data-msg-supplier="' . dol_escape_htmltag($supplierRequiredMsg) . '"';
-		print ' style="display:none;">';
-		print '<div class="krea-modal-dialog">';
-		print '<div class="krea-modal-header">';
-		print '<div class="krea-modal-title" id="' . $supplierModalId . '_title">' . $langs->trans('KreaBankQuickSupplierLinesTitle') . '</div>';
-		print '<button type="button" aria-label="' . dol_escape_htmltag($langs->trans('Close')) . '" class="butAction krea-modal-close" data-krea-modal-close="' . $supplierModalId . '">x</button>';
-		print '</div>';
-		print '<div class="krea-muted" style="margin-bottom:8px">' . $langs->trans('KreaBankQuickSupplierLinesHelp') . '</div>';
-		print '<table class="nobordernopadding centpercent krea-product-line-table">';
-		print '<tr class="liste_titre">';
-		print '<th>' . $langs->trans('Ref') . '</th>';
-		print '<th>' . $langs->trans('Description') . '</th>';
-		print '<th class="center">' . $langs->trans('Qty') . '</th>';
-		print '<th class="right">' . $langs->trans('Amount') . '</th>';
-		print '<th class="center">' . $langs->trans('Delete') . '</th>';
-		print '</tr>';
-		for ($lineSlot = 0; $lineSlot < (int) $quickSupplierProductLineSlots; $lineSlot++) {
-			$rowClass = 'krea-product-line-row';
-			if ($lineSlot > 0) {
-				$rowClass .= ' krea-product-line-row-hidden';
-			}
-			$qtyDefault = ($lineSlot === 0 ? '1' : '');
-			$amountDefault = ($lineSlot === 0 ? number_format((float) $prefillAmountNumber, 2, '.', '') : '');
-			$deleteIcon = img_picto($langs->transnoentitiesnoconv('Delete'), 'delete', 'class="krea-delete-icon"');
-			print '<tr class="' . $rowClass . '" data-krea-product-row="' . $lineSlot . '">';
-			print '<td><label class="kb-sr-only" for="entry_product_line_product_' . $lineSlot . '">' . $langs->trans('Product') . '</label>' . $form->select_produits(
-				0,
-				'entry_product_line_product_' . $lineSlot,
-				'',
-				0,
-				0,
-				1,
-				2,
-				'',
-				2,
-				array(),
-				0,
-				'',
-				0,
-				'minwidth200',
-				1,
-				'',
-				null,
-				1,
-				1
-			) . '</td>';
-			print '<td><input class="flat minwidth200 krea-product-line-label" type="text" aria-label="' . dol_escape_htmltag($langs->trans('Description')) . '" name="entry_product_line_label_' . $lineSlot . '" value="" readonly></td>';
-			print '<td class="center" data-label="' . dol_escape_htmltag($langs->trans('Qty')) . '"><input class="flat right krea-product-line-qty" type="number" step="0.000001" min="0" aria-label="' . dol_escape_htmltag($langs->trans('Qty')) . '" name="entry_product_line_qty_' . $lineSlot . '" value="' . $qtyDefault . '"></td>';
-			print '<td class="right" data-label="' . dol_escape_htmltag($langs->trans('Amount')) . '"><input class="flat right krea-product-line-amount" type="number" step="0.01" min="0" aria-label="' . dol_escape_htmltag($langs->trans('Amount')) . '" name="entry_product_line_amount_' . $lineSlot . '" value="' . $amountDefault . '" inputmode="decimal"></td>';
-			print '<td class="center"><button type="button" class="butAction krea-product-line-remove" data-krea-product-remove="' . $lineSlot . '" title="' . dol_escape_htmltag($langs->transnoentitiesnoconv('Delete')) . '" aria-label="' . dol_escape_htmltag($langs->transnoentitiesnoconv('Delete')) . '"' . ($lineSlot === 0 ? ' style="display:none"' : '') . '>' . $deleteIcon . '</button></td>';
-			print '</tr>';
-		}
-		print '</table>';
-		print '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
-		print '<button type="button" class="butAction krea-product-line-add">' . $langs->trans('KreaBankQuickSupplierLinesAddRow') . '</button>';
-		print '<span class="krea-muted">' . $langs->trans('KreaBankQuickSupplierLinesTarget') . ': <strong id="' . $supplierTargetTotalId . '">' . kreabankPrice($prefillAmountNumber) . '</strong></span>';
-		print '<span class="krea-muted">' . $langs->trans('KreaBankQuickSupplierLinesCurrent') . ': <strong id="' . $supplierCurrentTotalId . '">' . kreabankPrice(0) . '</strong></span>';
-		print '</div>';
-		print '<div id="' . $supplierFeedbackId . '" role="status" aria-live="polite" class="warning" style="margin-top:8px;display:none"></div>';
-		print '<div class="tabsAction" style="margin-top:10px">';
-		print '<button type="button" class="butAction" data-krea-modal-close="' . $supplierModalId . '">' . $langs->trans('KreaBankQuickSupplierLinesClose') . '</button>';
-		print '<button class="button kb-primary-action" type="button" name="entry_submit_action" value="supplier_invoice" id="' . $supplierConfirmId . '">' . $langs->trans('KreaBankWorkspaceCreateInvoice') . '</button>';
-		print '</div>';
-		print '</div>';
-		print '</div>';
-	}
-	print '</form>';
+	print '<button class="button kb-primary-action" type="submit" name="entry_submit_action" value="payment_entry">' . $langs->trans('KreaBankWorkspaceCreateBank') . '</button>';
+	print '</div></form>';
 };
 
 llxHeader('', $langs->trans('KreaBankReconcile'), '', '', 0, 0, '', '', '', 'mod-kreabank page-reconcile');
@@ -2162,13 +1742,7 @@ if (!$selectedLine) {
 	}
 	if (!$canCreate) { print '<p class="kb-readonly">' . $langs->trans($creationUnavailable ? 'KreaBankWorkspaceCreationUnavailable' : 'KreaBankWorkspaceRestrictedCreation') . '</p>'; }
 	elseif ($canReconcile) {
-		$renderQuickEntryForm(
-			$selectedLine, $openDocumentsSearch, $quickEntryPrefillLabel,
-			$selectedOutstanding, $quickEntryPrefillNote, $quickSupplierLookupPrefill,
-			$quickSupplierRefSupplier, $quickSupplierPredictedSocid, $quickSupplierPrediction,
-			($canQuickSupplierInvoice && $selectedLineDirection < 0),
-			($canQuickTaxEntry && $selectedLineDirection < 0)
-		);
+		$renderQuickEntryForm($selectedLine, $openDocumentsSearch, $quickEntryPrefillLabel, $selectedOutstanding, $quickEntryPrefillNote);
 	} else { print '<p class="kb-readonly">' . $langs->trans('KreaBankWorkspaceReadOnly') . '</p>'; }
 	print '</section>';
 	print '<div class="kb-queue-actions kb-js-only"><button type="button" class="button" id="kb-next-line" aria-controls="kb-pending-list" title="' . dol_escape_htmltag($langs->trans('KreaBankWorkspaceNextHelp')) . '"' . (count($pendingLines) < 2 ? ' disabled' : '') . '>' . $langs->trans('KreaBankWorkspaceNext') . '</button></div>';
@@ -2192,7 +1766,6 @@ if (!$selectedLine) {
 print '</div>';
 print '</div>';
 
-print '<script src="' . dol_buildpath('/custom/kreabank/js/reconcile-supplier.js', 1) . '?v=' . filemtime(__DIR__ . '/js/reconcile-supplier.js') . '" nonce="' . getNonce() . '"></script>';
 print '<script src="' . dol_buildpath('/custom/kreabank/js/reconcile.js', 1) . '?v=' . filemtime(__DIR__ . '/js/reconcile.js') . '" nonce="' . getNonce() . '"></script>';
 
 print dol_get_fiche_end();

@@ -246,11 +246,11 @@ foreach (array('otheraccounts','debit','credit','readonly','empty','locked','noe
 	if ($case === 'single') { workspaceCheck((bool) preg_match('/id="kb-next-line"[^>]+ disabled/', $html), 'Single pending line disables Next'); }
 	workspaceCheck(strpos($html, 'data-outstanding="125.5"') !== false, $case . ': raw outstanding retained');
 	workspaceCheck(strpos($html, 'data-currency="EUR"') !== false && strpos($html, 'BANK-TEST') !== false, $case . ': source context');
-	workspaceCheck((strpos($html, 'value="tax_entry"') !== false) === !in_array($case, array('credit','readonly','restricted','limited','unavailable')), $case . ': tax direction/permission restriction');
-	workspaceCheck((strpos($html, 'value="supplier_invoice"') !== false) === !in_array($case, array('credit','readonly','restricted','limited','unavailable')), $case . ': invoice direction/permission restriction');
+	workspaceCheck(strpos($html, 'value="tax_entry"') === false, $case . ': removed tax creation is absent');
+	workspaceCheck(strpos($html, 'data-krea-supplier-modal') === false && strpos($html, 'name="creation_choice"') === false, $case . ': removed supplier creation and choice UI are absent');
 	if ($case === 'readonly') { workspaceCheck(strpos($html, 'id="manualReconcileButton"') === false && strpos($html, 'krea_quick_entry_form_') === false, 'Read-only view must not offer writes'); }
 	if ($case === 'locked') { workspaceCheck(strpos($html, 'name="selected_docs[]"') === false, 'Locked movement must not be selectable'); }
-	if ($case === 'error') { workspaceCheck(strpos($html, 'data-initial-workflow="create"') !== false && strpos($html, 'value="Retained label"') !== false && strpos($html, 'value="supplier_invoice" checked') !== false, 'Failed creation retains workflow, choice and inputs'); }
+	if ($case === 'error') { workspaceCheck(strpos($html, 'data-initial-workflow="create"') !== false && strpos($html, 'value="Retained label"') !== false, 'Failed bank movement creation retains workflow and inputs'); }
 	if ($case === 'success') { workspaceCheck(strpos($html, 'role="status">') !== false && strpos($html, 'Synthetic record created and reconciled') !== false, 'Persistent accessible success state'); }
 }
 $invoiceDocument = array('rowid'=>242,'doc_type'=>'supplier_invoice','ref'=>'INV-SYNTHETIC','amount_open'=>125.5,'thirdparty_name'=>'Synthetic supplier','doc_date'=>'2026-11-03');

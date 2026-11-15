@@ -15,6 +15,13 @@
 
 ## Separate reconciliation list
 
+- 1.20.49 removes the row More options panel and its POST actions. Skip line,
+  quick tax creation and quick supplier invoice creation are retired everywhere;
+  reject stale actions rather than mapping them to ordinary movement creation.
+  Preserve historical records. Remaining draft advice/validation uses
+  `KreaBankDraftInvoiceReview` with exact persisted amounts and complete identity;
+  date-only or amount-only evidence never qualifies.
+
 - `reconciliationlist.php` is additive; keep `reconcile.php` and its assets unchanged
   when maintaining this feature. Use native header filters/pagination, explicit
   staged/native IDs, signed row reviews and the existing matcher/service.

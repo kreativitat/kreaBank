@@ -259,7 +259,7 @@ $assertContains($serviceSource, 'public function getAuditRetentionDiagnostics(',
 $assertContains($serviceSource, 'public function purgeAuditRowsOlderThanRetention(', 'service should expose audit retention purge API', $errors);
 $assertContains($serviceSource, "'minimum_gap_pct' => 15", 'supplier ML should expose minimum confidence gap guard', $errors);
 $assertContains($serviceSource, 'low_confidence_gap', 'supplier ML should distinguish low-gap predictions from low-confidence predictions', $errors);
-$assertContains($serviceSource, 'public function createQuickSupplierInvoiceAndReconcile(', 'service should expose quick supplier invoice reconciliation API', $errors);
+if (strpos($serviceSource, 'function createQuickSupplierInvoiceAndReconcile(') !== false) { $errors[] = 'Removed supplier invoice creation must not remain callable'; }
 $openInvoiceBody = $extractFunctionBody($serviceSource, 'getOpenInvoiceDocuments');
 if ($openInvoiceBody === '') {
 	$errors[] = 'Unable to parse getOpenInvoiceDocuments body';
@@ -525,7 +525,7 @@ if (strpos($serviceSource, '@unlink(') !== false) {
 if (strpos($serviceSource, 'array_fill(0, 16, 0.0)') !== false) {
 	$errors[] = 'service should not keep the old 16-bin supplier ML hash vector';
 }
-$assertContains($reconcileSource, "entry_submit_action\" value=\"supplier_invoice", 'reconcile should expose supplier invoice submit button in quick entry form', $errors);
+if (strpos($reconcileSource, 'data-krea-supplier-modal-open') !== false) { $errors[] = 'Removed supplier creation must not have a workspace button'; }
 $assertContains($reconcileSource, '$safeSuggestion = $service->getSafeSuggestion($suggestions, $safeScore);', 'manual reconciliation should use the shared automatic-match safety contract', $errors);
 $assertContains($reconcileSource, '$shouldCheck = !empty($autoSelectDocKeys[$docKey]);', 'manual reconciliation should preselect only explicitly safe or batch-selected documents', $errors);
 

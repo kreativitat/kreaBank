@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20.49 — 2026-11-15
+
+- Remove the reconciliation list's More options button, panel and POST actions entirely. Search, payment batches and native bank-movement creation retain their existing paths.
+- Remove Skip line, quick tax creation and quick supplier-invoice creation from both list and selected-line workspace, including their server APIs and supplier-dialog assets. Retired actions and unsupported generic entry types fail closed; historical records remain readable.
+- Draft advice in the remaining selected-line workspace requires an exact persisted amount and a complete counterparty name or bounded, non-provisional invoice reference. Repeat the same company, currency, direction and relevance checks under locks before native validation. Dates or search text alone never qualify.
+- No schema, permissions, menu, module activation or scheduler changes. Keep the descriptor and VERSION at 1.20.49.
+
 ## 1.20.48 — 2026-11-15
 
 - The row "More options" button of the Reconciliation list no longer opens the selected-line workspace. It expands inside the row, like Search, with only the tools the list lacked: tax entry, supplier invoice (product-line review dialog), skip, rule entry, payment difference and draft-invoice validation. Search, batches and bank-movement creation keep their existing row buttons.

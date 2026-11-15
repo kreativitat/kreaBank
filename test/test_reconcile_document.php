@@ -117,15 +117,15 @@ function loadDirectQueue($lineId, $params, $queueContinue, $account = 81)
 function submitQueueAction($action)
 {
 	global $service, $user, $langs;
-	$canNativeWrite = true; $canQuickSupplierInvoice = true; $canQuickTaxEntry = true;
+	$canNativeWrite = true;
 	$queueContinue = false; $lineId = GETPOSTINT('line_id');
 	$quickEntryFailed = false; $quickEntryFormState = array();
 	$reportActionException = static function ($e, ...$args) { $GLOBALS['events'][] = array('error', $e->getMessage()); };
 	$sanitizeUiErrorMessage = static function ($value) { return $value; };
 	$source = file_get_contents(__DIR__ . '/../line_workspace.inc.php');
-	$following = array('reconcile'=>'quick_assign', 'quick_assign'=>'quick_entry', 'quick_entry'=>'skip_line');
+	$following = array('reconcile'=>'quick_assign', 'quick_assign'=>'quick_entry', 'quick_entry'=>'end');
 	$start = strpos($source, "if (\$action === '" . $action . "' &&");
-	$end = strpos($source, "if (\$action === '" . $following[$action] . "' &&", $start);
+	$end = $action === 'quick_entry' ? strpos($source, '$pendingLines = array();', $start) : strpos($source, "if (\$action === '" . $following[$action] . "' &&", $start);
 	if ($start === false || $end === false) { throw new LogicException('Review reconciliation action boundary'); }
 	eval(substr($source, $start, $end - $start));
 	return $queueContinue;
@@ -248,18 +248,24 @@ foreach (array('tax_id','tax_type_id','tax_payment_mode_id') as $field) {
     $service->suggestions[0][$field]++;
     checkDirect(submitDirectReview()===null && !$service->executions, 'Tax identity and payment method are signed: '.$field);
 }
-foreach (array('reconcile','quick_assign','payment_entry','supplier_invoice','tax_entry') as $flow) {
+foreach (array('reconcile','quick_assign','payment_entry') as $flow) {
 	foreach (array(false, true) as $fail) {
 		resetDirectReview(); $service->fail = $fail;
 		$request += array('selected_docs'=>array('native_bank__22'), 'doc_amount'=>array('native_bank__22'=>'47.66'),
 			'doc_type'=>'native_bank', 'doc_id'=>22, 'allocated_amount'=>'47.66', 'entry_label'=>'Synthetic entry', 'entry_amount'=>'47.66',
-			'entry_submit_action'=>$flow, 'entry_supplier_socid'=>91,
+			'entry_submit_action'=>$flow, 'entry_type'=>'payment', 'entry_supplier_socid'=>91,
 			'entry_product_lines_json'=>json_encode(array(array('product_id'=>51,'qty'=>1,'amount'=>47.66))));
 		$action = in_array($flow, array('reconcile','quick_assign'), true) ? $flow : 'quick_entry';
 		$advance = submitQueueAction($action);
 		checkDirect($advance === !$fail && count($service->executions) === ($fail ? 0 : 1), $flow . ': continue only after successful native service execution');
 		checkDirect(loadDirectQueue(11, $request, $advance)['selected'] === ($fail ? 11 : 12), $flow . ': successful completion follows the displayed successor; failure retains the source');
 	}
+}
+foreach (array('supplier_invoice', 'tax_entry', 'skip_line', 'unknown', '') as $removed) {
+	resetDirectReview(); $request += array('entry_submit_action'=>$removed, 'entry_type'=>'payment', 'entry_label'=>'Test', 'entry_amount'=>'47.66');
+	$denied = false;
+	try { submitQueueAction('quick_entry'); } catch (RuntimeException $e) { $denied = true; }
+	checkDirect($denied && !$service->executions, 'Removed/unknown submit action cannot become an ordinary bank movement: ' . $removed);
 }
 resetDirectReview(); $service->partial = true;
 $request += array('selected_docs'=>array('native_bank__22'), 'doc_amount'=>array('native_bank__22'=>'20.00'));

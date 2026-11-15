@@ -1,11 +1,22 @@
 # Reconciliation list
 
-`reconciliationlist.php` is a separate banking feature. The existing
-`reconcile.php`, its JavaScript and CSS retain their existing workflows.
+`reconciliationlist.php` is the banking reconciliation list. Its row actions are
+Search, payment batches and ordinary bank-movement creation. More options and
+all `more_entry`, `more_rule`, `more_writeoff` and `more_draft` actions were removed
+in 1.20.49; stale POSTs are rejected before workspace/service dispatch.
+
+The selected-line workspace remains available through `workspace=1` and the
+legacy `reconcile.php` redirect. Skip line, quick tax creation and quick supplier
+invoice creation are removed from every entry point and service API. Existing
+invoice payments, tax matching, rules, reviewed differences and historical audit
+records remain supported. Draft advice requires exact persisted source/draft
+amounts and a complete counterparty or bounded real invoice reference; native
+validation repeats the same relevance check under source/invoice locks.
+
 The list remains directly accessible; its sidebar shortcut is hidden and no
-longer registered. The old reconciliation tab remains dormant, with its code and
-direct routes preserved. All accounts belong directly to the active company; cash accounts
-are excluded. Account selection is explicit in the header filter, never session-global.
+longer registered. All accounts belong directly to the active company; cash
+accounts are excluded. Account selection is explicit in the header filter,
+never session-global.
 
 The page uses native `print_barre_liste()`, `print_liste_field_titre()` and filter
 buttons. It defaults to newest booking date first; explicit header sort choices

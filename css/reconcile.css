@@ -1,27 +1,5 @@
 /* Copyright (C) 2026 Kreativität Works <mail@kreativitat.com>
  * SPDX-License-Identifier: GPL-3.0-or-later */
-.krea-modal-overlay{position:fixed;top:0;right:0;bottom:0;left:0;z-index:1500;background:rgba(15,23,42,.45);padding:20px;display:none;align-items:flex-start;justify-content:center;overflow:auto}
-.krea-modal-overlay.is-open{display:flex}
-.krea-modal-dialog{margin-top:30px;background:#fff;border:1px solid #c8d3dd;border-radius:10px;box-shadow:0 12px 32px rgba(15,23,42,.25);width:min(1180px,100%);padding:14px}
-.krea-modal-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
-.krea-modal-title{font-size:16px;font-weight:700;color:#1f4e79}
-.krea-modal-close{border:1px solid #c8d3dd;background:#f8fbfe;border-radius:6px;min-width:30px;min-height:30px;line-height:1;font-weight:700;cursor:pointer}
-.select2-container--open{z-index:1700 !important}
-.select2-dropdown{z-index:1701 !important}
-.krea-right .select2-container,.krea-right .minwidth300,.krea-right .minwidth200{max-width:100% !important}
-.krea-product-line-table{table-layout:auto;width:100%}
-.krea-product-line-table th,.krea-product-line-table td{vertical-align:middle}
-.krea-product-line-table th:nth-child(3),.krea-product-line-table td:nth-child(3){width:88px}
-.krea-product-line-table th:nth-child(4),.krea-product-line-table td:nth-child(4){width:140px;white-space:nowrap}
-.krea-product-line-table th:nth-child(5),.krea-product-line-table td:nth-child(5){width:56px;white-space:nowrap}
-.krea-product-line-table .select2-container{width:100% !important;max-width:100% !important}
-.krea-product-line-table input[type=\"text\"],.krea-product-line-table input[type=\"number\"]{width:100%}
-.krea-product-line-row-hidden{display:none}
-.krea-product-line-table .krea-product-line-amount,.krea-product-line-table .krea-product-line-qty{text-align:right}
-.krea-product-line-table .krea-product-line-remove{min-width:34px;width:34px;padding:2px 4px;display:inline-flex;align-items:center;justify-content:center}
-.krea-product-line-table .krea-product-line-remove .krea-delete-icon{margin:0}
-@media (max-width: 900px){.krea-modal-dialog{padding:10px}.krea-product-line-table .minwidth200{min-width:140px}}
-
 /* Reconciliation stays inside the native banking shell. */
 .kb-recon { --kb-ink:#243c48; --kb-muted:#566a74; --kb-line:#dce5e7; --kb-green:#355d4a; display:grid; grid-template-columns:minmax(245px,300px) minmax(0,1fr); gap:24px; align-items:start; margin-top:20px; color:var(--kb-ink); }
 .kb-recon * { box-sizing:border-box; }
@@ -112,12 +90,6 @@
 .kb-recon .button.kb-primary-action { display:inline-block; background:var(--kb-green); border:1px solid var(--kb-green); border-radius:6px; color:#fff; padding:12px 18px; margin:0; font-size:12px; font-weight:600; text-transform:none; line-height:1.5; white-space:normal; height:auto; }
 .kb-recon .button.kb-primary-action:hover:not(:disabled),.kb-recon .button.kb-primary-action:focus-visible:not(:disabled),.kb-recon .button.kb-primary-action:active:not(:disabled) { background:#284b3a; border-color:#284b3a; color:#fff; }
 .kb-recon form[aria-busy=true] { opacity:.7; }
-.kb-create-choices { padding:0; margin:0 0 22px; border:0; }
-.kb-create-choices legend { font-size:12px; font-weight:600; margin-bottom:10px; }
-.kb-create-choice { display:flex; gap:10px; padding:14px; border:1px solid var(--kb-line); border-radius:8px; margin-bottom:8px; cursor:pointer; }
-.kb-create-choice:has(input:checked) { border-color:#8eaf9c; background:#f3f8f5; }
-.kb-create-choice strong { display:block; font-size:13px; color:var(--kb-ink); }
-.kb-create-choice small { display:block; font-weight:400; font-size:12px; line-height:1.6; margin-top:5px; }
 .kb-entry-fields { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
 .kb-field { display:flex; flex-direction:column; gap:7px; min-width:0; }
 .kb-field-wide { grid-column:1/-1; }

@@ -779,69 +779,6 @@ class KreaBankNativeBankAdapter
 		return ($metaUpdated || $stagingUpdated || $source === 'native');
 	}
 
-	/**
-	 * Mark one imported line as manually skipped/deferred.
-	 *
-	 * @param int $lineId
-	 * @param int $nativeLineId
-	 * @return bool
-	 */
-	public function markStatementLineSkipped($lineId, $nativeLineId = 0)
-	{
-		$this->ensureMetaTable();
-		$this->ensureStagingTables();
-		$lineId = (int) $lineId;
-		if ($lineId <= 0) {
-			return false;
-		}
-
-		$nativeLineId = (int) $nativeLineId;
-		$hasStagedRow = false;
-		$sqlStageMap = 'SELECT fk_native_bank_line';
-		$sqlStageMap .= ' FROM ' . $this->db->prefix() . 'kreabank_statement_line';
-		$sqlStageMap .= ' WHERE entity = ' . ((int) $this->entity);
-		$sqlStageMap .= ' AND rowid = ' . $lineId;
-		$sqlStageMap .= $this->db->plimit(1, 0);
-		$resStageMap = $this->db->query($sqlStageMap);
-		if ($resStageMap && ($objStageMap = $this->db->fetch_object($resStageMap))) {
-			$hasStagedRow = true;
-			if ($nativeLineId <= 0) {
-				$nativeLineId = (int) $objStageMap->fk_native_bank_line;
-			}
-		}
-		if ($nativeLineId <= 0 && !$hasStagedRow) {
-			$nativeLineId = $lineId;
-		}
-
-		$metaUpdated = false;
-		if ($nativeLineId > 0 && $this->hasManagedNativeLine($nativeLineId)) {
-			$sqlMeta = 'UPDATE ' . $this->db->prefix() . 'kreabank_bankmeta';
-			$sqlMeta .= ' SET status = 3';
-			$sqlMeta .= ' WHERE entity = ' . ((int) $this->entity);
-			$sqlMeta .= ' AND fk_bank_line = ' . ((int) $nativeLineId);
-			if (!$this->db->query($sqlMeta)) {
-				return false;
-			}
-			$metaUpdated = true;
-		}
-
-		$stagingUpdated = false;
-		if ($hasStagedRow) {
-			$sqlStage = 'UPDATE ' . $this->db->prefix() . 'kreabank_statement_line';
-			$sqlStage .= ' SET status = 3, allocated_amount = 0';
-			if ($nativeLineId > 0) {
-				$sqlStage .= ', fk_native_bank_line = ' . ((int) $nativeLineId);
-			}
-			$sqlStage .= ' WHERE entity = ' . ((int) $this->entity);
-			$sqlStage .= ' AND rowid = ' . $lineId;
-			if (!$this->db->query($sqlStage)) {
-				return false;
-			}
-			$stagingUpdated = true;
-		}
-
-		return ($metaUpdated || $stagingUpdated);
-	}
 
 	/**
 	 * Remove KreaBank skip note markers from one native bank line note.

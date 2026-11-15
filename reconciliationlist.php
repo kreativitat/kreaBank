@@ -17,8 +17,9 @@ if (!isModEnabled('kreabank') || !isModEnabled('banque') || !empty($user->socid)
 	|| !$user->hasRight('banque','lire') || !$user->hasRight('kreabank','reconciliation','read')) { accessforbidden(); }
 // One line at a time: every creation and review option of the former selected-line page.
 // Its POST actions are distinct from the list actions below and keep their own checks.
+if (in_array(GETPOST('action','aZ09'), array('more_entry','more_rule','more_writeoff','more_draft','skip_line','bulk_skip'), true)) { accessforbidden(); }
 if (GETPOST('workspace','aZ09') === '1' || ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array(GETPOST('action','aZ09'), array('reconcile','quick_assign','quick_entry',
-	'skip_line','bulk_skip','batch_safe','confirm_document','confirm_rule_entry','confirm_writeoff','confirm_existing_movements','change_movement_account','validate_draft_invoice'), true))) {
+	'batch_safe','confirm_document','confirm_rule_entry','confirm_writeoff','confirm_existing_movements','change_movement_account','validate_draft_invoice'), true))) {
 	define('KREABANK_LINE_WORKSPACE', 1);
 	require __DIR__ . '/line_workspace.inc.php';
 	exit;
@@ -34,9 +35,6 @@ $paymentPermissions = array(
 		&& ($user->hasRight('fournisseur','facture','creer') || $user->hasRight('supplier_invoice','creer')),
 );
 $canUndo = $canWrite && $user->hasRight('kreabank','reconciliation','undo');
-// Row "more options": only the creation choices the list has no other tool for.
-$canTaxEntry = $canWrite && isModEnabled('tax') && $user->hasRight('tax','charges','lire') && $user->hasRight('tax','charges','creer');
-$canInvoiceEntry = $canWrite && isModEnabled('supplier_invoice') && $user->hasRight('fournisseur','facture','lire') && $user->hasRight('fournisseur','facture','creer');
 $url = dol_buildpath('/custom/kreabank/reconciliationlist.php', 1);
 $action = GETPOST('action','aZ09');
 $post = $_SERVER['REQUEST_METHOD'] === 'POST';
@@ -47,11 +45,11 @@ try { $state = kreabankWorklistState(array_merge($_GET,$_POST), max(1,(int) $con
 catch (InvalidArgumentException $e) { $invalidFilters = true; $state = kreabankWorklistState(array(), max(1,(int) $conf->liste_limit)); setEventMessages($langs->trans('KreaBankWorklistInvalidFilter'),null,'errors'); }
 $baseParams = $state['params'] + array('page'=>$state['page']);
 $expand = GETPOST('expand','alphanohtml');
-$mode = in_array(GETPOST('mode','alpha'),array('batch','create','more'),true) ? GETPOST('mode','alpha') : 'search';
+$mode = in_array(GETPOST('mode','alpha'),array('batch','create'),true) ? GETPOST('mode','alpha') : 'search';
 $search = substr((string) GETPOST('q','alphanohtml'),0,256);
 $scope = (int) $conf->entity . '|' . (int) $user->id;
 if (($_SESSION['kreabank_worklist_scope'] ?? '') !== $scope) {
-	unset($_SESSION['kreabank_worklist_inputs'],$_SESSION['kreabank_worklist_corrected'],$_SESSION['kreabank_worklist_batch_review'],$_SESSION['kreabank_worklist_scan'],$_SESSION['kreabank_worklist_movement_inputs'],$_SESSION['kreabank_worklist_movement_reviews'],$_SESSION['kreabank_worklist_more_inputs']);
+	unset($_SESSION['kreabank_worklist_inputs'],$_SESSION['kreabank_worklist_corrected'],$_SESSION['kreabank_worklist_batch_review'],$_SESSION['kreabank_worklist_scan'],$_SESSION['kreabank_worklist_movement_inputs'],$_SESSION['kreabank_worklist_movement_reviews']);
 	$_SESSION['kreabank_worklist_scope'] = $scope;
 }
 if (empty($_SESSION['kreabank_worklist_secret'])) { $_SESSION['kreabank_worklist_secret'] = bin2hex(random_bytes(32)); }
@@ -127,89 +125,6 @@ if ($post && $action !== '' && !in_array($action, array('advance_scan','more_sca
 			$service->createWorklistMovementAndReconcile($r['movement'],$paymentMode,$note);
 			unset($_SESSION['kreabank_worklist_movement_inputs'][$key]);
 			$expand = ''; setEventMessages($langs->trans('KreaBankWorklistMovementCreated'),null,'mesgs');
-		} elseif ($action === 'more_entry') {
-			$r = $take('more'); $key = $r['key']; list($source,$id) = kreabankWorklistSource($key);
-			$expand = $key; $mode = 'more';
-			$line = $worklist->load($key);
-			if ($source !== 'staged' || (int) $line['status'] === 2) { throw new RuntimeException('KreaBankWorklistChanged'); }
-			$submit = (string) GETPOST('entry_submit_action','aZ09');
-			$label = mb_substr(trim((string) GETPOST('entry_label','alphanohtml')),0,190,'UTF-8');
-			$note = mb_substr((string) GETPOST('entry_note','restricthtml'),0,1000,'UTF-8');
-			if ($submit === 'skip_line') {
-				$service->skipLine($id,trim((string) GETPOST('entry_note','alphanohtml')));
-				setEventMessages($langs->trans('KreaBankSkipDone'),null,'mesgs');
-			} elseif (in_array($submit,array('tax_entry','supplier_invoice'),true)) {
-				if (!($submit === 'tax_entry' ? $canTaxEntry : $canInvoiceEntry)) { accessforbidden(); }
-				$lines = array(); $decoded = json_decode((string) GETPOST('entry_product_lines_json','none'),true);
-				foreach (array_slice(is_array($decoded) ? $decoded : array(),0,12) as $item) {
-					if (!is_array($item)) { continue; }
-					$productLine = array('product_id'=>max(0,(int) ($item['product_id'] ?? 0)),'label'=>mb_substr(trim((string) ($item['label'] ?? '')),0,255,'UTF-8'),
-						'qty'=>abs((float) price2num((string) ($item['qty'] ?? 0),'MS')),'amount'=>abs((float) price2num((string) ($item['amount'] ?? 0),'MU')));
-					if ($productLine['product_id'] > 0 || $productLine['qty'] > 0.00001 || $productLine['amount'] > 0.00001) { $lines[] = $productLine; }
-				}
-				$supplierId = max(0,GETPOSTINT('entry_supplier_socid')); $supplierRef = mb_substr(trim((string) GETPOST('entry_ref_supplier','alphanohtml')),0,180,'UTF-8');
-				$_SESSION['kreabank_worklist_more_inputs'][$key] = array('label'=>$label,'note'=>$note,'supplier_id'=>$supplierId,'supplier_ref'=>$supplierRef,'lines'=>$lines);
-				if (count($_SESSION['kreabank_worklist_more_inputs']) > 30) { $_SESSION['kreabank_worklist_more_inputs'] = array_slice($_SESSION['kreabank_worklist_more_inputs'],-30,null,true); }
-				$amount = abs((float) $line['amount']);
-				// The list holds no existing-movement override: a possible duplicate keeps the line pending.
-				$service->assertNoExistingMovementForCreation($id);
-				if ($submit === 'supplier_invoice') {
-					if ($supplierId <= 0) {
-						$resolved = $service->resolveSupplierFromVatOrName(trim((string) GETPOST('entry_supplier_lookup','alphanohtml')),0);
-						$supplierId = (int) ($resolved['id'] ?? 0);
-					}
-					if ($supplierId <= 0 || !$lines) {
-						setEventMessages($supplierId <= 0 ? $langs->trans('ErrorFieldRequired',$langs->transnoentitiesnoconv('KreaBankQuickSupplierInvoiceSupplier')) : $langs->trans('KreaBankQuickSupplierLinesNoSelection'),null,'errors');
-						$redirect(array('expand'=>$key,'mode'=>'more'));
-					}
-					$created = $service->createQuickSupplierInvoiceAndReconcile($id,$label,$amount,$supplierId,$note,$supplierRef,$lines);
-					$createdId = (int) ($created['invoice_id'] ?? 0); $createdRef = (string) ($created['invoice_ref'] ?? '');
-					$createdUrl = $createdId > 0 ? dol_buildpath('/fourn/facture/card.php?facid=' . $createdId,1) : ''; $done = 'KreaBankQuickSupplierInvoiceDone';
-				} else {
-					$created = $service->createQuickTaxContributionAndReconcile($id,$label,$amount,$note);
-					$createdId = (int) ($created['social_contribution_id'] ?? 0); $createdRef = (string) ($created['social_contribution_ref'] ?? '');
-					$createdUrl = $createdId > 0 ? dol_buildpath('/compta/sociales/card.php?id=' . $createdId,1) : ''; $done = 'KreaBankQuickTaxEntryDone';
-				}
-				unset($_SESSION['kreabank_worklist_more_inputs'][$key]);
-				setEventMessages($langs->trans($done) . ($createdUrl !== '' ? ' <a href="' . dol_escape_htmltag($createdUrl) . '" target="_blank" rel="noopener">' . dol_escape_htmltag($createdRef !== '' ? $createdRef : '#' . $createdId) . '</a>' : ''),null,'mesgs');
-			} else { throw new RuntimeException('KreaBankWorklistChanged'); }
-			$expand = '';
-		} elseif (in_array($action,array('more_rule','more_writeoff','more_draft'),true)) {
-			$r = $take($action); $key = $r['key']; list($source,$id) = kreabankWorklistSource($key);
-			$expand = $key; $mode = 'more';
-			$worklist->load($key);
-			$line = $source === 'staged' ? $service->getBulkReviewLine($id,'staged') : null;
-			if (!$line || (int) $line['status'] !== 0) { throw new RuntimeException('KreaBankWorklistChanged'); }
-			$reviewScope = $scope . '|' . $key; $account = (int) $line['bank_account_id'];
-			if ($action === 'more_rule') {
-				if (!$canMove) { accessforbidden(); }
-				$fresh = $service->getBankRuleQuickReview($line);
-				if (!$fresh || !kreabankBulkReviewIsValid($fresh,$reviewScope,$r['expires'],$r['signature'],$secret,time(),true,$account)) { throw new RuntimeException('KreaBankWorklistChanged'); }
-				$service->reconcileBankRuleQuickEntry($fresh);
-				setEventMessages($langs->trans('KreaBankWorklistReconciled'),null,'mesgs');
-			} elseif ($action === 'more_writeoff') {
-				$reason = (string) GETPOST('writeoff_reason','aZ09');
-				if ($reason === '' || !isset($r['signatures'][$reason])) { throw new RuntimeException('KreaBankWorklistChanged'); }
-				$fresh = $service->getWriteOffReview($line,$r['doc_type'],$r['doc_id'],$reason);
-				if (!$fresh || !kreabankBulkReviewIsValid($fresh,$reviewScope,$r['expires'],$r['signatures'][$reason],$secret,time(),true,$account)) { throw new RuntimeException('KreaBankWorklistChanged'); }
-				$service->reconcileLine((int) $line['rowid'],array(array('doc_type'=>$r['doc_type'],'fk_doc'=>(int) $r['doc_id'],'doc_ref'=>$fresh['suggestion']['doc_ref'],
-					'allocated_amount'=>$fresh['allocation'],'match_score'=>1,'match_reasons'=>array())),'manual_writeoff',0,$langs->trans('KreaBankWriteOffReason_' . $reason),1,null,$fresh);
-				$outcome = 'KreaBankWriteOffDone';
-				try {
-					require_once __DIR__ . '/class/KreaBankHistory.class.php';
-					$completed = (new KreaBankHistory($db,$conf->entity))->find((int) $line['rowid'],'staged',$account);
-					$undo = $completed ? KreaBankWriteOff::undoSnapshotFromHistory($completed) : null;
-					if (($undo['writeoff']['remaining_status'] ?? '') === 'supplier_partial') { $outcome = 'KreaBankWriteOffSupplierPartialDone'; }
-				} catch (Throwable $outcomeError) { dol_syslog('KreaBank committed invoice difference outcome could not be reloaded',LOG_WARNING); }
-				setEventMessages($langs->trans($outcome),null,'mesgs');
-			} else {
-				// Validation only: payment and reconciliation need a fresh ordinary approval afterwards.
-				$service->validateDraftInvoice($id,'staged',$account,$r['doc_type'],$r['doc_id'],$r['snapshot'],$r['line_facts']);
-				setEventMessages($langs->trans('KreaBankDraftInvoiceValidated'),null,'mesgs');
-				unset($_SESSION['kreabank_worklist_scan']);
-				$redirect(array('expand'=>$key,'mode'=>'search','q'=>$search));
-			}
-			$expand = '';
 		} elseif ($action === 'correct_account') {
 			if (!$canMove) { accessforbidden(); }
 			$r = $take('move'); $key = $r['key']; list($source,$id) = kreabankWorklistSource($key);
@@ -372,7 +287,7 @@ if ($expand !== '') {
 $page = kreabankWorklistPage($filtered,$state);
 $baseParams['page'] = $page['page'];
 $accounts = $worklist->accounts(); $modelRows = array();
-$form = new Form($db); $moreAssets = false;
+$form = new Form($db);
 $paymentUrl = static function ($pair) use ($paymentPermissions,$conf,$db) {
 	$url = kreabankWorklistPaymentUrl($pair,$paymentPermissions,(string) $conf->currency);
 	if ($url !== '') {
@@ -390,7 +305,7 @@ $candidateModel = static function ($pair,$paymentUrl = '') {
 };
 foreach ($page['rows'] as $indexRow) {
 	$key = $indexRow['key']; $isExpanded = $expand === $key;
-	$row = array('key'=>$key,'line'=>$indexRow['line'],'expanded'=>$isExpanded,'batch_mode'=>$mode === 'batch','create_mode'=>$mode === 'create','more_mode'=>$mode === 'more','search'=>$search,
+	$row = array('key'=>$key,'line'=>$indexRow['line'],'expanded'=>$isExpanded,'batch_mode'=>$mode === 'batch','create_mode'=>$mode === 'create','search'=>$search,
 		'payment_account_ref'=>$indexRow['payment_account'] ?? '',
 		'pending_analysis'=>!isset($cache['summaries'][$key]),'batch_unavailable'=>!$worklist->batchesAvailable() || strpos($key,'staged:') !== 0);
 	try {
@@ -437,79 +352,7 @@ foreach ($page['rows'] as $indexRow) {
 					}
 				}
 			}
-			if ($isExpanded && $mode === 'more' && $canWrite && strpos($key,'staged:') === 0 && (int) $row['line']['status'] !== 2 && empty($batch['active'])) {
-				$line = $row['line']; $inputs = $_SESSION['kreabank_worklist_more_inputs'][$key] ?? array();
-				$outflow = (float) $line['amount'] < 0;
-				try { $restricted = (new KreaBankAccountPairs($db,(int) $conf->entity))->mainAccount((int) $line['bank_account_id']) > 0; } catch (Throwable $pairError) { $restricted = true; }
-				$amount = number_format(abs((float) $line['amount']),2,'.','');
-				$row['more_form'] = array('action'=>'more_entry','fields'=>array_merge($baseParams,array('expand'=>$key,'mode'=>'more','review'=>$remember('more',array('key'=>$key)))),
-					'line_id'=>(int) $line['rowid'],'amount'=>$amount,'currency'=>$line['currency'],'label'=>$inputs['label'] ?? dol_trunc(trim((string) preg_replace('/\s+/',' ',(string) $line['description'])),190,'right','UTF-8',1),
-					'note'=>$inputs['note'] ?? '','supplier_ref'=>$inputs['supplier_ref'] ?? '','lines'=>$inputs['lines'] ?? array(),
-					'tax'=>$canTaxEntry && $outflow && !$restricted,'invoice'=>$canInvoiceEntry && $outflow && !$restricted);
-				if ($row['more_form']['invoice']) {
-					$supplierId = (int) ($inputs['supplier_id'] ?? 0); $supplierName = '';
-					if ($supplierId <= 0) {
-						try {
-							$prediction = $service->predictSupplierForLine((int) $line['rowid']);
-							if (!empty($prediction['is_confident']) && !empty($prediction['predicted_socid'])) { $supplierId = (int) $prediction['predicted_socid']; $supplierName = (string) $prediction['predicted_name']; }
-						} catch (Throwable $predictionError) { $supplierId = 0; }
-					}
-					// Native selectors only; the view receives ready markup and performs no lookup.
-					$row['more_form']['supplier_select'] = $form->select_company($supplierId > 0 ? $supplierId : '','entry_supplier_socid','(s.fournisseur:>:0)','KreaBankQuickSupplierLookupPlaceholder',0,0,array(),0,'minwidth300','',$supplierName,1);
-					for ($slot = 0; $slot < 6; $slot++) {
-						$row['more_form']['product_selects'][$slot] = $form->select_produits(0,'entry_product_line_product_' . $slot,'',0,0,1,2,'',2,array(),0,'',0,'minwidth200',1,'',null,1,1);
-					}
-					$moreAssets = true;
-				}
-				// Reviewed choices tied to existing records: rule entry, payment difference, draft validation.
-				if (!$restricted && (int) $line['status'] === 0) {
-					$reviewScope = $scope . '|' . $key; $expires = time() + 900; $row['more_form']['review_search'] = true;
-					$fields = static function ($nonce) use ($baseParams,$key,$search) { return array_merge($baseParams,array('expand'=>$key,'mode'=>'more','q'=>$search,'review'=>$nonce)); };
-					try {
-						$ruleRow = $canMove ? $service->getBankRuleQuickReview($line) : null;
-						if ($ruleRow) {
-							$creation = $ruleRow['rule_creation']; $rule = $ruleRow['bank_rule'];
-							$notes = array($langs->transnoentities('KreaBankRuleEvidence',$rule['label']));
-							if (count($rule['conflicts']) > 1) { $notes[] = $langs->transnoentities('KreaBankRuleConflictEvidence',implode(', ',array_column($rule['conflicts'],'label'))); }
-							$notes[] = $langs->transnoentities('KreaBankRulePaymentMode') . ': ' . $creation['payment_mode'];
-							$notes[] = $langs->transnoentities('KreaBankRuleAccountingHints',$creation['accounting_account'],kreabankPrice($creation['vat']));
-							$row['more_form']['rule'] = array('action'=>'more_rule','fields'=>$fields($remember('more_rule',array('key'=>$key,'expires'=>$expires,'signature'=>kreabankBulkReviewSignature($ruleRow,$reviewScope,$expires,$secret)))),
-								'reference'=>$creation['label'],'description'=>$ruleRow['suggestion']['thirdparty_name'] ?? '','date'=>$line['operation_date'],'amount'=>$ruleRow['allocation'],'currency'=>$line['currency'],'notes'=>$notes);
-						}
-					} catch (Throwable $ruleError) { dol_syslog('KreaBank worklist rule review unavailable: ' . get_class($ruleError),LOG_WARNING); }
-					try {
-						foreach ($worklist->candidates($line,$search) as $choice) {
-							$s = $choice['suggestion'];
-							if (!in_array($s['doc_type'],array('customer_invoice','supplier_invoice'),true)) { continue; }
-							$reviews = $service->getWriteOffReviews($line,$s['doc_type'],(int) $s['doc_id']);
-							if (!$reviews) { continue; }
-							$first = reset($reviews); $signatures = array(); $reasons = array();
-							foreach ($reviews as $reason=>$review) {
-								$signatures[$reason] = kreabankBulkReviewSignature($review,$reviewScope,$expires,$secret);
-								$reasons[$reason] = $langs->transnoentities('KreaBankWriteOffReason_' . $reason) . ' — ' . $review['writeoff']['account'];
-							}
-							$row['more_form']['writeoffs'][] = array('action'=>'more_writeoff','fields'=>$fields($remember('more_writeoff',array('key'=>$key,'doc_type'=>$s['doc_type'],'doc_id'=>(int) $s['doc_id'],'expires'=>$expires,'signatures'=>$signatures))),
-								'doc_type'=>$s['doc_type'],'doc_id'=>(int) $s['doc_id'],'reference'=>kreabankBulkSuggestionReference($s),'description'=>$s['thirdparty_name'] ?? '','date'=>$s['doc_date'] ?? '','amount'=>$s['amount_open'],'currency'=>$line['currency'],'reasons'=>$reasons,
-								'notes'=>array($langs->transnoentities('KreaBankWriteOffAmounts',kreabankPrice($first['writeoff']['bank_amount']) . ' ' . $line['currency'],kreabankPrice($first['writeoff']['difference']) . ' ' . $line['currency']),
-									$langs->transnoentities($s['doc_type'] === 'supplier_invoice' ? 'KreaBankWriteOffSupplierOutcome' : 'KreaBankWriteOffCustomerOutcome')));
-						}
-					} catch (Throwable $writeOffError) { dol_syslog('KreaBank worklist invoice difference review unavailable: ' . get_class($writeOffError),LOG_WARNING); }
-					try {
-						$interval = max(0,(int) getDolGlobalInt('KREABANK_OPEN_DOC_DATE_INTERVAL_DAYS',7));
-						foreach ($service->getDraftInvoiceDocuments($line,120,$line['operation_date'] ?? null,$search !== '' ? max($interval,730) : $interval) as $doc) {
-							if ($search !== '' && mb_stripos($doc['ref'] . ' ' . $doc['ref_client'] . ' ' . $doc['thirdparty_name'],$search,0,'UTF-8') === false) { continue; }
-							$draft = array('doc_type'=>$doc['doc_type'],'doc_id'=>(int) $doc['rowid'],'reference'=>$doc['ref'],'description'=>$doc['thirdparty_name'],'date'=>$doc['doc_date'],'amount'=>$doc['amount_open'],'currency'=>$line['currency']);
-							if (!empty($doc['draft_native_validation'])) { $draft['notes'] = array($langs->transnoentities('KreaBankDraftInvoiceNativeValidation')); }
-							elseif ($service->canValidateDraftInvoice($doc['doc_type'])) {
-								$draft['action'] = 'more_draft'; $draft['confirm'] = $langs->transnoentities('KreaBankDraftInvoiceConfirm',$doc['ref']);
-								$draft['fields'] = $fields($remember('more_draft',array('key'=>$key,'doc_type'=>$doc['doc_type'],'doc_id'=>(int) $doc['rowid'],'snapshot'=>$doc['draft_snapshot'],'line_facts'=>kreabankBulkReviewLineFacts($line))));
-							} else { $draft['notes'] = array($langs->transnoentities('KreaBankDraftInvoiceReviewOnly')); }
-							$row['more_form']['drafts'][] = $draft;
-						}
-					} catch (Throwable $draftError) { dol_syslog('KreaBank worklist draft invoice review unavailable: ' . get_class($draftError),LOG_WARNING); }
-				}
-			}
-			if ($isExpanded && !in_array($mode,array('create','more'),true) && empty($row['batch_active'])) {
+			if ($isExpanded && $mode !== 'create' && empty($row['batch_active'])) {
 				$line = $row['line'];
 				if ($mode === 'batch' && !$row['batch_unavailable'] && $canWrite) {
 					$candidates = $service->listBatchCandidates((int) $line['rowid'],$search);
@@ -555,7 +398,7 @@ foreach ($page['rows'] as $indexRow) {
 		}
 	} catch (Throwable $e) {
 		$row['pending_analysis'] = false; $row['notice'] = kreabankWorklistTranslate($langs, 'KreaBankWorklistChanged'); $row['batch_unavailable'] = true;
-		unset($row['review']['action'],$row['review']['correction'],$row['review']['payment_url'],$row['batch_form'],$row['batch_review'],$row['undo_review'],$row['movement_form'],$row['more_form']);
+		unset($row['review']['action'],$row['review']['correction'],$row['review']['payment_url'],$row['batch_form'],$row['batch_review'],$row['undo_review'],$row['movement_form']);
 		foreach (array('candidates','other_accounts') as $field) { foreach (($row[$field] ?? array()) as $i=>$unused) { unset($row[$field][$i]['action'],$row[$field][$i]['correction'],$row[$field][$i]['payment_url']); } }
 	}
 	$modelRows[] = $row;
@@ -582,11 +425,6 @@ print kreabankBankingHeader('worklist',$navigationAccount,false);
 $assetRoot = dol_buildpath('/custom/kreabank/',1);
 print '<link rel="stylesheet" href="' . dol_escape_htmltag($assetRoot . 'css/worklist.css?v=' . filemtime(__DIR__ . '/css/worklist.css')) . '">';
 print '<script defer src="' . dol_escape_htmltag($assetRoot . 'js/worklist.js?v=' . filemtime(__DIR__ . '/js/worklist.js')) . '"></script>';
-if ($moreAssets) {
-	// The supplier-invoice dialog reuses the existing product-line assets unchanged.
-	print '<link rel="stylesheet" href="' . dol_escape_htmltag($assetRoot . 'css/reconcile.css?v=' . filemtime(__DIR__ . '/css/reconcile.css')) . '">';
-	print '<script defer src="' . dol_escape_htmltag($assetRoot . 'js/reconcile-supplier.js?v=' . filemtime(__DIR__ . '/js/reconcile-supplier.js')) . '"></script>';
-}
 print kreabankWorklistTable(array('url'=>$url,'token'=>newToken(),'state'=>$baseParams,'filters'=>array_combine(array_map(static function ($k) { return 'search_' . $k; },array_keys($state['filters'])),array_values($state['filters'])),
 	'navigation_scope'=>hash('sha256',$scope . '|' . $secret),'navigation_context'=>hash('sha256',json_encode(array($state['filters'],$state['sort'],$state['limit']))),'navigation_page'=>$page['page'],
 	'accounts'=>$accounts,'rows'=>$modelRows,'can_write'=>$canWrite,'sort'=>$state['sort'],'pagination'=>$pagination,'headers'=>$headers,'filter_buttons'=>$form->showFilterButtons(),'scan'=>$scan,

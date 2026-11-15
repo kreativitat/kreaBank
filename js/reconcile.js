@@ -125,32 +125,6 @@
         form.addEventListener('submit', function (event) { if (!refresh()) { event.preventDefault(); feedback.focus(); } });
         refresh();
     }
-    root.querySelectorAll('form[id^=krea_quick_entry_form_]').forEach(function (entryForm) {
-        var choices = Array.from(entryForm.querySelectorAll('input[name=creation_choice]'));
-        function creationChoice() {
-            var value = (entryForm.querySelector('input[name=creation_choice]:checked') || choices[0]).value;
-            entryForm.querySelectorAll('[data-kb-create-action]').forEach(function (button) {
-                button.hidden = button.dataset.kbCreateAction !== value;
-                // A hidden submit button must never become the implicit Enter-key action.
-                button.disabled = button.hidden;
-                button.type = !button.hidden && value !== 'supplier_invoice' ? 'submit' : 'button';
-            });
-            entryForm.querySelectorAll('[data-kb-invoice-field],[data-kb-supplier-field]').forEach(function (field) {
-                field.hidden = field.hasAttribute('data-kb-invoice-field') ? value !== 'supplier_invoice' : value === 'tax_entry';
-                field.querySelectorAll('input,select').forEach(function (input) { input.disabled = field.hidden; });
-            });
-        }
-        choices.forEach(function (input) { input.addEventListener('change', creationChoice); });
-        creationChoice();
-        entryForm.addEventListener('submit', function (event) {
-            var value = (entryForm.querySelector('input[name=creation_choice]:checked') || choices[0]).value;
-            if (!event.submitter || event.submitter.value !== value) {
-                event.preventDefault();
-                var action = entryForm.querySelector('[data-kb-create-action="' + value + '"]');
-                if (action) { action.click(); }
-            }
-        });
-    });
     root.querySelectorAll('form[method=POST],form.kb-document-search').forEach(function (workspaceForm) {
         workspaceForm.addEventListener('submit', function (event) {
             if (event.defaultPrevented) { return; }

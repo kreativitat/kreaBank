@@ -218,6 +218,10 @@ function runWorklistController($post, $session = array(), $options = array())
 	catch (WorklistControllerForbidden $end) {}
 	return array('calls'=>$service->calls,'session'=>$_SESSION,'redirect'=>$redirect,'denied'=>$GLOBALS['worklistControllerDenied'],'events'=>$GLOBALS['worklistControllerEvents'],'searches'=>$worklist->candidateSearches,'descriptor'=>$descriptor);
 }
+foreach (array('more_entry','more_rule','more_writeoff','more_draft','skip_line','bulk_skip') as $removed) {
+	$result = runWorklistController(array('action'=>$removed),worklistControllerSession());
+	checkWorklist($result['denied'] && !$result['calls'], 'Retired endpoint cannot execute even with a valid old session: ' . $removed);
+}
 $confirm = array('action'=>'confirm_pair','review'=>'fixture');
 $result = runWorklistController($confirm,worklistControllerSession());
 checkWorklist(count($result['calls']) === 1 && $result['calls'][0][0] === 'reconcileLine'
@@ -393,7 +397,7 @@ foreach (array('advance_scan','more_scan') as $readAction) {
 $baselinePath = getenv('KREABANK_PROTECTED_BASELINE');
 if ($baselinePath) {
 	$baseline = json_decode(file_get_contents($baselinePath), true);
-	foreach (array('css/reconcile.css','js/reconcile.js','js/reconcile-supplier.js') as $file) { // The page itself moved into the list in 1.20.47.
+	foreach (array('css/reconcile.css','js/reconcile.js') as $file) { // The page itself moved into the list in 1.20.47.
 		checkWorklist(isset($baseline[$file]) && hash_equals((string) $baseline[$file], hash_file('sha256', __DIR__ . '/../' . $file)), 'Existing reconciliation controller and presentation assets are unchanged: ' . $file);
 	}
 } else {

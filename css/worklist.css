@@ -69,10 +69,3 @@
 .kb-worklist .krea-modal-dialog .kb-wl-batch-footer { justify-content:flex-start; flex-wrap:wrap; margin-top:10px; }
 .kb-worklist .krea-modal-dialog .kb-wl-batch-footer > span { margin-right:0; }
 @media(max-width:700px) { .kb-wl-create-fields { grid-template-columns:minmax(0,1fr); gap:6px; } }
-.kb-worklist .kb-wl-more-review { margin-top:18px; padding-top:14px; border-top:1px solid color-mix(in srgb,currentColor 20%,transparent); }
-.kb-worklist .kb-wl-more-confirm { text-align:right; }
-.kb-worklist .kb-wl-more-confirm summary { cursor:pointer; }
-.kb-worklist .kb-wl-more-confirm { max-width:340px; }
-.kb-worklist .kb-wl-more-confirm[open] > :not(summary) { display:block; margin:8px 0 0 auto; }
-.kb-worklist .kb-wl-more-confirm select { max-width:100%; }
-.kb-worklist .kb-wl-more-confirm p { margin:0; text-align:left; }

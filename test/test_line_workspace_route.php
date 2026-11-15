@@ -46,10 +46,10 @@ foreach (array('history.php', 'pending.php', 'import.php', 'admin/guide.php', 'k
 	$check(strpos(file_get_contents($root . '/' . $file), '/kreabank/reconcile.php') === false, 'no link to the retired address remains in ' . $file);
 }
 $view = file_get_contents($root . '/lib/kreabank_worklist_view.lib.php');
-$check(strpos($view, "kreabankWorkspaceUrl('reconcile'") === false && strpos($view, "'mode'=>'more'") !== false && strpos($view, 'KreaBankWorklistMoreOptions') !== false, 'more options open inside the list row, never the line workspace');
-$check(strpos($list, "'more_rule','more_writeoff','more_draft'") !== false && strpos($list, "'more_entry'") !== false && strpos(substr($list, 0, strpos($list, 'line_workspace.inc.php')), 'more_entry') === false, 'the row action stays a list action');
-foreach (array('en_US', 'pt_PT') as $language) {
-	$check(strpos(file_get_contents($root . '/langs/' . $language . '/worklist.lang'), 'KreaBankWorklistMoreOptions=') !== false, 'row link label exists in ' . $language);
+$check(strpos($view, "'mode'=>'more'") === false && strpos($view, 'KreaBankWorklistMoreOptions') === false, 'More options has no row control or detail view');
+foreach (array('more_entry','more_rule','more_writeoff','more_draft','skip_line','bulk_skip') as $removed) {
+	$check(strpos(substr($list, 0, $route), "'" . $removed . "'") !== false && !in_array($removed, $routed[1], true), 'Removed endpoint is rejected before workspace/service dispatch: ' . $removed);
 }
+$check(!is_file($root . '/js/reconcile-supplier.js'), 'Removed invoice creation has no remaining client asset');
 
 echo 'OK: ' . $checks . " line workspace routing checks (source contract, no database)\n";
