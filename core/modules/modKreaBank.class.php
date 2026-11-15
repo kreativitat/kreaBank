@@ -50,7 +50,7 @@ class modKreaBank extends DolibarrModules
 		$this->descriptionlong = 'ModuleKreaBankDescLong';
 		$this->editor_name = 'Kreativität Works';
 		$this->editor_url = 'http://kreativitat.com';
-		$this->version = '1.20.43';
+		$this->version = '1.20.44';
 		$this->const_name = 'MAIN_MODULE_' . strtoupper($this->name);
 		$this->picto = 'kreaproducts@kreaproducts';
 
@@ -147,7 +147,8 @@ class modKreaBank extends DolibarrModules
 		$r++;
 
 		$this->menu = array();
-		$this->rights[$r] = array(0=>$this->numero + 4, 1=>'Manage advisory bank rules', 4=>'rules', 5=>'write');
+		// Keep historical rights unchanged; the adjacent ID belongs to legacy KreaTaxMatch.
+		$this->rights[$r] = array(0=>$this->numero * 100 + 4, 1=>'Manage advisory bank rules', 4=>'rules', 5=>'write');
 		$r++;
 
 		// Keep the existing bank-feed entry available to bank readers without workspace rights.

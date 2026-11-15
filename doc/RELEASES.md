@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.44 — 2026-11-15
+
+- Allocate the new bank-rule management permission in KreaBank's module-qualified range, preserving the legacy KreaTaxMatch permission and all existing grants.
+
 ## 1.20.43 — 2026-11-15
 
 - Add opt-in, signed small-difference invoice payments with exact company limits and reason accounts. Customer closing uses native reasons; supplier residuals retain native partial-payment status.

@@ -6,6 +6,7 @@
 
 ## Advisory bank rules
 
+- 2026-11-15: Rule management uses permission `15656004`. Preserve historical KreaBank rights and legacy KreaTaxMatch `156564`; check definitions and orphan user/group grants before registering a newly allocated right.
 - 2026-11-15: `KreaBankRule` and `KreaBankRuleServiceTrait` add selected-line advice only. Sign the exact rule/source/target/conflict snapshots, recheck them under existing reconciliation locks, and commit usage with the audit. Never pass rule evidence to unattended or bulk matching. New rules are inactive; schema installation is explicit and idempotent. Accounting/VAT quick-entry values are review hints by user choice. See [bank rules](doc/BANK_RULES.md).
 
 ## Reviewed invoice differences

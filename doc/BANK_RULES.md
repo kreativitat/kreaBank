@@ -65,6 +65,13 @@ do not disable existing scheduled jobs or change scheduler settings. For rollbac
 disable the rules and restore the prior source set. Retain the rule table and
 audits for recovery; do not drop business data.
 
+The new rule-management definition is `15656004`, `kreabank/rules/write`, default
+off. Check this ID across permission definitions and user/group assignments before
+registration; existing orphan assignments must not acquire unintended authority.
+Preserve legacy KreaTaxMatch `156564` and existing KreaBank permissions. Register
+only the new definition through native `insert_permissions(0, entity, 1)` for
+already-enabled companies, without module reactivation or broad grant resets.
+
 ## Validation
 
 - `php test/test_rules.php` runs pure condition/regex, priority/conflict and exact
