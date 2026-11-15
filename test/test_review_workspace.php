@@ -23,7 +23,7 @@ foreach (array('single','bulk') as $mode) {
 			checkReviewWorkspace(strpos($html,'1970') === false && substr_count($html,'<dd>—</dd>') >= 2, 'Invalid source and target dates render a placeholder');
 		}
 		if ($case === 'unmatched') {
-			checkReviewWorkspace(strpos($html,'workflow=create') !== false && strpos($html,'Criar um novo registo e reconciliar') !== false, 'No correspondence exposes creation');
+			checkReviewWorkspace(strpos($html,'workflow=create') !== false && strpos($html,'Criar um movimento bancário e reconciliar') !== false, 'No correspondence exposes ordinary bank movement creation');
 		}
 		if ($case === 'empty' || $case === 'loading') {
 			checkReviewWorkspace(strpos($html,'workflow=create') === false && strpos($html,'id="kreaBulkMatchForm"') === false, 'Loading and empty queues cannot offer financial confirmation');
