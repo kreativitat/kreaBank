@@ -325,7 +325,10 @@
         });
         var supplierField = form.querySelector("select[name=entry_supplier_socid],input[name=entry_supplier_socid]");
         if (supplierField) {
-            supplierField.addEventListener("change", function(){ kreaSyncSupplierLookup(form); kreaUpdateSupplierInvoiceOpenState(form); });
+            var supplierChanged = function(){ kreaSyncSupplierLookup(form); kreaUpdateSupplierInvoiceOpenState(form); kreaSetSupplierModalState(form.querySelector(".krea-supplier-lines-modal")); };
+            supplierField.addEventListener("change", supplierChanged);
+            // Searchable selectors announce a choice through jQuery only.
+            if (window.jQuery) { jQuery(supplierField).on("change", supplierChanged); }
         }
         kreaUpdateSupplierInvoiceOpenState(form);
         var previous = [];

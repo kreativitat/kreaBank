@@ -286,6 +286,7 @@ function kreabankWorklistTable($model, $langs)
 		$expanded = !empty($row['expanded']);
 		$batchMode = !empty($row['batch_mode']);
 		$createMode = !empty($row['create_mode']);
+		$moreMode = !empty($row['more_mode']);
 		$batchReview = !empty($row['batch_review']);
 		$activeBatch = !empty($row['batch_active']);
 		$draft = (array) ($row['draft'] ?? array());
@@ -317,20 +318,31 @@ function kreabankWorklistTable($model, $langs)
 				if ($mode === 'batch' && (!$canWrite || !empty($row['batch_unavailable']))) { continue; }
 				if ($mode === 'create' && (!$canWrite || empty($row['create_available']))) { continue; }
 				$url = kreabankWorklistUrl($model, array('expand'=>$key, 'mode'=>$mode));
-				$html .= '<a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e($url) . '" title="' . $t($label) . '" aria-label="' . $t($label) . '" aria-controls="' . $id . '-detail" aria-expanded="' . ($expanded && ($createMode ? 'create' : ($batchMode ? 'batch' : 'search')) === $mode ? 'true' : 'false') . '">' . kreabankWorklistIcon($mode === 'batch' ? 'layer-group' : ($mode === 'create' ? 'plus' : 'search')) . '<span class="kb-wl-sr">' . $t($label) . '</span></a>';
+				$html .= '<a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e($url) . '" title="' . $t($label) . '" aria-label="' . $t($label) . '" aria-controls="' . $id . '-detail" aria-expanded="' . ($expanded && ($moreMode ? 'more' : ($createMode ? 'create' : ($batchMode ? 'batch' : 'search'))) === $mode ? 'true' : 'false') . '">' . kreabankWorklistIcon($mode === 'batch' ? 'layer-group' : ($mode === 'create' ? 'plus' : 'search')) . '<span class="kb-wl-sr">' . $t($label) . '</span></a>';
 			}
 		}
-		if (!$done && $canWrite && function_exists('kreabankWorkspaceUrl') && preg_match('/^(staged|native):([1-9][0-9]{0,9})$/D', (string) $key, $workspaceKey)) {
-			// All per-line options (record payment, tax, supplier invoice, difference, rule entry, draft, skip).
-			$workspaceUrl = kreabankWorkspaceUrl('reconcile', (int) ($line['bank_account_id'] ?? 0)) . '&line_id=' . (int) $workspaceKey[2] . '&line_source=' . $workspaceKey[1];
-			$html .= '<a class="button kb-wl-icon kb-wl-workspace" href="' . $e($workspaceUrl) . '" title="' . $t('KreaBankWorklistMoreOptions') . '" aria-label="' . $t('KreaBankWorklistMoreOptions') . '">' . kreabankWorklistIcon('ellipsis-h') . '<span class="kb-wl-sr">' . $t('KreaBankWorklistMoreOptions') . '</span></a>';
+		if (!$done && $canWrite && !$activeBatch && strpos($key, 'staged:') === 0) {
+			// Tax entry, supplier invoice and skip open inside this row, like Search.
+			$html .= '<a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e(kreabankWorklistUrl($model, array('expand'=>$key, 'mode'=>'more', 'q'=>null))) . '" title="' . $t('KreaBankWorklistMoreOptions') . '" aria-label="' . $t('KreaBankWorklistMoreOptions') . '" aria-controls="' . $id . '-detail" aria-expanded="' . ($expanded && $moreMode ? 'true' : 'false') . '">' . kreabankWorklistIcon('ellipsis-h') . '<span class="kb-wl-sr">' . $t('KreaBankWorklistMoreOptions') . '</span></a>';
 		}
 		if ($done && $activeBatch) {
 			$html .= '<a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e(kreabankWorklistUrl($model, array('expand'=>$key, 'mode'=>'view'))) . '" title="' . $t('KreaBankWorklistViewBatch') . '" aria-label="' . $t('KreaBankWorklistViewBatch') . '" aria-controls="' . $id . '-detail" aria-expanded="' . ($expanded ? 'true' : 'false') . '">' . kreabankWorklistIcon('eye') . '</a>';
 		}
 		$html .= '</td></tr>';
 		if (!$expanded || ($done && !$activeBatch)) { continue; }
-		$html .= '<tr class="kb-wl-detail-row" id="' . $id . '-detail" data-line-key="' . $e($key) . '"><td colspan="' . $columnCount . '"><section class="kb-wl-detail" aria-label="' . $e($line['description'] ?? '') . '"><div class="kb-wl-detail-heading"><strong>' . $t($createMode ? 'KreaBankWorklistCreateMovement' : ($batchMode || $activeBatch ? 'KreaBankWorklistPaymentBatch' : 'KreaBankWorklistFindMatch')) . '</strong><a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e(kreabankWorklistUrl($model, array('expand'=>null, 'mode'=>null, 'entry_search'=>null, 'q'=>null))) . '" title="' . $t('Close') . '" aria-label="' . $t('Close') . '">' . kreabankWorklistIcon('times') . '</a></div>';
+		$html .= '<tr class="kb-wl-detail-row" id="' . $id . '-detail" data-line-key="' . $e($key) . '"><td colspan="' . $columnCount . '"><section class="kb-wl-detail" aria-label="' . $e($line['description'] ?? '') . '"><div class="kb-wl-detail-heading"><strong>' . $t($moreMode ? 'KreaBankWorklistMoreOptions' : ($createMode ? 'KreaBankWorklistCreateMovement' : ($batchMode || $activeBatch ? 'KreaBankWorklistPaymentBatch' : 'KreaBankWorklistFindMatch'))) . '</strong><a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e(kreabankWorklistUrl($model, array('expand'=>null, 'mode'=>null, 'entry_search'=>null, 'q'=>null))) . '" title="' . $t('Close') . '" aria-label="' . $t('Close') . '">' . kreabankWorklistIcon('times') . '</a></div>';
+		if ($moreMode) {
+			$more = kreabankWorklistMore($row,$line,$id,$model,$langs);
+			$html .= $more['html'];
+			if (!empty($more['review_search'])) {
+				// Finds invoices for a payment difference or draft validation; matching stays in Search.
+				$searchId = $id . '-search'; $searchState = $state; unset($searchState['q'], $searchState['entry_search']);
+				$html .= '<div class="kb-wl-search kb-wl-more-review"><label for="' . $searchId . '-query">' . $t('KreaBankWorklistMoreInvoices') . '</label><input class="flat" form="' . $searchId . '" type="search" name="q" id="' . $searchId . '-query" value="' . $e($row['search'] ?? '') . '"><span class="kb-wl-search-actions">' . kreabankWorklistButton(kreabankWorklistTranslate($langs, 'Search'), 'search', 'type="submit" form="' . $searchId . '"') . '</span></div>';
+				$forms .= '<form method="get" action="' . $e(strtok($model['url'], '?')) . '" id="' . $searchId . '">' . kreabankWorklistFields(array_merge($searchState, array('expand'=>$key, 'mode'=>'more'))) . '</form>';
+				$html .= $more['review'] !== '' ? $more['review'] : '<p class="opacitymedium">' . $t('KreaBankWorklistNoResults') . '</p>';
+			}
+			$html .= '</section></td></tr>'; $forms .= $more['form']; continue;
+		}
 		if ($createMode) {
 			$creation = kreabankWorklistCreation($row,$line,$id,$model,$langs);
 			$html .= $creation['html'] . '</section></td></tr>'; $forms .= $creation['form']; continue;

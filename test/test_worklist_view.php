@@ -68,6 +68,18 @@ function worklistViewFixture($case)
 			'correction'=>array('action'=>'correct_account', 'fields'=>array('source_key'=>'staged:11','account_move_review'=>'synthetic-move-token'), 'from_account_ref'=>'OTHER-BANK', 'to_account_ref'=>'STATEMENT-BANK')));
 		$model['rows'][0]['candidates'] = array();
 	}
+	if ($case === 'more') {
+		$model['rows'][0]['review']=null; $model['rows'][0]['expanded']=true; $model['rows'][0]['more_mode']=true;
+		$slots=array(); for ($slot=0;$slot<6;$slot++) { $slots[]='<select name="entry_product_line_product_' . $slot . '" id="entry_product_line_product_' . $slot . '"><option value=""></option><option value="7">P7 - Service</option></select>'; }
+		$model['rows'][0]['more_form']=array('action'=>'more_entry','fields'=>array('review'=>'synthetic-more-review','expand'=>'staged:11','mode'=>'more'),'line_id'=>11,'amount'=>'3300.00','currency'=>'EUR',
+			'label'=>'SALARIES <NOVEMBER>','note'=>'','supplier_ref'=>'','lines'=>array(),'tax'=>true,'invoice'=>true,
+			'review_search'=>true,
+			'rule'=>array('action'=>'more_rule','fields'=>array('review'=>'synthetic-rule'),'reference'=>'Bank fee <rule>','description'=>'Bank','date'=>'2026-11-11','amount'=>'3300.00','currency'=>'EUR','notes'=>array('Rule: fees')),
+			'writeoffs'=>array(array('action'=>'more_writeoff','fields'=>array('review'=>'synthetic-writeoff'),'doc_type'=>'supplier_invoice','doc_id'=>61,'reference'=>'SI-61','description'=>'Supplier','date'=>'2026-11-10','amount'=>'3300.40','currency'=>'EUR','reasons'=>array('rounding'=>'Rounding — 6588'),'notes'=>array('Difference: 0,40'))),
+			'drafts'=>array(array('action'=>'more_draft','fields'=>array('review'=>'synthetic-draft'),'confirm'=>'Validate (PROV62)?','doc_type'=>'supplier_invoice','doc_id'=>62,'reference'=>'(PROV62)','description'=>'Supplier','date'=>'2026-11-10','amount'=>3300.0,'currency'=>'EUR'),
+				array('doc_type'=>'supplier_invoice','doc_id'=>63,'reference'=>'(PROV63)','description'=>'Supplier','date'=>'2026-11-10','amount'=>3300.0,'currency'=>'EUR','notes'=>array('Open the invoice'))),
+			'supplier_select'=>'<select name="entry_supplier_socid" id="entry_supplier_socid"><option value=""></option><option value="5">Supplier five</option></select>','product_selects'=>$slots);
+	}
 	if (in_array($case,array('creation','creation_unavailable'),true)) {
         $model['rows'][0]['review']=null; $model['rows'][0]['candidates']=array();
         $model['rows'][0]['expanded']=true; $model['rows'][0]['create_mode']=true; $model['rows'][0]['create_available']=true;
@@ -149,7 +161,7 @@ $checks = 0;
 function checkWorklistView($condition, $message) { global $checks; if (!$condition) { throw new RuntimeException($message); } $checks++; }
 foreach (array('en_US','pt_PT') as $locale) {
 	$langs = worklistFixtureLanguages($locale);
-	foreach (array('ready','batch','reviewed','other','readonly','empty','unsafe','ambiguous','loading','direct_correction','completed','unavailable','needs_review','creation','creation_unavailable','empty_search','planned_invoice','payment_popup','single_bank') as $case) {
+	foreach (array('ready','batch','reviewed','other','readonly','empty','unsafe','ambiguous','loading','direct_correction','completed','unavailable','needs_review','creation','creation_unavailable','more','empty_search','planned_invoice','payment_popup','single_bank') as $case) {
 		$html = kreabankWorklistTable(worklistViewFixture($case), $langs);
 		$dom = new DOMDocument();
 		$previous = libxml_use_internal_errors(true);
@@ -179,6 +191,22 @@ foreach (array('en_US','pt_PT') as $locale) {
             checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-detail-row")]//input[@name="q"]')->length===0, 'Creation panel is separate from candidate search');
             checkWorklistView($xpath->query('//a[contains(@href,"mode=create") and @aria-expanded="true"]')->length===1, 'Only the active creation action is expanded');
             checkWorklistView($xpath->query('//textarea[@name="movement_note"]')->item(0)->textContent==='<reviewed note>', 'Sticky note is escaped and retained');
+		}
+		if ($case==='more') {
+			checkWorklistView($xpath->query('//form[@id="krea_quick_entry_form_11" and @method="post"]//input[@name="action" and @value="more_entry"]')->length===1, 'More options post one isolated list action');
+			checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-detail-row")]//button[@form="krea_quick_entry_form_11" and @name="entry_submit_action"]')->length===2
+				&& $xpath->query('//tr[contains(@class,"kb-wl-detail-row")]//button[@data-krea-supplier-modal-open="krea_supplier_invoice_modal_11"]')->length===1, 'Skip, tax and supplier invoice stay inside the row');
+			checkWorklistView($xpath->query('//form[@id="krea_quick_entry_form_11"]//div[@id="krea_supplier_invoice_modal_11"]//select[@name="entry_supplier_socid"]')->length===1
+				&& $xpath->query('//div[@id="krea_supplier_invoice_modal_11"]//tr[@data-krea-product-row]')->length===6, 'Supplier invoice review dialog belongs to the same form');
+			checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-detail-row")]//*[@name="payment_mode" or @name="batch_members[]"]')->length===0, 'More options duplicate neither movement creation nor batches');
+			foreach (array('more_rule','more_writeoff','more_draft') as $moreAction) {
+				checkWorklistView($xpath->query('//form[@method="post"][input[@name="action" and @value="' . $moreAction . '"]]')->length===1, $moreAction . ' is one isolated reviewed POST');
+			}
+			checkWorklistView($xpath->query('//select[@name="writeoff_reason" and @required]/option')->length===2 && $xpath->query('//select[@name="writeoff_reason"]/option[@selected]')->length===0, 'A difference reason must be chosen explicitly');
+			checkWorklistView($xpath->query('//details[contains(@class,"kb-wl-more-confirm")]')->length===2 && strpos($html,'Bank fee &lt;rule&gt;')!==false, 'Difference and draft validation keep a separate confirmation; rule label is escaped');
+			checkWorklistView($xpath->query('//form[@method="get" and @id!="searchFormList"][input[@name="mode" and @value="more"]]')->length===1, 'Invoice search stays inside more options');
+			checkWorklistView($xpath->query('//a[contains(@href,"mode=more") and @aria-expanded="true"]')->length===1 && strpos($html,'workspace=1')===false, 'The row expands in place and never links to the line workspace');
+			checkWorklistView($xpath->query('//input[@name="entry_label"]')->item(0)->getAttribute('value')==='SALARIES <NOVEMBER>', 'Prefilled label is escaped once');
 		}
         if ($case==='creation_unavailable') {
             checkWorklistView($xpath->query('//input[@name="action" and @value="create_movement"]')->length===0, 'Unavailable source has no financial creation action');

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.48 — 2026-11-15
+
+- The row "More options" button of the Reconciliation list no longer opens the selected-line workspace. It expands inside the row, like Search, with only the tools the list lacked: tax entry, supplier invoice (product-line review dialog), skip, rule entry, payment difference and draft-invoice validation. Search, batches and bank-movement creation keep their existing row buttons.
+- The new `more_entry`, `more_rule`, `more_writeoff` and `more_draft` list actions are bound to the displayed row, recheck ownership, permissions and the signed review, and refuse creation while a possible existing movement is unreviewed (the list holds no override). No schema change and no migration.
+
 ## 1.20.47 — 2026-11-15
 
 - The selected-line reconciliation page (`reconcile.php`) is retired as a separate address. Its complete workspace — record payment, quick bank entry, tax entry, supplier invoice, payment difference, rule entry, draft validation, account correction, skip — is now served inside the Reconciliation list (`reconciliationlist.php?workspace=1`) with the same permissions, signed reviews and service calls. Each pending list row has a "More options" link to it.
