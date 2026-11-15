@@ -117,7 +117,7 @@ if ($action === 'undo' && $user->hasRight('kreabank', 'reconciliation', 'undo') 
 	$reconciliationId = GETPOSTINT('reconciliation_id');
 	$reason = GETPOST('reason', 'alphanohtml');
 	try {
-		$review = kreabankHistoryTakeUndoReview(GETPOST('undo_review', 'alphanum'), $navigationAccountId);
+		$review = kreabankHistoryTakeUndoReview(GETPOST('undo_review', 'aZ09'), $navigationAccountId);
 		require_once __DIR__ . '/class/KreaBankService.class.php';
 		$service = new KreaBankService($db, $user, $langs);
 		$service->undoReconciliation($reconciliationId, $reason, $review);

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.53 — 2026-11-15
+
+- Fix History Undo token parsing on installed Dolibarr: use the supported `aZ09` request filter so a valid displayed review reaches the existing single-use ownership, expiry and locked-state checks. The unsupported `alphanum` filter discarded valid tokens and prevented undo without changing records.
+- Reject malformed or array Undo nonces through the existing review error instead of a PHP type error.
+- Exercise the actual native request helper in a database-free Undo regression, rather than a mock that ignores request filter names.
+
 ## 1.20.52 — 2026-11-15
 
 - Reject legacy imported ledger rows as sources in the unified existing-movement selector. They already occupy native bank rows; selecting another row requires duplicate correction and cannot use ordinary staged reconciliation. Reject stale approvals under locks and retain legacy workspace entry points.

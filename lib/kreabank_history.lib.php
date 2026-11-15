@@ -87,6 +87,9 @@ function kreabankHistoryUndoReview($row)
 function kreabankHistoryTakeUndoReview($key, $accountId)
 {
 	global $conf, $user;
+	if (!is_string($key) || !preg_match('/^[a-f0-9]{48}$/D', $key)) {
+		throw new DomainException('Review the reconciliation again before undoing it');
+	}
 	$review = $_SESSION['kreabank_history_undo'][$key] ?? null;
 	unset($_SESSION['kreabank_history_undo'][$key]);
 	if (!$review || $review['expires'] < time() || $review['entity'] !== (int) $conf->entity

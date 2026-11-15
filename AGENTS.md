@@ -4,6 +4,12 @@
 
 - 2026-11-15: GitHub Actions runs every non-database PHP test and Node CJS suite with Dolibarr 24 source on PHP 8.1/8.3. Missing private parser fixtures skip explicitly; database suites remain restricted to their documented disposable fixtures.
 
+## Native request filters
+
+- 1.20.53: History Undo nonce input uses native `GETPOST(..., 'aZ09')`. Dolibarr 24
+  does not support `alphanum`; its fallback can discard the nonce. Keep the native
+  request-helper regression alongside synthetic controller checks.
+
 ## Unified existing-movement selector
 
 - 1.20.51: The list has no standalone Search row action/panel. The layers selector
