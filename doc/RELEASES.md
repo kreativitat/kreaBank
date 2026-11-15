@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.57 — 2026-11-15
+
+- Version the payment-dialog stylesheet URL by its deployed modification time so existing browser sessions receive mobile layout corrections immediately.
+
 ## 1.20.56 — 2026-11-15
 
 - Reset native fixed row heights in the stacked mobile payment form so labels, controls and notes do not overlap. Keep evidence in two readable columns and preserve native desktop controls.

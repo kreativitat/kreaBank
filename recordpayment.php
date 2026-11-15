@@ -61,7 +61,7 @@ try {
 	$error = $post && !GETPOSTISSET('cancel') ? 'KreaBankWorklistPaymentFailed' : 'KreaBankWorklistChanged';
 	dol_syslog('KreaBank reviewed payment refused: ' . get_class($exception),LOG_WARNING);
 }
-llxHeader('', $translate('KreaBankWorklistRecordPayment'),'','','','',array(),array('/custom/kreabank/css/planned-payment.css'));
+llxHeader('', $translate('KreaBankWorklistRecordPayment'),'','','','',array(),array('/custom/kreabank/css/planned-payment.css?v=' . filemtime(__DIR__ . '/css/planned-payment.css')));
 print load_fiche_titre($translate('KreaBankWorklistRecordPayment'),'','payment');
 if ($cancelled) { $closePopup(); }
 elseif ($receipt) {
