@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.33 — 2026-11-15
+
+- Preserve native Select2 hidden-control sizing in transfer cards; verify accessible account names, focus and exact form values with the installed selector library.
+
 ## 1.20.32 — 2026-11-15
 
 - Present native internal transfers as responsive, labelled cards with clear account fields and an Add another transfer action. Preserve native controls, additional rows, validation and posting.

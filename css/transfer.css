@@ -1,6 +1,7 @@
 /* Copyright (C) 2026 Kreativität Works <mail@kreativitat.com>; GPL-3.0-or-later */
 body.kb-native-transfer #id-right { padding:24px 28px; min-width:0; }
 .kb-native-transfer .fiche > .table-fiche-title { margin-bottom:8px; }
+.kb-native-transfer #id-right .table-fiche-title .titre { font-size:22px; font-weight:600; color:var(--colortexttitlenotab,#344b5d); }
 .kb-native-transfer .kb-transfer-intro { display:block; max-width:72ch; font-size:.95em; line-height:1.6; opacity:1; color:var(--colortexttitlenotab,#526579); }
 .kb-native-transfer .kb-transfer-intro ~ br { display:none; }
 .kb-transfer-form { max-width:1000px; margin:24px 0 0; }
@@ -18,8 +19,8 @@ body.kb-native-transfer #id-right { padding:24px 28px; min-width:0; }
 .kb-transfer-table .kb-transfer-amount, .kb-transfer-table .kb-transfer-amountto { grid-column:span 2; }
 .kb-transfer-table tr.numvir > .kb-transfer-account_from, .kb-transfer-table tr.numvir > .kb-transfer-account_to { padding:14px; border:1px solid #e1e8e6; border-radius:6px; background:var(--colorbacktitle1,#f4f7f6); }
 .kb-transfer-account_from > .paddingright, .kb-transfer-account_to > .paddingright { display:none; }
-.kb-transfer-field input:not([type="hidden"]), .kb-transfer-field select, .kb-transfer-field .select2-container { box-sizing:border-box; min-width:0 !important; max-width:100%; width:100% !important; margin:0; }
-.kb-transfer-field input:not([type="hidden"]), .kb-transfer-field select { min-height:38px; }
+.kb-transfer-field input:not([type="hidden"]), .kb-transfer-field select:not(.select2-hidden-accessible), .kb-transfer-field .select2-container { box-sizing:border-box; min-width:0 !important; max-width:100%; width:100% !important; margin:0; }
+.kb-transfer-field input:not([type="hidden"]), .kb-transfer-field select:not(.select2-hidden-accessible) { min-height:38px; }
 .kb-transfer-field .select2-container .select2-selection--single { min-height:38px; height:auto; }
 .kb-transfer-field .select2-selection--single .select2-selection__rendered { line-height:36px; }
 .kb-transfer-field .select2-selection--single .select2-selection__arrow { height:36px; }
