@@ -208,6 +208,7 @@ foreach (array('en_US','pt_PT') as $locale) {
 		checkWorklistView($xpath->query('//form[@id="searchFormList"]')->length === 1, $case . ': native paging/search form');
 		checkWorklistView($xpath->query('//form[@id="searchFormList"]//*[@name="limit"]')->length === 1, $case . ': exactly one native page-size control');
 		checkWorklistView($xpath->query('//form//form')->length === 0, $case . ': no nested forms');
+		checkWorklistView($xpath->query('//input[@name="q" or @name="batch_name"] | //*[@data-kb-group-name] | //div[@class="kb-wl-search"]')->length===0,$case . ': selector search and optional name fields are absent');
 		checkWorklistView($xpath->query('//*[contains(@class,"kb-wl-other-review") or contains(@class,"kb-wl-other-account")]')->length===0 && strpos($html,'RETIRED-CARD-NOT-RENDERED')===false && strpos($html,$langs->trans('KreaBankWorklistOtherAccountReview'))===false,$case . ': no separate other-bank section or retired cards remain');
 		checkWorklistView($xpath->query('//form[@method="get"]//input[@name="token" or @name="action" or @name="review_signature"]')->length === 0, $case . ': no write evidence in GET forms');
 		checkWorklistView($xpath->query('//thead/tr[@class="liste_titre_filter"]/td')->length === ($case==='single_bank'?6:7), $case . ': column header filters');
@@ -269,9 +270,8 @@ foreach (array('en_US','pt_PT') as $locale) {
 			checkWorklistView($xpath->query('//select[@name="search_account"]')->length===0 && $xpath->query('//form[@id="searchFormList"]/input[@type="hidden" and @name="search_account" and @value="10"]')->length===1, 'The selected-bank view has no redundant selector and preserves its native GET filter');
 		}
         if ($case === 'empty_search') {
-            checkWorklistView($xpath->query('//div[@class="kb-wl-search"]/span[@class="kb-wl-search-actions"]/button[@type="submit"]')->length === 1
-                && $xpath->query('//div[@class="kb-wl-search"]/span[@class="kb-wl-search-actions"]/a[contains(@href,"mode=create") and @data-kb-row-navigation]')->length === 0,
-                'The unified selector filter has no duplicate creation shortcut');
+            checkWorklistView($xpath->query('//form[@method="get"]//input[@name="expand" or @name="mode"]')->length === 0,
+                'The unified selector has no separate existing-movement search form');
             checkWorklistView($xpath->query('//section[contains(@class,"kb-wl-detail")]/a[contains(@href,"mode=create")]')->length === 0,
                 'Creation is not repeated below the empty search result');
 		}
@@ -294,8 +294,15 @@ foreach (array('en_US','pt_PT') as $locale) {
 			checkWorklistView($xpath->query('//input[@type="checkbox" and @data-kb-member]')->length === ($case === 'batch' ? 3 : 0), 'Fresh signed batch review is readonly; editing has explicit component selection');
 			if ($case === 'batch') {
 				checkWorklistView(strpos($html, 'data-amount="-1100.00000000"') !== false, 'Source precision retained in allocation feedback');
-				checkWorklistView($xpath->query('//input[@name="batch_name" and @form]')->length === 1, 'Batch name belongs to separate POST');
+				checkWorklistView($xpath->query('//input[@name="batch_name"]')->length === 0, 'New drafts use the controller default name without an editable or hidden name field');
 				checkWorklistView($xpath->query('//button[@name="action" and @value="save_draft"]')->length === 1, 'Incomplete draft has explicit save action');
+				foreach (array('data-kb-save-draft'=>array('KreaBankWorklistSaveDraft','KreaBankWorklistSaveDraftHelp','save'),'data-kb-batch-review'=>array('KreaBankWorklistReviewSelection','KreaBankWorklistReviewSelectionHelp','eye')) as $attribute=>$keys) {
+					$button=$xpath->query('//button[@'.$attribute.']')->item(0);
+					checkWorklistView($button && trim($button->textContent)===$langs->trans($keys[0]) && $button->getAttribute('aria-label')===$langs->trans($keys[0]) && $xpath->query('.//span[contains(@class,"fa-'.$keys[2].'")]',$button)->length===1,'Draft and review retain distinct icons with concise visible and accessible action labels');
+					checkWorklistView($button->getAttribute('title')===$langs->trans($keys[1]),'Native hover help explains what each selection action does');
+					$descriptions=array();foreach(explode(' ',$button->getAttribute('aria-describedby')) as $descriptionId){$descriptions[]=$xpath->query('//*[@id="'.$descriptionId.'"]')->item(0)->textContent;}
+					checkWorklistView(in_array($langs->trans($keys[1]),$descriptions,true),'Screen readers receive the same action help while keeping live allocation feedback');
+				}
 			}
 			checkWorklistView($xpath->query('//form[@method="post"]//input[contains(@name,"amount")]')->length === 0, 'Presentation never rewrites POST amounts');
 			checkWorklistView(($xpath->query('//input[@name="action" and @value="confirm_batch"]')->length === 1) === ($case === 'reviewed'), 'Only a fresh server-reviewed group can expose final approval');

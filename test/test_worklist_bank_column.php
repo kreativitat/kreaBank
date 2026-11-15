@@ -17,6 +17,7 @@ function bankColumnModel($review,$options=array())
 		private $prepared;
 		public function __construct($prepared) {$this->prepared=$prepared;}
 		public function prepare($key) {return $this->prepared;}
+		public function compact($key) {return array('key'=>$key,'_prepared'=>$this->prepared);}
 	};
 	$native=array('rowid'=>81,'fk_account'=>102,'target_account_id'=>101,'snapshot'=>'exact-native-source-parent-facts','can_move'=>true);
 	$native=array_merge($native,$options['native']??array());
@@ -27,6 +28,7 @@ function bankColumnModel($review,$options=array())
 	};
 	$langs=new class {public function trans($key){return $key;}};
 	$page=array('rows'=>array(array('key'=>'staged:11','line'=>$line)));
+	$sourceKeys=array('staged:11');
 	$cache=array('summaries'=>array('staged:11'=>array()));$expand=!empty($options['expanded'])?'staged:11':'';$mode='batch';$search='';
 	$canWrite=empty($options['readonly']);$canMove=$canWrite;$canCreate=$canWrite;$canUndo=false;$baseParams=array('search_account'=>'101');
 	$remembered=array();$remember=static function($kind,$payload)use(&$remembered){$remembered[]=array($kind,$payload);return 'synthetic-review';};

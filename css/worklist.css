@@ -18,9 +18,10 @@
 .kb-worklist .kb-wl-match { min-width:170px; max-width:320px; overflow-wrap:anywhere; }
 .kb-worklist .kb-wl-caption { display:block; font-size:.88em; line-height:1.5; opacity:.8; }
 .kb-worklist .button.kb-wl-icon { display:inline-flex; align-items:center; justify-content:center; min-width:30px; min-height:30px; width:30px; height:30px; box-sizing:border-box; padding:5px; margin:2px; vertical-align:middle; font-size:13px; text-decoration:none; }
-.kb-worklist .kb-wl-icon.kb-wl-primary { color:#fff; background:#2c6c4f; border-color:#2c6c4f; }
-.kb-worklist .kb-wl-icon.kb-wl-primary:disabled { opacity:.45; }
-.kb-worklist .kb-wl-icon:disabled { color:#697378; background:#e3e7e9; border-color:#cbd2d5; cursor:not-allowed; }
+.kb-worklist .button.kb-wl-selection-action { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:30px; box-sizing:border-box; padding:5px 9px; margin:2px; font-size:13px; line-height:1.2; text-transform:none; text-decoration:none; }
+.kb-worklist .kb-wl-icon.kb-wl-primary,.kb-worklist .kb-wl-selection-action.kb-wl-primary { color:#fff; background:#2c6c4f; border-color:#2c6c4f; }
+.kb-worklist .kb-wl-icon.kb-wl-primary:disabled,.kb-worklist .kb-wl-selection-action.kb-wl-primary:disabled { opacity:.45; }
+.kb-worklist .kb-wl-icon:disabled,.kb-worklist .kb-wl-selection-action:disabled { color:#697378; background:#e3e7e9; border-color:#cbd2d5; cursor:not-allowed; }
 .kb-worklist .kb-wl-account-ref { appearance:none; display:inline-flex; align-items:center; gap:4px; border:0; background:transparent; padding:3px 0; margin:0; color:#916000; font:inherit; text-transform:none; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
 .kb-worklist .kb-wl-bank-review { display:block; overflow-wrap:anywhere; }
 .kb-worklist .kb-wl-bank-review + .kb-wl-bank-review { margin-top:5px; }
@@ -32,9 +33,6 @@
 .kb-worklist .kb-wl-detail { border:1px solid color-mix(in srgb,currentColor 20%,transparent); border-radius:5px; padding:15px 18px; max-width:1000px; margin:8px auto; }
 .kb-worklist .kb-wl-detail-heading,.kb-worklist .kb-wl-batch-footer,.kb-worklist .kb-wl-confirm-batch { display:flex; align-items:center; gap:8px; }
 .kb-worklist .kb-wl-detail-heading { justify-content:space-between; margin-bottom:8px; }
-.kb-worklist .kb-wl-search { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
-.kb-worklist .kb-wl-search input { min-width:150px; flex:1; max-width:400px; }
-.kb-worklist .kb-wl-search-actions { display:inline-flex; align-items:center; gap:4px; flex:0 0 auto; }
 /* Totals/actions stay outside the bounded payment list while its members scroll. */
 .kb-worklist .kb-wl-batch-controls { padding:0 0 12px; }
 .kb-worklist .kb-wl-batch-day { margin:0 0 6px; font-size:.92em; }
@@ -43,8 +41,6 @@
 .kb-worklist .kb-wl-batch-controls .kb-wl-batch-footer { flex-wrap:wrap; }
 .kb-worklist .kb-wl-batch .kb-wl-members { max-height:clamp(220px,48vh,560px); overflow-y:auto; overscroll-behavior:contain; padding:0 10px 0 0; border-bottom:1px solid color-mix(in srgb,currentColor 20%,transparent); scrollbar-gutter:stable; }
 .kb-worklist .kb-wl-batch .kb-wl-members:focus-visible { outline:2px solid var(--kb-wl-focus); outline-offset:2px; }
-.kb-worklist .kb-wl-batch-name { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:8px 0 12px; }
-.kb-worklist .kb-wl-batch-name input { flex:1; max-width:400px; }
 .kb-worklist .kb-wl-candidate { display:flex; align-items:center; gap:12px; padding:11px 0; border-top:1px solid color-mix(in srgb,currentColor 14%,transparent); }
 .kb-worklist .kb-wl-candidate > input[type=checkbox] { flex:0 0 auto; width:17px; height:17px; }
 .kb-worklist .kb-wl-candidate-evidence { flex:1; min-width:0; overflow-wrap:anywhere; }
@@ -70,8 +66,6 @@
 @media(max-width:700px) {
  .kb-worklist .kb-wl-detail { padding:12px; max-width:calc(100vw - 60px); margin:8px 0; }
  .kb-worklist .kb-wl-detail-row > td { padding:0 4px 8px; }
- .kb-worklist .kb-wl-search { align-items:flex-start; }
- .kb-worklist .kb-wl-search > label,.kb-worklist .kb-wl-batch-name > label { width:100%; }
  .kb-worklist .kb-wl-totals { gap:12px 18px; }
  .kb-worklist .kb-wl-totals > div:first-child { margin-right:auto; }
 }
@@ -82,4 +76,4 @@
 .kb-worklist .krea-modal-dialog .kb-wl-batch-footer > span { margin-right:0; }
 @media(max-width:700px) { .kb-wl-create-fields { grid-template-columns:minmax(0,1fr); gap:6px; } }
 
-.kb-worklist [data-kb-group-name][hidden],.kb-worklist [data-kb-save-draft][hidden] { display:none; }
+.kb-worklist [data-kb-save-draft][hidden] { display:none; }

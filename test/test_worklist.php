@@ -139,6 +139,8 @@ class WorklistControllerService
 	public $failCreation = false;
 	public $selectionPair;
 	public $selectionReads = array();
+	public $savedBatchName='';
+	public function loadPaymentBatch($id) { return array('draft'=>array('name'=>$this->savedBatchName)); }
 	public function prepareWorklistSelectionPair($key,$id) { if(strpos($key,'native:')===0)throw new DomainException('Legacy source requires review'); $this->selectionReads[]=array($key,$id); $pair=$this->selectionPair; $pair['suggestion']['doc_id']=$id; list($source,$lineId)=kreabankWorklistSource($key); $pair['line']['rowid']=$lineId; $pair['line']['fk_statement']=$source==='staged'?$lineId:0; $pair['approval_context']='selected_native'; $pair['worklist_selection']=array('version'=>1,'key'=>$key,'source'=>array('day'=>$pair['line']['operation_date']),'target'=>array('id'=>$id,'day'=>$pair['suggestion']['doc_date'])); return $pair; }
 	public function createWorklistMovementAndReconcile(...$args) { if ($this->failCreation) { throw new RuntimeException('Review changed'); } $this->calls[] = array('createWorklistMovementAndReconcile',$args); return 88; }
 	public function reconcileLine(...$args) { $this->calls[] = array('reconcileLine',$args); return 8; }
@@ -153,13 +155,14 @@ class WorklistControllerRead
 	public $pair;
 	public $batchSchema = true;
 	public $candidateSearches = array();
+	public $prepareCalls = array();
 	public function __construct($pair) { $this->pair = $pair; }
 	public function load($key) {
 		list($source,$id) = kreabankWorklistSource($key);
 		$line = $this->pair['line']; $line['rowid'] = $id; $line['fk_statement'] = $source === 'staged' ? $id : 0;
 		return $line;
 	}
-	public function prepare($key) { $pair = $this->pair; $pair['line'] = $this->load($key); return array('pair'=>$pair); }
+	public function prepare($key) { $this->prepareCalls[]=$key; $pair = $this->pair; $pair['line'] = $this->load($key); return array('pair'=>$pair); }
 	public function candidates($line, $search = '') { $this->candidateSearches[] = $search; $pair = $this->pair; $pair['line'] = $line; return array($pair['suggestion']['doc_type'] . '__' . $pair['suggestion']['doc_id']=>$pair); }
 	public function batchesAvailable() { return $this->batchSchema; }
 }
@@ -205,6 +208,7 @@ function runWorklistController($post, $session = array(), $options = array())
 	$worklist = new WorklistControllerRead($options['fresh_pair'] ?? worklistControllerPair());
 	$worklist->batchSchema = $options['batch_schema'] ?? true;
 	$service->selectionPair=$options['fresh_pair'] ?? worklistControllerPair();
+	$service->savedBatchName=$options['saved_batch_name']??'';
 	$controller = file_get_contents(__DIR__ . '/../reconciliationlist.php');
 	$authStart = strpos($controller, "if (!isModEnabled('kreabank')");
 	$authEnd = strpos($controller, '$service = new KreaBankService', $authStart);
@@ -220,7 +224,7 @@ function runWorklistController($post, $session = array(), $options = array())
 	try { eval($auth); eval($branch); if (isset($options['describe_pair'])) { $descriptor = $pairDescriptor('staged:8',$options['describe_pair']); } }
 	catch (WorklistControllerRedirect $end) { $redirect = $end->params; }
 	catch (WorklistControllerForbidden $end) {}
-	return array('calls'=>$service->calls,'session'=>$_SESSION,'redirect'=>$redirect,'denied'=>$GLOBALS['worklistControllerDenied'],'events'=>$GLOBALS['worklistControllerEvents'],'searches'=>$worklist->candidateSearches,'descriptor'=>$descriptor,'selection_reads'=>$service->selectionReads);
+	return array('calls'=>$service->calls,'session'=>$_SESSION,'redirect'=>$redirect,'denied'=>$GLOBALS['worklistControllerDenied'],'events'=>$GLOBALS['worklistControllerEvents'],'searches'=>$worklist->candidateSearches,'descriptor'=>$descriptor,'selection_reads'=>$service->selectionReads,'prepare_calls'=>$worklist->prepareCalls,'state'=>$state??null);
 }
 foreach (array('more_entry','more_rule','more_writeoff','more_draft','skip_line','bulk_skip') as $removed) {
 	$result = runWorklistController(array('action'=>$removed),worklistControllerSession());
@@ -230,8 +234,29 @@ $confirm = array('action'=>'confirm_pair','review'=>'fixture');
 $result = runWorklistController($confirm,worklistControllerSession());
 checkWorklist(count($result['calls']) === 1 && $result['calls'][0][0] === 'reconcileLine'
 	&& $result['calls'][0][1][0] === 8 && $result['calls'][0][1][1][0]['fk_doc'] === 81 && $result['calls'][0][1][2] === 'bulk_manual', 'Actual inline pair approval executes only the authenticated displayed target through the existing service');
-checkWorklist(!isset($result['session']['kreabank_worklist_reviews']['fixture'],$result['session']['kreabank_worklist_scan']), 'Successful approval consumes its one-use review and invalidates the read scan');
+checkWorklist(!isset($result['session']['kreabank_worklist_reviews']['fixture']) && $result['session']['kreabank_worklist_scan']['generation']!=='old scan', 'Successful approval consumes its one-use review and fences the previous read generation');
 checkWorklist(!runWorklistController($confirm,$result['session'])['calls'], 'An inline approval cannot be replayed after its review was consumed');
+checkWorklist(runWorklistController(array(),array(),array('method'=>'GET'))['state']['limit']===10,
+	'This page defaults to ten even when the global native list preference is twenty-five');
+checkWorklist(runWorklistController(array(),array(),array('method'=>'GET','get'=>array('limit'=>40)))['state']['limit']===40,
+	'An explicit page size survives the page-specific ten-row default');
+$continued=worklistControllerSession();$source=worklistControllerPair()['line'];$other=$source;$other['rowid']=9;$other['amount']='-77.00';
+$facts=kreabankWorklistSourceState(array('staged:8'=>$source,'staged:9'=>$other));
+$scan=kreabankWorklistRebaseScan(array(),'synthetic-current-context','source-scope',$facts,time());
+kreabankWorklistPresentationPage($scan,array('staged:8','staged:9'),10);
+$stale=worklistControllerPair();$stale['suggestion']['doc_id']=999;
+kreabankWorklistStoreSummary($scan,'staged:8',array('key'=>'staged:8','_prepared'=>array('line'=>$source,'pair'=>$stale)));
+kreabankWorklistStoreSummary($scan,'staged:9',array('key'=>'staged:9','match'=>'Unrelated retained result'));
+$continued['kreabank_worklist_scan']=$scan;
+$confirmed=runWorklistController($confirm,$continued);
+checkWorklist($confirmed['prepare_calls']===array('staged:8') && $confirmed['calls'][0][1][1][0]['fk_doc']===81,
+	'Financial confirmation unconditionally prepares fresh and never executes the cached display target');
+checkWorklist(isset($confirmed['session']['kreabank_worklist_scan']['summaries']['staged:9'])
+	&& !isset($confirmed['session']['kreabank_worklist_scan']['summaries']['staged:8']),
+	'The actual successful controller consumes its source and preserves an unrelated completed summary');
+$saved=runWorklistController(array('action'=>'save_draft','source_key'=>'staged:8','batch_members'=>array('81','82')),array(),array('saved_batch_name'=>'Synthetic custom name'));
+checkWorklist($saved['calls'][0][0]==='savePaymentBatchDraft' && $saved['calls'][0][1][2]==='Synthetic custom name',
+	'An absent retired name input preserves the current user private draft name');
 checkWorklist(count(runWorklistController($confirm,worklistControllerSession(true))['calls']) === 1, 'Explicit candidate choice revalidates and executes its exact shared manual-review target');
 foreach (array('customer_invoice','supplier_invoice','tax') as $type) {
 	$pair = worklistControllerPair(); $pair['suggestion']['doc_type'] = $type;
@@ -333,7 +358,7 @@ foreach (array(array('staged:8',true),array('staged:8',false)) as $selectionCase
 $legacySelection=runWorklistController(array('action'=>'review_batch','source_key'=>'native:8','batch_members'=>array('81')));
 checkWorklist(!$legacySelection['calls'] && !isset($legacySelection['session']['kreabank_worklist_batch_review']['native:8']), 'Legacy imports cannot prepare a different-movement selector confirmation');
 $redirected=runWorklistController(array(),array(),array('method'=>'GET','get'=>array('expand'=>'staged:8','mode'=>'search','q'=>'Retain filter')));
-checkWorklist($redirected['redirect']['mode']==='batch' && $redirected['redirect']['q']==='Retain filter' && !$redirected['calls'], 'Old standalone search URLs canonicalize to the unified selector without financial writes');
+checkWorklist($redirected['redirect']['mode']==='batch' && $redirected['redirect']['q']==='' && !$redirected['calls'], 'Old standalone search URLs canonicalize without retaining the removed hidden selector filter');
 $undoSession = array('kreabank_worklist_reviews'=>array('undo'=>worklistControllerReview('undo',array('key'=>'staged:8','batch'=>array('signed'=>'undo proof')))));
 $result = runWorklistController(array('action'=>'undo_batch','review'=>'undo'),$undoSession,array('denied'=>array('kreabank/reconciliation/undo')));
 checkWorklist(!$result['calls'] && $result['denied'], 'Batch undo requires its separate native/module authority');

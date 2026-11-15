@@ -65,6 +65,10 @@ async function browserChecks(directory) {
     };
     try {
         await open('batch');
+        assert.equal(await page.locator('.kb-wl-detail input[name="q"],.kb-wl-detail input[name="batch_name"]').count(),0,'Selector search and name inputs are removed');browserCount++;
+        assert.equal(await page.getByRole('button',{name:'Save draft',exact:true}).innerText(),'Save draft');browserCount++;
+        assert.equal(await page.getByRole('button',{name:'Save draft',exact:true}).getAttribute('title'),'Save this selection as a private draft. Does not reconcile.');browserCount++;
+        assert.equal(await page.getByRole('button',{name:'Review selection',exact:true}).getAttribute('title'),'Check selected movements before confirming reconciliation.');browserCount++;
         assert.equal(await page.locator('[data-kb-selected-total]').innerText(), '−3,300.00 EUR'); browserCount++;
         assert.equal(await page.locator('[data-kb-difference]').innerText(), '0.00 EUR'); browserCount++;
         assert.equal(await page.locator('[data-kb-batch-feedback]').innerText(), 'Ready'); browserCount++;
@@ -88,6 +92,7 @@ async function browserChecks(directory) {
         const draftFields = JSON.parse(submission.replace(/^Synthetic submission: /,''));
         assert.equal(draftFields.find(([key])=>key==='action')[1],'save_draft');
         assert.deepEqual(draftFields.filter(([key])=>key==='batch_members[]').map(([,value])=>value),['21','23']); browserCount++;
+        assert.equal(draftFields.some(([key])=>['q','batch_name'].includes(key)),false,'Draft submission has no replacement search/name fields');browserCount++;
         await second.check();
         await page.getByRole('button',{name:'Review selection',exact:true}).click();
         submission = await page.locator('#fixture-submit').innerText();
@@ -347,7 +352,6 @@ async function navigationBrowserChecks() {
     let nativeListVisits = 0;
     const paymentRefreshes = [];
     const removed = new Set();
-    let draft = '';
     let analysed = false;
     let scanRequests = 0;
     let scanDelay = 300;
@@ -380,15 +384,14 @@ async function navigationBrowserChecks() {
         for (const id of ids) {
             const key = 'staged:' + id;
             const marker = ' data-kb-row-navigation="' + key + '"';
-            const base = {expand:key,mode};
             html += '<tr class="kb-wl-row" data-line-key="' + key + '" id="row-' + id + '"><td>' + key + '</td><td>125.12345678 EUR</td><td class="kb-wl-actions"><a aria-label="Batch ' + id + '"' + marker + ' href="' + href({expand:key,mode:'batch'}) + '">Batch</a><button type="submit" aria-label="Approve ' + id + '" form="approve-' + id + '">Approve</button><button type="button" aria-label="Correct ' + id + '" data-kb-dialog="dialog-' + id + '">Bank</button><div style="display:inline-block" id="payment-popup-' + id + '" data-kb-payment-popup data-line-key="' + key + '" data-kb-payment-refresh="' + href({refresh_payment:key,scan:input.has('scan') ? '1' : null}) + '"><a class="kb-wl-record-payment" aria-label="Record payment ' + id + '" href="#">Payment</a></div></td></tr>';
             forms += '<form method="post" action="' + app + '" id="approve-' + id + '">' + hidden({action:'confirm_pair',row:key,token:'fixture-token',review:'fixture-review'}) + '</form>';
             forms += '<form method="post" action="' + app + '" id="correct-' + id + '">' + hidden({action:'correct_account',row:key,token:'fixture-token',review:'fixture-correction'}) + '</form><dialog class="kb-wl-dialog" id="dialog-' + id + '"><button type="button" data-kb-dialog-close autofocus>Cancel dialog</button><button type="submit" form="correct-' + id + '">Save correction</button></dialog>';
             if (expanded !== key) continue;
-            html += '<tr class="kb-wl-detail-row" data-line-key="' + key + '"><td colspan="3"><section class="kb-wl-detail"><div class="kb-wl-detail-heading">' + mode + '<a aria-label="Close"' + marker + ' href="' + href({}) + '">X</a></div><input type="search" id="query-' + id + '" name="q" form="search-' + id + '" value="' + escape(input.get('q') || '') + '"><button type="submit" form="search-' + id + '">Search entries</button>';
-            if (mode === 'batch') html += '<input id="name-' + id + '" name="batch_name" form="batch-' + id + '" value="' + escape(draft) + '"><button type="submit" form="batch-' + id + '">Save draft</button><a aria-label="Cancel batch"' + marker + ' href="' + href({}) + '">Cancel</a>';
+            html += '<tr class="kb-wl-detail-row" data-line-key="' + key + '"><td colspan="3"><section class="kb-wl-detail"><div class="kb-wl-detail-heading">' + mode + '<a aria-label="Close"' + marker + ' href="' + href({}) + '">X</a></div>';
+            if (mode === 'batch') html += '<button type="submit" form="batch-' + id + '">Save draft</button><a aria-label="Cancel batch"' + marker + ' href="' + href({}) + '">Cancel</a>';
             html += '</section></td></tr>';
-            forms += '<form method="get" action="' + app + '" id="search-' + id + '">' + hidden(base) + '</form><form method="post" action="' + app + '" id="batch-' + id + '">' + hidden({action:'save_draft',row:key,expand:key,mode:'batch',token:'fixture-token'}) + '</form>';
+            forms += '<form method="post" action="' + app + '" id="batch-' + id + '">' + hidden({action:'save_draft',row:key,expand:key,mode:'batch',token:'fixture-token'}) + '</form>';
         }
         html += '</tbody></table></div></form>' + forms;
         if (input.has('scan') && !analysed) html += '<div class="kb-wl-scan" data-page-ready="0" data-ready="Ready" data-failed="Failed" data-changed="Changed" data-paused="Paused"><span data-kb-scan-message>Analysing</span><span data-kb-scan-count>0 / 24</span></div><form data-kb-scan method="post" action="' + app + '?scan=1"><input name="action" value="advance_scan"><input name="scan_generation" value="fixture-generation"><input name="scan_cursor" value="0"><button type="submit">Continue analysis</button></form>';
@@ -448,7 +451,6 @@ async function navigationBrowserChecks() {
             }
             posts.push(fields);
             if (fields.action === 'confirm_pair') removed.add(Number(fields.row.split(':')[1]));
-            if (fields.action === 'save_draft') draft = fields.batch_name;
             const target = new URL(app);
             for (const key of ['company','sortorder','limit','page','search_description','search_account','search_status','expand','mode']) if (fields[key] !== undefined) target.searchParams.set(key,fields[key]);
             response.writeHead(303,{Location:target.href}); response.end(); return;
@@ -482,19 +484,11 @@ async function navigationBrowserChecks() {
         }
         await place(12);
         await cycle(()=>page.getByRole('link',{name:'Batch 12',exact:true}).click());
-        await page.locator('#query-12').fill('Synthetic lookup');
         let before = await offset(12);
-        await cycle(()=>page.locator('#query-12').press('Enter'));
-        await sameOffset(12,before,'Inline search keeps its source row');
-        assert.equal(await page.locator('#query-12').inputValue(),'Synthetic lookup'); count++;
-        assert.equal(await page.locator('#query-12').evaluate(input=>document.activeElement===input),true); count++;
-        await cycle(()=>page.getByRole('link',{name:'Close',exact:true}).click());
-        await cycle(()=>page.getByRole('link',{name:'Batch 12',exact:true}).click());
-        await page.locator('#name-12').fill('Synthetic draft');
-        before = await offset(12);
+        assert.equal(await page.locator('.kb-wl-detail input[name="q"],.kb-wl-detail input[name="batch_name"]').count(),0,'The navigation fixture reflects the selector without search/name inputs');count++;
         await cycle(()=>page.getByRole('button',{name:'Save draft',exact:true}).click());
         await sameOffset(12,before,'Native draft POST/redirect keeps its source row');
-        assert.equal(await page.locator('#name-12').inputValue(),'Synthetic draft'); count++;
+        assert.equal(Object.hasOwn(posts.at(-1),'batch_name'),false,'Private draft navigation uses the server default name');count++;
         await cycle(()=>page.getByRole('link',{name:'Cancel batch',exact:true}).click());
         await sameOffset(12,before,'Batch Cancel keeps its source row');
         await page.getByRole('button',{name:'Correct 12',exact:true}).click();

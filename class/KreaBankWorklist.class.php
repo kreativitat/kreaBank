@@ -4,6 +4,7 @@
  */
 require_once __DIR__ . '/kreabankintegration.class.php';
 require_once __DIR__ . '/KreaBankPlannedPayment.class.php';
+require_once __DIR__ . '/KreaBankSalaryPaymentReview.class.php';
 require_once __DIR__ . '/../lib/kreabank_worklist.lib.php';
 require_once __DIR__ . '/../lib/kreabank_manual_review.lib.php';
 require_once __DIR__ . '/../lib/kreabank_integration.lib.php';
@@ -97,7 +98,44 @@ class KreaBankWorklist
 		return $line;
 	}
 
-	/** Compact index retains no executable approval; visible pairs are signed afresh. */
+	/** Targeted visibility checks only; cached presentation never grants financial approval. */
+	public function presentationVisible($prepared)
+	{
+		$p=$this->db->prefix(); $e=$this->entity; $records=array(); $line=$prepared['line'];
+		if (!empty($prepared['pair']['suggestion'])) { $records[]=$prepared['pair']['suggestion']; }
+		if (!empty($prepared['completed']['doc_id'])) { $records[]=$prepared['completed']+array('bank_account_id'=>$line['bank_account_id']); }
+		foreach (($prepared['account_candidates']??array()) as $candidate) {
+			$records[]=array('doc_type'=>'native_bank','doc_id'=>$candidate['bank_line_id'],'bank_account_id'=>$candidate['bank_account_id']);
+		}
+		foreach (($prepared['batch']['active']['components']??array()) as $component) {
+			$records[]=array('doc_type'=>'native_bank','doc_id'=>$component['fk_bank_line'],'bank_account_id'=>$component['bank_account_id'],'active_group'=>true);
+		}
+		$salary=new KreaBankSalaryPaymentReview($this->db,$this->service->user,$e);
+		foreach ($records as $record) {
+			$type=$record['doc_type']; $id=(int)$record['doc_id']; $account=(int)($record['bank_account_id']??$line['bank_account_id']);
+			if ($type==='salary') {
+				if (!$this->rows("SELECT s.rowid FROM {$p}salary s JOIN {$p}user eu ON eu.rowid=s.fk_user AND eu.entity IN (0,s.entity)"
+					. " WHERE s.rowid=$id AND s.entity=$e AND s.paye=0 AND (".$salary->readableSql('s.fk_user').')')) { return false; }
+				continue;
+			}
+			if ($type==='native_bank') {
+				$sql="SELECT b.rowid FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account WHERE b.rowid=$id AND ba.entity=$e AND ba.rowid=$account";
+				$sql.=KreaBankTaxReconciliation::bankOwnershipSql($p).$salary->bankOwnershipSql().$salary->visibilitySql();
+				foreach(array(array('paiement','paiement_facture','facture','fk_paiement','fk_facture'),array('paiementfourn','paiementfourn_facturefourn','facture_fourn','fk_paiementfourn','fk_facturefourn')) as $tables){
+					list($payment,$allocation,$invoice,$payKey,$invoiceKey)=$tables;
+					$sql.=" AND NOT EXISTS (SELECT 1 FROM {$p}{$payment} pay WHERE pay.fk_bank=b.rowid AND (pay.entity<>$e OR EXISTS (SELECT 1 FROM {$p}{$allocation} a LEFT JOIN {$p}{$invoice} f ON f.rowid=a.$invoiceKey WHERE a.$payKey=pay.rowid AND (f.rowid IS NULL OR f.entity<>$e))))";
+				}
+				if (!$this->rows($sql)) { return false; }
+				continue;
+			}
+			if ($type==='tax' && !(new KreaBankTaxReconciliation($this->db,$this->service->user,$e))->canRead()) { return false; }
+			try { (new KreaBankReconciliationScope($this->db,$e))->assertDocument($type,$id,$account ?: (int)$line['bank_account_id']); }
+			catch (Exception $error) { return false; }
+		}
+		return true;
+	}
+
+	/** Compact index plus one transient prepared row; controller bounds full envelopes to the page. */
 	public function compact($key)
 	{
 		$row = $this->prepare($key);
@@ -123,7 +161,8 @@ class KreaBankWorklist
 		if (!empty($row['completed'])) { $references[] = $row['completed']['reference']; $accounts[] = (int) $row['line']['bank_account_id']; $accountRefs[] = $row['line']['bank_account_ref']; }
 		$status = $row['line']['needs_review'] ? 'review' : ((int) $row['line']['status'] === 2 ? 'reconciled' : (!empty($row['batch']['draft']) ? 'draft' : 'pending'));
 		return array('key'=>$key,'match'=>implode(' ', $references),'payment_accounts'=>array_values(array_unique($accounts)),
-			'payment_account'=>implode(', ', array_unique($accountRefs)),'status'=>$status);
+			'payment_account'=>implode(', ', array_unique($accountRefs)),'status'=>$status,
+			'dependencies'=>kreabankWorklistDependencies($row),'_prepared'=>$row);
 	}
 
 	public function prepare($key)

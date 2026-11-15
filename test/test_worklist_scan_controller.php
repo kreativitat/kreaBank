@@ -70,6 +70,8 @@ function runScanController($request = array(), $session = array(), $options = ar
 	$sources = $options['sources'] ?? syntheticScanSources();
 	$scope = $options['scope'] ?? '1|7';
 	$action = $request['action'] ?? '';
+	$post = $action !== '';
+	$_GET = $post ? array() : $request;
 	$expand = $request['expand'] ?? '';
 	$paymentReturn = $request['payment_return'] ?? '';
 	$worklist = new class { public $calls=array(); public function compact($key) { $this->calls[]=$key; return array('key'=>$key,'status'=>'pending','match'=>'Fresh payment evidence','payment_accounts'=>array(),'payment_account'=>''); } };

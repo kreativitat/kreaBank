@@ -3,7 +3,7 @@
 `reconciliationlist.php` is the banking reconciliation list. Its row actions are
 one selector for existing movements (the layers button) and ordinary bank-movement creation.
 The standalone Search row action and panel were removed in 1.20.51. The selector
-accepts one or more movements; its text filter remains available. More options and
+accepts one or more movements, without a separate text-search or batch-name field. More options and
 all `more_entry`, `more_rule`, `more_writeoff` and `more_draft` actions were removed
 in 1.20.49; stale POSTs are rejected before workspace/service dispatch.
 
@@ -111,7 +111,7 @@ correction rather than an ordinary reconciliation. Existing legacy workspace
 entry points remain separate. A successful staged scalar selection removes
 only the current user's stale private group draft in the same transaction.
 Multiple movements retain the existing batch service and its stricter eligibility.
-Other-account correction cards sit outside the allocation list and totals.
+Other-account correction belongs only in the main row's Payment bank column.
 
 Bank correction reuses `changeMovementAccount()` with a single-use reviewed
 snapshot. Its destination is the statement account. Native modifier permission
@@ -123,8 +123,11 @@ unchecked and does not reconcile it.
 
 **Select existing movements** groups existing native payment movements, including salary
 payments already recorded in the bank ledger. It does not initiate payroll or
-send payments. Drafts are private to the current user and company. Selected
-members survive search changes; unavailable members require explicit removal.
+send payments. Drafts are private to the current user and company. The selector
+has no search or editable name field; retained draft names remain read-only.
+**Save draft** retains the selection without reconciling. **Review selection**
+checks the movements before separate final confirmation. Both actions have native
+hover explanations and accessible help. Unavailable members require explicit removal.
 
 Review signs the complete original statement and every selected payment. An
 approval requires at least two eligible movements in the same account, currency
@@ -189,18 +192,20 @@ The design references are installed Dolibarr `compta/bank/bankentries_list.php`
 and `admin/tools/ui/content/tables.php`, with the
 [Primavera ERP reconciliation workflow](https://help.ila.cegid.com/primavera/docs/1606130127)
 as a functional reference. All-account scope, reviewed correction dialog and
-named private drafts are KreaBank adaptations. Synthetic rendering was inspected
+private drafts are KreaBank adaptations. Selector buttons also follow installed
+`admin/tools/ui/components/buttons.php` and the distinct native Reconcile/Save
+actions in `compta/bank/bankentries_list.php`. Synthetic rendering was inspected
 at desktop/mobile widths in English and European Portuguese. Installation/theme
 acceptance and migration execution are environment-specific deployment steps.
 Current production UI acceptance is recorded in [navigation](NAVIGATION.md).
 
-Payment bank references with a prepared account correction open the same reviewed
-change-bank modal as the exchange icon, in both list rows and expanded candidates.
+Payment bank references with a prepared account correction open the reviewed
+change-bank modal from the main row's warning link.
 Read-only, reconciled and ineligible references remain text. Opening or cancelling
 the modal changes no records; Save retains the existing signed POST review.
 
 Automatic analysis is limited server-side to the displayed source IDs and native
-page size (default 25, maximum 100). Completed batches never restart on reload.
+page size (default 10, maximum 100). Explicit page-size choices remain supported.
 The CSRF-protected More action grants one further page-size batch, using the
 current scope, generation and cursor; replayed or unfinished grants are rejected.
 With source-based filters, More opens the native page containing the next results.
@@ -212,8 +217,19 @@ A short in-flight session claim prevents concurrent tabs from matching the same
 batch. Stale views cannot replace newer state; failed workers return their current
 retry cursor while preserving completed summaries.
 
+Successful row actions retain unchanged summaries instead of restarting the scan.
+Per-source fingerprints and target dependencies invalidate changed sources and
+nearby same-amount/currency peers, including rows that previously had no match.
+Only the current native page can retain prepared display data, with a fixed
+120-second expiry and a one-use continuation after an action or completed scan.
+The cache binds the actor, company, filters, effective permissions and salary
+employee scope. Cached targets must still pass current visibility/ownership
+checks. An ordinary refresh recomputes visible recommendations; a newly visible
+or affected row gets its own bounded analysis. Financial confirmation always
+prepares current evidence again and repeats the native signed execution checks.
+
 Row actions preserve the active row, horizontal scroll and keyboard focus across
-Selector opening and closing, inline searches, POST redirects and
+selector opening and closing, POST redirects and
 read-only analysis refreshes. Position hints expire after two minutes and are
 bound to the session/company/user, filter/sort context and page; no financial
 inputs or review tokens are stored in the browser.

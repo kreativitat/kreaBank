@@ -23,6 +23,9 @@
 - 1.20.52: The selector accepts staged sources only; legacy imports already occupy
   native ledger rows and need duplicate review before choosing another row. Legacy
   workspace search is unchanged.
+- 1.20.62: The selector has no text-search or editable batch-name field. Keep
+  Save draft separate from Review selection and final approval, with native
+  descriptive tooltips. The list defaults to 10 rows; explicit limits persist.
 
 ## Advisory bank rules
 
@@ -76,6 +79,11 @@
 - The third operational tab, **Reconcile**, opens this list, using `search_account` for an owned selected bank. Keep the header button and removed sidebar shortcut absent.
 - The new list defaults to newest booking date first; explicit sort choices persist. Keep the legacy selected-line queue oldest-first.
 - Automatic matching is limited to native page-size targets; **More** validates the current session generation/cursor and grants one bounded next batch.
+- Action returns retain unchanged scan summaries. Prepared display envelopes
+  stay on one native page for a fixed 120 seconds and one authorized continuation;
+  bind current actor/company/filter/rights/employee scope and recheck target
+  visibility. Invalidate changed/shared targets and amount/date peers, fence old
+  workers, and always bypass presentation caching for financial confirmation.
 - See [the reconciliation list](doc/RECONCILIATION_LIST.md) for migration,
   rollback and strictly disposable database checks. No GET-time batch DDL or jobs.
 

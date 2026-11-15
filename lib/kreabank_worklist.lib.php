@@ -67,6 +67,8 @@ function kreabankWorklistPaymentUrl($pair, $permissions, $companyCurrency)
 /** Invalidate only this row after a native payment POST; cancellation never calls this. */
 function kreabankWorklistRefreshPayment(&$session, $key)
 {
+	$state=$session['kreabank_worklist_scan']['sources'][$key]['footprint']??null;
+	if ($state) { kreabankWorklistInvalidateScan($session,array('keys'=>array($key),'financial'=>true,'footprints'=>array($state))); }
 	foreach ((array) ($session['kreabank_worklist_reviews'] ?? array()) as $nonce=>$review) {
 		if (($review['payload']['key'] ?? '') === $key) { unset($session['kreabank_worklist_reviews'][$nonce]); }
 	}
@@ -74,7 +76,7 @@ function kreabankWorklistRefreshPayment(&$session, $key)
 }
 
 /** Request state for the separate list. Financial actions never enter read URLs. */
-function kreabankWorklistState($request, $defaultLimit = 25)
+function kreabankWorklistState($request, $defaultLimit = 10)
 {
 	$columns = array('operation_date','bank_account_ref','description','amount','match','payment_account','status');
 	$clear = false;
@@ -220,8 +222,190 @@ function kreabankWorklistAdvanceScan(&$scan, $prepare)
 	foreach ($scan['targets'] as $key) {
 		if (isset($scan['summaries'][$key])) { continue; }
 		if ($processed > 0 && (microtime(true) - $started >= 1.2 || $processed >= 8)) { break; }
-		$scan['summaries'][$key] = $prepare($key); $processed++;
+		kreabankWorklistStoreSummary($scan,$key,$prepare($key)); $processed++;
 	}
+}
+
+/** Current source evidence, independent of source order and page membership. */
+function kreabankWorklistSourceFingerprint($source)
+{
+	ksort($source);
+	return hash('sha256',json_encode($source,JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+}
+
+/** Permissions and employee scope can change while the same user/company remain selected. */
+function kreabankWorklistAccessFingerprint($user,$flags=array())
+{
+	$rights=array();
+	foreach (array(array('banque','lire'),array('banque','modifier'),array('banque','consolidate'),
+		array('kreabank','reconciliation','read'),array('kreabank','reconciliation','write'),array('kreabank','reconciliation','undo'),
+		array('facture','lire'),array('facture','paiement'),array('fournisseur','facture','lire'),array('fournisseur','facture','creer'),
+		array('supplier_invoice','lire'),array('supplier_invoice','creer'),array('tax','charges','lire'),array('tax','charges','creer'),
+		array('salaries','read'),array('salaries','readall'),array('salaries','write')) as $right) {
+		$rights[implode('.',$right)]=method_exists($user,'hasRight') ? (bool)$user->hasRight(...$right) : false;
+	}
+	$children=array();
+	if ($rights['salaries.read'] && !$rights['salaries.readall'] && method_exists($user,'getAllChildIds')) {
+		$children=array_map('intval',array_values((array)$user->getAllChildIds(1))); sort($children,SORT_NUMERIC);
+	}
+	return hash('sha256',json_encode(array($rights,$children,$flags,$user->entity??0,$user->socid??0,$user->statut??1)));
+}
+
+function kreabankWorklistFootprint($record,$fallback=array())
+{
+	$amount=$record['amount_decimal']??$record['amount_open']??$record['amount']??$fallback['amount_decimal']??$fallback['amount']??'';
+	if (is_float($amount)) { $amount=number_format($amount,8,'.',''); }
+	return array('account'=>(int)($record['bank_account_id']??$record['fk_account']??$fallback['bank_account_id']??0),
+		'currency'=>(string)($record['currency']??$fallback['currency']??''),'amount'=>(string)$amount,
+		'day'=>substr((string)($record['operation_date']??$record['doc_date']??$record['dateo']??$record['date']??$fallback['operation_date']??''),0,10));
+}
+
+/** Dependencies are display invalidation hints, never matching/approval evidence. */
+function kreabankWorklistDependencies($prepared)
+{
+	if (isset($prepared['suggestion'])) { $prepared=array('line'=>$prepared['line'],'pair'=>$prepared); }
+	$line=$prepared['line']??array(); $tokens=array(); $footprints=array(kreabankWorklistFootprint($line));
+	$add=static function($type,$id)use(&$tokens){if((int)$id>0){$tokens[$type.':'.(int)$id]=true;}};
+	$records=array();
+	if (!empty($prepared['pair']['suggestion'])) { $records[]=$prepared['pair']['suggestion']; }
+	foreach (($prepared['account_candidates']??array()) as $candidate) { $records[]=$candidate; }
+	foreach (array('active','draft') as $kind) {
+		$batch=$prepared['batch'][$kind]??array();
+		foreach (($batch['components']??array()) as $component) { $records[]=$component; }
+		foreach ((array)($batch['ids']??array()) as $id) { $add('native_bank',$id); }
+	}
+	foreach ($records as $record) {
+		$type=$record['doc_type']??$record['payment_type']??'native_bank';
+		$type=str_replace(array('payment_supplier_linked','payment_linked'),array('payment_supplier','payment'),$type);
+		$add($type,$record['doc_id']??$record['payment_id']??$record['fk_bank_line']??($type==='native_bank'?($record['rowid']??$record['id']??0):0));
+		foreach (array('native_bank_line_id','bank_line_id','fk_bank_line') as $field) { $add('native_bank',$record[$field]??0); }
+		foreach (array('customer_payment_id'=>'payment','supplier_payment_id'=>'payment_supplier','tax_id'=>'tax','tax_payment_id'=>'payment_tax') as $field=>$kind) { $add($kind,$record[$field]??0); }
+		$footprints[]=kreabankWorklistFootprint($record,$line);
+	}
+	return array('tokens'=>array_keys($tokens),'footprints'=>$footprints);
+}
+
+function kreabankWorklistSourceState($sources)
+{
+	$out=array();
+	foreach ($sources as $key=>$source) { $out[$key]=array('hash'=>kreabankWorklistSourceFingerprint($source),'footprint'=>kreabankWorklistFootprint($source)); }
+	return $out;
+}
+
+/** Exact shared targets plus conservative amount/date peers, including prior no-pair rows. */
+function kreabankWorklistAffectedKeys($scan,$effect)
+{
+	$keys=array_fill_keys((array)($effect['keys']??array()),true); $tokens=array_fill_keys((array)($effect['tokens']??array()),true);
+	foreach (($scan['sources']??array()) as $key=>$state) {
+		if (array_intersect_key(array_fill_keys($scan['summaries'][$key]['dependencies']['tokens']??array(),true),$tokens)) { $keys[$key]=true; }
+		if (empty($effect['financial'])) { continue; }
+		$peer=$state['footprint'];
+		foreach (($effect['footprints']??array()) as $changed) {
+			if ($changed['currency']!=='' && $peer['currency']!==$changed['currency']) { continue; }
+			try { if (kreabankWorklistCompareDecimal($peer['amount'],$changed['amount'])!==0) { continue; } }
+			catch (InvalidArgumentException $error) { /* Incomplete evidence must invalidate conservatively. */ }
+			$a=strtotime($peer['day'].' UTC'); $b=strtotime($changed['day'].' UTC');
+			if ($a!==false && $b!==false && abs($a-$b)>86400*($effect['radius']??31)) { continue; }
+			// Other-account advice means equal amount/date peers in other owned banks also depend on this movement.
+			$keys[$key]=true;
+		}
+	}
+	return array_keys($keys);
+}
+
+function kreabankWorklistInvalidateScan(&$session,$effect,$clearReviews=true)
+{
+	$scan=$session['kreabank_worklist_scan']??array();
+	if (!$scan) { return; }
+	if (empty($scan['context']) || !isset($scan['sources'])) {
+		$scan['generation']=bin2hex(random_bytes(16)); $scan['cursor']=0; unset($scan['lease']);
+		$session['kreabank_worklist_scan']=$scan; return;
+	}
+	foreach (($effect['keys']??array()) as $key) { $effect['tokens']=array_merge($effect['tokens']??array(),$scan['summaries'][$key]['dependencies']['tokens']??array()); }
+	$keys=kreabankWorklistAffectedKeys($scan,$effect);
+	foreach ($keys as $key) { unset($scan['summaries'][$key],$scan['presentations'][$key]); }
+	if ($clearReviews) {
+		foreach (($session['kreabank_worklist_reviews']??array()) as $nonce=>$review) {
+			if (in_array($review['payload']['key']??'', $keys,true)) { unset($session['kreabank_worklist_reviews'][$nonce]); }
+		}
+		foreach ($keys as $key) { unset($session['kreabank_worklist_batch_review'][$key]); }
+	}
+	$scan['generation']=bin2hex(random_bytes(16)); $scan['cursor']=0; $scan['reuse_once']=time()+30; unset($scan['lease']);
+	$session['kreabank_worklist_scan']=$scan;
+}
+
+function kreabankWorklistActionEffect($key,$prepared,$financial=true)
+{
+	$dependencies=kreabankWorklistDependencies($prepared);
+	return $dependencies+array('keys'=>array($key),'financial'=>$financial);
+}
+
+/** Rebase presentation progress onto fresh source facts; stale POST admission happens before this. */
+function kreabankWorklistRebaseScan($scan,$context,$scope,$sourceState,$now)
+{
+	if (($scan['context']??'')!==$context || ($scan['expires']??0)<$now || !isset($scan['sources'])) {
+		return array('context'=>$context,'scope'=>$scope,'sources'=>$sourceState,'generation'=>bin2hex(random_bytes(16)),
+			'cursor'=>0,'summaries'=>array(),'presentations'=>array(),'expires'=>$now+600);
+	}
+	if (($scan['scope']??'')!==$scope) {
+		$effect=array('keys'=>array(),'tokens'=>array(),'footprints'=>array(),'financial'=>true);
+		foreach (array_unique(array_merge(array_keys($scan['sources']),array_keys($sourceState))) as $key) {
+			if (($scan['sources'][$key]['hash']??null)===($sourceState[$key]['hash']??null)) { continue; }
+			$effect['keys'][]=$key;
+			foreach (array($scan['sources'][$key]['footprint']??null,$sourceState[$key]['footprint']??null) as $footprint) { if($footprint){$effect['footprints'][]=$footprint;} }
+			$effect['tokens']=array_merge($effect['tokens'],$scan['summaries'][$key]['dependencies']['tokens']??array());
+		}
+		foreach (kreabankWorklistAffectedKeys($scan,$effect) as $key) { unset($scan['summaries'][$key],$scan['presentations'][$key]); }
+		$scan['generation']=bin2hex(random_bytes(16)); $scan['cursor']=0; unset($scan['lease'],$scan['view'],$scan['targets']);
+	}
+	$scan['scope']=$scope; $scan['sources']=$sourceState;
+	$scan['summaries']=array_intersect_key($scan['summaries'],$sourceState);
+	$scan['presentations']=array_intersect_key($scan['presentations']??array(),$sourceState);
+	return $scan;
+}
+
+/** Full prepared data is retained only for one bounded current page, at a fixed expiry. */
+function kreabankWorklistPresentationPage(&$scan,$keys,$limit)
+{
+	$scan['visible']=array_slice(array_values($keys),0,max(1,min(100,(int)$limit)));
+	$scan['presentations']=array_intersect_key($scan['presentations']??array(),array_fill_keys($scan['visible'],true));
+}
+
+function kreabankWorklistStoreSummary(&$scan,$key,$summary,$now=null)
+{
+	$now=$now??time(); $prepared=$summary['_prepared']??null; unset($summary['_prepared']);
+	$scan['summaries'][$key]=$summary;
+	if ($prepared && in_array($key,$scan['visible']??array(),true) && isset($scan['sources'][$key])) {
+		$scan['presentations'][$key]=array('source'=>$scan['sources'][$key]['hash'],'context'=>$scan['context'],
+			'expires'=>min($scan['expires'],$now+120),'prepared'=>$prepared);
+	}
+}
+
+/** Display cache only. Financial POST code must always call fresh service preparation instead. */
+function kreabankWorklistPreparedPresentation(&$scan,$key,$source,$reuse,$prepare,$now=null,$visible=null)
+{
+	$now=$now??time(); $saved=$scan['presentations'][$key]??null;
+	if ($reuse && $saved && ($saved['context']??'')===($scan['context']??'') && ($saved['expires']??0)>=$now
+		&& ($scan['expires']??0)>=$now && ($saved['source']??'')===kreabankWorklistSourceFingerprint($source)
+		&& is_array($saved['prepared']??null) && (int)($saved['prepared']['line']['rowid']??0)===(int)$source['rowid']
+		&& (int)($saved['prepared']['line']['bank_account_id']??0)===(int)$source['bank_account_id']) {
+		try { $allowed=!$visible || $visible($saved['prepared']); } catch (Throwable $error) { $allowed=false; }
+		if (!$allowed) {
+			unset($scan['presentations'][$key],$scan['summaries'][$key],$scan['lease']);
+			$scan['generation']=bin2hex(random_bytes(16)); $scan['cursor']=0; $scan['presentation_invalidated']=true;
+			throw new RuntimeException('KreaBankWorklistChanged');
+		}
+		return $saved['prepared'];
+	}
+	unset($scan['presentations'][$key]);
+	try { $summary=$prepare($key); }
+	catch (Throwable $error) {
+		unset($scan['summaries'][$key],$scan['lease']); $scan['generation']=bin2hex(random_bytes(16));
+		$scan['cursor']=0; $scan['presentation_invalidated']=true; throw $error;
+	}
+	if (empty($summary['_prepared'])) { throw new RuntimeException('KreaBankWorklistChanged'); }
+	$prepared=$summary['_prepared']; kreabankWorklistStoreSummary($scan,$key,$summary,$now);
+	return $prepared;
 }
 
 /** One current completed batch review grants at most one further batch. */

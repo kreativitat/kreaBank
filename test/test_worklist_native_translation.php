@@ -119,6 +119,17 @@ foreach (array('en_US'=>'Reconciliation list', 'pt_PT'=>'Lista de reconciliaçã
 		'The actual Dolibarr helper owns the iframe and read-only close notification: ' . $locale);
 	checkWorklistNativeTranslation(serialize($model) === $before && $xpath->query('//td[contains(@class,"kb-wl-actions")]/button[@disabled]')->length === 1,
 		'The payment popup preserves evidence and leaves unpaid reconciliation disabled: ' . $locale);
+	$selectionModel=$model;$selectionModel['rows'][0]['review']=null;
+	$selectionModel['rows'][0]['draft']=array('member_keys'=>array('1','2'));
+	$selectionModel['rows'][0]['batch_form']=array('fields'=>array('source_key'=>'staged:1'));
+	$selectionHtml=kreabankWorklistTable($selectionModel,$langs);
+	$previous=libxml_use_internal_errors(true);$dom->loadHTML('<?xml encoding="utf-8" ?>'.$selectionHtml);libxml_clear_errors();libxml_use_internal_errors($previous);$xpath=new DOMXPath($dom);
+	checkWorklistNativeTranslation($xpath->query('//input[@name="q" or @name="batch_name"]')->length===0,'Native selector rendering omits the removed search/name fields: '.$locale);
+	foreach(array('data-kb-save-draft'=>array('KreaBankWorklistSaveDraft','KreaBankWorklistSaveDraftHelp'),'data-kb-batch-review'=>array('KreaBankWorklistReviewSelection','KreaBankWorklistReviewSelectionHelp'))as$attribute=>$keys){
+		$button=$xpath->query('//button[@'.$attribute.']')->item(0);
+		checkWorklistNativeTranslation($button && trim($button->textContent)===$langs->transnoentities($keys[0]) && $button->getAttribute('aria-label')===$langs->transnoentities($keys[0]),'Native visible and accessible action labels decode exactly once: '.$locale.'/'.$keys[0]);
+		checkWorklistNativeTranslation($button->getAttribute('title')===$langs->transnoentities($keys[1]) && strpos($selectionHtml,'&amp;ccedil;')===false,'Native hover explanation preserves Portuguese encoding: '.$locale.'/'.$keys[1]);
+	}
 }
 // Render the actual controller's title block with installed native helpers. The
 // native sort cleanup regex does not consume underscores in existing sort keys.

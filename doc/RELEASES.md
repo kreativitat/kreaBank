@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.62 — 2026-11-15
+
+- Remove the existing-movement selector's search and optional batch-name fields. Keep Save draft and Review selection distinct with clear labels and explanations; final reconciliation remains a separate approval.
+- Retain unchanged reconciliation-list results after actions and refresh affected records instead of restarting the whole page search. Confirmations still recompute current financial evidence and enforce the existing native guards.
+- Default the reconciliation list to 10 rows per page while retaining explicit page-size choices.
+
 ## 1.20.61 — 2026-11-15
 
 - Move possible wrong-bank movements into the row's payment-bank column as an underlined warning and bank reference opening the existing reviewed correction dialog. Remove the separate other-bank section from the batch selector.

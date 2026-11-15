@@ -95,6 +95,13 @@ function kreabankWorklistButton($label, $icon, $attributes = '', $primary = fals
 		. kreabankWorklistIcon($icon) . '<span class="kb-wl-sr">' . kreabankWorklistEscape($label) . '</span></button>';
 }
 
+/** Keep draft and review actions explicit, with native hover and accessible help. */
+function kreabankWorklistSelectionButton($label, $help, $icon, $attributes, $primary = false)
+{
+	return '<button class="button kb-wl-selection-action' . ($primary ? ' kb-wl-primary' : '') . '" title="' . kreabankWorklistEscape($help)
+		. '" aria-label="' . kreabankWorklistEscape($label) . '" ' . $attributes . '>' . kreabankWorklistIcon($icon) . '<span>' . kreabankWorklistEscape($label) . '</span></button>';
+}
+
 /** Render an isolated, associated POST form; never call this while a GET form is open. */
 function kreabankWorklistPostForm($id, $descriptor, $model, $extra = '')
 {
@@ -356,20 +363,8 @@ function kreabankWorklistTable($model, $langs)
 			$creation = kreabankWorklistCreation($row,$line,$id,$model,$langs);
 			$html .= $creation['html'] . '</section></td></tr>'; $forms .= $creation['form']; continue;
 		}
-		$searchId = $id . '-search';
-		if (!$activeBatch && !$batchReview) {
-		$html .= '<div class="kb-wl-search"><label for="' . $searchId . '-query">' . $t('KreaBankWorkspaceSearchEntries') . '</label><input class="flat" form="' . $searchId . '" type="search" name="q" id="' . $searchId . '-query" value="' . $e($row['search'] ?? '') . '"><span class="kb-wl-search-actions">' . kreabankWorklistButton(kreabankWorklistTranslate($langs, 'Search'), 'search', 'type="submit" form="' . $searchId . '"');
-		$html .= '</span></div>';
-		$searchState = $state;
-		unset($searchState['q'], $searchState['entry_search']);
-		$forms .= '<form method="get" action="' . $e(strtok($model['url'], '?')) . '" id="' . $searchId . '">' . kreabankWorklistFields(array_merge($searchState, array('expand'=>$key, 'mode'=>'batch'))) . '</form>';
-		}
 		$batch = (array) ($row['batch_form'] ?? array());
 		$batchId = $id . '-batch';
-		if ($batchMode && $canWrite && !$batchReview && !$activeBatch) {
-			$nameField = $batch['name_field'] ?? 'batch_name';
-			$html .= '<div class="kb-wl-batch-name" data-kb-group-name' . (count((array) ($draft['member_keys'] ?? array())) < 2 ? ' hidden' : '') . '><label for="' . $batchId . '-name">' . $t('KreaBankWorklistBatchName') . '</label><input class="flat" form="' . $batchId . '" type="text" name="' . $e($nameField) . '" id="' . $batchId . '-name" maxlength="80" value="' . $e($draft['name'] ?? '') . '"></div>';
-		}
 		$candidates = (array) ($batchMode ? ($row['batch_candidates'] ?? array()) : ($row['candidates'] ?? array()));
 		if ($activeBatch || $batchReview) {
 			$candidates = $row['batch_components'] ?? array_values(array_filter($candidates, static function ($candidate) use ($draft) { return !empty($candidate['selected']) || in_array((string) ($candidate['key'] ?? ''), array_map('strval', (array) ($draft['member_keys'] ?? array())), true); }));
@@ -382,8 +377,9 @@ function kreabankWorklistTable($model, $langs)
 			if (!empty($row['batch_suggestion']) && in_array($row['batch_suggestion'],array('unique','ambiguous','bounded','truncated'),true)) { $html .= '<p class="kb-wl-caption">' . $t('KreaBankWorklistBatchSuggestion_' . $row['batch_suggestion']) . '</p>'; }
 			$html .= '<div class="kb-wl-totals" role="status" aria-live="polite" aria-atomic="true"><div><span>' . $t('KreaBankReviewStatementLine') . '</span><strong>' . kreabankWorklistMoney($line['amount'], $line['currency']) . '</strong></div><div><span>' . $t('KreaBankWorkspaceSelectedTotal') . '</span><strong data-kb-selected-total>' . (isset($batch['selected_total']) ? kreabankWorklistMoney($batch['selected_total'], $line['currency']) : '—') . '</strong></div><div><span>' . $t('KreaBankWorkspaceDifference') . '</span><strong data-kb-difference>' . (isset($batch['difference']) ? kreabankWorklistMoney($batch['difference'], $line['currency']) : '—') . '</strong></div></div><div class="kb-wl-batch-footer"><span class="opacitymedium" data-kb-selected-count data-label="' . $t('KreaBankWorklistSelected') . '">' . count((array) ($draft['member_keys'] ?? array())) . '</span>';
 			if ($canWrite && $batch && !$batchReview && !$activeBatch) {
-				$html .= kreabankWorklistButton(kreabankWorklistTranslate($langs, 'KreaBankWorklistSaveDraft'), 'save', 'type="submit" form="' . $batchId . '" name="action" value="' . $e($batch['save_action'] ?? 'save_draft') . '" data-kb-save-draft' . ((isset($batch['grouping_available']) && !$batch['grouping_available']) || count((array) ($draft['member_keys'] ?? array())) === 1 ? ' hidden' : ''));
-				$html .= kreabankWorklistButton(kreabankWorklistTranslate($langs, 'KreaBankWorklistReviewSelection'), 'eye', 'type="submit" form="' . $batchId . '" name="action" value="' . $e($batch['review_action'] ?? 'review_batch') . '" data-kb-batch-review aria-describedby="' . $batchId . '-feedback"', true);
+				$html .= '<span class="kb-wl-sr" id="' . $batchId . '-save-help">' . $t('KreaBankWorklistSaveDraftHelp') . '</span><span class="kb-wl-sr" id="' . $batchId . '-review-help">' . $t('KreaBankWorklistReviewSelectionHelp') . '</span>';
+				$html .= kreabankWorklistSelectionButton(kreabankWorklistTranslate($langs,'KreaBankWorklistSaveDraft'),kreabankWorklistTranslate($langs,'KreaBankWorklistSaveDraftHelp'),'save','type="submit" form="' . $batchId . '" name="action" value="' . $e($batch['save_action'] ?? 'save_draft') . '" data-kb-save-draft aria-describedby="' . $batchId . '-save-help"' . ((isset($batch['grouping_available']) && !$batch['grouping_available']) || count((array) ($draft['member_keys'] ?? array())) === 1 ? ' hidden' : ''));
+				$html .= kreabankWorklistSelectionButton(kreabankWorklistTranslate($langs,'KreaBankWorklistReviewSelection'),kreabankWorklistTranslate($langs,'KreaBankWorklistReviewSelectionHelp'),'eye','type="submit" form="' . $batchId . '" name="action" value="' . $e($batch['review_action'] ?? 'review_batch') . '" data-kb-batch-review aria-describedby="' . $batchId . '-feedback ' . $batchId . '-review-help"',true);
 				$forms .= kreabankWorklistPostForm($batchId, array('fields'=>$batch['fields'] ?? array()), $model);
 			}
 			$html .= '</div>';
