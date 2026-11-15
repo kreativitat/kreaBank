@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.56 — 2026-11-15
+
+- Reset native fixed row heights in the stacked mobile payment form so labels, controls and notes do not overlap. Keep evidence in two readable columns and preserve native desktop controls.
+
 ## 1.20.55 — 2026-11-15
 
 - Stack native salary/tax payment fields inside narrow dialog frames and keep controls within the visible width. Preserve the desktop layout and cancellation behavior.
