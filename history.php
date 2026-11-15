@@ -783,7 +783,7 @@ if ($historyTotalRecords === 0) {
 		$row = $preparedRow['row'];
 		$lineId = (int) $preparedRow['line_id'];
 		$nativeLineId = (int) (isset($row['native_bank_line_id']) ? $row['native_bank_line_id'] : 0);
-		$lineUrl = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile&account_context=' . $navigationAccountId . '&line_source=' . $row['line_source'] . '&line_id=' . $lineId, 1);
+		$lineUrl = dol_buildpath('/custom/kreabank/reconciliationlist.php?mainmenu=bank&leftmenu=bank&workspace=1&account_context=' . $navigationAccountId . '&line_source=' . $row['line_source'] . '&line_id=' . $lineId, 1);
 		$nativeLineUrl = ($nativeLineId > 0 ? dol_buildpath('/compta/bank/line.php?rowid=' . $nativeLineId, 1) : '');
 		$eventTs = (int) $preparedRow['event_ts'];
 		$eventLabel = ($eventTs > 0 ? dol_print_date($eventTs, 'dayhour') : dol_escape_htmltag((string) $preparedRow['event_date']));

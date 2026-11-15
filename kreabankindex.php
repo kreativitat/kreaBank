@@ -59,5 +59,5 @@ if (!$user->hasRight('banque', 'lire')) {
 	accessforbidden();
 }
 
-header('Location: ' . dol_buildpath('/custom/kreabank/reconcile.php', 1) . '?mainmenu=bank&leftmenu=kreabank_reconcile');
+header('Location: ' . dol_buildpath('/custom/kreabank/reconciliationlist.php', 1) . '?mainmenu=bank&leftmenu=bank');
 exit;

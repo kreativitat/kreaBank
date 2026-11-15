@@ -1175,7 +1175,7 @@ if (is_array($importResult)) {
 	if (!empty($importResult['bank_line_ids']) && is_array($importResult['bank_line_ids'])) {
 		$firstLineId = (int) reset($importResult['bank_line_ids']);
 		if ($firstLineId > 0) {
-			$reconcileUrl = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile&line_id=' . $firstLineId, 1);
+			$reconcileUrl = dol_buildpath('/custom/kreabank/reconciliationlist.php?mainmenu=bank&leftmenu=bank&workspace=1&line_id=' . $firstLineId, 1);
 			print '<tr class="oddeven"><td>' . $langs->trans('KreaBankReconcile') . '</td><td><a target="_blank" rel="noopener" href="' . $reconcileUrl . '">#' . $firstLineId . '</a></td></tr>';
 		}
 	}

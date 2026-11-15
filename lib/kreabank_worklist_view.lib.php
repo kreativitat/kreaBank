@@ -84,7 +84,7 @@ function kreabankWorklistMoney($amount, $currency)
 
 function kreabankWorklistIcon($icon)
 {
-	$allowed = array('check', 'search', 'layer-group', 'plus', 'clock', 'money-bill-wave', 'save', 'times', 'exchange-alt', 'eye', 'undo', 'sync-alt', 'chevron-down', 'chevron-up');
+	$allowed = array('check', 'search', 'layer-group', 'plus', 'clock', 'money-bill-wave', 'save', 'times', 'exchange-alt', 'eye', 'undo', 'sync-alt', 'chevron-down', 'chevron-up', 'ellipsis-h');
 	return '<span class="fas fa-' . (in_array($icon, $allowed, true) ? $icon : 'eye') . '" aria-hidden="true"></span>';
 }
 
@@ -319,6 +319,11 @@ function kreabankWorklistTable($model, $langs)
 				$url = kreabankWorklistUrl($model, array('expand'=>$key, 'mode'=>$mode));
 				$html .= '<a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e($url) . '" title="' . $t($label) . '" aria-label="' . $t($label) . '" aria-controls="' . $id . '-detail" aria-expanded="' . ($expanded && ($createMode ? 'create' : ($batchMode ? 'batch' : 'search')) === $mode ? 'true' : 'false') . '">' . kreabankWorklistIcon($mode === 'batch' ? 'layer-group' : ($mode === 'create' ? 'plus' : 'search')) . '<span class="kb-wl-sr">' . $t($label) . '</span></a>';
 			}
+		}
+		if (!$done && $canWrite && function_exists('kreabankWorkspaceUrl') && preg_match('/^(staged|native):([1-9][0-9]{0,9})$/D', (string) $key, $workspaceKey)) {
+			// All per-line options (record payment, tax, supplier invoice, difference, rule entry, draft, skip).
+			$workspaceUrl = kreabankWorkspaceUrl('reconcile', (int) ($line['bank_account_id'] ?? 0)) . '&line_id=' . (int) $workspaceKey[2] . '&line_source=' . $workspaceKey[1];
+			$html .= '<a class="button kb-wl-icon kb-wl-workspace" href="' . $e($workspaceUrl) . '" title="' . $t('KreaBankWorklistMoreOptions') . '" aria-label="' . $t('KreaBankWorklistMoreOptions') . '">' . kreabankWorklistIcon('ellipsis-h') . '<span class="kb-wl-sr">' . $t('KreaBankWorklistMoreOptions') . '</span></a>';
 		}
 		if ($done && $activeBatch) {
 			$html .= '<a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e(kreabankWorklistUrl($model, array('expand'=>$key, 'mode'=>'view'))) . '" title="' . $t('KreaBankWorklistViewBatch') . '" aria-label="' . $t('KreaBankWorklistViewBatch') . '" aria-controls="' . $id . '-detail" aria-expanded="' . ($expanded ? 'true' : 'false') . '">' . kreabankWorklistIcon('eye') . '</a>';

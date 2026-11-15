@@ -2523,7 +2523,7 @@ class KreaBankService
 					$resLink = $this->native->addLineLink(
 						$nativeLineId,
 						$docId,
-						DOL_URL_ROOT . '/custom/kreabank/reconcile.php?quick_entry_id=',
+						DOL_URL_ROOT . '/custom/kreabank/reconciliationlist.php?workspace=1&quick_entry_id=',
 						'QuickEntry #' . $docId,
 						'quick_entry'
 					);

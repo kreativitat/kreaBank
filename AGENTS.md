@@ -405,3 +405,15 @@
   per-call token renewal is enabled.
 - `php test/test_existing_movement_guard.php` is pure; its database counterpart uses ONLY
   the guarded disposable localhost:33317 fixture.
+
+## Line workspace inside the reconciliation list
+
+- 2026-11-15: `reconcile.php` is only a permission-checked redirect. The selected-line
+  workspace lives in `line_workspace.inc.php`, included by `reconciliationlist.php` when
+  `workspace=1` or one of its explicitly listed POST actions is requested. Every mention of
+  `reconcile.php` above now means this workspace; its controller, signed reviews, assets
+  (`css/reconcile.css`, `js/reconcile.js`, `js/reconcile-supplier.js`) and tests are unchanged.
+- Keep workspace and list action names disjoint and the routed list explicit. The include
+  has no bootstrap and refuses direct requests. `kreabankWorkspaceUrl('reconcile')` is the
+  only URL builder; never link to `reconcile.php`. Never remove a workspace feature without
+  first providing it in the list. `php test/test_line_workspace_route.php` checks this contract.

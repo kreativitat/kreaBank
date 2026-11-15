@@ -100,7 +100,7 @@ $check($blocked($service, array('rowid' => 582569, 'fk_statement' => 0, 'bank_ac
 // Rule entries have no confirmation step and the controller wires the exact list.
 $serviceSource = file_get_contents(dirname(__DIR__) . '/class/KreaBankService.class.php');
 $check(strpos($serviceSource, '$this->assertNoExistingMovementForCreation($line, $ruleReview ? array() : $confirmedMovementIds);') !== false, 'rule entries cannot override');
-$controller = file_get_contents(dirname(__DIR__) . '/reconcile.php');
+$controller = file_get_contents(dirname(__DIR__) . '/line_workspace.inc.php');
 $check(strpos($controller, '$service->assertNoExistingMovementForCreation($lineId, $confirmedMovementIds);') !== false
 	&& strpos($controller, 'name="confirm_existing_movements"') !== false, 'every creation choice is guarded and confirmable');
 

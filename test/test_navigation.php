@@ -70,7 +70,7 @@ $conf = (object) array('entity' => 7, 'global' => new stdClass());
 $head = array(array('/card?id=45', 'Account', 'bankname'), array('/entries?id=45', 'Movements', 'journal'), array('/entries?id=45&action=reconcile', 'Reconcile', 'reconcile'), array('/extension', 'Other module', 'external'));
 $newHead = kreabankCompleteAccountHead($head, 45);
 checkNavigation($newHead === $head, 'Shared header replaces native tabs without inserting another navigation layer');
-checkNavigation(strpos(kreabankWorkspaceUrl('reconcile', 45), 'reconcile.php') !== false, 'Dormant reconciliation keeps its direct route');
+checkNavigation(strpos(kreabankWorkspaceUrl('reconcile', 45), '/reconciliationlist.php?mainmenu=bank&leftmenu=bank&workspace=1&account_context=45') !== false && strpos(kreabankWorkspaceUrl('reconcile', 45), 'reconcile.php') === false, 'The selected-line workspace is served inside the reconciliation list');
 $tabs = kreabankPrepareHead(45);
 checkNavigation(array_column($tabs, 2) === array('bankstatement', 'statement', 'worklist', 'monthlyreport', 'history'), 'Reconcile is third and native Movements is not an operational tab');
 $user->allowed[] = 'kreabank.reconciliation.write';

@@ -14,6 +14,12 @@ function kreabankWorkspaceUrl($page, $accountId = 0)
 	if (!in_array($page, $pages, true)) {
 		throw new InvalidArgumentException('Unknown bank workspace page');
 	}
+	if ($page === 'reconcile') {
+		// The selected-line workspace is served by the reconciliation list page.
+		return dol_buildpath('/custom/kreabank/reconciliationlist.php', 1)
+			. '?mainmenu=bank&leftmenu=bank&workspace=1'
+			. ((int) $accountId > 0 ? '&account_context=' . (int) $accountId : '');
+	}
 	return dol_buildpath('/custom/kreabank/' . $page . '.php', 1)
 		. '?mainmenu=bank&leftmenu=kreabank_' . $page
 		. ((int) $accountId > 0 ? '&account_context=' . (int) $accountId : '');

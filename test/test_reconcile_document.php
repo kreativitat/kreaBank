@@ -85,7 +85,7 @@ function submitDirectReview($nativeWrite = true, $account = 81)
 	$queueNext = kreabankReconcileQueueIds(GETPOST('queue_next'));
 	$queueSearch = GETPOST('queue_search');
 	$reportActionException = static function ($e, ...$args) { $GLOBALS['events'][] = array('error', $e->getMessage()); };
-	$source = file_get_contents(__DIR__ . '/../reconcile.php');
+	$source = file_get_contents(__DIR__ . '/../line_workspace.inc.php');
 	$start = strpos($source, "if (\$action === 'confirm_document') {");
 	$end = strpos($source, "if (\$action === 'batch_safe'", $start);
 	if ($start === false || $end === false) { throw new LogicException('Review direct approval controller boundary'); }
@@ -103,7 +103,7 @@ function loadDirectQueue($lineId, $params, $queueContinue, $account = 81)
 	$queueOrder = kreabankReconcileQueueIds($params['queue_order'] ?? '');
 	$queueNext = kreabankReconcileQueueIds($params['queue_next'] ?? '');
 	$queueSearch = $params['queue_search'] ?? ''; $selectedLine = null;
-	$source = file_get_contents(__DIR__ . '/../reconcile.php');
+	$source = file_get_contents(__DIR__ . '/../line_workspace.inc.php');
 	$start = strpos($source, '$requestedLineId = (int) $lineId;');
 	$end = strpos($source, "\n\tif (\$selectedLine) {", $start);
 	if ($start === false || $end === false) { throw new LogicException('Review pending selection boundary'); }
@@ -122,7 +122,7 @@ function submitQueueAction($action)
 	$quickEntryFailed = false; $quickEntryFormState = array();
 	$reportActionException = static function ($e, ...$args) { $GLOBALS['events'][] = array('error', $e->getMessage()); };
 	$sanitizeUiErrorMessage = static function ($value) { return $value; };
-	$source = file_get_contents(__DIR__ . '/../reconcile.php');
+	$source = file_get_contents(__DIR__ . '/../line_workspace.inc.php');
 	$following = array('reconcile'=>'quick_assign', 'quick_assign'=>'quick_entry', 'quick_entry'=>'skip_line');
 	$start = strpos($source, "if (\$action === '" . $action . "' &&");
 	$end = strpos($source, "if (\$action === '" . $following[$action] . "' &&", $start);

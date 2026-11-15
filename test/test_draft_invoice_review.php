@@ -33,7 +33,7 @@ function submitDraftReview($saved, $request = array(), $permission = true, $meth
 	};
 	$errors = array();
 	$reportActionException = static function ($e, ...$args) use (&$errors) { $errors[]=$e->getMessage(); };
-	$source = file_get_contents(__DIR__.'/../reconcile.php');
+	$source = file_get_contents(__DIR__.'/../line_workspace.inc.php');
 	$start = strpos($source, "if (\$action === 'validate_draft_invoice') {");
 	$end = strpos($source, "if (\$action === 'confirm_document') {", $start);
 	if ($start === false || $end === false) { throw new LogicException('Draft controller boundaries changed'); }
