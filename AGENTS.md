@@ -48,10 +48,16 @@
   only a unique exact signed-decimal subset from complete unsearched candidates;
   bounded/ambiguous results remain manual. Preserve saved inputs and historical
   active groups/undo. GET advice performs no financial mutation.
-- Native payment-dialog cancellation preserves the list and scan state. Only a
-  native POST attempt requests a one-row refresh; consume `refresh_payment` into
+- Native payment-dialog cancellation preserves the list and scan state. Only an
+  unprevented native payment POST attempt requests a one-row refresh; consume
+  `refresh_payment` into
   the canonical paused `payment_return` view. Never invalidate the full scan on
   every GET or restart analysis from the modal close callback.
+- Native popup handlers create the iframe after capture listeners: install its
+  watcher in the next task, not a capture microtask. Native invoice Cancel is a
+  submit input; intercept it before required-field validation and close only its
+  exact iframe-owned dialog. Evaluate final submit-event prevention at close so
+  invalid attempts cannot erase a genuine attempt or trigger a spurious refresh.
 
 - 1.20.49 removes the row More options panel and its POST actions. Skip line,
   quick tax creation and quick supplier invoice creation are retired everywhere;
