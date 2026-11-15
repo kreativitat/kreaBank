@@ -17,6 +17,11 @@ $adapter=new KreaBankPlannedPayment(null,$user,4,null);
 $checks=0;
 function plannedPureCheck($condition,$label) { global $checks; if (!$condition) { throw new RuntimeException($label); } $checks++; }
 function plannedPureInvoke($method,...$args) { global $adapter; $reflection=new ReflectionMethod($adapter,$method); $reflection->setAccessible(true); return $reflection->invokeArgs($adapter,$args); }
+plannedPureCheck($adapter->failureStage()==='review','A new payment adapter exposes only the fixed review stage');
+try { $adapter->create(array(),1,'',''); } catch (DomainException $error) {}
+plannedPureCheck($adapter->failureStage()==='review','An invalid review fails before accepting financial input');
+try { $adapter->create(array('version'=>1,'entity'=>4,'user'=>9,'type'=>'salary','id'=>1),0,'',''); } catch (DomainException $error) {}
+plannedPureCheck($adapter->failureStage()==='input','Invalid payment mode syntax reports a fixed input stage without a database');
 plannedPureCheck($adapter->permissions('salary') && $adapter->permissions('tax'),'Native salary and tax permissions admit the reviewed form');
 foreach (array('banque.lire','banque.modifier','kreabank.reconciliation.read','kreabank.reconciliation.write') as $right) {
 	$user->denied=array($right);

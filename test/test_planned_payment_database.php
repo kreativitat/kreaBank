@@ -57,12 +57,20 @@ class PlannedPaymentFixtureDb extends DoliDB
 {
 	public $ddlInsideTransaction=false;
 	public $queries=array();
+	public $tamperBankReference=null;
+	public $failOuterCommit=false;
 	public function __construct($connection) { $this->connection=$connection; }
 	public function query($sql) {
 		$this->queries[]=$sql;
 		if ($this->depth && preg_match('/^(CREATE|ALTER|DROP)\b/i',$sql)) { $this->ddlInsideTransaction=true; }
+		if ($this->tamperBankReference!==null && strpos($sql,'SELECT b.*,CAST(b.amount AS DECIMAL(24,8)) AS amount_decimal FROM kbauto_bank b ')===0
+			&& preg_match('/WHERE b\.rowid=([0-9]+)\b/',$sql,$match)) {
+			parent::query("UPDATE kbauto_bank SET num_chq='".$this->escape($this->tamperBankReference)."' WHERE rowid=".(int)$match[1]);
+			$this->tamperBankReference=null;
+		}
 		return parent::query($sql);
 	}
+	public function commit() { return $this->depth===1 && $this->failOuterCommit ? false : parent::commit(); }
 }
 $db=new PlannedPaymentFixtureDb($db->connection);
 $service=new KreaBankService($db,$user,$langs);
@@ -195,22 +203,40 @@ foreach (array('salary'=>170001,'tax'=>170010) as $type=>$id) {
 	foreach (array(0,3,4,5) as $mode) { rejectAuto(static function()use($planned,$review,$mode){$planned->create($review,$mode,'SYNTHETIC','');},'Missing, inactive, foreign and incoming-only modes are rejected'); }
 	foreach (array(array(str_repeat('X',51),''),array('',str_repeat('N',1001)),array("bad\0ref",'')) as $input) {
 		rejectAuto(static function()use($planned,$review,$input){$planned->create($review,1,$input[0],$input[1]);},'Server validates editable text length and controls');
+		checkAuto($planned->failureStage()==='input','Invalid optional text exposes only the fixed input diagnostic stage');
 	}
 	$parent=$type==='salary'?'salary':'chargesociales'; $payments=$type==='salary'?'payment_salary':'paiementcharge';
 	$db->beforeBegin=static function()use($db,$parent,$id){$db->query("UPDATE kbauto_$parent SET amount=amount+0.01 WHERE rowid=$id");};
 	rejectAuto(static function()use($planned,$review){$planned->create($review,1,'SYNTHETIC','');},'Parent remaining is freshly checked after transaction locks');
+	checkAuto($planned->failureStage()==='admission','Changed reviewed facts report the fixed admission stage');
 	$db->query("UPDATE kbauto_$parent SET amount=amount-0.01 WHERE rowid=$id");
 	$review=$planned->snapshot(plannedLine($id),$type,$id);
-	$failures=array('INSERT INTO kbauto_'.$payments,'UPDATE kbauto_'.$parent.' SET','INSERT INTO kbauto_bank (','INSERT INTO kbauto_bank_url','UPDATE kbauto_'.$payments.' SET fk_bank','INSERT INTO kbauto_kreabank_recon_audit');
-	foreach ($failures as $failure) {
+	$failures=array('INSERT INTO kbauto_'.$payments=>'payment_create','UPDATE kbauto_'.$parent.' SET'=>'verification',
+		'INSERT INTO kbauto_bank ('=>'bank_attachment','INSERT INTO kbauto_bank_url'=>'bank_attachment',
+		'UPDATE kbauto_'.$payments.' SET fk_bank'=>'bank_attachment','INSERT INTO kbauto_kreabank_recon_audit'=>'audit');
+	foreach ($failures as $failure=>$stage) {
 		$state=plannedState(); $db->fail=$failure;
 		rejectAuto(static function()use($planned,$review){$planned->create($review,1,'SYNTHETIC','Test-only note');},'Native failure is visible: '.$failure);
 		$db->fail='';
 		checkAuto(plannedState()===$state && $db->depth===0,'Payment, native paid state, ledger, links, source and audit roll back together');
+		checkAuto($planned->failureStage()===$stage,'Native failure exposes only its fixed workflow diagnostic stage');
 	}
+	$state=plannedState(); $db->tamperBankReference='DIFFERENT-NONEMPTY-REFERENCE';
+	rejectAuto(static function()use($planned,$review){$planned->create($review,1,'APPROVED-REFERENCE','');},'A different nonempty bank reference is rejected after native creation');
+	checkAuto($planned->failureStage()==='verification' && plannedState()===$state && $db->depth===0,
+		'Nonempty reference mismatch rolls back payment, paid parent, native debit, links and audit');
+	$state=plannedState(); $db->failOuterCommit=true;
+	rejectAuto(static function()use($planned,$review){$planned->create($review,1,'','');},'A confirmed outer commit failure remains visible');
+	$db->failOuterCommit=false;
+	checkAuto($planned->failureStage()==='commit' && plannedState()===$state && $db->depth===0,'The fixed commit stage preserves rollback of a confirmed non-commit');
 	$source=(array)$db->query("SELECT * FROM kbauto_kreabank_statement_line WHERE rowid=$id")->fetch_object();
 	$financialBefore=array(countAuto('salary'),countAuto('chargesociales'),countAuto($payments),countAuto('bank'));
-	$result=$planned->create($review,1,'SYNTHETIC','Test-only note');
+	// The native form permits an empty reference and persists bank.num_chq as NULL.
+	$result=$planned->create($review,1,'','Test-only note');
+	$recorded=$db->query("SELECT * FROM kbauto_$payments WHERE rowid=".$result['payment_id'])->fetch_object();
+	$bankReference=$db->query('SELECT num_chq FROM kbauto_bank WHERE rowid='.$result['native_bank_line_id'])->fetch_object()->num_chq;
+	checkAuto($recorded->{$type==='salary'?'num_payment':'num_paiement'}==='' && $bankReference===null && $planned->failureStage()==='complete',
+		'Blank optional reference remains exact on the real native payment and accepts its NULL bank alias');
 	checkAuto($result['payment_id']>0 && $result['native_bank_line_id']>0 && $financialBefore===array(countAuto('salary'),countAuto('chargesociales'),countAuto($payments)-1,countAuto('bank')-1),
 		'Native creation adds exactly one payment and debit, never a salary or tax document');
 	checkAuto((array)$db->query("SELECT * FROM kbauto_kreabank_statement_line WHERE rowid=$id")->fetch_object()===$source
@@ -219,6 +245,7 @@ foreach (array('salary'=>170001,'tax'=>170010) as $type=>$id) {
 	checkAuto($audit['payment_id']===$result['payment_id'] && $audit['native_bank_line_id']===$result['native_bank_line_id'] && $audit['native_reconciled']===0,'Atomic payment audit preserves source and native payment evidence');
 	$state=plannedState(); rejectAuto(static function()use($planned,$review){$planned->create($review,1,'SYNTHETIC','');},'A repeated reviewed submission cannot create another payment');
 	checkAuto(plannedState()===$state,'Rejected replay has no financial or audit effects');
+	checkAuto($planned->failureStage()==='admission','Every new attempt resets the diagnostic stage before replay admission fails');
 	$worklist=new KreaBankWorklist($db,1,$service); $prepared=$worklist->prepare('staged:'.$id); $pair=$prepared['pair'];
 	checkAuto($pair && $pair['suggestion']['doc_type']==='native_bank' && (int)$pair['suggestion']['doc_id']===$result['native_bank_line_id'],
 		'A fresh list preparation proposes the newly created native debit through the ordinary matching path');
@@ -242,6 +269,21 @@ foreach (array('salary'=>170001,'tax'=>170010) as $type=>$id) {
 		&& (int)$db->query("SELECT status FROM kbauto_kreabank_statement_line WHERE rowid=$id")->fetch_object()->status===0
 		&& (int)$db->query('SELECT rappro FROM kbauto_bank WHERE rowid='.$result['native_bank_line_id'])->fetch_object()->rappro===0,
 		'Undo returns source and debit to pending while retaining the created native payment and paid parent');
+}
+
+// Native PHP truthiness also treats the exact text '0' as an absent bank cheque
+// reference; keep that native alias without rewriting either payment reference.
+foreach (array('salary'=>170030,'tax'=>170040) as $type=>$id) {
+	if ($type==='salary') { plannedSalary($id,'612.34'); plannedStage($id,'-612.34'); }
+	else { plannedTax($id,'723.45','Synthetic tax October 2026','TAX-ZERO-123456'); plannedStage($id,'-723.45','Payment TAX-ZERO-123456'); }
+	$review=$planned->snapshot(plannedLine($id),$type,$id); $result=$planned->create($review,1,'0','');
+	$table=$type==='salary'?'payment_salary':'paiementcharge'; $referenceField=$type==='salary'?'num_payment':'num_paiement';
+	$paymentReference=$db->query("SELECT $referenceField FROM kbauto_$table WHERE rowid=".$result['payment_id'])->fetch_object()->$referenceField;
+	$native=$db->query('SELECT num_chq,rappro,CAST(amount AS DECIMAL(24,8)) amount_decimal FROM kbauto_bank WHERE rowid='.$result['native_bank_line_id'])->fetch_object();
+	checkAuto($paymentReference==='0' && $native->num_chq===null && $native->amount_decimal===$review['source']['amount'] && (int)$native->rappro===0,
+		'Zero reference remains exact on salary/tax payment while accepting only the native absent-bank alias');
+	checkAuto($planned->failureStage()==='complete' && (int)$db->query("SELECT status FROM kbauto_kreabank_statement_line WHERE rowid=$id")->fetch_object()->status===0,
+		'Zero-reference creation commits normally and leaves reconciliation for separate approval');
 }
 checkAuto(!$db->ddlInsideTransaction,'Financial creation performs no schema changes');
 echo 'OK: '.($checks-$initialPlannedChecks)." guarded planned-payment checks\n";

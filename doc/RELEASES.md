@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.58 — 2026-11-15
+
+- Accept Dolibarr's native absent bank-reference representation when the optional payment number is blank. Preserve the exact payment reference, including native zero-reference semantics, and all amount, date, account, mode and ownership checks. Previously a successful native creation was rejected and rolled back by comparing NULL with an empty string.
+- Log only a fixed failure stage and exception class for guarded payment failures; keep raw financial data, SQL and exception messages out of the warning.
+- Reproduce the blank-reference failure with native salary/tax objects and cover creation, signed reconciliation, undo, reference mismatches and rollback.
+
 ## 1.20.57 — 2026-11-15
 
 - Version the payment-dialog stylesheet URL by its deployed modification time so existing browser sessions receive mobile layout corrections immediately.

@@ -14,11 +14,18 @@ final class KreaBankPlannedPayment
 	private $user;
 	private $entity;
 	private $service;
+	private $failureStage = 'review';
 	const MAX_CANDIDATES = 100;
 
 	public function __construct($db, $user, $entity, $service)
 	{
 		$this->db = $db; $this->user = $user; $this->entity = (int) $entity; $this->service = $service;
+	}
+
+	/** Fixed diagnostic stage only; never exposes document, user or native error data. */
+	public function failureStage()
+	{
+		return $this->failureStage;
 	}
 
 	/** Advice requires the same read and write authority as the reviewed payment form. */
@@ -135,13 +142,16 @@ final class KreaBankPlannedPayment
 	/** Native financial lifecycle inside one outer transaction; source remains pending. */
 	public function create($context, $modeId, $reference, $note)
 	{
+		$this->failureStage = 'review';
 		if (!is_array($context) || ($context['version'] ?? null) !== 1 || ($context['entity'] ?? null) !== $this->entity
 			|| ($context['user'] ?? null) !== (int) $this->user->id || !$this->permissions($context['type'] ?? '')) { throw new DomainException('The payment review changed'); }
+		$this->failureStage = 'input';
 		$modeId = $this->id($modeId); $id = $this->id($context['id'] ?? 0);
 		foreach (array(array($reference,50),array($note,1000)) as $input) {
 			if (!is_string($input[0]) || mb_strlen($input[0],'UTF-8') > $input[1] || preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/',$input[0])) { throw new DomainException('The payment reference or note is invalid'); }
 		}
 		$reference = trim($reference); $note = trim($note); $type = $context['type']; $p = $this->db->prefix();
+		$this->failureStage = 'admission';
 		if (!$this->db->begin()) { throw new RuntimeException('Cannot start native payment creation'); }
 		try {
 			// Same first lock as reconciliation, transfers and reviewed movement creation.
@@ -152,6 +162,7 @@ final class KreaBankPlannedPayment
 			$modes = array_column($this->paymentModes(true),null,'id');
 			if (!isset($modes[$modeId])) { throw new DomainException('Select a current active native payment mode'); }
 			$timestamp = (new DateTimeImmutable($context['booking_date'] . ' 12:00:00',new DateTimeZone('UTC')))->getTimestamp();
+			$this->failureStage = 'payment_create';
 			if ($type === 'salary') {
 				require_once DOL_DOCUMENT_ROOT . '/salaries/class/paymentsalary.class.php';
 				$payment = new PaymentSalary($this->db); $payment->datep = $timestamp;
@@ -166,16 +177,24 @@ final class KreaBankPlannedPayment
 			}
 			$payment->amounts = array($id=>$context['amount']); $payment->num_payment = $reference; $payment->note = $note;
 			$paymentId = (int) $payment->create($this->user,1);
-			if ($paymentId <= 0 || $payment->addPaymentToBank($this->user,$nativeType,$nativeLabel,$context['source']['bank_account_id'],'','') <= 0) {
+			if ($paymentId <= 0) {
 				throw new RuntimeException('Native payment creation failed; no payment was retained');
 			}
+			$this->failureStage = 'bank_attachment';
+			if ($payment->addPaymentToBank($this->user,$nativeType,$nativeLabel,$context['source']['bank_account_id'],'','') <= 0) {
+				throw new RuntimeException('Native bank attachment failed; no payment was retained');
+			}
+			$this->failureStage = 'verification';
 			$after = $this->verifyCreated($current,$paymentId,$modeId,$modes[$modeId]['code'],$reference,$nativeType);
+			$this->failureStage = 'audit';
 			$payload = array('strategy'=>'planned_payment_create','native_reconciled'=>0,'type'=>$type,'parent_id'=>$id,'payment_id'=>$paymentId,
 				'native_bank_line_id'=>$after['native_bank_line_id'],'amount_decimal'=>$context['amount'],'currency'=>$context['currency'],
 				'booking_date'=>$context['booking_date'],'review_hash'=>hash('sha256',json_encode($context,JSON_THROW_ON_ERROR)),
 				'source'=>$context['source'],'parent_before'=>$context['parent'],'payments_before'=>$context['payments'],'after'=>$after);
 			if (!$this->service->recordPlannedPaymentAudit($context['source']['rowid'],$payload)) { throw new RuntimeException('Cannot record the native payment audit'); }
+			$this->failureStage = 'commit';
 			if (!$this->db->commit()) { throw new RuntimeException('The native payment commit was not confirmed; inspect its status before retrying'); }
+			$this->failureStage = 'complete';
 			return array('type'=>$type,'id'=>$id,'payment_id'=>$paymentId,'native_bank_line_id'=>$after['native_bank_line_id']);
 		} catch (Throwable $error) { $this->db->rollback(); throw $error; }
 	}
@@ -322,9 +341,12 @@ final class KreaBankPlannedPayment
 		$sum = KreaBankPaymentBatchDecimal::sum(array_column($rows,'amount_decimal'));
 		if (count($parents) !== 1 || (int) $parents[0]['paye'] !== 1 || KreaBankPaymentBatchDecimal::normalize($parents[0]['amount_decimal']) !== $sum) { throw new RuntimeException('The native paid-document lifecycle did not preserve the exact remaining balance'); }
 		$bank = $this->rows("SELECT b.*,CAST(b.amount AS DECIMAL(24,8)) AS amount_decimal FROM {$p}bank b JOIN {$p}bank_account a ON a.rowid=b.fk_account AND a.entity=" . $this->entity . " WHERE b.rowid=$bankId FOR UPDATE");
+		// Native Account::addline()/AccountLine::insert() store NULL for the falsy
+		// optional references '' and '0'; the payment itself retains the exact text.
+		$bankReference = $reference === '0' ? '' : $reference;
 		if (count($bank) !== 1 || (int) $bank[0]['fk_account'] !== $context['source']['bank_account_id'] || (int) $bank[0]['rappro'] !== 0
 			|| KreaBankPaymentBatchDecimal::normalize($bank[0]['amount_decimal']) !== $context['source']['amount']
-			|| substr($bank[0]['dateo'],0,10) !== $context['booking_date'] || $bank[0]['num_chq'] !== $reference || $bank[0]['fk_type'] !== $modeCode) { throw new RuntimeException('The native bank movement differs from the reviewed statement'); }
+			|| substr($bank[0]['dateo'],0,10) !== $context['booking_date'] || (string) ($bank[0]['num_chq'] ?? '') !== $bankReference || $bank[0]['fk_type'] !== $modeCode) { throw new RuntimeException('The native bank movement differs from the reviewed statement'); }
 		$links = $this->rows("SELECT type,url_id FROM {$p}bank_url WHERE fk_bank=$bankId ORDER BY rowid FOR UPDATE");
 		$paymentLinks = array_filter($links,static function ($row) use ($nativeType,$paymentId) { return $row['type'] === $nativeType && (int) $row['url_id'] === $paymentId; });
 		if (count($paymentLinks) !== 1 || $this->source($context['source']['rowid'],true) !== $context['source']) { throw new RuntimeException('Native linkage or pending source evidence changed'); }
