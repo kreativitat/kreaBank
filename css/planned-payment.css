@@ -1,0 +1,14 @@
+/* Native payment controls, stacked inside narrow dialog iframes. */
+@media (max-width: 480px) {
+	#kb-wl-payment-form .kb-wl-payment-evidence { table-layout: fixed; }
+	#kb-wl-payment-form .kb-wl-payment-evidence td { width: 50%; overflow-wrap: anywhere; }
+	#kb-wl-payment-form .kb-wl-payment-fields,
+	#kb-wl-payment-form .kb-wl-payment-fields tbody,
+	#kb-wl-payment-form .kb-wl-payment-fields tr,
+	#kb-wl-payment-form .kb-wl-payment-fields td { display: block; width: 100% !important; box-sizing: border-box; }
+	#kb-wl-payment-form .kb-wl-payment-fields .titlefield { padding-bottom: 0; }
+	#kb-wl-payment-form .kb-wl-payment-fields input,
+	#kb-wl-payment-form .kb-wl-payment-fields textarea,
+	#kb-wl-payment-form .kb-wl-payment-fields select,
+	#kb-wl-payment-form .kb-wl-payment-fields .select2-container { width: 100% !important; min-width: 0 !important; max-width: 100%; box-sizing: border-box; }
+}

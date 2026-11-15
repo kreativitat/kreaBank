@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.55 — 2026-11-15
+
+- Stack native salary/tax payment fields inside narrow dialog frames and keep controls within the visible width. Preserve the desktop layout and cancellation behavior.
+- Use an empty native payment-method placeholder so browser validation requires a real selection; Cancel continues to close without submission.
+
 ## 1.20.54 — 2026-11-15
 
 - Suggest existing unpaid salary and tax records in the reconciliation list with the same Record payment control as invoices. Require exact remaining balance, complete identity, bounded dates and current native visibility; never add salary advice to unattended or bulk matching.

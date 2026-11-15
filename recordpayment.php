@@ -61,7 +61,7 @@ try {
 	$error = $post && !GETPOSTISSET('cancel') ? 'KreaBankWorklistPaymentFailed' : 'KreaBankWorklistChanged';
 	dol_syslog('KreaBank reviewed payment refused: ' . get_class($exception),LOG_WARNING);
 }
-llxHeader('', $translate('KreaBankWorklistRecordPayment'));
+llxHeader('', $translate('KreaBankWorklistRecordPayment'),'','','','',array(),array('/custom/kreabank/css/planned-payment.css'));
 print load_fiche_titre($translate('KreaBankWorklistRecordPayment'),'','payment');
 if ($cancelled) { $closePopup(); }
 elseif ($receipt) {
@@ -77,13 +77,13 @@ elseif ($receipt) {
 		$modes[(int) $mode['id']] = $label !== 'PaymentType' . $mode['code'] ? $label : $mode['label'];
 	}
 	$e = 'kreabankWorklistEscape';
-	print '<form method="post" action="' . $e(dol_buildpath('/custom/kreabank/recordpayment.php',1)) . '">';
+	print '<form id="kb-wl-payment-form" method="post" action="' . $e(dol_buildpath('/custom/kreabank/recordpayment.php',1)) . '">';
 	print kreabankWorklistFields(array('token'=>newToken(),'action'=>'add_payment','review'=>$review,'type'=>$context['type'],'id'=>$context['id'],
 		'dol_hide_topmenu'=>1,'dol_hide_leftmenu'=>1,'dol_openinpopup'=>$popup));
 	print kreabankPlannedPaymentEvidence($context,$langs);
-	print '<div class="fichecenter"><table class="border centpercent">';
+	print '<div class="fichecenter"><table class="border centpercent kb-wl-payment-fields">';
 	print '<tr><td class="titlefield fieldrequired"><label for="paiementtype">' . $e($translate('PaymentMode')) . '</label></td><td>'
-		. str_replace('<select ','<select required ',$form->selectarray('paiementtype',$modes,$context['payment_mode_id'] ?? '',1)) . '</td></tr>';
+		. str_replace(array('<select ','value="-1"'),array('<select required ','value=""'),$form->selectarray('paiementtype',$modes,$context['payment_mode_id'] ?? '',1)) . '</td></tr>';
 	print '<tr><td><label for="num_payment">' . $e($translate('Numero')) . '</label></td><td><input type="text" class="flat maxwidth300" id="num_payment" name="num_payment" maxlength="50"></td></tr>';
 	print '<tr><td><label for="note">' . $e($translate('Comments')) . '</label></td><td><textarea class="flat centpercent" id="note" name="note" rows="3" maxlength="1000"></textarea></td></tr></table></div>';
 	print '<p class="opacitymedium">' . $e($translate('KreaBankWorklistPaymentSeparate')) . '</p>';

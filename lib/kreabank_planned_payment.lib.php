@@ -48,7 +48,7 @@ function kreabankPlannedPaymentEvidence($context, $langs)
 		kreabankWorklistTranslate($langs,'Date')=>kreabankWorklistDate($context['booking_date']),
 		kreabankWorklistTranslate($langs,'BankAccount')=>$context['source']['bank_account_ref'],
 	);
-	$html = '<div class="fichecenter"><table class="border centpercent">';
+	$html = '<div class="fichecenter"><table class="border centpercent kb-wl-payment-evidence">';
 	foreach ($rows as $label=>$value) { $html .= '<tr><td class="titlefield">' . $e($label) . '</td><td>' . $e($value) . '</td></tr>'; }
 	foreach (array('KreaBankWorklistRemaining'=>$context['remaining'],'Amount'=>$context['amount']) as $label=>$amount) {
 		$html .= '<tr><td class="titlefield">' . $e(kreabankWorklistTranslate($langs,$label)) . '</td><td>' . kreabankWorklistMoney($amount,$context['currency']) . '</td></tr>';
