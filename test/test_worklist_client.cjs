@@ -308,6 +308,8 @@ async function navigationBrowserChecks() {
     page.setDefaultTimeout(5000);
     const errors = [];
     const posts = [];
+    const nativePosts = [];
+    let nativeListVisits = 0;
     const paymentRefreshes = [];
     const removed = new Set();
     let draft = '';
@@ -355,12 +357,21 @@ async function navigationBrowserChecks() {
         }
         html += '</tbody></table></div></form>' + forms;
         if (input.has('scan') && !analysed) html += '<div class="kb-wl-scan" data-page-ready="0" data-ready="Ready" data-failed="Failed" data-changed="Changed" data-paused="Paused"><span data-kb-scan-message>Analysing</span><span data-kb-scan-count>0 / 24</span></div><form data-kb-scan method="post" action="' + app + '?scan=1"><input name="action" value="advance_scan"><input name="scan_generation" value="fixture-generation"><input name="scan_cursor" value="0"><button type="submit">Continue analysis</button></form>';
-        const nativePopup = () => document.querySelectorAll('a.kb-wl-record-payment').forEach(opener=>opener.addEventListener('click',event=>{
+        const nativePopup = () => {
+            window.fixtureClosedDialogs=[];
+            window.jQuery=element=>({dialog(action){
+                if(action!=='close'||!element.matches('dialog.fixture-native-payment'))throw Error('Unexpected native dialog operation');
+                window.fixtureClosedDialogs.push(element.id);element.close();
+            }});
+            document.querySelectorAll('a.kb-wl-record-payment').forEach(opener=>opener.addEventListener('click',event=>{
             event.preventDefault(); event.stopPropagation();
             const wrapper=opener.closest('[data-kb-payment-popup]');
             const dialog=document.createElement('dialog');
+            const name='kbwlpay'+Number(wrapper.dataset.lineKey.split(':')[1]).toString(16).padStart(16,'0');
+            dialog.id='idfordialog'+name;
+            wrapper.dataset.kbPaymentFrame='iframedialog'+name;
             dialog.className='fixture-native-payment';
-            dialog.innerHTML='<iframe title="Synthetic native payment" src="/native-payment.php"></iframe><button type="button">Cancel payment</button><button type="button">Close payment</button>';
+            dialog.innerHTML='<iframe id="iframedialog'+name+'" title="Synthetic native payment" src="/native-payment.php"></iframe><button type="button">Cancel payment</button><button type="button">Close payment</button>';
             dialog.querySelectorAll('button').forEach(button=>button.addEventListener('click',()=>dialog.close()));
             dialog.addEventListener('close',()=>{
                 dialog.remove();
@@ -368,14 +379,25 @@ async function navigationBrowserChecks() {
                 if(window.fixtureDuplicateClose) wrapper.dispatchEvent(new Event('kb-worklist-payment-close',{bubbles:true}));
             });
             document.body.append(dialog); dialog.showModal();
-        }));
+            }));
+        };
         return html + '</div><div class="bottom"></div><script>' + script + '</script><script>(' + nativePopup.toString() + ')();</script>';
     };
     const server = http.createServer(async (request, response) => {
         const url = new URL(request.url,app);
-        if (request.method==='GET' && url.pathname==='/native-payment.php') {
+        if (url.pathname==='/native-payment.php') {
+            if(request.method==='POST') {
+                let body='';for await(const chunk of request)body+=chunk;
+                const fields=Object.fromEntries(new URLSearchParams(body));nativePosts.push(fields);
+                if(Object.hasOwn(fields,'cancel')) { response.writeHead(303,{Location:'/supplier-invoice-list.php'});response.end();return; }
+            }
             response.writeHead(200,{'Content-Type':'text/html'});
-            response.end('<!doctype html><title>Synthetic native payment</title><p>Read-only payment fixture; no payment can be submitted.</p>'); return;
+            response.end('<!doctype html><title>Synthetic native payment</title><p>Synthetic payment form; no ERP connection.</p>'
+                +(request.method==='POST'?'<p>Synthetic POST attempt recorded.</p>':'')
+                +'<form method="post" action="/native-payment.php"><input type="hidden" name="action" value="add_paiement"><input aria-label="Required reference" name="required_reference" required value="SYNTHETIC"><button type="submit" name="save" value="1">Attempt payment</button><input type="submit" name="cancel" value="Native Cancel"></form>');return;
+        }
+        if(url.pathname==='/supplier-invoice-list.php') {
+            nativeListVisits++;response.writeHead(200,{'Content-Type':'text/html'});response.end('<p>Synthetic native invoice list after a Cancel POST.</p>');return;
         }
         if (url.pathname !== new URL(app).pathname) { response.writeHead(404); response.end(); return; }
         if (request.method === 'POST') {
@@ -514,24 +536,95 @@ async function navigationBrowserChecks() {
         const bankOpener = page.getByRole('button',{name:'Correct 13',exact:true});
         await bankOpener.click(); await page.keyboard.press('Escape');
         assert.equal(await bankOpener.evaluate(button=>document.activeElement===button),true); count++;
-        for (const close of ['Cancel payment','Close payment']) {
+        for (const close of ['Native Cancel','Cancel payment','Close payment','Escape']) {
             await page.goto(app+'?search_account=101&search_description=Keep+these+filters&search_status=all');
             await place(13);
             before = await offset(13);
             const refreshCount = paymentRefreshes.length;
+            const nativePostCount = nativePosts.length;
+            const scanCount = scanRequests;
             const opener = page.getByRole('link',{name:'Record payment 13',exact:true});
             await opener.focus(); await opener.press('Enter');
-            await page.frameLocator('iframe[title="Synthetic native payment"]').getByText('Read-only payment fixture; no payment can be submitted.').waitFor();
+            await page.frameLocator('iframe[title="Synthetic native payment"]').getByText('Synthetic payment form; no ERP connection.').waitFor();
             assert.equal(await page.locator('.fixture-native-payment').isVisible(),true,'A native return-false opener still activates the capture handler'); count++;
             assert.equal(await page.evaluate(key=>sessionStorage.getItem(key),storageKey),null,'Opening does not leave stale reload state'); count++;
             if (close==='Close payment') await page.evaluate(()=>{window.fixtureDuplicateClose=true;});
-            await page.getByRole('button',{name:close,exact:true}).click(); await page.waitForTimeout(100);
+            if(close==='Native Cancel')await page.frameLocator('iframe[title="Synthetic native payment"]').getByRole('button',{name:close,exact:true}).click();
+            else if(close==='Escape'){await page.getByRole('button',{name:'Close payment',exact:true}).focus();await page.keyboard.press('Escape');}
+            else await page.getByRole('button',{name:close,exact:true}).click();
+            await page.waitForTimeout(100);
+            assert.equal(await page.locator('.fixture-native-payment').count(),0,close+': native cancellation closes the payment dialog');count++;
             await sameOffset(13,before,'Native payment cancellation stays at the source row');
             assert.equal(await opener.evaluate(link=>document.activeElement===link),true,'Payment refresh returns focus to its native opener'); count++;
             const target = new URL(page.url());
             assert.deepEqual([target.searchParams.get('refresh_payment'),target.searchParams.get('search_account'),target.searchParams.get('search_description'),target.searchParams.get('search_status')],[null,'101','Keep these filters','all']); count++;
             assert.equal(paymentRefreshes.length,refreshCount,'Cancellation and duplicate native close callbacks cause no refresh'); count++;
+            assert.equal(nativePosts.length,nativePostCount,'Native submit Cancel never sends its form POST');count++;
+            assert.equal(nativeListVisits,0,'Cancellation never navigates to the native invoice list inside the dialog');count++;
+            assert.equal(scanRequests,scanCount,'Payment cancellation never restarts the scan');count++;
+            if(close==='Native Cancel') { assert.deepEqual(await page.evaluate(()=>window.fixtureClosedDialogs),['idfordialogkbwlpay000000000000000d'],'The established native API closes the exact iframe-owned dialog');count++; }
         }
+
+        // An earlier genuine POST has an unknown outcome; later Cancel must retain one refresh.
+        await page.goto(app+'?search_account=101&search_description=Keep+these+filters&search_status=all');
+        await place(13);before=await offset(13);
+        let refreshCount=paymentRefreshes.length;
+        let nativePostCount=nativePosts.length;
+        await page.getByRole('link',{name:'Record payment 13',exact:true}).click();
+        const nativeFrame=page.frameLocator('iframe[title="Synthetic native payment"]');
+        await nativeFrame.getByRole('button',{name:'Attempt payment',exact:true}).click();
+        await nativeFrame.getByText('Synthetic POST attempt recorded.').waitFor();
+        assert.equal(nativePosts.length,nativePostCount+1);count++;
+        await page.evaluate(()=>{window.fixtureDuplicateClose=true;});
+        await cycle(()=>nativeFrame.getByRole('button',{name:'Native Cancel',exact:true}).click());
+        assert.equal(paymentRefreshes.length,refreshCount+1,'Cancel after an actual POST refreshes exactly once despite duplicate close callbacks');count++;
+        assert.equal(nativePosts.length,nativePostCount+1,'Later Cancel never adds a second native POST');count++;
+        assert.equal(nativeListVisits,0);count++;
+        await sameOffset(13,before,'The owned refresh after a prior attempt retains the statement row');
+
+        await page.goto(app);await place(13);
+        refreshCount=paymentRefreshes.length;nativePostCount=nativePosts.length;
+        await page.getByRole('link',{name:'Record payment 13',exact:true}).click();
+        const preventedFrame=page.frameLocator('iframe[title="Synthetic native payment"]');
+        await preventedFrame.getByText('Synthetic payment form; no ERP connection.').waitFor();
+        await preventedFrame.locator('form').evaluate(form=>form.addEventListener('submit',event=>{if(event.submitter.name==='save')event.preventDefault();}));
+        await preventedFrame.getByRole('button',{name:'Attempt payment',exact:true}).click();
+        await preventedFrame.getByRole('button',{name:'Attempt payment',exact:true}).click();
+        await preventedFrame.getByRole('button',{name:'Native Cancel',exact:true}).click();
+        await page.waitForTimeout(100);
+        assert.equal(nativePosts.length,nativePostCount,'Two native validation-prevented submits followed by Cancel send no POST');count++;
+        assert.equal(paymentRefreshes.length,refreshCount,'Two validation-prevented submits followed by Cancel cause no refresh');count++;
+        assert.equal(await page.locator('.fixture-native-payment').count(),0);count++;
+
+        await page.goto(app);await place(13);
+        refreshCount=paymentRefreshes.length;nativePostCount=nativePosts.length;
+        const invalidScanCount=scanRequests;
+        const invalidOpener=page.getByRole('link',{name:'Record payment 13',exact:true});
+        await invalidOpener.click();
+        const invalidFrame=page.frameLocator('iframe[title="Synthetic native payment"]');
+        await invalidFrame.getByRole('textbox',{name:'Required reference',exact:true}).fill('');
+        assert.equal(await invalidFrame.locator('form').evaluate(form=>form.checkValidity()),false,'Required-invalid native form is reproduced');count++;
+        await invalidFrame.getByRole('button',{name:'Native Cancel',exact:true}).click();
+        await page.waitForTimeout(100);
+        assert.equal(await page.locator('.fixture-native-payment').count(),0,'Required fields cannot block native Cancel from closing');count++;
+        assert.equal(nativePosts.length,nativePostCount,'Required-invalid Cancel sends no native POST');count++;
+        assert.equal(paymentRefreshes.length,refreshCount,'Required-invalid Cancel causes no row refresh');count++;
+        assert.equal(scanRequests,invalidScanCount,'Required-invalid Cancel starts no scan');count++;
+        assert.equal(await invalidOpener.evaluate(link=>document.activeElement===link),true,'Required-invalid Cancel restores opener focus');count++;
+
+        await page.goto(app);await place(13);
+        refreshCount=paymentRefreshes.length;nativePostCount=nativePosts.length;
+        await page.getByRole('link',{name:'Record payment 13',exact:true}).click();
+        const immediateFrame=page.frameLocator('iframe[title="Synthetic native payment"]');
+        await immediateFrame.getByText('Synthetic payment form; no ERP connection.').waitFor();
+        await immediateFrame.locator('form').evaluate(form=>form.addEventListener('submit',event=>{
+            event.preventDefault();window.parent.jQuery(window.frameElement.parentElement).dialog('close');
+        }));
+        await immediateFrame.getByRole('button',{name:'Attempt payment',exact:true}).click();
+        await page.waitForTimeout(100);
+        assert.equal(nativePosts.length,nativePostCount,'A bubbling validation handler can prevent and immediately close without a POST');count++;
+        assert.equal(paymentRefreshes.length,refreshCount,'A prevented submit immediately closing the dialog causes no refresh');count++;
+        assert.equal(await page.locator('.fixture-native-payment').count(),0);count++;
         await page.setViewportSize({width:500,height:900});
         await place(13);
         await page.locator('.div-table-responsive').evaluate(wrapper=>{wrapper.scrollLeft=350;});
@@ -552,7 +645,8 @@ async function navigationBrowserChecks() {
             assert.equal(page.url(),app,'Unsafe or mismatched popup refresh targets are rejected'); count++;
             assert.equal(paymentRefreshes.length,refreshCount); count++;
         }
-        assert.equal(posts.length,3,'The iframe lifecycle never submits a payment'); count++;
+        assert.equal(posts.length,3,'The payment-dialog lifecycle never submits list financial actions'); count++;
+        assert.equal(nativePosts.length,1,'Only the explicit synthetic native attempt posts; cancellation paths send none');count++;
 
         await page.goto(app);
         await page.getByRole('combobox',{name:'Account',exact:true}).selectOption('101');
@@ -601,7 +695,7 @@ async function navigationBrowserChecks() {
         assert.deepEqual(errors,[]); count++;
         console.log('OK: '+count+' isolated Chromium row navigation checks (synthetic routes only)');
     } catch (error) {
-        console.error({url:page.url(),posts,errors,body:(await page.locator('body').innerText().catch(()=>'' )).slice(0,300)});
+        console.error({url:page.url(),posts,nativePosts,nativeListVisits,errors,closedDialogs:await page.evaluate(()=>window.fixtureClosedDialogs),body:(await page.locator('body').innerText().catch(()=>'' )).slice(0,300)});
         throw error;
     } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
 }

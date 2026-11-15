@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.60 — 2026-11-15
+
+- Close native invoice payment Cancel directly inside the list dialog without posting the cancel form or navigating to the supplier list in the iframe. Keep genuine prior payment-attempt refresh separate; closing an untouched dialog never restarts analysis.
+- Bind the payment watcher after native iframe creation and retain final validation evidence for each attempted submit. Invalid required fields cannot block Cancel; prevented attempts never cause a refresh or erase a genuine earlier attempt.
+
 ## 1.20.59 — 2026-11-15
 
 - Show identity-supported invoice, salary and tax payments recorded in another owned bank with a warning beside the editable bank reference. Reuse the reviewed correction dialog and preserve native payment allocations, accounting and reconciliation locks.

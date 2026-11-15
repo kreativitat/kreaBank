@@ -238,12 +238,13 @@
             const opener = event.target.closest && event.target.closest('a.kb-wl-record-payment');
             const popup = opener && opener.closest('[data-kb-payment-popup]');
             if (!popup || !root.contains(popup) || !/^(staged|native):[1-9]\d*$/.test(popup.dataset.lineKey)) return;
-            const state = {refresh:navigation.capture(popup, opener, true), submitted:false, opener, cleanup:[], documents:new WeakSet()};
+            const state = {refresh:navigation.capture(popup, opener, true), submitted:false, submissions:[], opener, cleanup:[], documents:new WeakSet()};
             paymentReturns.set(popup, state);
             paymentRefreshPending = true;
             pausePaymentAnalysis();
-            // The native handler creates/reparents its iframe while the click bubbles.
-            queueMicrotask(() => {
+            // Native click handlers create the iframe after capture; trusted events can
+            // run a microtask checkpoint between listeners, so bind in the next task.
+            const bindingTimer = setTimeout(() => {
                 const frame = document.getElementById(popup.dataset.kbPaymentFrame);
                 if (!frame || paymentReturns.get(popup) !== state) return;
                 const watch = () => {
@@ -251,21 +252,44 @@
                     try { doc = frame.contentDocument; } catch (_) { return; }
                     if (!doc || state.documents.has(doc)) return;
                     state.documents.add(doc);
+                    const paymentForm = form => form && String(form.method).toLowerCase() === 'post'
+                        && form.elements.action && ['add_paiement','confirm_paiement','add_payment'].includes(form.elements.action.value);
+                    const cancel = event => {
+                        event.preventDefault();
+                        const name = /^iframedialog(kbwlpay[a-f0-9]{16})$/.exec(frame.id);
+                        const dialog = name && document.getElementById('idfordialog' + name[1]);
+                        if (dialog && dialog.contains(frame) && typeof window.jQuery === 'function') {
+                            const nativeDialog = window.jQuery(dialog);
+                            if (nativeDialog && typeof nativeDialog.dialog === 'function') nativeDialog.dialog('close');
+                        }
+                    };
+                    const clicked = event => {
+                        const control = event.target.closest && event.target.closest('input[name="cancel"],button[name="cancel"]');
+                        // Cancel must close even when HTML required fields would block submit.
+                        if (control && control.type === 'submit' && paymentForm(control.form)) cancel(event);
+                    };
                     const submitted = event => {
                         const form = event.target;
-                        if (String(form.method).toLowerCase() !== 'post' || event.submitter && event.submitter.name === 'cancel'
-                            || !form.elements.action || !['add_paiement','confirm_paiement','add_payment'].includes(form.elements.action.value)) return;
-                        const previous = state.submitted;
+                        if (!paymentForm(form)) return;
+                        if (event.submitter && event.submitter.name === 'cancel') {
+                            // Native supplier Cancel is a submit input; keep it out of the POST lifecycle.
+                            cancel(event);
+                            // A prior genuine write attempt still needs its single row refresh on close.
+                            return;
+                        }
+                        state.submissions.push(event);
                         state.submitted = true;
-                        queueMicrotask(() => { if (event.defaultPrevented) state.submitted = previous; });
                     };
+                    doc.addEventListener('click', clicked, true);
                     doc.addEventListener('submit', submitted, true);
+                    state.cleanup.push(() => doc.removeEventListener('click', clicked, true));
                     state.cleanup.push(() => doc.removeEventListener('submit', submitted, true));
                 };
                 frame.addEventListener('load', watch);
                 state.cleanup.push(() => frame.removeEventListener('load', watch));
                 watch();
-            });
+            }, 0);
+            state.cleanup.push(() => clearTimeout(bindingTimer));
         }, true);
         root.addEventListener('kb-worklist-payment-close', event => {
             const popup = event.target.closest && event.target.closest('[data-kb-payment-popup]');
@@ -276,6 +300,9 @@
             paymentRefreshPending = false;
             pausePaymentAnalysis();
             if (state.opener.isConnected) state.opener.focus({preventScroll:true});
+            // Read final native validation flags at close; prevented events must never
+            // erase another genuine attempt, regardless of capture/bubble ordering.
+            state.submitted = state.submissions.some(submission => !submission.defaultPrevented);
             // X, Escape and native Cancel return to the unchanged list. No request or scan.
             if (!state.submitted) return;
             let url;
