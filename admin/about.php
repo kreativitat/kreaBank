@@ -112,46 +112,40 @@ dol_include_once('/kreabank/core/modules/modKreaBank.class.php');
 $tmpmodule = new modKreaBank($db);
 
 // Organized about block
-$logoUrl = dol_buildpath('/custom/kreaproducts/img/logo.png', 1);
+$logoUrl = dol_buildpath('/kreabank/img/logo.png', 1);
 $moduleName = $tmpmodule->getName();
 $moduleVersion = $tmpmodule->getVersion();
 $editorName = $tmpmodule->editor_name;
 $editorUrl = $tmpmodule->editor_url;
 $supportEmail = 'mail@kreativitat.com';
 $transWithFallback = static function ($key, $fallback) use ($langs) {
-	$translated = $langs->trans($key);
+	$translated = $langs->transnoentities($key);
 	return ($translated !== $key) ? $translated : $fallback;
 };
 
-$aboutWhatText = $transWithFallback(
-	'KreaBankAboutWhatText',
-	'KreaBank is a bank reconciliation workspace for Dolibarr. It imports statements, keeps a staging layer for review, and guides users through safe reconciliation against native bank, payment, invoice, and accounting objects.'
-);
-$aboutFriendlyPurposeText = $transWithFallback(
-	'KreaBankAboutFriendlyPurposeText',
-	'In simple terms, KreaBank helps you take a bank statement, find what each line belongs to in Dolibarr, and either reconcile it, keep it pending, or create the missing accounting flow.'
-);
-$aboutPurposeText = $transWithFallback(
-	'KreaBankAboutPurposeText',
-	'Use it when bank files arrive in different layouts and the finance team needs controlled reconciliation, pending queues, quick-entry flows, and auditability without bypassing Dolibarr native bank data.'
-);
-$aboutCapabilities = array(
-	$transWithFallback('KreaBankAboutCapabilityImport', 'Import and map CSV, XLS, XLSX, OFX, MT940, CAMT.053, Norma 43, and supported bank text exports.'),
-	$transWithFallback('KreaBankAboutCapabilityMatch', 'Suggest matching open documents and native bank entries with assisted dual-pane reconciliation and batch detection.'),
-	$transWithFallback('KreaBankAboutCapabilityQuickEntry', 'Create quick payment, tax, or supplier invoice flows directly from a statement line when the source document does not exist yet.'),
-	$transWithFallback('KreaBankAboutCapabilityAudit', 'Track pending lines, reconciliation history, and audit records for operational follow-up and control.'),
-);
+$aboutWhatText = $langs->transnoentities('KreaBankAboutWhatText');
+$aboutCapabilities = array();
+foreach (array(
+	'KreaBankAboutCapabilityImport',
+	'KreaBankAboutCapabilityMatch',
+	'KreaBankAboutCapabilityQuickEntry',
+	'KreaBankAboutCapabilityMonthly',
+	'KreaBankAboutCapabilityAudit',
+	'KreaBankAboutCapabilityFeed',
+	'KreaBankAboutCapabilityTransfer',
+) as $key) {
+	$aboutCapabilities[] = $langs->transnoentities($key);
+}
 
 print '<div class="fichecenter" style="margin-top: 18px;">';
 print '<table class="border centpercent tableforfield">';
 print '<tr><td class="titlefield">' . dol_escape_htmltag($transWithFallback('KreaBankAboutWhatTitle', 'What This Module Does')) . '</td><td>' . dol_escape_htmltag($aboutWhatText) . '</td></tr>';
-print '<tr><td class="titlefield">' . dol_escape_htmltag($transWithFallback('KreaBankAboutFriendlyPurposeTitle', 'Purpose In Plain Language')) . '</td><td>' . dol_escape_htmltag($aboutFriendlyPurposeText) . '</td></tr>';
-print '<tr><td class="titlefield">' . dol_escape_htmltag($transWithFallback('KreaBankAboutPurposeTitle', 'What It Is For')) . '</td><td>' . dol_escape_htmltag($aboutPurposeText) . '</td></tr>';
 print '<tr><td class="titlefield">' . dol_escape_htmltag($transWithFallback('KreaBankAboutCapabilitiesTitle', 'Main Capabilities')) . '</td><td><ul class="marginleftonly">';
 foreach ($aboutCapabilities as $capability) {
 	print '<li>' . dol_escape_htmltag($capability) . '</li>';
 }
 print '</ul></td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankAboutDocumentation') . '</td><td><a href="https://github.com/kreativitat/kreaBank#readme" target="_blank" rel="noopener noreferrer">' . $langs->trans('KreaBankAboutReadme') . '</a> · <a href="https://github.com/kreativitat/kreaBank/blob/main/doc/RELEASES.md" target="_blank" rel="noopener noreferrer">' . $langs->trans('KreaBankAboutReleaseNotes') . '</a></td></tr>';
 print '</table>';
 print '</div>';
 

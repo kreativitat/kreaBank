@@ -23,6 +23,7 @@ class NavigationTestLangs
 	public function load($file) {}
 	public function loadLangs($files) {}
 	public function trans($key) { return $key; }
+	public function transnoentities($key, ...$params) { return $key; }
 }
 class NavigationTestDb
 {

@@ -158,17 +158,8 @@ $item->fieldAttr['max'] = '200';
 $item->helpText = $langs->trans('KreaBankBatchMinCoveragePctHelp');
 
 $item = $formSetup->newItem('KREABANK_BATCH_HINT_KEYWORDS');
-$batchHintLabel = $langs->trans('KREABANK_BATCH_HINT_KEYWORDS');
-if ($batchHintLabel === 'KREABANK_BATCH_HINT_KEYWORDS') {
-	$batchHintLabel = 'Palavras-chave para deteccao de lote (separadas por virgula)';
-}
-$batchHintHelp = $langs->trans('KreaBankBatchHintKeywordsHelp');
-if ($batchHintHelp === 'KreaBankBatchHintKeywordsHelp') {
-	$batchHintHelp = 'Palavras-chave separadas por virgula pesquisadas no texto da linha para sugerir modo lote (exemplo: LOTE, SALARIO, FOLHA).';
-}
-$item->nameText = $batchHintLabel;
 $item->fieldAttr['placeholder'] = 'LOTE, SALARIO, FOLHA';
-$item->helpText = $batchHintHelp;
+$item->helpText = $langs->trans('KreaBankBatchHintKeywordsHelp');
 
 $item = $formSetup->newItem('KREABANK_BATCH_ML_ENABLED')->setAsYesNo();
 $item->helpText = $langs->trans('KreaBankBatchMlEnabledHelp');
@@ -176,14 +167,14 @@ if (!$mlRuntimeSupported) {
 	$item->helpText .= ' ' . $langs->trans('KreaBankMlRequiresPhp8Help', PHP_VERSION);
 }
 
-$item = $formSetup->newItem('KREABANK_BATCH_ML_CLASSIFIER')->setAsSelect(array(
-	'knn' => 'KNN',
-	'naive_bayes' => 'Naive Bayes',
-	'decision_tree' => 'Decision Tree',
-	'random_forest' => 'Random Forest',
-));
-$item->nameText = 'Batch ML classifier algorithm';
-$item->helpText = 'Select the classifier family used for batch prediction training and inference.';
+$classifierLabels = array(
+	'knn' => $langs->transnoentities('KreaBankClassifierKnn'),
+	'naive_bayes' => $langs->transnoentities('KreaBankClassifierNaiveBayes'),
+	'decision_tree' => $langs->transnoentities('KreaBankClassifierDecisionTree'),
+	'random_forest' => $langs->transnoentities('KreaBankClassifierRandomForest'),
+);
+$item = $formSetup->newItem('KREABANK_BATCH_ML_CLASSIFIER')->setAsSelect($classifierLabels);
+$item->helpText = $langs->trans('KreaBankBatchMlClassifierHelp');
 
 $item = $formSetup->newItem('KREABANK_BATCH_ML_AUTO_THRESHOLD');
 $item->fieldAttr['type'] = 'number';
@@ -237,22 +228,19 @@ $item = $formSetup->newItem('KREABANK_BULKMATCH_SCAN_CACHE_TTL');
 $item->fieldAttr['type'] = 'number';
 $item->fieldAttr['min'] = '30';
 $item->fieldAttr['max'] = '3600';
-$item->nameText = 'Bulk scan cache TTL (seconds)';
-$item->helpText = 'How long partial/full bulk scan cache stays valid for current entity and user.';
+$item->helpText = $langs->trans('KreaBankBulkScanCacheHelp');
 
 $item = $formSetup->newItem('KREABANK_BULKMATCH_SCAN_CHUNK_SIZE');
 $item->fieldAttr['type'] = 'number';
 $item->fieldAttr['min'] = '20';
 $item->fieldAttr['max'] = '2000';
-$item->nameText = 'Bulk scan chunk size';
-$item->helpText = 'Number of pending lines loaded per scan chunk request.';
+$item->helpText = $langs->trans('KreaBankBulkScanChunkHelp');
 
 $item = $formSetup->newItem('KREABANK_BULKMATCH_SCAN_REQUEST_BUDGET_MS');
 $item->fieldAttr['type'] = 'number';
 $item->fieldAttr['min'] = '200';
 $item->fieldAttr['max'] = '10000';
-$item->nameText = 'Bulk scan request budget (ms)';
-$item->helpText = 'Maximum scanning time per HTTP request before returning partial progress.';
+$item->helpText = $langs->trans('KreaBankBulkScanBudgetHelp');
 
 $formSetup->newItem('KreaBankImportTitle')->setAsTitle();
 $formSetup->newItem('KREABANK_DEFAULT_IMPORT_DELIMITER')->setAsSelect(array(
@@ -281,8 +269,7 @@ $item = $formSetup->newItem('KREABANK_AUDIT_RETENTION_DAYS');
 $item->fieldAttr['type'] = 'number';
 $item->fieldAttr['min'] = '1';
 $item->fieldAttr['max'] = '3650';
-$item->nameText = 'Audit retention (days)';
-$item->helpText = 'Reconciliation audit rows older than this window are eligible for manual purge.';
+$item->helpText = $langs->trans('KreaBankAuditRetentionHelp');
 
 if (versioncompare(explode('.', DOL_VERSION), array(15)) < 0 && $action == 'update' && !empty($user->admin)) {
 	$formSetup->saveConfFromPost();
@@ -294,9 +281,9 @@ if ($action === 'purge_audit_retention' && $_SERVER['REQUEST_METHOD'] === 'POST'
 	}
 	try {
 		$deletedRows = (int) $service->purgeAuditRowsOlderThanRetention();
-		setEventMessages('Audit purge completed. Deleted rows: ' . $deletedRows, null, 'mesgs');
+		setEventMessages($langs->trans('KreaBankAuditPurgeDone', $deletedRows), null, 'mesgs');
 	} catch (Exception $e) {
-		setEventMessages('Audit purge failed: ' . $e->getMessage(), null, 'errors');
+		setEventMessages($langs->trans('KreaBankAuditPurgeFailed', $e->getMessage()), null, 'errors');
 	}
 }
 
@@ -323,45 +310,55 @@ if (!$mlRuntimeSupported) {
 }
 print $formSetup->generateOutput(true);
 
+$batchMlStatusKeys = array(
+	'disabled_by_setup_or_dependency' => 'KreaBankMlStatusDisabled',
+	'model_not_ready' => 'KreaBankMlStatusNotReady',
+	'class_coverage_insufficient' => 'KreaBankMlStatusCoverage',
+	'classifier_unavailable' => 'KreaBankMlStatusUnavailable',
+	'validation_train_failed' => 'KreaBankMlStatusTrainingFailed',
+	'validation_prediction_failed' => 'KreaBankMlStatusPredictionFailed',
+	'ok' => 'KreaBankDiagnosticOk',
+);
+
 print '<br><div class="fichecenter">';
 print '<table class="noborder centpercent">';
-print '<tr class="liste_titre"><th colspan="2">Batch ML validation (chronological holdout; duplicate groups excluded)</th></tr>';
-print '<tr><td class="titlefield">Classifier</td><td>' . dol_escape_htmltag((string) $batchMlValidationReport['classifier']) . '</td></tr>';
-print '<tr><td class="titlefield">Sample count</td><td>' . ((int) $batchMlValidationReport['sample_count']) . '</td></tr>';
-print '<tr><td class="titlefield">Train/Test split</td><td>' . ((int) $batchMlValidationReport['train_count']) . ' / ' . ((int) $batchMlValidationReport['test_count']) . '</td></tr>';
-print '<tr><td class="titlefield">Accuracy / Precision / Recall</td><td>' . kreabankPrice((float) $batchMlValidationReport['accuracy_pct']) . '% / ' . kreabankPrice((float) $batchMlValidationReport['precision_pct']) . '% / ' . kreabankPrice((float) $batchMlValidationReport['recall_pct']) . '%</td></tr>';
-print '<tr><td class="titlefield">Confusion matrix (TP/FP/TN/FN)</td><td>' . ((int) $batchMlValidationReport['confusion']['tp']) . ' / ' . ((int) $batchMlValidationReport['confusion']['fp']) . ' / ' . ((int) $batchMlValidationReport['confusion']['tn']) . ' / ' . ((int) $batchMlValidationReport['confusion']['fn']) . '</td></tr>';
-print '<tr><td class="titlefield">F1 / Balanced accuracy / Majority baseline</td><td>' . kreabankPrice($batchMlValidationReport['f1_pct']) . '% / ' . kreabankPrice($batchMlValidationReport['balanced_accuracy_pct']) . '% / ' . kreabankPrice($batchMlValidationReport['baseline_accuracy_pct']) . '%</td></tr>';
-print '<tr><td class="titlefield">Excluded legacy / Invalid samples / Duplicate training rows</td><td>' . ((int) $batchMlValidationReport['legacy_sample_count']) . ' / ' . ((int) $batchMlValidationReport['invalid_sample_count']) . ' / ' . ((int) $batchMlValidationReport['duplicate_train_count']) . '</td></tr>';
-print '<tr><td class="titlefield">Evaluated predictions / Prediction errors</td><td>' . ((int) $batchMlValidationReport['evaluated_count']) . ' / ' . ((int) $batchMlValidationReport['prediction_errors']) . '</td></tr>';
-print '<tr><td class="titlefield">Status</td><td>' . dol_escape_htmltag((string) $batchMlValidationReport['status']) . '</td></tr>';
+print '<tr class="liste_titre"><th colspan="2">' . $langs->trans('KreaBankMlValidationTitle') . '</th></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankSetupClassifier') . '</td><td>' . dol_escape_htmltag($classifierLabels[$batchMlValidationReport['classifier']] ?? (string) $batchMlValidationReport['classifier']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankMlSampleCount') . '</td><td>' . ((int) $batchMlValidationReport['sample_count']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankMlTrainTest') . '</td><td>' . ((int) $batchMlValidationReport['train_count']) . ' / ' . ((int) $batchMlValidationReport['test_count']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankMlMetrics') . '</td><td>' . kreabankPrice((float) $batchMlValidationReport['accuracy_pct']) . '% / ' . kreabankPrice((float) $batchMlValidationReport['precision_pct']) . '% / ' . kreabankPrice((float) $batchMlValidationReport['recall_pct']) . '%</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankMlConfusion') . '</td><td>' . ((int) $batchMlValidationReport['confusion']['tp']) . ' / ' . ((int) $batchMlValidationReport['confusion']['fp']) . ' / ' . ((int) $batchMlValidationReport['confusion']['tn']) . ' / ' . ((int) $batchMlValidationReport['confusion']['fn']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankMlAdditionalMetrics') . '</td><td>' . kreabankPrice($batchMlValidationReport['f1_pct']) . '% / ' . kreabankPrice($batchMlValidationReport['balanced_accuracy_pct']) . '% / ' . kreabankPrice($batchMlValidationReport['baseline_accuracy_pct']) . '%</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankMlExcludedSamples') . '</td><td>' . ((int) $batchMlValidationReport['legacy_sample_count']) . ' / ' . ((int) $batchMlValidationReport['invalid_sample_count']) . ' / ' . ((int) $batchMlValidationReport['duplicate_train_count']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankMlPredictions') . '</td><td>' . ((int) $batchMlValidationReport['evaluated_count']) . ' / ' . ((int) $batchMlValidationReport['prediction_errors']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankStatus') . '</td><td>' . (isset($batchMlStatusKeys[$batchMlValidationReport['status']]) ? $langs->trans($batchMlStatusKeys[$batchMlValidationReport['status']]) : dol_escape_htmltag((string) $batchMlValidationReport['status'])) . '</td></tr>';
 print '</table>';
 print '</div>';
 
 print '<br><div class="fichecenter">';
 print '<table class="noborder centpercent">';
-print '<tr class="liste_titre"><th colspan="2">Referential integrity diagnostics (entity ' . ((int) $integrityDiagnostics['entity']) . ')</th></tr>';
-print '<tr><td class="titlefield">Orphan staged lines</td><td>' . ((int) $integrityDiagnostics['orphan_statement_lines']) . '</td></tr>';
-print '<tr><td class="titlefield">Orphan statements</td><td>' . ((int) $integrityDiagnostics['orphan_statements']) . '</td></tr>';
-print '<tr><td class="titlefield">Orphan native bank metadata rows</td><td>' . ((int) $integrityDiagnostics['orphan_bankmeta_rows']) . '</td></tr>';
-print '<tr><td class="titlefield">Native metadata account mismatches</td><td>' . ((int) $integrityDiagnostics['bankmeta_account_mismatches']) . '</td></tr>';
-print '<tr><td class="titlefield">Status</td><td>' . (!empty($integrityDiagnostics['ok']) ? 'OK' : 'Issues detected') . '</td></tr>';
+print '<tr class="liste_titre"><th colspan="2">' . $langs->trans('KreaBankIntegrityTitle', (int) $integrityDiagnostics['entity']) . '</th></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankIntegrityOrphanLines') . '</td><td>' . ((int) $integrityDiagnostics['orphan_statement_lines']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankIntegrityOrphanStatements') . '</td><td>' . ((int) $integrityDiagnostics['orphan_statements']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankIntegrityOrphanMetadata') . '</td><td>' . ((int) $integrityDiagnostics['orphan_bankmeta_rows']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankIntegrityAccountMismatch') . '</td><td>' . ((int) $integrityDiagnostics['bankmeta_account_mismatches']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankStatus') . '</td><td>' . $langs->trans(!empty($integrityDiagnostics['ok']) ? 'KreaBankDiagnosticOk' : 'KreaBankDiagnosticIssues') . '</td></tr>';
 print '</table>';
 print '</div>';
 
 print '<br><div class="fichecenter">';
 print '<table class="noborder centpercent">';
-print '<tr class="liste_titre"><th colspan="2">Audit retention diagnostics (entity ' . ((int) $conf->entity) . ')</th></tr>';
-print '<tr><td class="titlefield">Retention days</td><td>' . ((int) $auditRetentionDiagnostics['retention_days']) . '</td></tr>';
-print '<tr><td class="titlefield">Cutoff date</td><td>' . dol_escape_htmltag((string) $auditRetentionDiagnostics['cutoff_date']) . '</td></tr>';
-print '<tr><td class="titlefield">Total audit rows</td><td>' . ((int) $auditRetentionDiagnostics['total_rows']) . '</td></tr>';
-print '<tr><td class="titlefield">Purgeable rows</td><td>' . ((int) $auditRetentionDiagnostics['purgeable_rows']) . '</td></tr>';
-print '<tr><td class="titlefield">Oldest/Newest audit date</td><td>' . dol_escape_htmltag((string) $auditRetentionDiagnostics['oldest_date']) . ' / ' . dol_escape_htmltag((string) $auditRetentionDiagnostics['newest_date']) . '</td></tr>';
-print '<tr><td class="titlefield">Manual purge</td><td>';
+print '<tr class="liste_titre"><th colspan="2">' . $langs->trans('KreaBankAuditDiagnosticsTitle', (int) $conf->entity) . '</th></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankAuditRetentionDays') . '</td><td>' . ((int) $auditRetentionDiagnostics['retention_days']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankAuditCutoff') . '</td><td>' . dol_escape_htmltag((string) $auditRetentionDiagnostics['cutoff_date']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankAuditTotalRows') . '</td><td>' . ((int) $auditRetentionDiagnostics['total_rows']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankAuditPurgeableRows') . '</td><td>' . ((int) $auditRetentionDiagnostics['purgeable_rows']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankAuditDateRange') . '</td><td>' . dol_escape_htmltag((string) $auditRetentionDiagnostics['oldest_date']) . ' / ' . dol_escape_htmltag((string) $auditRetentionDiagnostics['newest_date']) . '</td></tr>';
+print '<tr><td class="titlefield">' . $langs->trans('KreaBankAuditManualPurge') . '</td><td>';
 print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" style="display:inline-block">';
 print '<input type="hidden" name="token" value="' . newToken() . '">';
 print '<input type="hidden" name="action" value="purge_audit_retention">';
-print '<button class="button" type="submit">Purge rows older than retention</button>';
+print '<button class="button" type="submit">' . $langs->trans('KreaBankAuditPurgeAction') . '</button>';
 print '</form>';
 print '</td></tr>';
 print '</table>';

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.37 — 2026-11-15
+
+- Expand transfer cards to the available width and align native date controls.
+- Translate setup options, diagnostics and learning states into European Portuguese; refresh the module overview and About page.
+
 ## 1.20.36 — 2026-11-15
 
 - Let transfer card fields expand beyond the native table-cell height so labels and controls remain aligned without overlap.

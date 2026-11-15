@@ -4,7 +4,7 @@ body.kb-native-transfer #id-right { padding:24px 28px; min-width:0; }
 .kb-native-transfer #id-right .table-fiche-title .titre { font-size:22px; font-weight:600; color:var(--colortexttitlenotab,#344b5d); }
 .kb-native-transfer .kb-transfer-intro { display:block; max-width:72ch; font-size:.95em; line-height:1.6; opacity:1; color:var(--colortexttitlenotab,#526579); }
 .kb-native-transfer .kb-transfer-intro ~ br { display:none; }
-.kb-transfer-form { max-width:1000px; margin:24px 0 0; }
+.kb-transfer-form { box-sizing:border-box; width:100%; max-width:none; margin:24px 0 0; }
 .kb-transfer-form .div-table-responsive-no-min { overflow:visible; }
 .kb-transfer-form .kb-transfer-table, .kb-transfer-table > tbody { display:block; width:100%; border:0; background:transparent; }
 .kb-transfer-table .liste_titre { display:none; }
@@ -30,6 +30,8 @@ body.kb-native-transfer #id-right { padding:24px 28px; min-width:0; }
 .kb-transfer-field .inline-block { max-width:100%; }
 .kb-transfer-field .maxwidth100 { max-width:none !important; }
 .kb-transfer-field input.hasDatepicker { width:calc(100% - 28px) !important; }
+.kb-transfer-field .divfordateinput { display:flex; align-items:center; gap:6px; width:100%; }
+.kb-transfer-field .divfordateinput input:not([type="hidden"]) { flex:1 1 auto; width:0 !important; }
 .kb-transfer-form #btncont { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; padding:0; }
 .kb-transfer-form #btncont > br, .kb-transfer-form #btnincrement { display:none; }
 .kb-transfer-form #btncont > div { margin-left:auto; }
