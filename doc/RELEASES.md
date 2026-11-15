@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20.50 — 2026-11-15
+
+- Restrict new payment batches to native payments on the statement booking day. On initial opening, preselect only a proved unique exact-decimal group from the complete same-day candidates; ambiguity, truncation and bounded-search exhaustion leave selection manual. Saved choices take precedence, and review/confirmation remain explicit.
+- Keep batch totals, difference, selection count and review actions above a bounded, keyboard-scrollable payment list.
+- Closing or cancelling the native payment dialog leaves the list and scan cache intact. Only a native payment POST attempt requests one scoped row refresh; consume its refresh URL once and pause automatic scanning. Completed scan responses cannot trigger repeated reloads.
+- No schema, settings, permissions, menu or scheduler change.
+
 ## 1.20.49 — 2026-11-15
 
 - Remove the reconciliation list's More options button, panel and POST actions entirely. Search, payment batches and native bank-movement creation retain their existing paths.

@@ -226,29 +226,58 @@
             const opener = event.target.closest && event.target.closest('a.kb-wl-record-payment');
             const popup = opener && opener.closest('[data-kb-payment-popup]');
             if (!popup || !root.contains(popup) || !/^(staged|native):[1-9]\d*$/.test(popup.dataset.lineKey)) return;
-            // The native popup handler returns false, so observe before bubbling stops.
-            paymentReturns.set(popup, navigation.capture(popup, opener, true));
+            const state = {refresh:navigation.capture(popup, opener, true), submitted:false, opener, cleanup:[], documents:new WeakSet()};
+            paymentReturns.set(popup, state);
             paymentRefreshPending = true;
             pausePaymentAnalysis();
+            // The native handler creates/reparents its iframe while the click bubbles.
+            queueMicrotask(() => {
+                const frame = document.getElementById(popup.dataset.kbPaymentFrame);
+                if (!frame || paymentReturns.get(popup) !== state) return;
+                const watch = () => {
+                    let doc;
+                    try { doc = frame.contentDocument; } catch (_) { return; }
+                    if (!doc || state.documents.has(doc)) return;
+                    state.documents.add(doc);
+                    const submitted = event => {
+                        const form = event.target;
+                        if (String(form.method).toLowerCase() !== 'post' || event.submitter && event.submitter.name === 'cancel'
+                            || !form.elements.action || !['add_paiement','confirm_paiement'].includes(form.elements.action.value)) return;
+                        const previous = state.submitted;
+                        state.submitted = true;
+                        queueMicrotask(() => { if (event.defaultPrevented) state.submitted = previous; });
+                    };
+                    doc.addEventListener('submit', submitted, true);
+                    state.cleanup.push(() => doc.removeEventListener('submit', submitted, true));
+                };
+                frame.addEventListener('load', watch);
+                state.cleanup.push(() => frame.removeEventListener('load', watch));
+                watch();
+            });
         }, true);
         root.addEventListener('kb-worklist-payment-close', event => {
             const popup = event.target.closest && event.target.closest('[data-kb-payment-popup]');
-            const refresh = popup && paymentReturns.get(popup);
-            if (!refresh || !root.contains(popup)) return;
+            const state = popup && paymentReturns.get(popup);
+            if (!state || !root.contains(popup)) return;
+            paymentReturns.delete(popup);
+            state.cleanup.forEach(cleanup => cleanup());
+            paymentRefreshPending = false;
+            pausePaymentAnalysis();
+            if (state.opener.isConnected) state.opener.focus({preventScroll:true});
+            // X, Escape and native Cancel return to the unchanged list. No request or scan.
+            if (!state.submitted) return;
             let url;
             try { url = new URL(popup.dataset.kbPaymentRefresh, window.location.href); } catch (_) { return; }
             if (url.origin !== window.location.origin || url.pathname !== window.location.pathname || url.username || url.password
                 || url.searchParams.get('refresh_payment') !== popup.dataset.lineKey || url.searchParams.has('action')) return;
-            paymentReturns.delete(popup);
-            pausePaymentAnalysis();
-            // Closing means re-read actual state; it never signals payment success.
-            refresh(url.href);
+            // A native POST attempt warrants one fresh row read, never an assumed success.
+            state.refresh(url.href);
         });
         const scanForm = root.querySelector('form[data-kb-scan]');
         const scan = root.querySelector('.kb-wl-scan');
         if (scanForm && scan && scanForm.elements.action && scanForm.elements.action.value === 'advance_scan' && typeof fetch === 'function') {
             let requests = 0;
-            let paused = false;
+            let paused = scan.dataset.autoScan === '0';
             let running = false;
             let timer;
             let request;
@@ -282,7 +311,7 @@
                     }
                     if (result.done) {
                         message(scan.dataset.ready);
-                        if (!editing()) navigation.reload();
+                        if (!editing() && scan.dataset.pageReady !== '1') { scan.dataset.pageReady = '1'; navigation.reload(); }
                         return;
                     }
                     if (!editing() && requests < 30) timer = setTimeout(advance, 600);
@@ -291,7 +320,7 @@
                     if (error.name !== 'AbortError') message(error.message === 'changed' ? scan.dataset.changed : scan.dataset.failed);
                 } finally { running = false; }
             };
-            const pause = () => { paused = true; clearTimeout(timer); message(scan.dataset.paused); };
+            const pause = () => { paused = true; clearTimeout(timer); if (request) request.abort(); message(scan.dataset.paused); };
             pausePaymentAnalysis = pause;
             root.addEventListener('input', pause);
             root.addEventListener('change', pause);

@@ -40,9 +40,12 @@ Eligible unpaid customer/supplier invoice proposals offer **Record payment** in
 the row and expanded Search card. This opens the installed native payment form
 in Dolibarr's iframe dialog, with the invoice, statement account, booking date
 and exact bounded amount prefilled. Native payment permissions and confirmation
-remain authoritative. Closing or cancelling only clears advisory reviews and
-re-reads current evidence at the same row; it never means payment succeeded or
-automatically reconciles the line. Search and Create batch remain available as
+remain authoritative. Closing with X or Escape, or cancelling without a native payment POST, returns
+to the unchanged list without navigation, candidate reads or restarted analysis.
+A native payment POST attempt invalidates only that row's advisory approvals and
+requests one fresh row read through a consumed, canonical return URL. Automatic
+analysis stays paused after return; neither a close nor a POST attempt means
+payment succeeded or automatically reconciles the line. Search and Create batch remain available as
 alternative ways to find recorded payments.
 
 The payment shortcut requires owned, pending, unallocated, unmapped staged
@@ -185,3 +188,21 @@ parsed labels or stored URLs. Batch component references open each existing nati
 bank movement; aggregate batch names and unavailable placeholders remain text.
 The eligible Create movement plus icon sits beside the expanded Search control,
 with the existing permission/no-results conditions and row-position navigation.
+
+## Same-day batch selection
+
+New pending batch discovery, retained selections, review and locked execution use
+the source booking calendar day. Searches never widen it. Historical active
+groups, projections and undo preserve their original evidence.
+
+Initial batch opening preselects only a unique exact signed-decimal subset of at
+least two eligible owned-account native payments. The advisory helper uses the
+complete, unsearched candidate set and bounded exact arithmetic, including a
+complementary-sum proof for near-total batches. Truncation, competing combinations,
+changed evidence or exhausted budgets leave selection manual. Saved drafts and
+retained form inputs take precedence. GET neither saves a draft nor reconciles.
+
+Totals, difference, count and review actions sit above the bounded payment list;
+only members scroll, with keyboard access and contained scrolling at narrow
+widths. Explicit signed confirmation still rechecks every component and claim
+under the shared service locks.

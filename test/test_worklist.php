@@ -380,8 +380,11 @@ checkWorklist(strpos(kreabankWorklistPaymentUrl($paymentPair,$permission,'EUR'),
 $session=worklistControllerSession(); $session['kreabank_worklist_reviews']['other']=worklistControllerReview('pair',array('key'=>'staged:9'));
 $session['kreabank_worklist_batch_review']=array('staged:8'=>'old','staged:9'=>'kept');
 kreabankWorklistRefreshPayment($session,'staged:8');
-checkWorklist(!isset($session['kreabank_worklist_scan'],$session['kreabank_worklist_reviews']['fixture'],$session['kreabank_worklist_batch_review']['staged:8'])
-	&& isset($session['kreabank_worklist_reviews']['other'],$session['kreabank_worklist_batch_review']['staged:9']), 'Closing a native payment form invalidates only advisory approvals for that row and recomputes the scan');
+checkWorklist(isset($session['kreabank_worklist_scan']) && !isset($session['kreabank_worklist_reviews']['fixture'],$session['kreabank_worklist_batch_review']['staged:8'])
+	&& isset($session['kreabank_worklist_reviews']['other'],$session['kreabank_worklist_batch_review']['staged:9']), 'A native payment POST invalidates row approvals while preserving the existing scan');
+$returned = runWorklistController(array(),worklistControllerSession(),array('method'=>'GET','get'=>array('refresh_payment'=>'staged:8','search_account'=>'101')));
+checkWorklist(($returned['redirect']['payment_return'] ?? '') === 'staged:8' && !isset($returned['redirect']['refresh_payment']) && !$returned['calls'], 'Payment refresh is consumed into a canonical read-only return URL');
+checkWorklist(isset($returned['session']['kreabank_worklist_scan']) && !isset($returned['session']['kreabank_worklist_reviews']['fixture']), 'Canonical payment return retains scan state and removes only the reviewed row token');
 $keptStatus=kreabankWorklistState(array('search_status'=>'reconciled','search_description'=>'old','button_removefilter_x'=>'x','page'=>3));
 checkWorklist($keptStatus['filters']['status']==='reconciled' && $keptStatus['filters']['description']==='' && $keptStatus['page']===0, 'Clearing column filters keeps the selected status tab and resets pagination');
 

@@ -489,19 +489,19 @@ async function navigationBrowserChecks() {
             assert.equal(await page.locator('.fixture-native-payment').isVisible(),true,'A native return-false opener still activates the capture handler'); count++;
             assert.equal(await page.evaluate(key=>sessionStorage.getItem(key),storageKey),null,'Opening does not leave stale reload state'); count++;
             if (close==='Close payment') await page.evaluate(()=>{window.fixtureDuplicateClose=true;});
-            await cycle(()=>page.getByRole('button',{name:close,exact:true}).click());
-            await sameOffset(13,before,'Native payment close refreshes at the source row');
+            await page.getByRole('button',{name:close,exact:true}).click(); await page.waitForTimeout(100);
+            await sameOffset(13,before,'Native payment cancellation stays at the source row');
             assert.equal(await opener.evaluate(link=>document.activeElement===link),true,'Payment refresh returns focus to its native opener'); count++;
             const target = new URL(page.url());
-            assert.deepEqual([target.searchParams.get('refresh_payment'),target.searchParams.get('search_account'),target.searchParams.get('search_description'),target.searchParams.get('search_status')],['staged:13','101','Keep these filters','all']); count++;
-            assert.equal(paymentRefreshes.length,refreshCount+1,'A duplicate native close callback grants one read-only refresh'); count++;
+            assert.deepEqual([target.searchParams.get('refresh_payment'),target.searchParams.get('search_account'),target.searchParams.get('search_description'),target.searchParams.get('search_status')],[null,'101','Keep these filters','all']); count++;
+            assert.equal(paymentRefreshes.length,refreshCount,'Cancellation and duplicate native close callbacks cause no refresh'); count++;
         }
         await page.setViewportSize({width:500,height:900});
         await place(13);
         await page.locator('.div-table-responsive').evaluate(wrapper=>{wrapper.scrollLeft=350;});
         before = await offset(13);
         await page.getByRole('link',{name:'Record payment 13',exact:true}).evaluate(link=>link.click());
-        await cycle(()=>page.getByRole('button',{name:'Close payment',exact:true}).click());
+        await page.getByRole('button',{name:'Close payment',exact:true}).click(); await page.waitForTimeout(100);
         await sameOffset(13,before,'Native popup keeps narrow-screen vertical position');
         assert.equal(await page.locator('.div-table-responsive').evaluate(wrapper=>wrapper.scrollLeft),350,'Native popup keeps horizontal table position'); count++;
         await page.setViewportSize({width:1280,height:900});
@@ -547,9 +547,9 @@ async function navigationBrowserChecks() {
         await page.locator('form[data-kb-scan]').evaluate(form=>form.requestSubmit());
         await page.waitForTimeout(80);
         assert.equal(scanRequests,scanCount+1,'Continue cannot resume analysis while payment refresh is pending'); count++;
-        await cycle(()=>page.getByRole('button',{name:'Cancel payment',exact:true}).click());
-        await sameOffset(13,before,'Closing an unfinished payment form still re-reads actual state at its row');
-        assert.equal(new URL(page.url()).searchParams.get('refresh_payment'),'staged:13'); count++;
+        await page.getByRole('button',{name:'Cancel payment',exact:true}).click(); await page.waitForTimeout(100);
+        await sameOffset(13,before,'Closing an unfinished payment form preserves the list without searching');
+        assert.equal(new URL(page.url()).searchParams.get('refresh_payment'),null); count++;
         assert.equal(posts.length,3); count++;
 
         analysed = false; scanDelay = 300;

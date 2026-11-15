@@ -69,7 +69,7 @@ trait KreaBankPaymentBatchTrait
 		return true;
 	}
 
-	/** Read-only bounded discovery. A total alone never chooses a group. */
+	/** Read-only bounded discovery on the statement booking day; approval remains explicit. */
 	public function listBatchCandidates($stagingId, $search = '')
 	{
 		$this->assertPaymentBatchActor(true);
@@ -77,12 +77,13 @@ trait KreaBankPaymentBatchTrait
 		$search = trim((string) $search);
 		if (strlen($search) > 256) { throw new DomainException('Bank search is too long'); }
 		$p = $this->db->prefix();
-		$sql = "SELECT b.rowid,b.fk_account AS bank_account_id,ba.ref AS bank_account_ref,ba.currency_code AS currency,"
+		$sql = "SELECT b.rowid,ba.entity,b.fk_account AS bank_account_id,ba.ref AS bank_account_ref,ba.currency_code AS currency,"
 			. " CAST(b.amount AS DECIMAL(24,8)) AS amount_decimal,b.dateo AS doc_date,b.label AS description,b.num_chq AS ref,"
 			. " (SELECT GROUP_CONCAT(DISTINCT u.type ORDER BY u.type) FROM {$p}bank_url u WHERE u.fk_bank=b.rowid) AS url_types,"
 			. " (SELECT GROUP_CONCAT(u.label ORDER BY u.rowid SEPARATOR ' / ') FROM {$p}bank_url u WHERE u.fk_bank=b.rowid) AS payment_refs"
 			. " FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account"
 			. ' WHERE ba.entity=' . $this->entity . ' AND b.fk_account=' . (int) $source['bank_account_id']
+			. $this->paymentBatchBookingDaySql($source)
 			. ' AND b.rappro=0 AND COALESCE(b.fk_bordereau,0)=0 AND b.amount' . ($source['amount'][0] === '-' ? '<0' : '>0')
 			. " AND COALESCE(b.fk_type,'')<>'SOLD'"
 			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_bankmeta m WHERE m.fk_bank_line=b.rowid)"
@@ -94,7 +95,7 @@ trait KreaBankPaymentBatchTrait
 			$sql .= " AND (CONCAT_WS(' ',b.label,b.num_chq,ba.ref,b.dateo) LIKE " . $this->sqlText('%' . $needle . '%') . " ESCAPE '!'"
 				. " OR EXISTS (SELECT 1 FROM {$p}bank_url u WHERE u.fk_bank=b.rowid AND u.label LIKE " . $this->sqlText('%' . $needle . '%') . " ESCAPE '!'))";
 		}
-		$sql .= ' ORDER BY ABS(DATEDIFF(b.dateo,' . $this->sqlText($source['operation_date']) . ')),b.dateo,b.rowid' . $this->db->plimit(101);
+		$sql .= ' ORDER BY b.dateo,b.rowid' . $this->db->plimit(101);
 		$rows = $this->paymentBatchRows($sql);
 		$truncated = count($rows) > 100;
 		$rows = array_slice($rows, 0, 100);
@@ -104,7 +105,27 @@ trait KreaBankPaymentBatchTrait
 			$row['operation_date'] = $row['doc_date'];
 		}
 		unset($row);
-		return array('source'=>$source, 'rows'=>$rows, 'truncated'=>$truncated);
+		return array('source'=>$source, 'rows'=>$rows, 'truncated'=>$truncated, 'search'=>$search);
+	}
+
+	/**
+	 * Advisory initial selection from a complete, unsearched listBatchCandidates() result.
+	 * Never saves a draft or approves anything. Controllers must preserve existing user input.
+	 *
+	 * @return array{status:string,ids:array<int,int>,candidate_count:int}
+	 */
+	public function getPaymentBatchSuggestion($stagingId, array $candidates)
+	{
+		$this->assertPaymentBatchActor(true);
+		$source = $this->paymentBatchSource($stagingId);
+		$count = isset($candidates['rows']) && is_array($candidates['rows']) ? count($candidates['rows']) : 0;
+		if (($candidates['source'] ?? null) !== $source) { return array('status'=>'changed','ids'=>array(),'candidate_count'=>$count); }
+		if (($candidates['search'] ?? null) !== '') { return array('status'=>'filtered','ids'=>array(),'candidate_count'=>$count); }
+		if (!isset($candidates['rows'], $candidates['truncated']) || !is_array($candidates['rows']) || !is_bool($candidates['truncated'])) {
+			return array('status'=>'invalid','ids'=>array(),'candidate_count'=>$count);
+		}
+		require_once __DIR__ . '/KreaBankPaymentBatchSuggestion.class.php';
+		return KreaBankPaymentBatchSuggestion::suggest($source, $candidates['rows'], $candidates['truncated']);
 	}
 
 	/** Rehydrate explicit draft selections even when they fall outside a search page. */
@@ -393,6 +414,7 @@ trait KreaBankPaymentBatchTrait
 			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_bankmeta m WHERE m.fk_bank_line=b.rowid)"
 			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement_line m WHERE m.fk_native_bank_line=b.rowid)"
 			. ($activeBatchId ? " AND EXISTS (SELECT 1 FROM {$p}kreabank_payment_batch_line m WHERE m.entity=" . $this->entity . ' AND m.fk_batch=' . (int) $activeBatchId . ' AND m.active_bank_line=b.rowid AND m.amount=CAST(b.amount AS DECIMAL(24,8)))' : " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_payment_batch_line m WHERE m.active_bank_line=b.rowid)")
+			. (!$activeBatchId ? $this->paymentBatchBookingDaySql($source) : '')
 			. $this->paymentBatchOwnershipSql() . ($lock ? ' FOR UPDATE' : '');
 		$rows = $this->paymentBatchRows($sql);
 		if (count($rows) !== 1) { throw new DomainException('A selected payment is unavailable, already claimed or belongs to another account'); }
@@ -419,6 +441,13 @@ trait KreaBankPaymentBatchTrait
 		$row['payment_refs'] = implode(' / ', array_unique(array_filter(array_column($facts['links'], 'label'))));
 		$row['url_types'] = implode(',', array_unique(array_column($facts['links'], 'type')));
 		return $row;
+	}
+
+	/** Existing active groups retain their historical dates; new pending groups use this range. */
+	private function paymentBatchBookingDaySql($source)
+	{
+		$day = $this->sqlText($source['operation_date']);
+		return ' AND b.dateo>=' . $day . ' AND b.dateo<DATE_ADD(' . $day . ',INTERVAL 1 DAY)';
 	}
 
 	private function paymentBatchIds($ids, $requireGroup)

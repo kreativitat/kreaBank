@@ -35,6 +35,20 @@ function batchDatabaseState() {
 }
 $candidates=$service->listBatchCandidates(95000);
 checkAuto(count(array_intersect($ids,array_column($candidates['rows'],'rowid')))===2,'Separate existing salary movements are discoverable');
+bankAuto(96002,'-1000.00000001','OUTSIDE-BATCH-DAY',101,'2026-10-31');
+bankAuto(96003,'-2000.00000002','OUTSIDE-BATCH-DAY',101,'2026-11-02');
+checkAuto(!array_intersect(array(96002,96003),array_column($service->listBatchCandidates(95000)['rows'],'rowid')),'Neighboring booking days never enter pending batch discovery');
+checkAuto($service->listBatchCandidates(95000,'OUTSIDE-BATCH-DAY')['rows']===array(),'An explicit batch search cannot widen the booking day');
+$offDay=$service->getPaymentBatchSelectedCandidates(95000,array(96000,96002));
+checkAuto(array_map('intval',array_column($offDay['rows'],'rowid'))===array(96000) && $offDay['unavailable']===array(96002),'Retained off-day draft members are unavailable rather than silently carried into review');
+rejectAuto(static function () use ($service) { $service->savePaymentBatchDraft(95000,array(96002,96001),'Off-day draft'); },'New drafts cannot contain another booking day');
+rejectAuto(static function () use ($service) { $service->preparePaymentBatchReview(95000,array(96002,96001),'Off-day review'); },'Exact totals do not permit off-day review members');
+$dateReview=$service->preparePaymentBatchReview(95000,$ids,'Same-day review');
+$db->query("UPDATE kbauto_bank SET dateo='2026-11-02' WHERE rowid=96001");
+$dateState=batchDatabaseState();
+rejectAuto(static function () use ($service,$dateReview) { $service->reconcilePaymentBatch($dateReview); },'Execution rejects a selected movement moved to another booking day');
+checkAuto(batchDatabaseState()===$dateState && $db->depth===0,'Date rejection creates no native, group, source or audit changes');
+$db->query("UPDATE kbauto_bank SET dateo='2026-11-01' WHERE rowid=96001");
 checkAuto($service->listBatchCandidates(95000,'SALARY-97000')['rows'][0]['amount_decimal']==='-1000.00000001','Candidate display retains persisted eight-decimal strings');
 checkAuto($service->listBatchCandidates(95000,'%')['rows']===array(),'Search wildcard input remains literal');
 $rehydrated=$service->getPaymentBatchSelectedCandidates(95000,array(96001,99999,96000));
@@ -158,12 +172,16 @@ foreach (array('UPDATE kbauto_kreabank_payment_batch_line SET active_bank_line=N
 $db->query('UPDATE kbauto_bank SET amount=-2000.00000003 WHERE rowid=96001');
 rejectAuto(static function () use ($service) { $service->preparePaymentBatchUndoReview(95000); },'Tampered reconciled component amount cannot be silently undone');
 $db->query('UPDATE kbauto_bank SET amount=-2000.00000002 WHERE rowid=96001');
+// Existing installations may contain historical groups created before the same-day policy.
+$db->query("UPDATE kbauto_bank SET dateo='2026-10-31' WHERE rowid=96001");
 $undo=$service->preparePaymentBatchUndoReview(95000);
+checkAuto(substr($undo['components'][1]['doc_date'],0,10)==='2026-10-31','Active historical off-day groups remain reviewable for undo');
 checkAuto($service->undoPaymentBatch(95000,$undo),'Explicit fresh group undo succeeds');
 checkAuto($service->loadPaymentBatch(95000)['active']===null && (int)$service->loadPaymentBatch(95000)['source']['status']===0,'Undo returns the source to pending');
 checkAuto((int)$db->query('SELECT COUNT(*) n FROM kbauto_bank WHERE rowid IN (96000,96001) AND rappro=0')->fetch_object()->n===2,'Undo reverses all component reconciliations');
 checkAuto(countAuto('kreabank_payment_batch')===1 && (int)$db->query('SELECT COUNT(*) n FROM kbauto_kreabank_payment_batch_line WHERE active_bank_line IS NOT NULL')->fetch_object()->n===0,'Undo preserves normalized history and releases active claims');
 rejectAuto(static function () use ($service,$undo) { $service->undoPaymentBatch(95000,$undo); },'Undo review is single use');
+$db->query("UPDATE kbauto_bank SET dateo='2026-11-01' WHERE rowid=96001");
 $newId=$service->reconcilePaymentBatch(batchDatabaseReview());
 checkAuto($newId!==$batchId && countAuto('kreabank_payment_batch')===2,'A reviewed retry after undo creates a new historical group');
 class BatchNoUndoUser extends User { public function hasRight($a,$b,$c='') { return !($a==='kreabank' && $b==='reconciliation' && $c==='undo'); } }

@@ -47,6 +47,7 @@ $baseParams = $state['params'] + array('page'=>$state['page']);
 $expand = GETPOST('expand','alphanohtml');
 $mode = in_array(GETPOST('mode','alpha'),array('batch','create'),true) ? GETPOST('mode','alpha') : 'search';
 $search = substr((string) GETPOST('q','alphanohtml'),0,256);
+$paymentReturn = !$post ? (string) GETPOST('payment_return','alphanohtml') : '';
 $scope = (int) $conf->entity . '|' . (int) $user->id;
 if (($_SESSION['kreabank_worklist_scope'] ?? '') !== $scope) {
 	unset($_SESSION['kreabank_worklist_inputs'],$_SESSION['kreabank_worklist_corrected'],$_SESSION['kreabank_worklist_batch_review'],$_SESSION['kreabank_worklist_scan'],$_SESSION['kreabank_worklist_movement_inputs'],$_SESSION['kreabank_worklist_movement_reviews']);
@@ -57,13 +58,6 @@ $secret = $_SESSION['kreabank_worklist_secret'];
 $now = time();
 foreach ((array) ($_SESSION['kreabank_worklist_reviews'] ?? array()) as $key=>$review) {
 	if (($review['expires'] ?? 0) < $now || ($review['scope'] ?? '') !== $scope) { unset($_SESSION['kreabank_worklist_reviews'][$key]); }
-}
-if (!$post && GETPOST('refresh_payment','alphanohtml') !== '') {
-	try {
-		$refreshKey = (string) GETPOST('refresh_payment','alphanohtml');
-		$worklist->load($refreshKey);
-		kreabankWorklistRefreshPayment($_SESSION,$refreshKey);
-	} catch (Throwable $error) { setEventMessages($langs->trans('KreaBankWorklistChanged'),null,'errors'); }
 }
 $remember = static function ($kind,$payload) use ($scope) {
 	$nonce = bin2hex(random_bytes(24));
@@ -90,6 +84,16 @@ $pairDescriptor = static function ($key,$pair,$explicit = false,$searchContext =
 	$label = $type === 'native_bank' ? 'KreaBankWorklistReconcile' : 'KreaBankWorkspaceReconcilePayment';
 	return array('action'=>'confirm_pair','fields'=>array_merge($baseParams,array('review'=>$nonce)),'label'=>$label);
 };
+
+// Consume legacy refresh links once; they must never survive an analysis reload.
+if (!$post && GETPOST('refresh_payment','alphanohtml') !== '') {
+	try {
+		$refreshKey = (string) GETPOST('refresh_payment','alphanohtml');
+		$worklist->load($refreshKey);
+		kreabankWorklistRefreshPayment($_SESSION,$refreshKey);
+	} catch (Throwable $error) { $redirect(); }
+	$redirect(array('payment_return'=>$refreshKey));
+}
 
 if ($post && $action !== '' && !in_array($action, array('advance_scan','more_scan'), true)) {
 	if (!$canWrite) { accessforbidden(); }
@@ -199,6 +203,14 @@ if ($isScanPost && !kreabankWorklistScanAdmitted($cache,$scanScope,GETPOST('scan
 if (($cache['scope'] ?? '') !== $scanScope || ($cache['expires'] ?? 0) < time()) {
 	$cache = array('scope'=>$scanScope,'generation'=>bin2hex(random_bytes(16)),'cursor'=>0,'summaries'=>array(),'expires'=>time()+600);
 	$_SESSION['kreabank_worklist_scan'] = $cache;
+}
+// Only the payment's owned source is refreshed; the rest of the scan is retained.
+if ($paymentReturn !== '' && isset($sources[$paymentReturn])) {
+	try {
+		$cache['summaries'][$paymentReturn] = $worklist->compact($paymentReturn);
+		$cache['generation'] = bin2hex(random_bytes(16)); $cache['cursor'] = 0; unset($cache['lease']);
+		$_SESSION['kreabank_worklist_scan'] = $cache;
+	} catch (Throwable $error) { setEventMessages($langs->trans('KreaBankWorklistChanged'),null,'errors'); }
 }
 // Bind the rendered native page, including an out-of-range or filtered-page reset.
 $scanComplete = count($cache['summaries']) >= count($sourceKeys);
@@ -356,6 +368,12 @@ foreach ($page['rows'] as $indexRow) {
 				$line = $row['line'];
 				if ($mode === 'batch' && !$row['batch_unavailable'] && $canWrite) {
 					$candidates = $service->listBatchCandidates((int) $line['rowid'],$search);
+					// A fresh batch gets advisory checkboxes only; stored/user choices take precedence.
+					if (!array_key_exists('draft',$row) && !isset($_SESSION['kreabank_worklist_inputs'][$key])) {
+						$suggestion = $service->getPaymentBatchSuggestion((int) $line['rowid'],$candidates);
+						$row['batch_suggestion'] = $suggestion['status'];
+						if ($suggestion['status'] === 'unique') { $row['draft'] = array('name'=>'','member_keys'=>array_map('strval',$suggestion['ids'])); }
+					}
 					$selectedIds = array_map('intval',$row['draft']['member_keys'] ?? array());
 					$retained = $service->getPaymentBatchSelectedCandidates((int) $line['rowid'],$selectedIds);
 					$batchCandidates = array();
@@ -383,7 +401,7 @@ foreach ($page['rows'] as $indexRow) {
 					if ($worklist->searchTruncated()) { $row['notice'] = kreabankWorklistTranslate($langs, 'KreaBankWorklistRefineSearch'); }
 				}
 			}
-			if (!empty($row['line']['fk_statement']) && (int) $row['line']['status'] === 0 && ($isExpanded || !empty($prepared['account_candidates']))) {
+			if (!empty($row['line']['fk_statement']) && (int) $row['line']['status'] === 0 && !($isExpanded && $mode === 'batch') && ($isExpanded || !empty($prepared['account_candidates']))) {
 				$other = $service->searchOtherAccountMovements((int) $row['line']['rowid'],$isExpanded ? $search : '');
 				foreach ($other as $c) {
 					$item = array('key'=>'native:' . $c['rowid'],'doc_type'=>'native_bank','doc_id'=>(int) $c['rowid'],'reference'=>($c['payment_refs'] ?: $c['num_chq']) ?: '#' . $c['rowid'],'date'=>$c['dateo'],'amount'=>$c['amount'],'currency'=>$row['line']['currency'],'account_ref'=>$c['account_ref'],'description'=>$c['label'],'selectable'=>false);
@@ -416,7 +434,7 @@ foreach (array('operation_date'=>'KreaBankDate','bank_account_ref'=>'KreaBankWor
 $scan = null;
 if (!$scanDone) {
 	$batchDone = $pageReady($cache);
-	$scan = array('message'=>kreabankWorklistTranslate($langs, $batchDone ? 'KreaBankWorklistResultsReady' : 'KreaBankWorklistAnalyzing'),'done'=>count(array_intersect_key($cache['summaries'],array_fill_keys($cache['targets'],true))),'total'=>count($cache['targets']),'page_ready'=>$batchDone,
+	$scan = array('message'=>kreabankWorklistTranslate($langs, $batchDone ? 'KreaBankWorklistResultsReady' : 'KreaBankWorklistAnalyzing'),'done'=>count(array_intersect_key($cache['summaries'],array_fill_keys($cache['targets'],true))),'total'=>count($cache['targets']),'page_ready'=>$batchDone,'auto_scan'=>$paymentReturn === '',
 		'action'=>array('action'=>$batchDone ? 'more_scan' : 'advance_scan','fields'=>array_merge($baseParams,array('scan_generation'=>$cache['generation'],'scan_cursor'=>$cache['cursor']))));
 }
 $navigationAccount = kreabankNavigationAccount((int) $state['filters']['account']);

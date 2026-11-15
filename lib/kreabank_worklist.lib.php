@@ -46,13 +46,13 @@ function kreabankWorklistPaymentUrl($pair, $permissions, $companyCurrency)
 		'reyear'=>(int) $date[1],'remonth'=>(int) $date[2],'reday'=>(int) $date[3], 'amount_' . (int) $s['doc_id']=>$amount),'','&',PHP_QUERY_RFC3986);
 }
 
-/** Discard advisory state after closing the native form, regardless of whether it saved. */
+/** Invalidate only this row after a native payment POST; cancellation never calls this. */
 function kreabankWorklistRefreshPayment(&$session, $key)
 {
 	foreach ((array) ($session['kreabank_worklist_reviews'] ?? array()) as $nonce=>$review) {
 		if (($review['payload']['key'] ?? '') === $key) { unset($session['kreabank_worklist_reviews'][$nonce]); }
 	}
-	unset($session['kreabank_worklist_scan'],$session['kreabank_worklist_batch_review'][$key]);
+	unset($session['kreabank_worklist_batch_review'][$key]);
 }
 
 /** Request state for the separate list. Financial actions never enter read URLs. */

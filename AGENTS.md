@@ -15,6 +15,16 @@
 
 ## Separate reconciliation list
 
+- 1.20.50: New pending batches use only the source booking day, including retained
+  selections and locked execution. `KreaBankPaymentBatchSuggestion` preselects
+  only a unique exact signed-decimal subset from complete unsearched candidates;
+  bounded/ambiguous results remain manual. Preserve saved inputs and historical
+  active groups/undo. GET advice performs no financial mutation.
+- Native payment-dialog cancellation preserves the list and scan state. Only a
+  native POST attempt requests a one-row refresh; consume `refresh_payment` into
+  the canonical paused `payment_return` view. Never invalidate the full scan on
+  every GET or restart analysis from the modal close callback.
+
 - 1.20.49 removes the row More options panel and its POST actions. Skip line,
   quick tax creation and quick supplier invoice creation are retired everywhere;
   reject stale actions rather than mapping them to ordinary movement creation.
@@ -304,18 +314,18 @@
   reconciliation flows, including taxes. Do not introduce record-type-specific
   layouts or oversized warning banners.
 
-- `reconcile.php` keeps the existing controller and shared service calls. Scoped
-  presentation assets are `css/reconcile.css`, `js/reconcile.js` and
-  `js/reconcile-supplier.js`; include all three when deploying this workspace.
+- The legacy `reconcile.php` address redirects to the selected-line include. Its
+  surviving presentation assets are `css/reconcile.css` and `js/reconcile.js`.
 - Pending search filters the bounded loaded queue (up to 200 lines); the full
   pending view remains accessible. Mobile starts with the queue collapsed.
   Matching and creation have separate panels and explicitly labelled actions.
 - Allocation feedback sums original hidden decimal strings; two-decimal display
   must never rewrite POST amounts. The service remains authoritative for amount,
   company, permission, lock, duplicate and safe-match validation.
-- Creation choices must retain explicit submit actions, including implicit Enter
-  submission. Supplier invoices require product-line review; keep dialog focus
-  containment, Escape and return focus. Failed creation retains reviewed inputs.
+- Ordinary bank creation retains its explicit submit action, including implicit
+  Enter submission, and failed creation retains reviewed inputs. Supplier invoice
+  and tax creation are retired; keep native payment-dialog cancellation separate
+  from financial submission.
 - `php test/test_reconcile_workspace.php` renders the actual view without an ERP
   bootstrap or database. Its `--html <case> [locale]` output intercepts every
   submission for browser checks. `node test/test_reconcile_workspace.cjs` checks

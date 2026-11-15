@@ -71,6 +71,9 @@ function runScanController($request = array(), $session = array(), $options = ar
 	$scope = $options['scope'] ?? '1|7';
 	$action = $request['action'] ?? '';
 	$expand = $request['expand'] ?? '';
+	$paymentReturn = $request['payment_return'] ?? '';
+	$worklist = new class { public $calls=array(); public function compact($key) { $this->calls[]=$key; return array('key'=>$key,'status'=>'pending','match'=>'Fresh payment evidence','payment_accounts'=>array(),'payment_account'=>''); } };
+	$langs = new class { public function trans($key) { return $key; } };
 	$user = (object) array('id'=>7); $conf = (object) array('entity'=>1);
 	$source = file_get_contents(__DIR__ . '/../reconciliationlist.php');
 	$redirectStart = strpos($source, '$redirect = static function');
@@ -89,7 +92,7 @@ function runScanController($request = array(), $session = array(), $options = ar
 	finally { $body = ob_get_clean(); }
 	return array('session'=>$_SESSION,'cache'=>$_SESSION['kreabank_worklist_scan'] ?? null,'state'=>$state,'base'=>$baseParams,
 		'view'=>$scanView ?? null,'scope'=>$scanScope,'display'=>$displayKeys ?? array(),'status'=>$status,'redirected'=>$redirected,
-		'body'=>json_decode($body,true),'redirect'=>$redirectParams);
+		'body'=>json_decode($body,true),'redirect'=>$redirectParams,'compact_calls'=>$worklist->calls);
 }
 
 function scanControllerPost($rendered, $extra = array())
@@ -100,6 +103,13 @@ function scanControllerPost($rendered, $extra = array())
 
 $pageA = runScanController(array('page'=>0));
 checkScanController($pageA['cache']['targets'] === array_map(static function ($id) { return 'staged:'.$id; },range(166,142)), 'Actual GET grants only the newest page of the 166 sources');
+$paymentSession = $pageA['session'];
+$paymentSession['kreabank_worklist_scan']['summaries']['staged:165'] = array('key'=>'staged:165','status'=>'pending','match'=>'Kept evidence','payment_accounts'=>array(),'payment_account'=>'');
+$returned = runScanController(array('payment_return'=>'staged:166'),$paymentSession);
+checkScanController($returned['compact_calls'] === array('staged:166') && $returned['cache']['summaries']['staged:165'] === $paymentSession['kreabank_worklist_scan']['summaries']['staged:165'], 'A native payment return refreshes only its owned source and retains all other summaries');
+checkScanController($returned['cache']['generation'] !== $pageA['cache']['generation'] && $returned['cache']['cursor'] === 0, 'Payment return rejects stale background publications without deleting the scan');
+$foreignReturn = runScanController(array('payment_return'=>'staged:999'),$paymentSession);
+checkScanController(!$foreignReturn['compact_calls'], 'Unknown or foreign payment return cannot trigger candidate reads');
 $sessionA = $pageA['session']; $sessionA['unrelated_fixture_state'] = 'preserve';
 $pageB = runScanController(array('page'=>1),$sessionA);
 checkScanController($pageB['cache']['targets'] === array_map(static function ($id) { return 'staged:'.$id; },range(141,117)), 'Actual GET page two grants only its displayed source identities');
