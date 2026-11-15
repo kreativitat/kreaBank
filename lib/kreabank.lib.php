@@ -109,6 +109,8 @@ function kreabankAdminPrepareHead()
 
 	$head[$h] = array(dol_buildpath('/custom/kreabank/admin/pairs.php', 1), $langs->trans('KreaBankAccountPairs'), 'pairs');
 	$h++;
+	$head[$h] = array(dol_buildpath('/custom/kreabank/admin/rules.php', 1), $langs->trans('KreaBankRules'), 'rules');
+	$h++;
 
 	$head[$h] = array(dol_buildpath('/custom/kreabank/admin/automation.php', 1), $langs->trans('KreaBankAutomation'), 'automation');
 	$h++;

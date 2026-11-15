@@ -58,6 +58,11 @@ function kreabankBulkReviewSignature($row, $scope, $expires, $secret)
 		foreach (array('tax_id','tax_type_id','tax_payment_mode_id') as $key) { $document[$key] = (int) ($suggestion[$key] ?? 0); }
 	}
 	$document['amount_open'] = number_format((float) ($suggestion['amount_open'] ?? 0), 8, '.', '');
+	if (!empty($row['bank_rule'])) {
+		$document['bank_rule'] = $row['bank_rule'];
+		$document['bank_rule_target'] = $row['bank_rule_target'] ?? null;
+		$document['rule_creation'] = $row['rule_creation'] ?? null;
+	}
 	if (!empty($row['approval_context'])) {
 		$document['approval_context'] = (string) $row['approval_context'];
 		$document['other_account_warning'] = !empty($row['other_account_warning']);

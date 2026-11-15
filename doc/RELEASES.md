@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.42 — 2026-11-15
+
+- Add company-owned advisory bank rules with configuration, bounded previews and signed selected-line approval. Rule usage and reconciliation audit commit together; automatic matching is unchanged. Accounting/VAT quick-entry values remain review hints.
+- Existing installations must apply the idempotent rule-table migration before configuring rules. See [bank rules](BANK_RULES.md).
+
 ## 1.20.41 — 2026-11-15
 
 - Run PHP syntax, non-database regression and Node tests in GitHub Actions on PHP 8.1/8.3 with Dolibarr 24 source. Report missing private bank fixtures as explicit skips.

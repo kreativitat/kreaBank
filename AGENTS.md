@@ -4,6 +4,10 @@
 
 - 2026-11-15: GitHub Actions runs every non-database PHP test and Node CJS suite with Dolibarr 24 source on PHP 8.1/8.3. Missing private parser fixtures skip explicitly; database suites remain restricted to their documented disposable fixtures.
 
+## Advisory bank rules
+
+- 2026-11-15: `KreaBankRule` and `KreaBankRuleServiceTrait` add selected-line advice only. Sign the exact rule/source/target/conflict snapshots, recheck them under existing reconciliation locks, and commit usage with the audit. Never pass rule evidence to unattended or bulk matching. New rules are inactive; schema installation is explicit and idempotent. Accounting/VAT quick-entry values are review hints by user choice. See [bank rules](doc/BANK_RULES.md).
+
 ## Separate reconciliation list
 
 - `reconciliationlist.php` is additive; keep `reconcile.php` and its assets unchanged

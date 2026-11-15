@@ -53,6 +53,11 @@ The original selected-line workspace at `reconcile.php` remains supported throug
 its direct routes, with its existing creation and review flows. See the
 [selected-line guide](doc/RECONCILIATION_UI.md).
 
+Company-owned [bank rules](doc/BANK_RULES.md) provide selected-line invoice search,
+reviewed bank-entry prefills and category advice. New rules start disabled and
+never affect automatic matching. Accounting account and VAT values remain review
+hints; usage is recorded only with successful approved reconciliation.
+
 Native internal transfers use Dolibarr's own transfer form and posting lifecycle.
 KreaBank presents its controls as labelled, full-width responsive cards, including
 additional transfers, without replacing native validation or financial execution.

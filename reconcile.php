@@ -232,6 +232,27 @@ if ($action === 'validate_draft_invoice') {
 	} catch (Throwable $e) { $reportActionException($e, 'validate_draft_invoice'); }
 }
 
+if ($action === 'confirm_rule_entry') {
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !kreabankIsTokenValid()
+		|| !$user->hasRight('kreabank', 'reconciliation', 'write') || !$user->hasRight('banque', 'modifier')) { accessforbidden(); }
+	try {
+		$line = GETPOST('line_source', 'aZ09') === 'staged' ? $service->getBulkReviewLine($lineId, 'staged') : null;
+		$row = $line ? $service->getBankRuleQuickReview($line) : null;
+		$scope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId;
+		if (!$row || GETPOST('review_doc', 'aZ09') !== 'rule__' . $row['bank_rule']['id']
+			|| !kreabankBulkReviewIsValid($row, $scope, GETPOSTINT('review_expires'), GETPOST('review_signature', 'aZ09'),
+				$_SESSION['kreabank_bulk_review_secret'] ?? '', dol_now(), true, $navigationAccountId)) {
+			throw new RuntimeException($langs->trans('KreaBankBulkMatchReviewChanged', '1'));
+		}
+		$service->reconcileBankRuleQuickEntry($row);
+		unset($_SESSION['kreabank_bulkmatch_scan_state'], $_SESSION['kreabank_matched_scan_state']);
+		setEventMessages($langs->trans('KreaBankReconcileDone'), null, 'mesgs');
+		$redirectUrl = kreabankWorkspaceUrl('reconcile', $navigationAccountId) . '&sortfield=' . rawurlencode($pendingSort['field']) . '&sortorder=' . $pendingSort['order'];
+		$redirectUrl .= '&' . http_build_query(kreabankReconcileQueueParameters($queueOrder, $queueNext, $queueSearch), '', '&', PHP_QUERY_RFC3986);
+		header('Location: ' . $redirectUrl); exit;
+	} catch (Throwable $e) { $reportActionException($e, 'confirm_rule_entry'); }
+}
+
 if ($action === 'confirm_document') {
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !kreabankIsTokenValid()
 		|| !$user->hasRight('kreabank', 'reconciliation', 'write') || !$canNativeWrite) {
@@ -1311,6 +1332,33 @@ if ($isLoteBatchLine && $selectedLine && !empty($documents)) {
 	}
 }
 
+$bankRuleAdvice = array('winner'=>null, 'matches'=>array(), 'conflicts'=>false);
+if ($selectedLine && method_exists($service, 'getBankRuleAdvice')) {
+	try {
+		$bankRuleAdvice = $service->getBankRuleAdvice($selectedLine);
+		if (($bankRuleAdvice['winner']['action']['type'] ?? '') === 'category') {
+			$nativeIds = $service->bankRuleNativeCandidateIds($selectedLine, array_column(array_filter($documents, static function ($doc) { return $doc['doc_type'] === 'native_bank'; }), 'rowid'));
+			foreach ($documents as &$doc) {
+				if ($doc['doc_type'] === 'native_bank' && empty($doc['is_locked']) && (int) ($doc['bank_account_id'] ?? 0) === (int) $selectedLine['bank_account_id']
+					&& isset($nativeIds[(int) $doc['rowid']])) {
+					$doc['bank_rule'] = KreaBankService::bankRuleReviewSnapshot($bankRuleAdvice);
+				}
+			}
+			unset($doc);
+		}
+		foreach ($service->getBankRuleInvoiceDocuments($selectedLine, $bankRuleAdvice) as $ruleDoc) {
+			$found = false;
+			foreach ($documents as &$doc) {
+				if ($doc['doc_type'] === $ruleDoc['doc_type'] && (int) $doc['rowid'] === (int) $ruleDoc['rowid']) {
+					$doc['bank_rule'] = $ruleDoc['bank_rule']; $found = true;
+				}
+			}
+			unset($doc);
+			if (!$found) { $documents[] = $ruleDoc; }
+		}
+	} catch (Throwable $e) { $reportActionException($e, 'bank_rule_advice', $langs->trans('KreaBankRulesUnavailable')); }
+}
+
 $selectedOutstanding = 0.0;
 $quickEntryPrefillLabel = '';
 $quickEntryPrefillNote = '';
@@ -1673,6 +1721,13 @@ $canReconcile = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canN
 $documentReviewRows = array();
 $documentReviewForms = array();
 $draftInvoiceForms = array();
+$ruleQuickReview = null;
+if ($selectedLine && $canReconcile && $canCreate && method_exists($service, 'getBankRuleQuickReview')) {
+	try {
+		$ruleQuickReview = $service->getBankRuleQuickReview($selectedLine);
+		if ($ruleQuickReview && empty($_SESSION['kreabank_bulk_review_secret'])) { $_SESSION['kreabank_bulk_review_secret'] = bin2hex(random_bytes(32)); }
+	} catch (Throwable $e) { $reportActionException($e, 'rule_quick_review', $langs->trans('KreaBankRulesUnavailable')); }
+}
 foreach ($_SESSION['kreabank_draft_invoices'] ?? array() as $key=>$review) {
 	if ($review['expires'] < time()) { unset($_SESSION['kreabank_draft_invoices'][$key]); }
 }
@@ -1877,6 +1932,15 @@ if (!$selectedLine) {
 			print '</label>';
 			$documentAccountRef = trim((string) ($doc['bank_account_ref'] ?? ''));
 			print '<div class="kb-candidate-account krea-muted">' . $langs->trans('BankAccount') . ': <strong>' . dol_escape_htmltag($documentAccountRef !== '' ? $documentAccountRef : '—') . '</strong></div>';
+			if (!empty($doc['bank_rule'])) {
+				print '<p class="krea-muted">' . $langs->trans('KreaBankRuleEvidence', dol_escape_htmltag($doc['bank_rule']['label'])) . '</p>';
+				if (isset($doc['bank_rule']['action_evidence']['category_label'])) {
+					print '<p class="krea-muted">' . $langs->trans('KreaBankRuleCategoryEvidence', dol_escape_htmltag($doc['bank_rule']['action_evidence']['category_label'])) . '</p>';
+				}
+				if (count($doc['bank_rule']['conflicts']) > 1) {
+					print '<p class="krea-muted">' . $langs->trans('KreaBankRuleConflictEvidence', dol_escape_htmltag(implode(', ', array_column($doc['bank_rule']['conflicts'], 'label')))) . '</p>';
+				}
+			}
 			if (!empty($doc['linked_bank_line'])) {
 				$linkedLineUrl = dol_buildpath('/compta/bank/line.php?rowid=' . (int) $doc['linked_bank_line'], 1);
 				$linkedLineDate = !empty($doc['linked_bank_date']) ? dol_print_date(strtotime((string) $doc['linked_bank_date']), 'day') : '';
@@ -1987,6 +2051,21 @@ if (!$selectedLine) {
 	if ($searchOtherAccounts || !empty($otherAccountDocuments)) { print kreabankOtherAccountMovementsHtml($otherAccountDocuments, $selectedLine, $accountMoveReviews, $openDocumentsSearch, $langs); }
 	print '</section>';
 	print '<section class="kb-workflow-panel kb-create-panel" id="kb-panel-create" aria-labelledby="kb-create-heading"><h3 id="kb-create-heading">' . $langs->trans('KreaBankWorkspaceCreate') . '</h3><p class="kb-panel-intro">' . $langs->trans('KreaBankWorkspaceCreateHelp') . '</p>';
+	if ($ruleQuickReview) {
+		require_once __DIR__ . '/lib/kreabank_rules_view.lib.php';
+		$formId = 'kb-rule-quick-review';
+		print kreabankRuleQuickCard($ruleQuickReview, $formId, $langs);
+		$expires = dol_now() + 1800;
+		$scope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId;
+		$signature = kreabankBulkReviewSignature($ruleQuickReview, $scope, $expires, $_SESSION['kreabank_bulk_review_secret']);
+		print '<form method="POST" id="' . $formId . '" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">'
+			. kreabankNavigationHiddenFields($navigationAccountId) . $queueNavigationFields;
+		foreach (array('token'=>newToken(), 'action'=>'confirm_rule_entry', 'line_id'=>(int) $selectedLine['rowid'], 'line_source'=>'staged',
+			'review_doc'=>'rule__' . $ruleQuickReview['bank_rule']['id'], 'review_expires'=>$expires, 'review_signature'=>$signature) as $name=>$value) {
+			print '<input type="hidden" name="' . $name . '" value="' . dol_escape_htmltag((string) $value) . '">';
+		}
+		print '</form>';
+	}
 	if (!$canCreate) { print '<p class="kb-readonly">' . $langs->trans($creationUnavailable ? 'KreaBankWorkspaceCreationUnavailable' : 'KreaBankWorkspaceRestrictedCreation') . '</p>'; }
 	elseif ($canReconcile) {
 		$renderQuickEntryForm(

@@ -525,7 +525,7 @@ class KreaBankNativeBankAdapter
 	 * @param string $paymentOperationCode Explicit active method for a reviewed native payment
 	 * @return int
 	 */
-	public function ensureNativeLineForStatementLine($lineId, $isTransfer = false, $cardReceipt = false, $receiptOperationCode = '', $paymentOperationCode = '')
+	public function ensureNativeLineForStatementLine($lineId, $isTransfer = false, $cardReceipt = false, $receiptOperationCode = '', $paymentOperationCode = '', $manualPrefill = array())
 	{
 		$this->ensureMetaTable();
 		$this->ensureStagingTables();
@@ -568,6 +568,13 @@ class KreaBankNativeBankAdapter
 		$numChq = (string) (!empty($line['payment_reference']) ? $line['payment_reference'] : $line['bank_reference']);
 		$statementRef = !empty($line['statement_ref']) ? (string) $line['statement_ref'] : '';
 		$notePrivate = 'KreaBank staged import ' . dol_escape_htmltag((string) $line['source_type']) . ' / ' . dol_escape_htmltag((string) $line['source_file']);
+		if ($manualPrefill) {
+			if ($paymentOperationCode === '' || !preg_match('/^[a-z0-9_.-]{1,32}$/iD', (string) ($manualPrefill['accounting_account'] ?? ''))
+				|| trim((string) ($manualPrefill['label'] ?? '')) === '') { throw new RuntimeException('Invalid reviewed bank-rule prefill'); }
+			$label = $manualPrefill['label'];
+			$notePrivate .= ' / Reviewed accounting hint: ' . $manualPrefill['accounting_account']
+				. ' / Reviewed VAT hint: ' . KreaBankDecimal::normalize($manualPrefill['vat']) . '%';
+		}
 
 		$newLineId = $account->addline(
 			$dateo,
@@ -912,7 +919,16 @@ class KreaBankNativeBankAdapter
 		// Transaction dependency:
 		// callers must persist KreaBank meta/staging reconciliation status in the same DB transaction
 		// (see KreaBankService::reconcileLine -> markStatementLineReconciled) to keep native + helper tables coherent.
-		return (int) $line->update_conciliation($this->user, (int) $categoryId, 1);
+		$result = (int) $line->update_conciliation($this->user, (int) $categoryId, 1);
+		if ($result > 0 && (int) $categoryId > 0) {
+			// Native update_conciliation ignores category INSERT errors; verify its effect before audit/commit.
+			$p = $this->db->prefix();
+			$check = $this->db->query("SELECT c.rowid FROM {$p}category_bankline cb JOIN {$p}categorie c ON c.rowid=cb.fk_categ"
+				. " JOIN {$p}bank b ON b.rowid=cb.lineid JOIN {$p}bank_account ba ON ba.rowid=b.fk_account"
+				. ' WHERE c.entity=' . $this->entity . ' AND ba.entity=' . $this->entity . ' AND b.rowid=' . $lineId . ' AND c.rowid=' . (int) $categoryId);
+			if (!$check || !$this->db->fetch_object($check)) { return -1; }
+		}
+		return $result;
 	}
 
 	/**

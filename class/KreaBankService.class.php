@@ -15,6 +15,7 @@ require_once __DIR__ . '/KreaBankTaxReconciliation.class.php';
 require_once __DIR__ . '/KreaBankStatementEvidence.class.php';
 require_once __DIR__ . '/KreaBankPaymentBatchTrait.php';
 require_once __DIR__ . '/KreaBankWorklistMovementTrait.php';
+require_once __DIR__ . '/KreaBankRuleServiceTrait.php';
 require_once __DIR__ . '/../lib/kreabank.lib.php';
 
 /**
@@ -39,6 +40,7 @@ class KreaBankService
 {
 	use KreaBankPaymentBatchTrait;
 	use KreaBankWorklistMovementTrait;
+	use KreaBankRuleServiceTrait;
 
 	/** Legacy samples were repeatedly scaled and cannot be reconstructed safely. */
 	const BATCH_ML_FEATURE_VERSION = 2;
@@ -1452,7 +1454,7 @@ class KreaBankService
 	 * @param bool $draftOnly Review-only drafts; ordinary matching remains validated-only
 	 * @return array<int,array<string,mixed>>
 	 */
-	protected function getOpenInvoiceDocuments($direction = 0, $limit = 250, $anchorDate = null, $intervalDays = null, $draftOnly = false, $search = '')
+	protected function getOpenInvoiceDocuments($direction = 0, $limit = 250, $anchorDate = null, $intervalDays = null, $draftOnly = false, $search = '', $thirdpartyId = 0)
 	{
 		$documents = array();
 		$limit = max(20, (int) $limit);
@@ -1471,6 +1473,7 @@ class KreaBankService
 			$sql .= " FROM " . $this->db->prefix() . "facture as f";
 			$sql .= ' LEFT JOIN ' . $this->db->prefix() . 'societe as s ON s.rowid = f.fk_soc';
 			$sql .= ' WHERE f.entity = ' . ((int) $this->entity);
+			if ($thirdpartyId > 0) { $sql .= ' AND s.entity=' . $this->entity . ' AND f.fk_soc=' . (int) $thirdpartyId; }
 			$sql .= $draftOnly ? ' AND f.fk_statut = 0 AND f.paye = 0' : ' AND f.fk_statut = 1 AND f.paye = 0';
 			$sql .= ' AND f.type <> 2';
 			$sql .= ' AND ' . $customerAmountOpenSql . ' > 0.0000001';
@@ -1499,6 +1502,7 @@ class KreaBankService
 						'ref' => (string) $obj->ref,
 						'ref_client' => (string) $obj->ref_client,
 						'amount_open' => $amountOpen,
+						'amount_open_exact' => (string) $obj->amount_open,
 						'doc_date' => $obj->doc_date,
 						'fk_soc' => (int) $obj->fk_soc,
 						'thirdparty_name' => (string) $obj->thirdparty_name,
@@ -1520,6 +1524,7 @@ class KreaBankService
 			$sqlf .= ' FROM ' . $this->db->prefix() . 'facture_fourn as f';
 			$sqlf .= ' LEFT JOIN ' . $this->db->prefix() . 'societe as s ON s.rowid = f.fk_soc';
 			$sqlf .= ' WHERE f.entity = ' . ((int) $this->entity);
+			if ($thirdpartyId > 0) { $sqlf .= ' AND s.entity=' . $this->entity . ' AND f.fk_soc=' . (int) $thirdpartyId; }
 			$sqlf .= $draftOnly ? ' AND f.fk_statut = 0 AND f.paye = 0' : ' AND f.fk_statut = 1 AND f.paye = 0';
 			$sqlf .= ' AND f.type <> 2';
 			$sqlf .= ' AND ' . $supplierAmountOpenSql . ' > 0.0000001';
@@ -1548,6 +1553,7 @@ class KreaBankService
 						'ref' => (string) $obj->ref,
 						'ref_client' => (string) $obj->ref_client,
 						'amount_open' => $amountOpen,
+						'amount_open_exact' => (string) $obj->amount_open,
 						'doc_date' => $obj->doc_date,
 						'fk_soc' => (int) $obj->fk_soc,
 						'thirdparty_name' => (string) $obj->thirdparty_name,
@@ -2283,6 +2289,7 @@ class KreaBankService
 				$links[0]['match_reasons'] = $fresh['suggestion']['details'];
 			}
 			$scope->assertLine($line);
+			if ($isReviewedBulk) { $this->assertBankRuleReview($reviewedRow, $line); }
 			if (!empty($line['fk_statement']) && $this->paymentBatchMapsAvailable()) {
 				$active = $this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'kreabank_payment_batch WHERE entity=' . $this->entity . ' AND active_statement_line=' . (int) $line['rowid'] . ' FOR UPDATE');
 				if ($active) { throw new DomainException('An active payment batch already owns this statement line'); }
@@ -2310,8 +2317,25 @@ class KreaBankService
 			} else {
 				$taxModeCode = in_array($links[0]['doc_type'], array('tax','payment_tax'), true)
 					? (new KreaBankTaxReconciliation($this->db, $this->user, $this->entity))->paymentModeCode((int) ($reviewedRow['suggestion']['tax_payment_mode_id'] ?? 0)) : '';
-				$nativeLineId = $this->resolveNativeLineIdFromStatementLine($line, true, $taxModeCode);
+				$ruleCreation = $reviewedRow['rule_creation'] ?? array();
+				if ($ruleCreation) {
+					if ($taxModeCode !== '' || !empty($line['native_bank_line_id']) || $ruleCreation['type'] !== 'quick_entry'
+						|| !isset(KreaBankNativeBankAdapter::activePaymentModes($this->db, true)[$ruleCreation['payment_mode']])) {
+						throw new RuntimeException('Rule entry requires a new movement and its explicit active payment mode');
+					}
+					$taxModeCode = $ruleCreation['payment_mode'];
+				}
+				$nativeLineId = $ruleCreation
+					? (int) $this->native->ensureNativeLineForStatementLine((int) $line['rowid'], false, false, '', $taxModeCode, $ruleCreation)
+					: $this->resolveNativeLineIdFromStatementLine($line, true, $taxModeCode);
 				$nativeLine = $this->buildNativeLineContext($line, $nativeLineId);
+				if ($ruleCreation) {
+					$persisted = $this->transferRows('SELECT b.amount FROM ' . $this->db->prefix() . 'bank b JOIN ' . $this->db->prefix()
+						. 'bank_account ba ON ba.rowid=b.fk_account WHERE ba.entity=' . $this->entity . ' AND ba.rowid=' . (int) $line['bank_account_id'] . ' AND b.rowid=' . $nativeLineId);
+					if (count($persisted) !== 1 || KreaBankDecimal::compare((string) $persisted[0]->amount, $ruleCreation['source_amount']) !== 0) {
+						throw new RuntimeException('Native rule-entry amount differs from the reviewed source');
+					}
+				}
 			}
 			if ($isReviewedBulk && ($selectedNativeBankLink !== null || $selectedLinkedPaymentBankLink !== null)) {
 				$selectedBankLine = $this->native->getBankLineById($nativeLineId);
@@ -2450,12 +2474,15 @@ class KreaBankService
 				);
 			}
 
+			if ($isReviewedBulk) { $this->recordBankRuleReview($reviewedRow, $line); }
 			$this->finalizeNativeReconciliation($line, $nativeLineId, $outstanding, $isReviewedBulk ? $reviewSource : null,
 				($isAutomaticNative || $isReviewedBulk) ? array(
 					'strategy' => $strategy, 'is_auto' => (int) $isAuto, 'confidence_score' => $confidenceScore,
 					'links' => $links, 'native' => 1, 'native_bank_line_id' => $nativeLineId,
-				) + ($isSelectedNativeReview ? array('approval_context'=>'selected_native',
-					'other_account_warning'=>!empty($reviewedRow['other_account_warning'])) : array()) : null);
+				) + (!empty($reviewedRow['bank_rule']) ? array('bank_rule'=>$reviewedRow['bank_rule'], 'bank_rule_target'=>$reviewedRow['bank_rule_target'] ?? null, 'rule_creation'=>$reviewedRow['rule_creation'] ?? null) : array())
+				+ ($isSelectedNativeReview ? array('approval_context'=>'selected_native',
+					'other_account_warning'=>!empty($reviewedRow['other_account_warning'])) : array()) : null,
+				$isReviewedBulk ? $this->bankRuleCategory($reviewedRow) : 0);
 			if (!$this->db->commit()) {
 				throw new Exception('Failed to commit bank reconciliation; inspect its status before retrying');
 			}
@@ -3216,11 +3243,11 @@ class KreaBankService
 	 * @param string $note
 	 * @return int
 	 */
-	public function createQuickEntryAndReconcile($lineId, $entryType, $label, $amount, $fkSoc = 0, $note = '')
+	public function createQuickEntryAndReconcile($lineId, $entryType, $label, $amount, $fkSoc = 0, $note = '', $ruleReview = null)
 	{
 		$this->ensureQuickEntryTable();
 
-		$line = $this->getLineById($lineId);
+		$line = $ruleReview ? $this->getBulkReviewLine($lineId, 'staged') : $this->getLineById($lineId);
 		if (!$line) {
 			throw new Exception('Unknown statement line');
 		}
@@ -3229,17 +3256,17 @@ class KreaBankService
 			throw new Exception('Bank line already reconciled');
 		}
 
-		$amount = abs((float) price2num((string) $amount, 'MU'));
-		if ($amount <= 0.00001) {
-			throw new Exception('Quick entry amount must be positive');
-		}
-
-		$outstanding = max(0.0, abs((float) $line['amount']) - abs((float) $line['allocated_amount']));
-		if ($amount > $outstanding) {
-			$amount = $outstanding;
-		}
-		if (abs($amount - $outstanding) > 0.01) {
-			throw new Exception('Tax quick flow requires full allocation of the statement line amount');
+		if ($ruleReview) {
+			$amount = KreaBankDecimal::abs($amount);
+			$evidence = $this->bankRuleLineEvidence($line);
+			if ($amount === '0' || KreaBankDecimal::compare($amount, KreaBankDecimal::abs($evidence['amount'])) !== 0
+				|| KreaBankDecimal::compare((string) $line['allocated_amount'], '0') !== 0) { throw new RuntimeException('Rule entry requires the exact unallocated statement amount'); }
+		} else {
+			$amount = abs((float) price2num((string) $amount, 'MU'));
+			if ($amount <= 0.00001) { throw new Exception('Quick entry amount must be positive'); }
+			$outstanding = max(0.0, abs((float) $line['amount']) - abs((float) $line['allocated_amount']));
+			if ($amount > $outstanding) { $amount = $outstanding; }
+			if (abs($amount - $outstanding) > 0.01) { throw new Exception('Tax quick flow requires full allocation of the statement line amount'); }
 		}
 
 		$now = dol_now();
@@ -3271,6 +3298,10 @@ class KreaBankService
 		$quickRef = 'QE' . str_pad((string) $quickEntryId, 8, '0', STR_PAD_LEFT);
 
 		try {
+			if ($ruleReview) {
+				$ruleReview['suggestion']['doc_id'] = $quickEntryId;
+				$ruleReview['suggestion']['doc_ref'] = $quickRef;
+			}
 			$this->reconcileLine(
 				(int) $lineId,
 				array(array(
@@ -3281,10 +3312,10 @@ class KreaBankService
 					'match_score' => 0,
 					'match_reasons' => array('manual_quick_entry'),
 				)),
-				'quick_entry',
+				$ruleReview ? 'bulk_manual' : 'quick_entry',
 				0,
 				$note,
-				0
+				0, null, $ruleReview
 			);
 		} catch (Exception $e) {
 			$reconcileError = trim((string) preg_replace('/\s+/', ' ', (string) $e->getMessage()));
@@ -3947,10 +3978,10 @@ class KreaBankService
 	}
 
 	/** Shared native + staging + audit persistence; callers own the transaction and locks. */
-	protected function finalizeNativeReconciliation($line, $nativeLineId, $amount, $source = null, $audit = null)
+	protected function finalizeNativeReconciliation($line, $nativeLineId, $amount, $source = null, $audit = null, $categoryId = 0)
 	{
 		$label = !empty($line['statement_ref']) ? (string) $line['statement_ref'] : 'KREABANK-' . dol_print_date(dol_now(), '%Y%m%d');
-		if ($this->native->conciliateLine($nativeLineId, $label, 0) <= 0
+		if ($this->native->conciliateLine($nativeLineId, $label, $categoryId) <= 0
 			|| !$this->native->markStatementLineReconciled((int) $line['rowid'], $amount, $nativeLineId, $source)) {
 			throw new Exception('Failed to persist native and statement reconciliation');
 		}
