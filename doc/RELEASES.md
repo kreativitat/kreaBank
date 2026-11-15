@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.34 — 2026-11-15
+
+- Use KreaBank consistently for the Portuguese module and workspace name.
+
 ## 1.20.33 — 2026-11-15
 
 - Preserve native Select2 hidden-control sizing in transfer cards; verify accessible account names, focus and exact form values with the installed selector library.

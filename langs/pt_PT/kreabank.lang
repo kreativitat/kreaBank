@@ -34,7 +34,7 @@ KreaBankFeedRefreshHelp=Requer um token com permissão de escrita. Utiliza apena
 KreaBankFeedCoverage=Cobertura por empresa
 KreaBankFeedCoverageHelp=Cada conta de origem necessita de um IBAN e moeda correspondentes a uma única conta da empresa titular. Ligue as restantes contas no Fintable para completar a cobertura.
 KreaBankFeedMappedAccounts=Contas ligadas / contas bancárias
-ModuleKreaBankName=Reconciliacao KreaBank
+ModuleKreaBankName=KreaBank
 ModuleKreaBankDesc=Assistente nativo de banco para importacao e reconciliacao em /compta/bank
 ModuleKreaBankDescLong=O KreaBank estende os fluxos nativos de banco do Dolibarr com mapeamento de importacao, assistencia de conciliacao e auditoria, mantendo as tabelas nativas como fonte oficial.
 Action=Acao
@@ -125,7 +125,7 @@ KreaBankSecretIdPlaceholder=ID de cliente API / secret id
 KreaBankSecretKeyPlaceholder=Segredo API / token
 
 # Workspace/menu
-KreaBankArea=Reconciliacao KreaBank
+KreaBankArea=KreaBank
 KreaBankReconcile=Reconciliar
 KreaBankBulkMatch=Reconciliar em lote
 KreaBankGuide=Como usar
@@ -534,6 +534,7 @@ KreaBankSortList=Ordenar lista
 KreaBankTpaEnable=Criar e conciliar automaticamente recebimentos de terminais de pagamento (TPA)
 KreaBankTpaHelp=Para fechos TPA positivos reconhecidos nas contas selecionadas da empresa, reutiliza uma correspondência comprovada ou cria um recebimento bancário com o modo de pagamento selecionado. Movimentos ou identificadores de fecho em conflito ficam pendentes. Regista apenas o recebimento bancário; não cria faturas nem pagamentos de faturas.
 KreaBankTpaNewReceipt=Criar recebimento de TPA
+
 KreaBankTpaPaymentMode=Modo de pagamento dos recebimentos de TPA (obrigatório)
 KreaBankLedgerBalance=Saldo Dolibarr
 
