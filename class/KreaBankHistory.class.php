@@ -4,6 +4,7 @@
  */
 require_once __DIR__ . '/kreabankintegration.class.php';
 require_once __DIR__ . '/KreaBankPaymentBatchTrait.php';
+require_once __DIR__ . '/KreaBankWriteOff.class.php';
 
 /** Read-only History projection. IDs always retain their storage namespace. */
 class KreaBankHistory
@@ -36,7 +37,9 @@ class KreaBankHistory
 		if (!in_array($source, array('staged', 'native'), true) || (int) $id <= 0) { return null; }
 		$rows = $this->rows($this->sql($accountId) . ' AND h.rowid=' . (int) $id
 			. " AND h.source_storage='" . ($source === 'staged' ? 'staging' : 'legacy_native') . "'");
-		return count($rows) === 1 ? $this->prepare($rows[0]) : null;
+		if (count($rows) !== 1) { return null; }
+		$audits = $this->audits(100, ' AND a.fk_statement_line=' . (int) $id . " AND a.audit_type='reconcile'");
+		return $this->withReconciliationAudit($this->prepare($rows[0]), $audits[(int) $id] ?? array());
 	}
 
 	private function prepare($row)
@@ -63,24 +66,29 @@ class KreaBankHistory
 		$audits = $ids ? $this->audits(5000, ' AND a.fk_statement_line IN (' . implode(',', $ids) . ") AND a.audit_type='reconcile'") : array();
 		$out = array();
 		foreach ($rows as $row) {
-			$row = $this->prepare($row);
-			foreach ($audits[$row['rowid']] ?? array() as $audit) {
-				$payload = json_decode((string) $audit['payload_json'], true);
-				if (!is_array($payload)) { continue; }
-				if (isset($payload['source']) && $payload['source'] !== $row['line_source']) { continue; }
-				if (!empty($payload['native_bank_line_id']) && (int) $payload['native_bank_line_id'] !== (int) $row['native_bank_line_id']) { continue; }
-				// Untagged historical IDs are ambiguous when both namespaces contain that ID.
-				if (empty($payload['source']) && empty($payload['native_bank_line_id']) && empty($payload['batch_id'])) { continue; }
-				if (!empty($payload['batch_id']) && (int) $payload['batch_id'] !== (int) $row['group_id']) { continue; }
-				$row['history_audit'] = $audit;
-				$row['date_validate'] = $audit['datec'];
-				$row['strategy'] = (string) ($payload['strategy'] ?? $row['strategy']);
-				$row['confidence_score'] = (int) ($payload['confidence_score'] ?? 0);
-				break;
-			}
-			$out[] = $row;
+			$out[] = $this->withReconciliationAudit($this->prepare($row), $audits[$row['rowid']] ?? array());
 		}
 		return $out;
+	}
+
+	private function withReconciliationAudit($row, $audits)
+	{
+		foreach ($audits as $audit) {
+			$payload = json_decode((string) $audit['payload_json'], true);
+			if (!is_array($payload)) { continue; }
+			if (isset($payload['source']) && $payload['source'] !== $row['line_source']) { continue; }
+			if (!empty($payload['native_bank_line_id']) && (int) $payload['native_bank_line_id'] !== (int) $row['native_bank_line_id']) { continue; }
+			// Untagged historical IDs are ambiguous when both namespaces contain that ID.
+			if (empty($payload['source']) && empty($payload['native_bank_line_id']) && empty($payload['batch_id'])) { continue; }
+			if (!empty($payload['batch_id']) && (int) $payload['batch_id'] !== (int) $row['group_id']) { continue; }
+			$row['history_audit'] = $audit;
+			$row['date_validate'] = $audit['datec'];
+			$row['strategy'] = (string) ($payload['strategy'] ?? $row['strategy']);
+			$row['confidence_score'] = (int) ($payload['confidence_score'] ?? 0);
+			break;
+		}
+		if ($row['strategy'] === 'manual_writeoff' && !KreaBankWriteOff::undoSnapshotFromHistory($row)) { $row['needs_review'] = true; }
+		return $row;
 	}
 
 	/** Account pages fetch only events for their displayed source IDs. No schema writes. */
@@ -133,6 +141,8 @@ class KreaBankHistory
 		foreach (array('rowid','line_source','bank_account_id','native_bank_line_id','amount','native_amount','currency','status','rappro','statement_ref','num_releve','operation_date','description','group_id','needs_review') as $field) {
 			$out[$field] = (string) ($row[$field] ?? '');
 		}
+		$writeoff = KreaBankWriteOff::undoSnapshotFromHistory($row);
+		if ($writeoff) { $out['writeoff'] = $writeoff; }
 		return $out;
 	}
 }

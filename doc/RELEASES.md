@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.43 — 2026-11-15
+
+- Add opt-in, signed small-difference invoice payments with exact company limits and reason accounts. Customer closing uses native reasons; supplier residuals retain native partial-payment status.
+- Audit payment, difference and account atomically; History undo reverses the created payment and reopens the invoice while preserving bank evidence. No schema or scheduler change. See [payment differences](WRITE_OFF.md).
+- Keep rule actions confined to the selected-line cards that display their signed evidence.
+
 ## 1.20.42 — 2026-11-15
 
 - Add company-owned advisory bank rules with configuration, bounded previews and signed selected-line approval. Rule usage and reconciliation audit commit together; automatic matching is unchanged. Accounting/VAT quick-entry values remain review hints.

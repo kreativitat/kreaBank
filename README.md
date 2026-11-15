@@ -58,6 +58,11 @@ reviewed bank-entry prefills and category advice. New rules start disabled and
 never affect automatic matching. Accounting account and VAT values remain review
 hints; usage is recorded only with successful approved reconciliation.
 
+Optional [small-difference payments](doc/WRITE_OFF.md) add a reviewed action within
+eligible invoice cards. Both company limits and all reason accounts are required.
+The feature starts off; History can reverse its payment through native lifecycle
+calls while preserving imported bank evidence.
+
 Native internal transfers use Dolibarr's own transfer form and posting lifecycle.
 KreaBank presents its controls as labelled, full-width responsive cards, including
 additional transfers, without replacing native validation or financial execution.

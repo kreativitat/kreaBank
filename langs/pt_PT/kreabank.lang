@@ -903,3 +903,27 @@ KreaBankRuleConflictEvidence=Regras correspondentes: %s. A primeira regra por pr
 KreaBankRuleAccountingHints=Indicações para revisão — conta: %s; IVA: %s%%. Não é criado qualquer lançamento contabilístico ou de IVA.
 KreaBankRuleCategoryEvidence=Categoria a aplicar: %s
 KreaBankRulePaymentMode=Método de pagamento
+
+# Reviewed payment differences
+KreaBankWriteOffTitle=Pequenas diferenças de pagamento
+KREABANK_WRITEOFF_ENABLED=Ativar diferenças de pagamento revistas
+KREABANK_WRITEOFF_MAX_ABS=Diferença máxima em valor
+KREABANK_WRITEOFF_MAX_PERCENT=Diferença máxima (%)
+KREABANK_WRITEOFF_ACCOUNT_BANK_FEE=Conta para comissões bancárias
+KREABANK_WRITEOFF_ACCOUNT_ROUNDING=Conta para arredondamentos
+KREABANK_WRITEOFF_ACCOUNT_DISCOUNT_GRANTED=Conta para descontos concedidos
+KREABANK_WRITEOFF_ACCOUNT_DISCOUNT_RECEIVED=Conta para descontos obtidos
+KreaBankWriteOffSetupHelp=Desativado por predefinição. Configure ambos os limites e as quatro contas contabilísticas ativas da empresa. As faturas de clientes utilizam o fecho parcial nativo; as faturas de fornecedores mantêm o estado de pagamento definido pelo Dolibarr. Não é criado outro movimento bancário nem lançamento contabilístico.
+KreaBankWriteOffAction=Registar pagamento com diferença
+KreaBankWriteOffAmounts=Pagamento bancário: %s. Diferença: %s.
+KreaBankWriteOffReason=Motivo e conta contabilística
+KreaBankWriteOffChooseReason=Selecione um motivo
+KreaBankWriteOffReason_bank_fee=Comissão bancária
+KreaBankWriteOffReason_rounding=Arredondamento
+KreaBankWriteOffReason_discount_granted=Desconto concedido
+KreaBankWriteOffReason_discount_received=Desconto obtido
+KreaBankWriteOffCustomerOutcome=Regista o montante bancário e fecha esta fatura com o motivo nativo selecionado. A diferença e a conta ficam no registo de auditoria.
+KreaBankWriteOffSupplierOutcome=Regista o montante bancário. A fatura do fornecedor mantém-se parcialmente paga, salvo fecho pela política de pagamento nativa; a diferença e a conta ficam no registo de auditoria.
+KreaBankWriteOffDone=Pagamento com diferença registado e conciliado.
+KreaBankWriteOffSupplierPartialDone=Pagamento registado e conciliado. A fatura do fornecedor mantém-se parcialmente paga, com o saldo remanescente.
+KreaBankWriteOffUnavailable=A revisão da diferença de pagamento está indisponível. Atualize a fatura antes de aprovar.

@@ -8,6 +8,10 @@
 
 - 2026-11-15: `KreaBankRule` and `KreaBankRuleServiceTrait` add selected-line advice only. Sign the exact rule/source/target/conflict snapshots, recheck them under existing reconciliation locks, and commit usage with the audit. Never pass rule evidence to unattended or bulk matching. New rules are inactive; schema installation is explicit and idempotent. Accounting/VAT quick-entry values are review hints by user choice. See [bank rules](doc/BANK_RULES.md).
 
+## Reviewed invoice differences
+
+- 2026-11-15: `KreaBankWriteOff` and its service/native traits extend only signed selected-line `manual_writeoff` approvals through `reconcileLine()`. Lock company-local configuration and exact source/invoice/payment facts; require both limits and active reason accounts. Customer closure uses native codes; never force supplier residuals paid. Audit and undo preserve the native bank evidence and reverse only the created payment. Never feed this action to the matcher or learning. See [payment differences](doc/WRITE_OFF.md).
+
 ## Separate reconciliation list
 
 - `reconciliationlist.php` is additive; keep `reconcile.php` and its assets unchanged

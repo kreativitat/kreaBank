@@ -7,6 +7,7 @@
  */
 require __DIR__ . '/test_bulk_review_database.php';
 require_once __DIR__ . '/../class/KreaBankRule.class.php';
+require_once __DIR__ . '/../lib/kreabank_manual_review.lib.php';
 $initialChecks = $checks;
 $conf->modules_parts = array('hooks'=>array());
 function dol_trunc($value, $length, $mode = 'right', $charset = '', $dots = 1) { return substr($value,0,$length); }
@@ -79,6 +80,12 @@ $advice=KreaBankRule::evaluate($rules->all(true),$line);
 checkAuto((int)$advice['winner']['rowid']===$id, 'An owned active rule provides advisory evidence');
 checkAuto($service->getAutomaticNativeSuggestion(82000,array(101))===null, 'A matching rule never makes amount/date-only evidence automatically safe');
 checkAuto((int)$rules->all()[0]['hit_count']===0, 'Evaluation never increments usage');
+$worklistCallbacks = kreabankManualReviewCallbacks($service, 3, 100, false);
+$worklistRows = $worklistCallbacks['prepareDocumentReviews']($line);
+checkAuto(count($worklistRows) > 0, 'Shared list review retains ordinary manual candidates while a rule matches');
+foreach ($worklistRows as $worklistRow) {
+	checkAuto(empty($worklistRow['bank_rule']), 'Shared list review never receives undisplayed selected-line rule actions');
+}
 rejectAuto(static function()use($rules,$id,$active,$line){$rules->recordHit($id,$active['revision'],$line);}, 'Usage cannot update outside the approval transaction');
 $row=reviewedFixture(82000,92000);
 $row['bank_rule']=KreaBankService::bankRuleReviewSnapshot($service->getBankRuleAdvice($line));

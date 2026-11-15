@@ -8,6 +8,7 @@
  */
 
 require_once DOL_DOCUMENT_ROOT . '/compta/bank/class/account.class.php';
+require_once __DIR__ . '/KreaBankWriteOffNativeTrait.php';
 
 /**
  * Adapter to persist KreaBank statement imports and native reconciliation links.
@@ -17,6 +18,7 @@ require_once DOL_DOCUMENT_ROOT . '/compta/bank/class/account.class.php';
  */
 class KreaBankNativeBankAdapter
 {
+	use KreaBankWriteOffNativeTrait;
 	/** @var DoliDB */
 	protected $db;
 

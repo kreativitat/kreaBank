@@ -242,6 +242,33 @@ $item->fieldAttr['min'] = '200';
 $item->fieldAttr['max'] = '10000';
 $item->helpText = $langs->trans('KreaBankBulkScanBudgetHelp');
 
+$formSetup->newItem('KreaBankWriteOffTitle')->setAsTitle();
+$writeOffSettingNames = array('KREABANK_WRITEOFF_ENABLED', 'KREABANK_WRITEOFF_MAX_ABS', 'KREABANK_WRITEOFF_MAX_PERCENT',
+	'KREABANK_WRITEOFF_ACCOUNT_BANK_FEE', 'KREABANK_WRITEOFF_ACCOUNT_ROUNDING', 'KREABANK_WRITEOFF_ACCOUNT_DISCOUNT_GRANTED', 'KREABANK_WRITEOFF_ACCOUNT_DISCOUNT_RECEIVED');
+$writeOffLocalValues = array();
+$writeOffSettingResult = $db->query('SELECT name,value FROM ' . MAIN_DB_PREFIX . 'const WHERE entity=' . (int) $conf->entity
+	. " AND name IN ('" . implode("','", $writeOffSettingNames) . "')");
+if ($writeOffSettingResult) {
+	while ($setting = $db->fetch_object($writeOffSettingResult)) { $writeOffLocalValues[$setting->name] = $setting->value; }
+}
+// Native setup normally displays inherited globals; these settings are explicitly company-local.
+foreach ($writeOffSettingNames as $name) { $conf->global->$name = $writeOffLocalValues[$name] ?? ''; }
+$item = $formSetup->newItem('KREABANK_WRITEOFF_ENABLED')->setAsYesNo();
+$item->helpText = $langs->trans('KreaBankWriteOffSetupHelp');
+$item = $formSetup->newItem('KREABANK_WRITEOFF_MAX_ABS');
+$item->fieldAttr['type'] = 'number'; $item->fieldAttr['step'] = '0.01'; $item->fieldAttr['min'] = '0.01';
+$item = $formSetup->newItem('KREABANK_WRITEOFF_MAX_PERCENT');
+$item->fieldAttr['type'] = 'number'; $item->fieldAttr['step'] = '0.01'; $item->fieldAttr['min'] = '0.01'; $item->fieldAttr['max'] = '100';
+$writeOffAccounts = array(''=>'—');
+$writeOffAccountResult = $db->query('SELECT account_number,label FROM ' . MAIN_DB_PREFIX . 'accounting_account WHERE entity=' . (int) $conf->entity . ' AND active=1 ORDER BY account_number');
+if ($writeOffAccountResult) {
+	while ($account = $db->fetch_object($writeOffAccountResult)) { $writeOffAccounts[$account->account_number] = $account->account_number . ' — ' . $account->label; }
+}
+$formSetup->newItem('KREABANK_WRITEOFF_ACCOUNT_BANK_FEE')->setAsSelect($writeOffAccounts);
+$formSetup->newItem('KREABANK_WRITEOFF_ACCOUNT_ROUNDING')->setAsSelect($writeOffAccounts);
+$formSetup->newItem('KREABANK_WRITEOFF_ACCOUNT_DISCOUNT_GRANTED')->setAsSelect($writeOffAccounts);
+$formSetup->newItem('KREABANK_WRITEOFF_ACCOUNT_DISCOUNT_RECEIVED')->setAsSelect($writeOffAccounts);
+
 $formSetup->newItem('KreaBankImportTitle')->setAsTitle();
 $formSetup->newItem('KREABANK_DEFAULT_IMPORT_DELIMITER')->setAsSelect(array(
 	';' => $langs->trans('KreaBankDelimiterSemicolon'),

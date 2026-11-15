@@ -903,3 +903,27 @@ KreaBankRuleConflictEvidence=Matching rules: %s. The first rule by priority supp
 KreaBankRuleAccountingHints=Review hints — account: %s; VAT: %s%%. No accounting or VAT entry is created.
 KreaBankRuleCategoryEvidence=Category to apply: %s
 KreaBankRulePaymentMode=Payment method
+
+# Reviewed payment differences
+KreaBankWriteOffTitle=Small payment differences
+KREABANK_WRITEOFF_ENABLED=Enable reviewed payment differences
+KREABANK_WRITEOFF_MAX_ABS=Maximum absolute difference
+KREABANK_WRITEOFF_MAX_PERCENT=Maximum difference (%)
+KREABANK_WRITEOFF_ACCOUNT_BANK_FEE=Bank fee account
+KREABANK_WRITEOFF_ACCOUNT_ROUNDING=Rounding account
+KREABANK_WRITEOFF_ACCOUNT_DISCOUNT_GRANTED=Discounts granted account
+KREABANK_WRITEOFF_ACCOUNT_DISCOUNT_RECEIVED=Discounts received account
+KreaBankWriteOffSetupHelp=Off by default. Set both limits and all four active company-owned accounting accounts. Customer invoices use native partial closing; supplier invoices retain their native remaining-payment status. No extra bank movement or accounting posting is created.
+KreaBankWriteOffAction=Record payment with difference
+KreaBankWriteOffAmounts=Bank payment: %s. Difference: %s.
+KreaBankWriteOffReason=Reason and accounting account
+KreaBankWriteOffChooseReason=Choose a reason
+KreaBankWriteOffReason_bank_fee=Bank fee
+KreaBankWriteOffReason_rounding=Rounding
+KreaBankWriteOffReason_discount_granted=Discount granted
+KreaBankWriteOffReason_discount_received=Discount received
+KreaBankWriteOffCustomerOutcome=Records the bank amount and closes this invoice with the selected native reason. The difference and account are retained in the audit.
+KreaBankWriteOffSupplierOutcome=Records the bank amount. The supplier invoice remains partially paid unless its native payment policy closes it; the difference and account are retained in the audit.
+KreaBankWriteOffDone=Payment with difference recorded and reconciled.
+KreaBankWriteOffSupplierPartialDone=Payment recorded and reconciled. The supplier invoice remains partially paid with its remaining balance.
+KreaBankWriteOffUnavailable=Payment-difference review is unavailable. Reload the invoice before approving it.

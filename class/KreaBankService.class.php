@@ -16,6 +16,7 @@ require_once __DIR__ . '/KreaBankStatementEvidence.class.php';
 require_once __DIR__ . '/KreaBankPaymentBatchTrait.php';
 require_once __DIR__ . '/KreaBankWorklistMovementTrait.php';
 require_once __DIR__ . '/KreaBankRuleServiceTrait.php';
+require_once __DIR__ . '/KreaBankWriteOffServiceTrait.php';
 require_once __DIR__ . '/../lib/kreabank.lib.php';
 
 /**
@@ -41,6 +42,7 @@ class KreaBankService
 	use KreaBankPaymentBatchTrait;
 	use KreaBankWorklistMovementTrait;
 	use KreaBankRuleServiceTrait;
+	use KreaBankWriteOffServiceTrait;
 
 	/** Legacy samples were repeatedly scaled and cannot be reconstructed safely. */
 	const BATCH_ML_FEATURE_VERSION = 2;
@@ -2142,6 +2144,9 @@ class KreaBankService
 	public function reconcileLine($lineId, $links, $strategy = 'manual', $isAuto = 0, $note = '', $confidenceScore = 0, $automaticAccounts = null, $reviewedRow = null)
 	{
 		$isReviewedBulk = $reviewedRow !== null;
+		$isWriteOff = !empty($reviewedRow['writeoff']);
+		if (($strategy === 'manual_writeoff') !== $isWriteOff || ($isWriteOff && (!in_array($links[0]['doc_type'] ?? '', array('customer_invoice','supplier_invoice'), true)
+			|| !empty($reviewedRow['bank_rule'])))) { throw new RuntimeException('Invoice differences require their explicit signed manual review'); }
 		$isSelectedNativeReview = ($reviewedRow['approval_context'] ?? '') === 'selected_native';
 		foreach ($links as $link) {
 			if (in_array($link['doc_type'] ?? '', array('tax', 'payment_tax'), true) && (!$isReviewedBulk || $isAuto)) {
@@ -2161,13 +2166,14 @@ class KreaBankService
 				|| self::automaticDecimal($reviewedRow['allocation'] ?? 0) !== ltrim(self::automaticDecimal($reviewedRow['line']['amount'] ?? 0), '-'))) {
 				throw new Exception('Invalid selected native movement review');
 			}
-			if ($strategy !== 'bulk_manual' || (int) $isAuto !== 0 || $automaticAccounts !== null || count($links) !== 1
+			if ($strategy !== ($isWriteOff ? 'manual_writeoff' : 'bulk_manual') || (int) $isAuto !== 0 || $automaticAccounts !== null || count($links) !== 1
 				|| !$this->user->hasRight('kreabank', 'reconciliation', 'write')
 				|| (!$this->user->hasRight('banque', 'modifier') && !$this->user->hasRight('banque', 'consolidate'))
 				|| (int) ($reviewedRow['line']['rowid'] ?? 0) !== (int) $lineId
 				|| (string) ($reviewedRow['suggestion']['doc_type'] ?? '') !== (string) ($links[0]['doc_type'] ?? '')
 				|| (int) ($reviewedRow['suggestion']['doc_id'] ?? 0) !== (int) ($links[0]['fk_doc'] ?? 0)
-				|| abs((float) ($reviewedRow['allocation'] ?? 0) - (float) ($links[0]['allocated_amount'] ?? 0)) > 0.00000001) {
+				|| ($isWriteOff ? KreaBankDecimal::compare($reviewedRow['allocation'] ?? '0', $links[0]['allocated_amount'] ?? '0') !== 0
+					: abs((float) ($reviewedRow['allocation'] ?? 0) - (float) ($links[0]['allocated_amount'] ?? 0)) > 0.00000001)) {
 				throw new Exception('Invalid manual bank reconciliation review');
 			}
 		}
@@ -2243,6 +2249,7 @@ class KreaBankService
 			throw new Exception('Failed to start database transaction');
 		}
 		$companyLinks = array();
+		$writeOffAudit = null;
 		try {
 			$this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'bank_account WHERE entity=' . $this->entity . ' AND rowid=' . (int) $line['bank_account_id'] . ' FOR UPDATE');
 			// Serialize scheduled and manual claims on the same staged record.
@@ -2290,6 +2297,7 @@ class KreaBankService
 			}
 			$scope->assertLine($line);
 			if ($isReviewedBulk) { $this->assertBankRuleReview($reviewedRow, $line); }
+			if ($isWriteOff) { $reviewedRow = $this->revalidateWriteOffReview($reviewedRow, $line); }
 			if (!empty($line['fk_statement']) && $this->paymentBatchMapsAvailable()) {
 				$active = $this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'kreabank_payment_batch WHERE entity=' . $this->entity . ' AND active_statement_line=' . (int) $line['rowid'] . ' FOR UPDATE');
 				if ($active) { throw new DomainException('An active payment batch already owns this statement line'); }
@@ -2347,7 +2355,7 @@ class KreaBankService
 			}
 
 			foreach ($links as $link) {
-				$allocatedAmount = abs((float) price2num((string) $link['allocated_amount'], 'MU'));
+				$allocatedAmount = $isWriteOff ? KreaBankDecimal::abs($link['allocated_amount']) : abs((float) price2num((string) $link['allocated_amount'], 'MU'));
 				if ($allocatedAmount <= 0.00001) {
 					continue;
 				}
@@ -2408,6 +2416,7 @@ class KreaBankService
 					}
 				} elseif ($docType === 'customer_invoice') {
 					$created = $this->createCustomerPaymentForBankLine($nativeLine, $docId, $allocatedAmount, (string) $note);
+					if ($isWriteOff) { $writeOffAudit = $this->completeWriteOffReview($reviewedRow, $created, $nativeLine); }
 					$createdPaymentLabel = '#' . ((int) $created['payment_id']);
 					$resLink = $this->native->addLineLink(
 						$nativeLineId,
@@ -2429,6 +2438,7 @@ class KreaBankService
 					}
 				} elseif ($docType === 'supplier_invoice') {
 					$created = $this->createSupplierPaymentForBankLine($nativeLine, $docId, $allocatedAmount, (string) $note);
+					if ($isWriteOff) { $writeOffAudit = $this->completeWriteOffReview($reviewedRow, $created, $nativeLine); }
 					$createdPaymentLabel = '#' . ((int) $created['payment_id']);
 					$resLink = $this->native->addLineLink(
 						$nativeLineId,
@@ -2475,14 +2485,19 @@ class KreaBankService
 			}
 
 			if ($isReviewedBulk) { $this->recordBankRuleReview($reviewedRow, $line); }
-			$this->finalizeNativeReconciliation($line, $nativeLineId, $outstanding, $isReviewedBulk ? $reviewSource : null,
+			$this->finalizeNativeReconciliation($line, $nativeLineId, $isWriteOff ? $reviewedRow['allocation'] : $outstanding, $isReviewedBulk ? $reviewSource : null,
 				($isAutomaticNative || $isReviewedBulk) ? array(
 					'strategy' => $strategy, 'is_auto' => (int) $isAuto, 'confidence_score' => $confidenceScore,
 					'links' => $links, 'native' => 1, 'native_bank_line_id' => $nativeLineId,
-				) + (!empty($reviewedRow['bank_rule']) ? array('bank_rule'=>$reviewedRow['bank_rule'], 'bank_rule_target'=>$reviewedRow['bank_rule_target'] ?? null, 'rule_creation'=>$reviewedRow['rule_creation'] ?? null) : array())
+				) + ($writeOffAudit ? array('source'=>$reviewSource, 'writeoff'=>$writeOffAudit) : array())
+				+ (!empty($reviewedRow['bank_rule']) ? array('bank_rule'=>$reviewedRow['bank_rule'], 'bank_rule_target'=>$reviewedRow['bank_rule_target'] ?? null, 'rule_creation'=>$reviewedRow['rule_creation'] ?? null) : array())
 				+ ($isSelectedNativeReview ? array('approval_context'=>'selected_native',
 					'other_account_warning'=>!empty($reviewedRow['other_account_warning'])) : array()) : null,
 				$isReviewedBulk ? $this->bankRuleCategory($reviewedRow) : 0);
+			if ($writeOffAudit && !$this->logAudit('manual_writeoff', (int) $line['rowid'], (int) $line['rowid'],
+				array('source'=>$reviewSource, 'native_bank_line_id'=>$nativeLineId, 'writeoff'=>$writeOffAudit))) {
+				throw new RuntimeException('Failed to persist invoice difference audit');
+			}
 			if (!$this->db->commit()) {
 				throw new Exception('Failed to commit bank reconciliation; inspect its status before retrying');
 			}
@@ -3968,10 +3983,12 @@ class KreaBankService
 			if (!$line || $line['needs_review'] || !empty($line['group_id']) || KreaBankHistory::snapshot($line) !== $review) {
 				throw new Exception('The reconciliation changed; review it again');
 			}
+			$writeOffReversed = $this->undoWriteOffReview($line, $review);
 			if ($this->native->unconciliateLine($nativeLineId, $line['statement_ref']) <= 0) { throw new Exception('Failed to undo native bank conciliation'); }
 			if (!$this->native->markStatementLinePending($lineId, $source)) { throw new Exception('Failed to mark statement line as pending'); }
 			if (!$this->logAudit('undo', $lineId, $lineId, array('reason'=>(string) $reason, 'source'=>$source,
-				'native'=>1, 'native_bank_line_id'=>$nativeLineId))) { throw new Exception('Failed to persist undo audit'); }
+				'native'=>1, 'native_bank_line_id'=>$nativeLineId, 'writeoff_reversed'=>$writeOffReversed,
+				'writeoff'=>$review['writeoff'] ?? null))) { throw new Exception('Failed to persist undo audit'); }
 			if (!$this->db->commit()) { throw new Exception('Cannot confirm undo commit; inspect its status before retrying'); }
 		} catch (Throwable $e) { $this->db->rollback(); throw $e; }
 		return true;

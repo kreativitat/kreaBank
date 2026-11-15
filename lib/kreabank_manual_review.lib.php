@@ -294,7 +294,7 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 			'preselected' => !empty($resolved['is_bulk_safe']), 'is_bulk_safe' => !empty($resolved['is_bulk_safe']),
 			'score' => (int) $resolved['suggestion']['score']);
 	};
-	$prepareDocumentReviews = static function ($line) use ($service, $dateTolerance, $appendLinkedFallbackSuggestions, $resolveLineBestSuggestion) {
+	$prepareDocumentReviews = static function ($line) use ($service, $dateTolerance, $appendLinkedFallbackSuggestions, $resolveLineBestSuggestion, $singleReview) {
 		$lineId = (int) $line['rowid'];
 		if ((int) $line['status'] !== 0) {
 			return array();
@@ -302,7 +302,7 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 		$accountReview = !empty($line['fk_statement']) && $service->getPaymentAccountReview($lineId, array($line['bank_account_id']));
 		$suggestionsByLine = $service->getSuggestionsForLines(array($line), 0, $dateTolerance, null, false);
 		$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestionsByLine[$lineId] ?? array(), $dateTolerance);
-		if (method_exists($service, 'appendBankRuleManualSuggestions')) { $suggestions = $service->appendBankRuleManualSuggestions($line, $suggestions); }
+		if ($singleReview && method_exists($service, 'appendBankRuleManualSuggestions')) { $suggestions = $service->appendBankRuleManualSuggestions($line, $suggestions); }
 		$rows = array();
 		foreach ($suggestions as $suggestion) {
 			// A reviewed existing movement cannot create or move the other payment.

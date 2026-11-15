@@ -253,6 +253,40 @@ if ($action === 'confirm_rule_entry') {
 	} catch (Throwable $e) { $reportActionException($e, 'confirm_rule_entry'); }
 }
 
+if ($action === 'confirm_writeoff') {
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !kreabankIsTokenValid()
+		|| !$user->hasRight('kreabank', 'reconciliation', 'write') || !$canNativeWrite) { accessforbidden(); }
+	try {
+		$source = GETPOST('line_source', 'aZ09'); $key = GETPOST('review_doc', 'aZ09');
+		$reason = GETPOST('writeoff_reason', 'aZ09');
+		if (!preg_match('/^(customer_invoice|supplier_invoice)__([1-9][0-9]{0,9})$/D', $key, $document) || $reason === '') {
+			throw new RuntimeException($langs->trans('KreaBankBulkMatchReviewChanged', '1'));
+		}
+		$line = $service->getBulkReviewLine($lineId, $source);
+		$row = $line ? $service->getWriteOffReview($line, $document[1], (int) $document[2], $reason) : null;
+		$scope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId;
+		if (!$row || !kreabankBulkReviewIsValid($row, $scope, GETPOSTINT('review_expires'), GETPOST('writeoff_signature_' . $reason, 'aZ09'),
+			$_SESSION['kreabank_bulk_review_secret'] ?? '', dol_now(), true, $navigationAccountId)) {
+			throw new RuntimeException($langs->trans('KreaBankBulkMatchReviewChanged', '1'));
+		}
+		$service->reconcileLine((int) $line['rowid'], array(array('doc_type'=>$document[1], 'fk_doc'=>(int) $document[2],
+			'doc_ref'=>$row['suggestion']['doc_ref'], 'allocated_amount'=>$row['allocation'], 'match_score'=>1, 'match_reasons'=>array())),
+			'manual_writeoff', 0, $langs->trans('KreaBankWriteOffReason_' . $reason), 1, null, $row);
+		$outcome = 'KreaBankWriteOffDone';
+		try {
+			require_once __DIR__ . '/class/KreaBankHistory.class.php';
+			$completed = (new KreaBankHistory($db, $conf->entity))->find((int) $line['rowid'], $source, (int) $line['bank_account_id']);
+			$undo = $completed ? KreaBankWriteOff::undoSnapshotFromHistory($completed) : null;
+			if (($undo['writeoff']['remaining_status'] ?? '') === 'supplier_partial') { $outcome = 'KreaBankWriteOffSupplierPartialDone'; }
+		} catch (Throwable $e) { if (function_exists('dol_syslog')) { dol_syslog('KreaBank committed invoice difference outcome could not be reloaded', LOG_WARNING); } }
+		setEventMessages($langs->trans($outcome), null, 'mesgs');
+		unset($_SESSION['kreabank_bulkmatch_scan_state'], $_SESSION['kreabank_matched_scan_state']);
+		$redirectUrl = kreabankWorkspaceUrl('reconcile', $navigationAccountId) . '&sortfield=' . rawurlencode($pendingSort['field']) . '&sortorder=' . $pendingSort['order'];
+		$redirectUrl .= '&' . http_build_query(kreabankReconcileQueueParameters($queueOrder, $queueNext, $queueSearch), '', '&', PHP_QUERY_RFC3986);
+		header('Location: ' . $redirectUrl); exit;
+	} catch (Throwable $e) { $reportActionException($e, 'confirm_writeoff'); }
+}
+
 if ($action === 'confirm_document') {
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !kreabankIsTokenValid()
 		|| !$user->hasRight('kreabank', 'reconciliation', 'write') || !$canNativeWrite) {
@@ -1721,6 +1755,17 @@ $canReconcile = ($user->hasRight('kreabank', 'reconciliation', 'write') && $canN
 $documentReviewRows = array();
 $documentReviewForms = array();
 $draftInvoiceForms = array();
+$writeOffReviewRows = array();
+if ($selectedLine && $canReconcile && $canCreate && method_exists($service, 'getWriteOffReviews')) {
+	try {
+		foreach ($documents as $doc) {
+			if (!empty($doc['is_locked']) || !empty($doc['is_draft']) || !in_array($doc['doc_type'], array('customer_invoice','supplier_invoice'), true)) { continue; }
+			$reviews = $service->getWriteOffReviews($selectedLine, $doc['doc_type'], (int) $doc['rowid']);
+			if ($reviews) { $writeOffReviewRows[$doc['doc_type'] . '__' . (int) $doc['rowid']] = $reviews; }
+		}
+		if ($writeOffReviewRows && empty($_SESSION['kreabank_bulk_review_secret'])) { $_SESSION['kreabank_bulk_review_secret'] = bin2hex(random_bytes(32)); }
+	} catch (Throwable $e) { $reportActionException($e, 'writeoff_review', $langs->trans('KreaBankWriteOffUnavailable')); }
+}
 $ruleQuickReview = null;
 if ($selectedLine && $canReconcile && $canCreate && method_exists($service, 'getBankRuleQuickReview')) {
 	try {
@@ -1999,6 +2044,10 @@ if (!$selectedLine) {
 					print '<button type="button" class="button kb-primary-action" disabled>' . $langs->trans($actionLabel) . '</button>';
 					print '<p class="krea-muted">' . $langs->trans('KreaBankWorkspaceDocumentUnavailable') . '</p>';
 				}
+				if (!empty($writeOffReviewRows[$docKey])) {
+					require_once __DIR__ . '/lib/kreabank_writeoff_view.lib.php';
+					print kreabankWriteOffOption($writeOffReviewRows[$docKey], 'kb-writeoff-' . $docKey, $langs);
+				}
 			}
 			if (!$isLocked && $rawDocType === 'native_bank' && $isLoteBatchLine) {
 				print '<input type="hidden" name="match_score[' . $docKey . ']" value="' . $score . '">';
@@ -2024,6 +2073,21 @@ if (!$selectedLine) {
 	}
 	print '</form>';
 	// Associated forms stay outside the native-movement form; no nested forms.
+	foreach ($writeOffReviewRows as $docKey=>$reviews) {
+		$first = reset($reviews); $expires = dol_now() + 1800;
+		$scope = (int) $conf->entity . '|' . (int) $user->id . '|' . $navigationAccountId;
+		print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="kb-writeoff-' . dol_escape_htmltag($docKey) . '">'
+			. kreabankNavigationHiddenFields($navigationAccountId) . $queueNavigationFields;
+		foreach (array('token'=>newToken(), 'action'=>'confirm_writeoff', 'line_id'=>(int) $selectedLine['rowid'],
+			'line_source'=>!empty($selectedLine['fk_statement']) ? 'staged' : 'native', 'review_doc'=>$docKey, 'review_expires'=>$expires) as $name=>$value) {
+			print '<input type="hidden" name="' . $name . '" value="' . dol_escape_htmltag((string) $value) . '">';
+		}
+		foreach ($reviews as $reason=>$row) {
+			print '<input type="hidden" name="writeoff_signature_' . dol_escape_htmltag($reason) . '" value="'
+				. kreabankBulkReviewSignature($row, $scope, $expires, $_SESSION['kreabank_bulk_review_secret']) . '">';
+		}
+		print '</form>';
+	}
 	foreach ($draftInvoiceForms as $formId=>$key) {
 		print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="' . dol_escape_htmltag($formId) . '">'
 			. kreabankNavigationHiddenFields($navigationAccountId)
