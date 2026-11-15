@@ -282,9 +282,16 @@ class ActionsKreaBank extends CommonHookActions
 	public function printCommonFooter($parameters, &$object, &$action, $hookmanager)
 	{
 		$this->resprints = '';
-		// Standalone native creation and transfer forms do not use workspace navigation.
+		// Standalone forms retain native navigation and execution.
 		$page = basename($_SERVER['PHP_SELF'] ?? '');
-		if ($page === 'transfer.php' || ($page === 'card.php' && ($action === 'create' || GETPOST('action', 'aZ09') === 'create'))) {
+		if ($page === 'transfer.php') {
+			if ($this->bankingContextAllowed()) {
+				require_once __DIR__ . '/../lib/kreabank_transfer.lib.php';
+				$this->resprints = kreabankTransferAssets();
+			}
+			return 0;
+		}
+		if ($page === 'card.php' && ($action === 'create' || GETPOST('action', 'aZ09') === 'create')) {
 			return 0;
 		}
 		if (!$this->bankingContextAllowed()) {

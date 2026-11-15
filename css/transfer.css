@@ -1,0 +1,46 @@
+/* Copyright (C) 2026 Kreativität Works <mail@kreativitat.com>; GPL-3.0-or-later */
+body.kb-native-transfer #id-right { padding:24px 28px; min-width:0; }
+.kb-native-transfer .fiche > .table-fiche-title { margin-bottom:8px; }
+.kb-native-transfer .kb-transfer-intro { display:block; max-width:72ch; font-size:.95em; line-height:1.6; opacity:1; color:var(--colortexttitlenotab,#526579); }
+.kb-native-transfer .kb-transfer-intro ~ br { display:none; }
+.kb-transfer-form { max-width:1000px; margin:24px 0 0; }
+.kb-transfer-form .div-table-responsive-no-min { overflow:visible; }
+.kb-transfer-form .kb-transfer-table, .kb-transfer-table > tbody { display:block; width:100%; border:0; background:transparent; }
+.kb-transfer-table .liste_titre { display:none; }
+.kb-transfer-table tr.numvir:not(.hidejs):not(.hideobject) { display:grid !important; grid-template-columns:repeat(6,minmax(0,1fr)); gap:20px; margin:0 0 20px; padding:20px; border:1px solid #d8e2e9; border-radius:8px; background:var(--colorbackbody,#fff); }
+.kb-transfer-table tr.numvir.hidejs, .kb-transfer-table tr.numvir.hideobject { display:none !important; }
+.kb-transfer-table tr.numvir > td { box-sizing:border-box; min-width:0; margin:0; padding:0; border:0; white-space:normal; text-align:left; background:transparent; }
+.kb-transfer-table tr.numvir > .kb-transfer-row-heading { grid-column:1 / -1; padding-bottom:14px; border-bottom:1px solid #e4e9ed; }
+.kb-transfer-row-heading h2 { margin:0; font-size:1.05em; font-weight:600; color:var(--colortexttitlenotab,#344b5d); }
+.kb-transfer-table .kb-transfer-field { grid-column:span 3; }
+.kb-transfer-field label { display:block; margin:0 0 8px; font-size:.92em; font-weight:600; color:var(--colortexttitlenotab,#526579); }
+.kb-transfer-table .kb-transfer-label { grid-column:span 4; }
+.kb-transfer-table .kb-transfer-amount, .kb-transfer-table .kb-transfer-amountto { grid-column:span 2; }
+.kb-transfer-table tr.numvir > .kb-transfer-account_from, .kb-transfer-table tr.numvir > .kb-transfer-account_to { padding:14px; border:1px solid #e1e8e6; border-radius:6px; background:var(--colorbacktitle1,#f4f7f6); }
+.kb-transfer-account_from > .paddingright, .kb-transfer-account_to > .paddingright { display:none; }
+.kb-transfer-field input:not([type="hidden"]), .kb-transfer-field select, .kb-transfer-field .select2-container { box-sizing:border-box; min-width:0 !important; max-width:100%; width:100% !important; margin:0; }
+.kb-transfer-field input:not([type="hidden"]), .kb-transfer-field select { min-height:38px; }
+.kb-transfer-field .select2-container .select2-selection--single { min-height:38px; height:auto; }
+.kb-transfer-field .select2-selection--single .select2-selection__rendered { line-height:36px; }
+.kb-transfer-field .select2-selection--single .select2-selection__arrow { height:36px; }
+.kb-transfer-field .select2-selection__rendered { min-width:0; }
+.kb-transfer-field .select2-container { vertical-align:middle; }
+.kb-transfer-field .nowraponall { white-space:normal; }
+.kb-transfer-field .inline-block { max-width:100%; }
+.kb-transfer-field .maxwidth100 { max-width:none !important; }
+.kb-transfer-field input.hasDatepicker { width:calc(100% - 28px) !important; }
+.kb-transfer-form #btncont { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; padding:0; }
+.kb-transfer-form #btncont > br, .kb-transfer-form #btnincrement { display:none; }
+.kb-transfer-form #btncont > div { margin-left:auto; }
+.kb-transfer-form #btncont .button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:40px; margin:0; }
+.kb-transfer-form .kb-transfer-add { background:var(--colorbackbody,#fff); color:var(--colortexttitlenotab,#344b5d); border:1px solid #cbd6df; }
+.kb-transfer-form .kb-transfer-add:hover:not(:disabled) { background:var(--colorbacktitle1,#f0f4f3); }
+.kb-transfer-form .kb-transfer-add:disabled { opacity:.5; cursor:default; }
+.kb-transfer-form :focus-visible { outline:2px solid #3b7660; outline-offset:3px; }
+@media (max-width:700px) {
+ body.kb-native-transfer #id-right { padding:18px 12px; }
+ .kb-transfer-form { margin-top:18px; }
+ .kb-transfer-table tr.numvir:not(.hidejs):not(.hideobject) { grid-template-columns:minmax(0,1fr); gap:18px; padding:16px; }
+ .kb-transfer-table .kb-transfer-field { grid-column:1; }
+ .kb-transfer-form #btncont > div, .kb-transfer-form #btncont > .button, .kb-transfer-form #btncont input.button { width:100%; }
+}

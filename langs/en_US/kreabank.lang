@@ -791,3 +791,10 @@ KreaBankHistoryActionInvoiceValidation=Invoice validation
 KreaBankHistoryActionStatementEvidence=Statement evidence
 KreaBankHistoryActionAuditPurge=Audit cleanup
 KreaBankHistoryActionTriggerEvent=System event
+
+# Native internal transfer presentation
+KreaBankTransferAdd=Add another transfer
+KreaBankTransferNumber=Transfer %s
+KreaBankTransferHelp=Move funds between your accounts. The debit and credit are recorded together.
+KreaBankTransferFrom=From account
+KreaBankTransferTo=To account

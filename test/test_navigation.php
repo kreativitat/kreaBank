@@ -104,6 +104,7 @@ checkNavigation($hooks->completeTabsHead($parameters, $object, $action, null) ==
 $user->allowed[] = 'kreabank.reconciliation.read';
 $parameters['type'] = 'bank';
 checkNavigation($hooks->completeTabsHead($parameters, $object, $action, null) === 0, 'Native hook never adds a second bank tab bar');
+function getNonce() { return 'navigation-test'; }
 function dol_escape_htmltag($text) { return htmlspecialchars((string) $text, ENT_QUOTES, 'UTF-8'); }
 function GETPOSTINT($key) { return (int) ($GLOBALS['navigationRequest'][$key] ?? 0); }
 function GETPOST($key, $type = '') { return $GLOBALS['navigationRequest'][$key] ?? ''; }
@@ -196,7 +197,13 @@ checkNavigation($hooks->doActions(array(), $object, $action, null) === 0 && coun
 $_SERVER['PHP_SELF'] = '/compta/bank/transfer.php';
 $hooks->resprints = 'previous hook output';
 $queryCount = count($db->queries);
-checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0 && $hooks->resprints === '' && count($db->queries) === $queryCount, 'Internal transfers do not inject a workspace header, selector or tabs');
+checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0 && count($db->queries) === $queryCount
+	&& strpos($hooks->resprints, 'transfer.js') !== false && strpos($hooks->resprints, 'transfer.css') !== false
+	&& strpos($hooks->resprints, 'kb-header') === false && strpos($hooks->resprints, 'kb-primary') === false,
+	'Internal transfers enhance presentation without queries, a workspace header, selector or tabs');
+$user->allowed = array('banque.lire');
+checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0 && $hooks->resprints === '' && count($db->queries) === $queryCount, 'Native-only readers retain the original transfer presentation');
+$user->allowed = array('banque.lire', 'kreabank.reconciliation.read');
 $_SERVER['PHP_SELF'] = '/compta/bank/card.php';
 $action = 'create';
 checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0 && $hooks->resprints === '' && count($db->queries) === $queryCount, 'New-account creation keeps only the native form without workspace navigation');

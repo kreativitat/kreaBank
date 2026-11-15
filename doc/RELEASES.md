@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.32 — 2026-11-15
+
+- Present native internal transfers as responsive, labelled cards with clear account fields and an Add another transfer action. Preserve native controls, additional rows, validation and posting.
+
 ## 1.20.31 — 2026-11-14
 
 - Replace the History Status column with compact filter tabs; preserve native filters, independent pagination and signed Undo state. Keep exceptional review/reversal warnings beside each description.

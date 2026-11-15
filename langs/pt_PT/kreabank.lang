@@ -790,3 +790,10 @@ KreaBankHistoryActionInvoiceValidation=Validação de fatura
 KreaBankHistoryActionStatementEvidence=Dados do extrato
 KreaBankHistoryActionAuditPurge=Limpeza da auditoria
 KreaBankHistoryActionTriggerEvent=Evento do sistema
+
+# Native internal transfer presentation
+KreaBankTransferAdd=Adicionar outra transferência
+KreaBankTransferNumber=Transferência %s
+KreaBankTransferHelp=Transfira entre as suas contas. O débito e o crédito são registados em conjunto.
+KreaBankTransferFrom=Conta de origem
+KreaBankTransferTo=Conta de destino

@@ -174,3 +174,31 @@ an owned selected account using `search_account`, or opens all accounts when
 unscoped. It adds no header button or sidebar item. The old reconciliation UI
 remains dormant. Native bank and module read rights are both required, and the
 new list keeps its own column filters.
+
+## Native internal transfer form
+
+The transfer form at `/compta/bank/transfer.php` uses a presentation-only footer
+enhancement for workspace readers. `lib/kreabank_transfer.lib.php` loads scoped
+`css/transfer.css` and `js/transfer.js`; core Dolibarr source is unchanged. The
+design reference is the installed Dolibarr 24 UI documentation
+(`/admin/tools/ui/index.php`) and the existing monthly-report controls, borders
+and spacing. Native-only users keep the native presentation.
+
+Keep the original form, field nodes/names, token, row siblings and hidden-state
+classes: native adding, currency switching and failed-input restoration depend
+on them. Initialize after native ready handlers. Add is a non-submit button
+that invokes the native add action, focuses the revealed account and disables
+at the native limit of 19 rows. No transfer is submitted during UI verification.
+
+Run `php test/test_transfer.php` with installed Dolibarr source and no application
+bootstrap or database. `--html error pt_PT` renders a synthetic retry/foreign
+currency fixture; `--html cheque en_US` includes the optional cheque field.
+Serve generated HTML only in the isolated local test installation; submissions
+are intercepted. Check exact form values, all 19 rows, labels/focus and responsive
+rendering there, then inspect the actual native theme without saving a transfer.
+
+Deploy the helper and both assets before the footer hook, with the version files
+and appended locale keys. Preserve preimages and any independent locale changes.
+No schema migration, menu refresh, module reactivation or scheduler change is
+needed. Roll back the hook first and restore exact preimages; remove only new
+assets that still match the deployed checksums.
