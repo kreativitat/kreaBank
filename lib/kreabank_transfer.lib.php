@@ -1,7 +1,7 @@
 <?php
 /* Copyright (C) 2026 Kreativität Works <mail@kreativitat.com>; GPL-3.0-or-later */
 
-/** Read the ten most-used committed descriptions, counting each owned transfer once. */
+/** Read the five most-used committed descriptions, counting each owned transfer once. */
 function kreabankTransferDescriptions($db, $user, $entity)
 {
 	$entity = (int) $entity;
@@ -18,7 +18,7 @@ function kreabankTransferDescriptions($db, $user, $entity)
 		. " WHERE b.amount<0 AND peer.amount>0 AND TRIM(b.label)<>'' AND b.label=peer.label"
 		. " AND EXISTS (SELECT 1 FROM {$p}bank_url reciprocal WHERE reciprocal.fk_bank=peer.rowid AND reciprocal.type='banktransfert' AND reciprocal.url_id=b.rowid)"
 		. " GROUP BY TRIM(b.label) ORDER BY uses DESC, last_used DESC, description ASC"
-		. $db->plimit(10);
+		. $db->plimit(5);
 	$result = $db->query($sql);
 	if (!$result) { throw new RuntimeException('Transfer description history is unavailable'); }
 	$descriptions = array();
@@ -38,13 +38,13 @@ function kreabankTransferAssets($descriptions = array(), $descriptionError = '')
 		'help' => $langs->transnoentities('KreaBankTransferHelp'),
 		'from' => $langs->transnoentities('KreaBankTransferFrom'),
 		'to' => $langs->transnoentities('KreaBankTransferTo'),
-		'descriptions' => array_slice(array_values($descriptions), 0, 10),
+		'descriptions' => array_slice(array_values($descriptions), 0, 5),
 		'descriptionPlaceholder' => $langs->transnoentities('KreaBankTransferDescriptionPlaceholder'),
 		'descriptionError' => (string) $descriptionError,
 	);
 	$nonce = dol_escape_htmltag(getNonce());
-	return '<link rel="stylesheet" href="' . dol_escape_htmltag(dol_buildpath('/kreabank/css/transfer.css', 1)) . '?v=1.20.38">'
+	return '<link rel="stylesheet" href="' . dol_escape_htmltag(dol_buildpath('/kreabank/css/transfer.css', 1)) . '?v=1.20.39">'
 		. '<script type="application/json" id="kb-transfer-labels" nonce="' . $nonce . '">'
 		. json_encode($labels, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . '</script>'
-		. '<script src="' . dol_escape_htmltag(dol_buildpath('/kreabank/js/transfer.js', 1)) . '?v=1.20.38" nonce="' . $nonce . '"></script>';
+		. '<script src="' . dol_escape_htmltag(dol_buildpath('/kreabank/js/transfer.js', 1)) . '?v=1.20.39" nonce="' . $nonce . '"></script>';
 }

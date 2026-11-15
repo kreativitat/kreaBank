@@ -16,7 +16,7 @@
         var labels = JSON.parse(config.textContent);
         var descriptions = document.createElement('datalist');
         descriptions.id = 'kb-transfer-descriptions';
-        (Array.isArray(labels.descriptions) ? labels.descriptions : []).slice(0, 10).forEach(function (description) {
+        (Array.isArray(labels.descriptions) ? labels.descriptions : []).slice(0, 5).forEach(function (description) {
             var option = document.createElement('option');
             option.value = description;
             descriptions.appendChild(option);

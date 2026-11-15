@@ -56,6 +56,11 @@ try {
 	$db->query('CREATE TABLE kbtransfer_bank_url(fk_bank INT, url_id VARCHAR(255), type VARCHAR(32))');
 	$db->query("INSERT INTO kbtransfer_bank_account VALUES (101,1,'EUR'),(102,1,'EUR'),(103,1,'USD'),(201,2,'EUR'),(202,2,'EUR')");
 	checkTransferHistory(kreabankTransferDescriptions($db, $user, 1) === array(), 'Empty history remains usable');
+	transferHistoryPair('Cross currency only', '2026-11-03', 101, 103, true, '11.25');
+	transferHistoryPair('Cash only', '2026-11-04', 101, 102, true, '10.00', 'LIQ');
+	checkTransferHistory(kreabankTransferDescriptions($db, $user, 1) === array('Cash only', 'Cross currency only'), 'Cash and unequal cross-currency legs remain eligible');
+	$db->query('DELETE FROM kbtransfer_bank_url');
+	$db->query('DELETE FROM kbtransfer_bank');
 	for ($i = 0; $i < 3; $i++) { transferHistoryPair('Most used'); }
 	for ($i = 0; $i < 2; $i++) { transferHistoryPair('Second'); }
 	$duplicate = transferHistoryPair('Duplicate links', '2026-11-02');
@@ -75,10 +80,10 @@ try {
 	transferHistoryPair('Rolled back transfer');
 	$db->connection->rollback();
 	$expected = array('Most used', 'Second', 'Transferência <&> "livre"', 'A same date', 'B same date', 'Cash', 'Cross currency', 'Duplicate links');
-	checkTransferHistory(kreabankTransferDescriptions($db, $user, 1) === $expected, 'Frequency counts each committed transfer once; date/name ties deterministic; invalid/foreign pairs excluded');
+	checkTransferHistory(kreabankTransferDescriptions($db, $user, 1) === array_slice($expected, 0, 5), 'Frequency counts each committed transfer once; date/name ties deterministic; invalid/foreign pairs excluded');
 	checkTransferHistory(kreabankTransferDescriptions($db, $user, 2) === array('Foreign both'), 'Other company sees only its own complete transfers');
 	for ($i = 0; $i < 12; $i++) { transferHistoryPair(sprintf('Older %02d', $i), '2026-10-01'); }
-	checkTransferHistory(kreabankTransferDescriptions($db, $user, 1) === array_merge($expected, array('Older 00', 'Older 01')), 'At most ten most-used descriptions returned');
+	checkTransferHistory(kreabankTransferDescriptions($db, $user, 1) === array_slice($expected, 0, 5), 'At most five most-used descriptions returned');
 	foreach (array('banque.lire', 'banque.transfer', 'kreabank.reconciliation.read') as $denied) {
 		$user->denied = $denied; $before = $db->queries;
 		checkTransferHistory(kreabankTransferDescriptions($db, $user, 1) === array() && $before === $db->queries, 'Missing right denies history before SQL: ' . $denied);

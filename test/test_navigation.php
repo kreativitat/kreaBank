@@ -207,7 +207,7 @@ checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0
 $user->allowed[] = 'banque.transfer';
 checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0 && count($db->queries) === $queryCount + 1
 	&& strpos(end($db->queries), 'source_account.entity=7') !== false && strpos(end($db->queries), 'target_account.entity=7') !== false
-	&& strpos(end($db->queries), ' LIMIT 0, 10') !== false && strpos($hooks->resprints, '"descriptionError":""') !== false,
+	&& strpos(end($db->queries), ' LIMIT 0, 5') !== false && strpos($hooks->resprints, '"descriptionError":""') !== false,
 	'Transfer writers receive bounded current-company history through the native footer');
 $db->fail = true;
 checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0

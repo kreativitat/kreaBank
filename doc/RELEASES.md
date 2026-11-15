@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.39 — 2026-11-15
+
+- Limit reusable transfer descriptions to the five most-used entries.
+
 ## 1.20.38 — 2026-11-15
 
 - Suggest the ten most-used descriptions from committed, company-owned internal transfers. Reuse native history without extra writes or schema changes.
