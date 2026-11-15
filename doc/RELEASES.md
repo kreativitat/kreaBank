@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.36 — 2026-11-15
+
+- Let transfer card fields expand beyond the native table-cell height so labels and controls remain aligned without overlap.
+
 ## 1.20.35 — 2026-11-15
 
 - Preserve Portuguese accents and transfer numbering in the native transfer cards using plain-text translations for JSON labels.
