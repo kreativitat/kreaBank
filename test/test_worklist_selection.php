@@ -87,7 +87,7 @@ class SelectionFixtureService
 			'doc_date'=>$r['dateo'],'bank_account_id'=>101,'bank_account_ref'=>'SYNTHETIC','currency'=>'EUR','description'=>$r['label'],'thirdparty_name'=>'','thirdparty_iban'=>'','payment_ref'=>''));
 	}
 	protected function getPatterns(){return array();}
-	public function getPaymentAccountReview($id,$accounts){return $this->warning;}
+	public function getWorklistPaymentAccountReview($id,$accounts){return $this->warning;}
 	private static function automaticDecimal($value){return is_float($value)?number_format($value,8,'.',''):KreaBankPaymentBatchDecimal::normalize($value);}
 	private function automaticFeedEvidenceValid($id,$lock=false){return false;}
 	protected function paymentBatchUnclaimedSql(){return ' AND /* active claims checked */ 1=1';}

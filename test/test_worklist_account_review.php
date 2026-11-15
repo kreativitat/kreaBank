@@ -11,12 +11,13 @@ class AccountReviewWorklistFixture extends KreaBankWorklist
 	public $fixtureLine;
 	public function __construct($review)
 	{
-		$this->fixtureLine = array('rowid'=>11,'fk_statement'=>1,'bank_account_id'=>101,'status'=>0,'account_open'=>true);
+		$this->fixtureLine = array('rowid'=>11,'fk_statement'=>1,'bank_account_id'=>101,'status'=>0,'account_open'=>true,'needs_review'=>false);
 		$service = new class($review) {
 			public $user;
 			private $review;
 			public function __construct($review) { $this->review=$review; $this->user=new stdClass(); }
 			public function getPaymentAccountReview($id,$accounts) { return $this->review; }
+			public function getWorklistPaymentAccountReview($id,$accounts) { return $this->review; }
 		};
 		// A warning must short-circuit executable suggestions and unpaid creation advice.
 		$db = new class { public function query($sql) { throw new RuntimeException('Unexpected discovery after account warning'); } };
@@ -31,7 +32,8 @@ class AccountReviewWorklistFixture extends KreaBankWorklist
 }
 $checks=0;
 function accountWorklistCheck($value,$message) { global $checks; if (!$value) { throw new RuntimeException($message); } $checks++; }
-$candidate=array('bank_line_id'=>21,'bank_account_id'=>102,'payment_id'=>31,'payment_type'=>'payment_supplier');
+$candidate=array('bank_line_id'=>21,'bank_account_id'=>102,'account_ref'=>'OTHER-BANK','payment_id'=>31,'payment_type'=>'payment_supplier',
+	'payment_ref'=>'PAY-31','reference'=>'Existing native payment');
 foreach (array(
 	array('candidates'=>array($candidate),'truncated'=>false),
 	array('candidates'=>array($candidate,$candidate),'truncated'=>false),
@@ -45,4 +47,9 @@ foreach (array(
 	accountWorklistCheck($row['pair']===null,'A warning suppresses even an otherwise executable same-account pair');
 	accountWorklistCheck($worklist->candidates($row['line'])===array(),'Explicit candidate search cannot bypass account correction');
 }
+$weak=array('evidence'=>'amount_date','candidates'=>array($candidate),'truncated'=>false);
+$weakWorklist=new AccountReviewWorklistFixture($weak);$compact=$weakWorklist->compact('staged:11');
+accountWorklistCheck($compact['match']==='' && $compact['payment_account']==='OTHER-BANK' && $compact['payment_accounts']===array(102),
+	'Weak bank evidence is indexed only as a payment-bank warning, never as a proposed Match');
+accountWorklistCheck($weakWorklist->prepare('staged:11')['pair']===null,'Weak bank evidence cannot create a reconciliation pair or unpaid creation advice');
 echo 'OK: '.$checks." worklist account-review preparation checks (synthetic, no database)\n";

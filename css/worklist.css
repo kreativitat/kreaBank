@@ -21,8 +21,10 @@
 .kb-worklist .kb-wl-icon.kb-wl-primary { color:#fff; background:#2c6c4f; border-color:#2c6c4f; }
 .kb-worklist .kb-wl-icon.kb-wl-primary:disabled { opacity:.45; }
 .kb-worklist .kb-wl-icon:disabled { color:#697378; background:#e3e7e9; border-color:#cbd2d5; cursor:not-allowed; }
-.kb-worklist .kb-wl-account-ref { appearance:none; border:0; background:transparent; padding:3px 0; margin:0; color:#1769aa; font:inherit; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
-.kb-worklist .kb-wl-payment-account { display:inline-flex; align-items:center; gap:4px; }
+.kb-worklist .kb-wl-account-ref { appearance:none; display:inline-flex; align-items:center; gap:4px; border:0; background:transparent; padding:3px 0; margin:0; color:#916000; font:inherit; text-transform:none; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+.kb-worklist .kb-wl-bank-review { display:block; overflow-wrap:anywhere; }
+.kb-worklist .kb-wl-bank-review + .kb-wl-bank-review { margin-top:5px; }
+.kb-worklist .kb-wl-bank-warning { display:inline-flex; align-items:center; gap:4px; }
 .kb-worklist [data-kb-account-warning] { color:#916000; }
 .kb-worklist :is(button,a,input,select):focus-visible { outline:2px solid var(--kb-wl-focus); outline-offset:3px; }
 .kb-worklist .kb-wl-sr { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
@@ -48,7 +50,6 @@
 .kb-worklist .kb-wl-candidate-evidence { flex:1; min-width:0; overflow-wrap:anywhere; }
 .kb-worklist .kb-wl-member-label { display:block; cursor:pointer; }
 .kb-worklist .kb-wl-candidate-actions { flex:0 0 auto; }
-.kb-worklist .kb-wl-other-account { opacity:.88; }
 .kb-worklist .kb-wl-totals { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:12px 30px; border-top:1px solid color-mix(in srgb,currentColor 20%,transparent); padding:14px 0; }
 .kb-worklist .kb-wl-totals > div { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
 .kb-worklist .kb-wl-totals > div > span { font-size:.9em; opacity:.75; }
@@ -82,5 +83,3 @@
 @media(max-width:700px) { .kb-wl-create-fields { grid-template-columns:minmax(0,1fr); gap:6px; } }
 
 .kb-worklist [data-kb-group-name][hidden],.kb-worklist [data-kb-save-draft][hidden] { display:none; }
-.kb-worklist .kb-wl-other-review { margin-top:18px; border-top:1px solid color-mix(in srgb,currentColor 20%,transparent); padding-top:12px; }
-.kb-worklist .kb-wl-other-review h4 { font-size:1em; margin:0 0 8px; }

@@ -183,7 +183,7 @@ trait KreaBankWorklistMovementTrait
 				if ($rows) { throw new DomainException('An existing salary or tax payment requires review before creating a bank movement'); }
 			}
 		}
-		if ($this->getPaymentAccountReview($id, array($account))) { throw new DomainException('An existing payment in another account requires review'); }
+		if ($this->getWorklistPaymentAccountReview($id, array($account))) { throw new DomainException('An existing payment in another account requires review'); }
 	}
 
 	private function worklistMovementDate($value)

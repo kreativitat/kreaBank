@@ -19,7 +19,7 @@
   facts under existing locks; scalar completion clears only that user's stale
   staged draft. Groups retain all existing batch invariants. Competing singles
   and exact groups leave advisory selection manual. Other-account correction
-  cards never participate in allocation.
+  belongs only in the row's payment-bank column, never in selector allocation.
 - 1.20.52: The selector accepts staged sources only; legacy imports already occupy
   native ledger rows and need duplicate review before choosing another row. Legacy
   workspace search is unchanged.
@@ -265,6 +265,13 @@
 
 ## Payment account review
 
+- `getWorklistPaymentAccountReview()` adds list-only, exact same-day amount
+  advice when there is no eligible full-amount native choice in the source bank.
+  Keep this possible bank issue independent of Match and strong automatic
+  identity. Preserve all raw ambiguity/overflow and native correction guards;
+  only one complete eligible movement gets a signed bank-column correction.
+  Never restore the separate other-bank selector section. See the guarded
+  `test_worklist_payment_account_review_database.php` and pure bank-column suite.
 - `KreaBankService::getPaymentAccountReview()` accepts explicit staging IDs and
   checks current-company invoice, salary and tax payments in other owned accounts.
   It returns

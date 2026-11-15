@@ -109,7 +109,7 @@ class KreaBankWorklist
 			if ($account['id'] > 0) { $accounts[] = $account['id']; $accountRefs[] = $account['ref']; }
 		}
 		foreach ($row['account_candidates'] as $candidate) {
-			$references[] = ($candidate['payment_ref'] ?? $candidate['reference'] ?? '') . ' ' . ($candidate['reference'] ?? '');
+			if (($row['account_review']['evidence'] ?? '') !== 'amount_date') { $references[] = ($candidate['payment_ref'] ?? $candidate['reference'] ?? '') . ' ' . ($candidate['reference'] ?? ''); }
 			$accounts[] = (int) $candidate['bank_account_id']; $accountRefs[] = $candidate['account_ref'];
 		}
 		if (!empty($row['batch']['active'])) {
@@ -132,8 +132,9 @@ class KreaBankWorklist
 		$batch = $this->batches && !empty($line['fk_statement']) ? $this->readBatch($line) : array();
 		$pair = null; $accountCandidates = array(); $accountReview = null; $completed = null;
 		if ((int) $line['status'] === 0 && $line['account_open'] && empty($batch['active'])) {
-			$prepared = ($this->callbacks['prepareReviewRow'])($line);
-			$accountReview = $prepared['account_review'] ?? null;
+			$accountReview = !empty($line['fk_statement']) ? $this->service->getWorklistPaymentAccountReview((int) $line['rowid'],array($line['bank_account_id'])) : null;
+			$prepared = $accountReview ? array() : ($this->callbacks['prepareReviewRow'])($line);
+			$accountReview = $accountReview ?: ($prepared['account_review'] ?? null);
 			if (!$accountReview && !empty($prepared['suggestion']['doc_id'])) { $pair = $prepared; }
 			$accountCandidates = $accountReview['candidates'] ?? array();
 			$payments = new KreaBankPlannedPayment($this->db,$this->service->user,$this->entity,$this->service);

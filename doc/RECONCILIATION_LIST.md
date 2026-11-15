@@ -78,15 +78,26 @@ view retains the bank column and its filter. Statements follows the same conditi
 rule and drops stale filters for its hidden column.
 Exceptional review warnings remain beside the match evidence.
 
-An identity-supported payment in another owned bank appears as the same compact
-candidate card, with its recorded bank reference and an exclamation mark. Eligible
-bank references open the existing reviewed account-correction dialog. Invoice,
-salary and tax payments retain their native ownership, visibility and financial
-locks. Reconciled, posted, deposited, claimed and protected movements cannot be
-moved through this shortcut. Reconciliation stays disabled until fresh evidence
-clears the account mismatch; the single-payment selector cannot override it.
-Competing or incomplete wrong-bank results never select an arbitrary payment.
-Closing the correction dialog does not submit, navigate or restart analysis.
+Other-bank advice appears directly in the row's **Payment bank** column, including
+when the row is collapsed. One complete eligible movement uses an underlined
+warning and bank reference to open the existing reviewed correction dialog.
+The selector has no separate other-bank section or correction cards.
+
+Strong payment identity can still supply the normal Match card. Exact signed
+amount and booking-day evidence alone is only a **possible bank issue**: Match
+remains **No match**, with no automatic identity, selection or learned evidence.
+An eligible exact full-amount native movement already in the source bank takes
+precedence over this weaker coincidence. Competing and incomplete results never
+choose a correction automatically. Fresh list creation, selection and execution
+checks preserve this review condition under existing locks.
+
+Invoice, salary and tax payments retain their native ownership, visibility and
+financial locks. Reconciled, posted, deposited, claimed and protected movements
+cannot be moved through this shortcut. Successful correction returns to the list
+for fresh same-account reconciliation; the two approvals remain separate. Closing
+the correction dialog does not submit, navigate or restart analysis. The inline
+control and existing modal follow the installed Dolibarr UI button/table guidance
+and the native theme; no new page shell or dialog framework is introduced.
 
 Suggested row pairs retain the existing signed manual review. The unified selector
 lists only movements on the source booking day, in its owned bank account and

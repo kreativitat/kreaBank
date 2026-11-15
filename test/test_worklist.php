@@ -283,7 +283,7 @@ checkWorklist(!$result['calls'] && !isset($result['session']['kreabank_worklist_
 $moveSession = array('kreabank_worklist_reviews'=>array('move'=>worklistControllerReview('move',array('key'=>'staged:8','bank_line'=>81,'snapshot'=>'displayed snapshot','old'=>102,'target'=>101))));
 $result = runWorklistController(array('action'=>'correct_account','review'=>'move','bank_line'=>999,'target'=>202),$moveSession);
 checkWorklist($result['calls'] === array(array('changeMovementAccount',array(8,81,'displayed snapshot',102,101))), 'Change-bank controller uses the reviewed movement and destination, ignoring forged POST account IDs');
-checkWorklist($result['redirect']['expand'] === 'staged:8' && $result['redirect']['mode'] === 'batch', 'Account correction returns to the same row for fresh unchecked review');
+checkWorklist(empty($result['redirect']['expand']) && empty($result['redirect']['mode']), 'Account correction returns to the list for fresh same-account review');
 $result = runWorklistController(array('action'=>'correct_account','review'=>'move'),$moveSession,array('denied'=>array('banque/modifier')));
 checkWorklist(!$result['calls'] && $result['denied'], 'Native consolidate rights do not grant native account-modifier authority');
 $draft = array('action'=>'save_draft','source_key'=>'staged:8','batch_members'=>array('81','82'),'batch_name'=>'Salaries');

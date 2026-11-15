@@ -382,7 +382,7 @@ trait KreaBankPaymentBatchTrait
 
 	private function paymentBatchAssertAccountReview($source)
 	{
-		if ($this->getPaymentAccountReview((int) $source['rowid'], array((int) $source['bank_account_id']))) {
+		if ($this->getWorklistPaymentAccountReview((int) $source['rowid'], array((int) $source['bank_account_id']))) {
 			throw new DomainException('Review the suspected payment in another bank account before approving this group');
 		}
 	}

@@ -147,10 +147,11 @@ function kreabankWorklistAccountReference($candidate, $fallback, $langs)
 }
 
 /** Keep a wrong-bank warning visible even when the movement cannot be edited. */
-function kreabankWorklistAccountWarning($langs)
+function kreabankWorklistAccountWarning($langs, $reference = '', $possible = false)
 {
-	$label = kreabankWorklistEscape(kreabankWorklistTranslate($langs,'KreaBankWorklistAccountMismatch'));
-	return '<span data-kb-account-warning role="img" title="' . $label . '" aria-label="' . $label . '">' . kreabankWorklistIcon('exclamation-circle') . '</span>';
+	$label = kreabankWorklistTranslate($langs,$possible ? 'KreaBankWorklistPossibleOtherAccount' : 'KreaBankWorklistAccountMismatch');
+	return '<span class="kb-wl-bank-warning" data-kb-account-warning role="img" title="' . kreabankWorklistEscape($label) . '" aria-label="' . kreabankWorklistEscape(trim($label . ' ' . $reference)) . '">'
+		. kreabankWorklistIcon('exclamation-circle') . ($reference !== '' ? ' ' . kreabankWorklistEscape($reference) : '') . '</span>';
 }
 
 /** Native payment confirmation stays in the iframe; cancellation leaves the list intact. */
@@ -207,7 +208,7 @@ function kreabankWorklistAccountFilter($model, $filters, $langs, $name, $label, 
 	return $html . '</select>';
 }
 
-/** The same reviewed account-change dialog serves list proposals and expanded results. */
+/** The payment-bank column opens the existing reviewed account-change dialog. */
 function kreabankWorklistCorrection($candidate, $line, $id, $model, $langs)
 {
 	if (empty($model['can_write']) || empty($candidate['correction'])) { return array('button'=>'', 'reference'=>'', 'form'=>'', 'dialog'=>''); }
@@ -217,11 +218,13 @@ function kreabankWorklistCorrection($candidate, $line, $id, $model, $langs)
 	$dialogId = $id . '-account';
 	$actionId = $dialogId . '-form';
 	$accountRef = trim((string) ($candidate['account_ref'] ?? ''));
-	$reference = $accountRef === '' ? '' : '<button type="button" class="kb-wl-account-ref" data-kb-dialog="' . $dialogId . '" aria-controls="' . $dialogId . '" aria-haspopup="dialog" title="' . $t('KreaBankWorklistChangeAccount') . '">' . $e($accountRef) . '</button>';
+	$label = kreabankWorklistTranslate($langs,!empty($candidate['possible']) ? 'KreaBankWorklistPossibleOtherAccount' : 'KreaBankWorklistAccountMismatch') . ' ' . $accountRef . '. ' . kreabankWorklistTranslate($langs,'KreaBankWorklistChangeAccount');
+	$reference = $accountRef === '' ? '' : '<button type="button" class="kb-wl-account-ref" data-kb-account-warning data-kb-dialog="' . $dialogId . '" aria-controls="' . $dialogId . '" aria-haspopup="dialog" title="' . $e($label) . '" aria-label="' . $e($label) . '">'
+		. kreabankWorklistIcon('exclamation-circle') . ' ' . $e($accountRef) . '</button>';
 	$dialog = '<dialog class="kb-wl-dialog" id="' . $dialogId . '" aria-labelledby="' . $dialogId . '-title" aria-describedby="' . $dialogId . '-effect">'
 		. '<button type="button" class="button kb-wl-icon kb-wl-dialog-close" data-kb-dialog-close title="' . $t('Close') . '" aria-label="' . $t('Close') . '">' . kreabankWorklistIcon('times') . '</button><h2 id="' . $dialogId . '-title">' . $t('KreaBankWorklistChangeAccount') . '</h2>'
 		. '<p><strong>' . $e(kreabankWorklistNativeLabel($candidate['reference'] ?? '', $langs)) . '</strong></p><dl><dt>' . $t('KreaBankDate') . '</dt><dd>' . $e(kreabankWorklistDate($candidate['date'] ?? '')) . '</dd><dt>' . $t('Amount') . '</dt><dd>' . kreabankWorklistMoney($candidate['amount'], $candidate['currency'] ?? $line['currency']) . '</dd><dt>' . $t('KreaBankWorklistStatementAccount') . '</dt><dd>' . $e($line['bank_account_ref']) . '</dd><dt>' . $t('KreaBankWorklistFromAccount') . '</dt><dd>' . $e($correction['from_account_ref'] ?? $candidate['account_ref'] ?? '') . '</dd><dt>' . $t('KreaBankWorklistToAccount') . '</dt><dd>' . $e($correction['to_account_ref'] ?? $line['bank_account_ref']) . '</dd></dl><p id="' . $dialogId . '-effect">' . $t('KreaBankWorklistCorrectionEffect') . '</p><div class="kb-wl-dialog-actions"><button type="button" class="button" data-kb-dialog-close autofocus>' . $t('Cancel') . '</button><button type="submit" class="button" form="' . $actionId . '">' . $t('Save') . '</button></div></dialog>';
-	return array('button'=>kreabankWorklistButton(kreabankWorklistTranslate($langs,'KreaBankWorklistAccountMismatch') . ' ' . kreabankWorklistTranslate($langs, 'KreaBankWorklistChangeAccount'), 'exclamation-circle', 'type="button" data-kb-account-warning data-kb-dialog="' . $dialogId . '" aria-controls="' . $dialogId . '" aria-haspopup="dialog"'),
+	return array('button'=>'',
 		'reference'=>$reference, 'form'=>kreabankWorklistPostForm($actionId, $correction, $model), 'dialog'=>$dialog);
 }
 
@@ -307,7 +310,8 @@ function kreabankWorklistTable($model, $langs)
 		$activeBatch = !empty($row['batch_active']);
 		$draft = (array) ($row['draft'] ?? array());
 		$done = (int) ($line['status'] ?? 0) === 2 || !empty($row['reconciled']);
-		$accountMismatch = !$done && (!empty($row['account_mismatch']) || !empty($review['correction']));
+		$bankReviews = !$done ? (array) ($row['bank_reviews'] ?? (!empty($review['correction']) ? array($review) : array())) : array();
+		$accountMismatch = !$done && (!empty($row['account_mismatch']) || $bankReviews);
 		$needsReview = !empty($row['needs_review']);
 		$html .= '<tr class="oddeven kb-wl-row" id="' . $id . '" data-line-key="' . $e($key) . '"><td class="nowrap">' . $e(kreabankWorklistDate($line['operation_date'] ?? $line['date'] ?? '')) . '</td>' . (!$hideStatementAccount ? '<td>' . $e($line['bank_account_ref'] ?? '') . '</td>' : '') . '<td class="kb-wl-statement">' . $e($line['description'] ?? '') . '</td><td class="right nowrap">' . kreabankWorklistMoney($line['amount'], $line['currency']) . '</td><td class="kb-wl-match">';
 		if ($review) { $html .= kreabankWorklistCandidate($review, $langs); }
@@ -317,13 +321,14 @@ function kreabankWorklistTable($model, $langs)
 		if ($needsReview) { $html .= '<span class="kb-wl-caption warning" role="status">' . $t('KreaBankLinkNeedsReview') . '</span>'; }
 		if ($canWrite && !$done && !$accountMismatch) { $html .= kreabankWorklistPaymentButton($review,$line,$key,$id . '-proposal',$model,$langs); }
 		$paymentAccount = $accountMismatch ? $e(trim((string) ($review['account_ref'] ?? $row['payment_account_ref'] ?? '')) ?: '—') : kreabankWorklistAccountReference($review,$row['payment_account_ref'] ?? '',$langs);
-		$correctionUi = array('button'=>'', 'reference'=>'', 'form'=>'', 'dialog'=>'');
-		if (!$done && !empty($review['correction'])) {
-			$correctionUi = kreabankWorklistCorrection($review, $line, $id . '-proposal', $model, $langs);
-			$forms .= $correctionUi['form']; $dialogs .= $correctionUi['dialog'];
+		$html .= '</td><td class="kb-wl-payment-bank">';
+		foreach ($bankReviews as $bankIndex=>$bankReview) {
+			$correctionUi = count($bankReviews) === 1 ? kreabankWorklistCorrection($bankReview,$line,$id . '-bank-' . $bankIndex,$model,$langs) : array('reference'=>'','form'=>'','dialog'=>'');
+			$html .= '<span class="kb-wl-bank-review">' . ($correctionUi['reference'] ?: kreabankWorklistAccountWarning($langs,trim((string) ($bankReview['account_ref'] ?? '')) ?: '—',!empty($bankReview['possible'])));
+			if (count($bankReviews) > 1 && !empty($bankReview['reference'])) { $html .= '<span class="kb-wl-caption">' . $e(kreabankWorklistNativeLabel($bankReview['reference'],$langs)) . '</span>'; }
+			$html .= '</span>'; $forms .= $correctionUi['form']; $dialogs .= $correctionUi['dialog'];
 		}
-		$html .= '</td><td><span class="kb-wl-payment-account">' . ($correctionUi['reference'] ?: $paymentAccount)
-			. ($correctionUi['button'] ?: ($accountMismatch ? kreabankWorklistAccountWarning($langs) : '')) . '</span>';
+		if (!$bankReviews) { $html .= $accountMismatch ? kreabankWorklistAccountWarning($langs,trim((string) ($review['account_ref'] ?? $row['payment_account_ref'] ?? '')) ?: '—') : $paymentAccount; }
 		$html .= '</td><td class="right nowrap kb-wl-actions">';
 		if ($accountMismatch) {
 			$html .= kreabankWorklistButton(kreabankWorklistTranslate($langs,'KreaBankWorklistAccountCorrectionRequired'),'check','type="button"',false,true);
@@ -370,10 +375,7 @@ function kreabankWorklistTable($model, $langs)
 			$candidates = $row['batch_components'] ?? array_values(array_filter($candidates, static function ($candidate) use ($draft) { return !empty($candidate['selected']) || in_array((string) ($candidate['key'] ?? ''), array_map('strval', (array) ($draft['member_keys'] ?? array())), true); }));
 			if (!empty($draft['name'])) { $html .= '<p><strong>' . $e($draft['name']) . '</strong></p>'; }
 		}
-		$otherCandidates = (array) ($row['other_accounts'] ?? $row['other_account'] ?? array());
-		if ($activeBatch || $batchReview) { $otherCandidates = array(); }
-		if (isset($otherCandidates['key'])) { $otherCandidates = array($otherCandidates); }
-		if (!$candidates && !$otherCandidates) { $html .= '<p class="opacitymedium">' . $t('KreaBankWorklistNoResults') . '</p>'; }
+		if (!$candidates) { $html .= '<p class="opacitymedium">' . $t('KreaBankWorklistNoResults') . '</p>'; }
 		if ($batchMode) {
 			$html .= '<div class="kb-wl-batch"' . (!$batchReview && !$activeBatch && $canWrite ? ' data-kb-batch' : '') . ' data-max-members="' . (int) ($row['max_members'] ?? 500) . '" data-target="' . $e($line['amount_decimal'] ?? $line['amount']) . '" data-currency="' . $e($line['currency']) . '" data-incomplete="' . $t('KreaBankWorklistBatchIncomplete') . '" data-ready="' . $t('KreaBankWorklistReady') . '"><div class="kb-wl-batch-controls">';
 			$html .= '<p class="kb-wl-batch-day">' . $t('KreaBankWorklistBatchDay') . ' <strong>' . $e(kreabankWorklistDate($line['operation_date'])) . '</strong></p>';
@@ -388,38 +390,29 @@ function kreabankWorklistTable($model, $langs)
 			if (!$batchReview && !$activeBatch && $canWrite) { $html .= '<p class="kb-wl-batch-feedback opacitymedium" id="' . $batchId . '-feedback" data-kb-batch-feedback role="status">' . $t('KreaBankWorklistBatchIncomplete') . '</p>'; }
 			$html .= '</div><div class="kb-wl-members" role="region" tabindex="0" aria-label="' . $t('KreaBankWorklistBatchPayments') . '">';
 		}
-		$otherSection = false;
-		foreach (array_merge($candidates, $otherCandidates) as $index => $candidate) {
+		foreach ($candidates as $index => $candidate) {
 			$candidateId = $id . '-candidate-' . $index;
-			$isOther = in_array($candidate, $otherCandidates, true); $selectable = false;
-			if ($batchMode && $isOther && !$otherSection) {
-				$html .= '</div></div><section class="kb-wl-other-review"><h4>' . $t('KreaBankWorklistOtherAccountReview') . '</h4>'; $otherSection = true;
-			}
-			$html .= '<div class="kb-wl-candidate' . ($isOther ? ' kb-wl-other-account' : '') . '">';
-			if ($batchMode && !$batchReview && !$activeBatch && $canWrite && !$isOther) {
+			$selectable = false;
+			$html .= '<div class="kb-wl-candidate">';
+			if ($batchMode && !$batchReview && !$activeBatch && $canWrite) {
 				$selected = !empty($candidate['selected']) || in_array((string) $candidate['key'], array_map('strval', (array) ($draft['member_keys'] ?? array())), true);
-				$selectable = $canWrite && !$isOther && !empty($candidate['selectable']);
+				$selectable = $canWrite && !empty($candidate['selectable']);
 				$html .= '<input type="checkbox" id="' . $candidateId . '" form="' . $batchId . '" name="' . $e($batch['selection_name'] ?? 'batch_members[]') . '" value="' . $e($candidate['key']) . '" data-kb-member data-single-eligible="' . (!isset($candidate['single_eligible']) || $candidate['single_eligible'] ? '1' : '0') . '" data-group-eligible="' . (!isset($candidate['group_eligible']) || $candidate['group_eligible'] ? '1' : '0') . '" data-amount="' . $e($candidate['amount']) . '"' . ($selected ? ' checked' : '') . (!$selectable ? ' disabled' : '') . ' aria-label="' . $e(kreabankWorklistTranslate($langs, 'Select') . ' ' . kreabankWorklistNativeLabel($candidate['reference'] ?? '', $langs)) . '">';
 			}
 			$evidence = kreabankWorklistCandidate($candidate, $langs);
 			if ($batchMode && !$batchReview && $canWrite && $selectable) { $evidence = '<label class="kb-wl-member-label" for="' . $candidateId . '">' . $evidence . '</label>'; }
-			$correctionUi = (!$done && !$batchReview && $canWrite && !empty($candidate['correction']))
-				? kreabankWorklistCorrection($candidate, $line, $candidateId, $model, $langs) : array('button'=>'', 'reference'=>'', 'form'=>'', 'dialog'=>'');
-			$html .= '<div class="kb-wl-candidate-evidence">' . $evidence . '<span class="kb-wl-caption">' . $t('KreaBankWorklistPaymentAccount') . ': <span class="kb-wl-payment-account"><strong>' . ($correctionUi['reference'] ?: kreabankWorklistAccountReference($candidate,'',$langs)) . '</strong>'
-				. ($correctionUi['button'] ?: ($isOther ? kreabankWorklistAccountWarning($langs) : '')) . '</span></span>';
-			if ($isOther) { $html .= '<span class="kb-wl-caption">' . $t('KreaBankWorklistOtherAccount') . '</span>'; }
-			if (!$batchMode && !$isOther && !$done && $canWrite && !$accountMismatch) { $html .= kreabankWorklistPaymentButton($candidate,$line,$key,$candidateId,$model,$langs); }
+			$html .= '<div class="kb-wl-candidate-evidence">' . $evidence . '<span class="kb-wl-caption">' . $t('KreaBankWorklistPaymentAccount') . ': <strong>' . kreabankWorklistAccountReference($candidate,'',$langs) . '</strong></span>';
+			if (!$batchMode && !$done && $canWrite && !$accountMismatch) { $html .= kreabankWorklistPaymentButton($candidate,$line,$key,$candidateId,$model,$langs); }
 			$html .= '</div><div class="kb-wl-candidate-actions">';
-			if (!$batchMode && !$isOther && !$done && $canWrite && !$accountMismatch && !empty($candidate['action'])) {
+			if (!$batchMode && !$done && $canWrite && !$accountMismatch && !empty($candidate['action'])) {
 				$actionId = $candidateId . '-approve';
 				$disabled = !empty($candidate['action']['disabled']) || in_array($candidate['doc_type'] ?? '',array('customer_invoice','supplier_invoice','tax','salary'),true);
 				$html .= kreabankWorklistButton(kreabankWorklistTranslate($langs, $disabled ? 'KreaBankWorklistPaymentRequired' : ($candidate['action']['label'] ?? 'KreaBankWorklistReconcile')), 'check', $disabled ? 'type="button"' : 'type="submit" form="' . $actionId . '"', !$disabled, $disabled);
 				if (!$disabled) { $forms .= kreabankWorklistPostForm($actionId, $candidate['action'], $model); }
 			}
-			$forms .= $correctionUi['form']; $dialogs .= $correctionUi['dialog'];
 			$html .= '</div></div>';
 		}
-		if ($batchMode) { $html .= $otherSection ? '</section>' : '</div></div>'; }
+		if ($batchMode) { $html .= '</div></div>'; }
 		if ($canWrite && !empty($row['batch_review'])) {
 			$actionId = $id . '-confirm-batch';
 			$html .= '<div class="kb-wl-confirm-batch"><span>' . $t('KreaBankWorklistBatchReviewed') . '</span>' . kreabankWorklistButton(kreabankWorklistTranslate($langs, 'KreaBankWorklistReconcileSelection'), 'check', 'type="submit" form="' . $actionId . '"', true) . '</div>';

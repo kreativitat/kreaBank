@@ -265,7 +265,7 @@ final class KreaBankPlannedPayment
 		if ($this->rows("SELECT b.rowid FROM {$p}bank b WHERE b.fk_account=$account AND b.dateo>=$start AND b.dateo<$end"
 			. ' AND CAST(b.amount AS DECIMAL(24,8))=' . $source['amount'] . ' ORDER BY b.rowid' . $this->db->plimit(1) . $suffix)
 			|| $this->service->findExistingMovementsForCreation($source)
-			|| $this->service->getPaymentAccountReview($source['rowid'],array($account))) { throw new DomainException('An existing native movement or payment account requires review'); }
+			|| $this->service->getWorklistPaymentAccountReview($source['rowid'],array($account))) { throw new DomainException('An existing native movement or payment account requires review'); }
 		$amount = KreaBankPaymentBatchDecimal::absolute($source['amount']);
 		foreach (array('paiementfourn','paiement') as $payment) {
 			if ($this->rows("SELECT q.rowid FROM {$p}{$payment} q WHERE q.entity=$e AND COALESCE(q.fk_bank,0)=0 AND ABS(CAST(q.amount AS DECIMAL(24,8)))=$amount"

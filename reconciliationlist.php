@@ -141,7 +141,7 @@ if ($post && $action !== '' && !in_array($action, array('advance_scan','more_sca
 			if ($source !== 'staged') { throw new RuntimeException('KreaBankWorklistChanged'); }
 			$service->changeMovementAccount($id,$r['bank_line'],$r['snapshot'],$r['old'],$r['target']);
 			$_SESSION['kreabank_worklist_corrected'][$key] = array('bank_line'=>$r['bank_line'],'expires'=>time()+900);
-			$expand = $key; $mode = 'batch'; $search = '';
+			$expand = ''; $mode = 'batch'; $search = '';
 			setEventMessages($langs->trans('KreaBankAccountMoveDone'),null,'mesgs');
 		} elseif (in_array($action,array('save_draft','review_batch'),true)) {
 			$key = GETPOST('source_key','alphanohtml'); list($source,$id) = kreabankWorklistSource($key);
@@ -204,7 +204,7 @@ $requiresComplete = $state['filters']['match'] !== '' || $state['filters']['paym
 	|| in_array($state['sort']['field'],array('match','payment_account','status'),true);
 $scanFilters = $state['filters']; unset($scanFilters['match'],$scanFilters['payment_account']);
 if ($scanFilters['status'] === 'draft') { $scanFilters['status'] = 'pending'; }
-$scanScope = hash('sha256',json_encode(array('payment-account-review-v3',$scope,$scanFilters,array_map(static function ($s) {
+$scanScope = hash('sha256',json_encode(array('worklist-bank-review-v4',$scope,$scanFilters,array_map(static function ($s) {
 	return array($s['rowid'],$s['source_storage'],$s['amount'],$s['currency'],$s['operation_date'],$s['description'],$s['payment_reference'],$s['bank_reference'],$s['status'],$s['native_id'],$s['native_amount'],$s['native_currency'],$s['num_releve'],$s['rappro'],$s['group_id'],$s['group_valid'],$s['group_count'],$s['group_date']);
 },array_values($sources)))));
 $cache = $_SESSION['kreabank_worklist_scan'] ?? array();
@@ -354,7 +354,7 @@ foreach ($page['rows'] as $indexRow) {
 			if (!$row['account_mismatch'] && !empty($prepared['pair'])) {
 				$row['review'] = $candidateModel($prepared['pair'],empty($prepared['account_candidates']) && empty($prepared['batch']['active']) && empty($prepared['batch']['draft']) ? $paymentUrl($prepared['pair']) : '');
 				if ($canWrite) { $row['review']['action'] = $pairDescriptor($key,$prepared['pair']); }
-			} elseif (count($prepared['account_candidates']) === 1 && empty($prepared['account_review']['truncated'])) {
+			} elseif (count($prepared['account_candidates']) === 1 && empty($prepared['account_review']['truncated']) && ($prepared['account_review']['evidence'] ?? '') !== 'amount_date') {
 				$c = $prepared['account_candidates'][0];
 				$row['review'] = array('doc_type'=>$c['payment_type'],'doc_id'=>(int) $c['payment_id'],'reference'=>$c['payment_ref'],'date'=>$c['date'],'amount'=>$c['amount'],'currency'=>$row['line']['currency'],'account_ref'=>$c['account_ref'],'description'=>$c['reference']);
 			}
@@ -434,29 +434,28 @@ foreach ($page['rows'] as $indexRow) {
 					}
 				}
 			}
-			if (!empty($row['line']['fk_statement']) && (int) $row['line']['status'] === 0 && ($isExpanded || !empty($prepared['account_candidates']))) {
-				$other = $service->searchOtherAccountMovements((int) $row['line']['rowid'],$isExpanded ? $search : '');
-				if (count($prepared['account_candidates']) === 1 && empty($prepared['account_review']['truncated'])) {
-					$exactId = (int) $prepared['account_candidates'][0]['bank_line_id'];
-					if (!in_array($exactId,array_map('intval',array_column($other,'rowid')),true)) {
-						$other = array_merge($service->searchOtherAccountMovements((int) $row['line']['rowid'],'',$exactId),$other);
+			if (!empty($row['line']['fk_statement']) && (int) $row['line']['status'] === 0 && !empty($prepared['account_candidates'])) {
+				$unique = count($prepared['account_candidates']) === 1 && empty($prepared['account_review']['truncated']);
+				foreach ($prepared['account_candidates'] as $c) {
+					$item = array('key'=>'native:' . $c['bank_line_id'],'doc_type'=>'native_bank','doc_id'=>(int) $c['bank_line_id'],
+						'reference'=>$c['payment_ref'] ?: $c['reference'],'date'=>$c['date'],'amount'=>$c['amount'],'currency'=>$row['line']['currency'],
+						'account_ref'=>$c['account_ref'],'description'=>$c['reference'],'possible'=>($prepared['account_review']['evidence'] ?? '') === 'amount_date');
+					if ($unique && $canMove) {
+						$native = $service->searchOtherAccountMovements((int) $row['line']['rowid'],'',(int) $c['bank_line_id']);
+						if (count($native) === 1 && $native[0]['can_move'] && kreabankWorklistCorrectionMatches($prepared['account_candidates'],$native[0])) {
+							$n = $native[0];
+							$item['correction'] = array('action'=>'correct_account','fields'=>array_merge($baseParams,array('review'=>$remember('move',array('key'=>$key,'bank_line'=>(int) $n['rowid'],'snapshot'=>$n['snapshot'],'old'=>(int) $n['fk_account'],'target'=>(int) $n['target_account_id'])))),
+								'from_account_ref'=>$c['account_ref'],'to_account_ref'=>$row['line']['bank_account_ref']);
+						}
 					}
-				}
-				foreach ($other as $c) {
-					$item = array('key'=>'native:' . $c['rowid'],'doc_type'=>'native_bank','doc_id'=>(int) $c['rowid'],'reference'=>($c['payment_refs'] ?: $c['num_chq']) ?: '#' . $c['rowid'],'date'=>$c['dateo'],'amount'=>$c['amount'],'currency'=>$row['line']['currency'],'account_ref'=>$c['account_ref'],'description'=>$c['label'],'selectable'=>false);
-					if ($canMove && $c['can_move']) {
-						$item['correction'] = array('action'=>'correct_account','fields'=>array_merge($baseParams,array('review'=>$remember('move',array('key'=>$key,'bank_line'=>(int) $c['rowid'],'snapshot'=>$c['snapshot'],'old'=>(int) $c['fk_account'],'target'=>(int) $c['target_account_id'])))),
-							'from_account_ref'=>$c['account_ref'],'to_account_ref'=>$row['line']['bank_account_ref']);
-					}
-					$row['other_accounts'][] = $item;
-					if (!empty($row['review']) && !empty($row['review']['account_ref']) && $row['review']['account_ref'] === $item['account_ref'] && kreabankWorklistCorrectionMatches($prepared['account_candidates'],$c)) { $row['review']['correction'] = $item['correction'] ?? null; }
+					$row['bank_reviews'][] = $item;
 				}
 			}
 		}
 	} catch (Throwable $e) {
 		$row['pending_analysis'] = false; $row['notice'] = kreabankWorklistTranslate($langs, 'KreaBankWorklistChanged'); $row['batch_unavailable'] = true;
 		unset($row['review']['action'],$row['review']['correction'],$row['review']['payment_url'],$row['batch_form'],$row['batch_review'],$row['undo_review'],$row['movement_form']);
-		foreach (array('candidates','other_accounts') as $field) { foreach (($row[$field] ?? array()) as $i=>$unused) { unset($row[$field][$i]['action'],$row[$field][$i]['correction'],$row[$field][$i]['payment_url']); } }
+		foreach (array('candidates','bank_reviews') as $field) { foreach (($row[$field] ?? array()) as $i=>$unused) { unset($row[$field][$i]['action'],$row[$field][$i]['correction'],$row[$field][$i]['payment_url']); } }
 	}
 	$modelRows[] = $row;
 }

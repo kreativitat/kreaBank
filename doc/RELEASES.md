@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.61 — 2026-11-15
+
+- Move possible wrong-bank movements into the row's payment-bank column as an underlined warning and bank reference opening the existing reviewed correction dialog. Remove the separate other-bank section from the batch selector.
+- Keep exact amount/date-only evidence separate from Match and automatic identity rules. Ambiguous, incomplete and protected records never select a correction automatically; fresh list checks prevent duplicate creation while an account issue requires review.
+- Return successful bank correction to the list for a fresh same-account reconciliation, without opening the batch panel.
+
 ## 1.20.60 — 2026-11-15
 
 - Close native invoice payment Cancel directly inside the list dialog without posting the cancel form or navigating to the supplier list in the iframe. Keep genuine prior payment-attempt refresh separate; closing an untouched dialog never restarts analysis.

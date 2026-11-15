@@ -131,7 +131,7 @@ trait KreaBankWorklistSelectionTrait
 		$id = (int) $parts[1]; $p = $this->db->prefix(); $e = (int) $this->entity;
 		$line = $this->getBulkReviewLine($id, 'staged');
 		if (!$line || empty($line['fk_statement']) || (int) $line['status'] !== 0 || !empty($line['is_duplicate']) || (float) $line['allocated_amount'] !== 0.0) { throw new DomainException('Statement is unavailable'); }
-		if ($this->getPaymentAccountReview($id, array($line['bank_account_id']))) {
+		if ($this->getWorklistPaymentAccountReview($id, array($line['bank_account_id']))) {
 			throw new DomainException('Correct the payment bank account before reconciling this statement');
 		}
 		$sql = "SELECT l.*,s.ref AS source_statement_ref,s.currency AS source_statement_currency,s.source_type,s.bank_account_id,ba.currency_code AS bank_currency,ba.ref AS bank_account_ref"

@@ -2840,6 +2840,59 @@ class KreaBankService
 			? array('line'=>$line,'candidates'=>$candidates,'truncated'=>$truncated) : null;
 	}
 
+	/**
+	 * List-only manual account advice. Amount/date evidence never enters the strong
+	 * payment review, matcher, automatic runner or unattended reconciliation.
+	 */
+	public function getWorklistPaymentAccountReview($stagingId, $accountIds)
+	{
+		$this->assertAutomaticActor(true);
+		$strong = $this->getPaymentAccountReview($stagingId, $accountIds);
+		if ($strong) { return $strong; }
+		$id = (int) $stagingId; $p = $this->db->prefix();
+		$allowed = array_values(array_filter(array_map('intval',(array) $accountIds),static function ($value) { return $value > 0; }));
+		if (!$allowed || $id <= 0) { return null; }
+		$source = $this->transferRows("SELECT l.rowid,CAST(l.amount AS DECIMAL(24,8)) AS amount,l.operation_date,l.currency,s.bank_account_id"
+			. " FROM {$p}kreabank_statement_line l JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
+			. " JOIN {$p}bank_account a ON a.rowid=s.bank_account_id AND a.entity=s.entity WHERE l.entity=" . $this->entity . " AND l.rowid=$id"
+			. ' AND a.rowid IN (' . implode(',',$allowed) . ') AND a.clos=0 AND a.rappro=1 AND a.courant<>2'
+			. ' AND l.status=0 AND l.is_duplicate=0 AND l.allocated_amount=0 AND l.fk_native_bank_line IS NULL AND l.amount<>0'
+			. ' AND l.currency=a.currency_code AND l.currency=s.currency');
+		if (count($source) !== 1) { return null; }
+		$source = (array) $source[0]; $amount = KreaBankPaymentBatchDecimal::normalize($source['amount']);
+		$day = substr((string) $source['operation_date'],0,10);
+		if (!preg_match('/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D',$day,$parts) || !checkdate((int) $parts[2],(int) $parts[3],(int) $parts[1])) { return null; }
+		$other = $this->searchOtherAccountMovements($id);
+		$truncated = count($other) >= 101; $candidates = array();
+		foreach ($other as $row) {
+			if (KreaBankPaymentBatchDecimal::normalize((string) $row['amount']) !== $amount || substr((string) $row['dateo'],0,10) !== $day) { continue; }
+			$nativeId = (int) $row['rowid'];
+			$candidates[$nativeId] = array('bank_line_id'=>$nativeId,'bank_account_id'=>(int) $row['fk_account'],'account_ref'=>$row['account_ref'],
+				'account_label'=>$row['account_label'],'payment_id'=>$nativeId,'payment_type'=>'native_bank',
+				'payment_ref'=>trim((string) ($row['payment_refs'] ?: $row['num_chq'])) ?: '#' . $nativeId,
+				'reference'=>$row['label'],'amount'=>$amount,'date'=>$row['dateo'],'reconciled'=>(bool) $row['rappro'],'can_move'=>(bool) $row['can_move']);
+		}
+		if (!$candidates && !$truncated) { return null; }
+		// A real same-account reconciliation choice wins over a mere amount/date coincidence elsewhere.
+		$own = $this->transferRows("SELECT b.rowid FROM {$p}bank b JOIN {$p}bank_account a ON a.rowid=b.fk_account WHERE a.entity=" . $this->entity
+			. ' AND b.fk_account=' . (int) $source['bank_account_id'] . ' AND a.currency_code=' . $this->sqlText($source['currency'])
+			. " AND CAST(b.amount AS DECIMAL(24,8))=$amount AND b.dateo>=" . $this->sqlText($day)
+			. ' AND b.dateo<' . $this->sqlText(gmdate('Y-m-d',strtotime($day . ' UTC')+86400)) . ' AND b.rappro=0 ORDER BY b.rowid' . $this->db->plimit(101));
+		$line = $this->getBulkReviewLine($id,'staged');
+		if (!$line) { return null; }
+		foreach (array_slice($own,0,100) as $row) {
+			$documents = $this->getOpenNativeBankDocuments($amount[0] === '-' ? -1 : 1,20,null,0,0,(int) $source['bank_account_id'],(int) $row->rowid);
+			if (count($documents) !== 1 || KreaBankPaymentBatchDecimal::normalize($documents[0]['amount_decimal']) !== $amount
+				|| $documents[0]['currency'] !== $source['currency'] || substr((string) $documents[0]['doc_date'],0,10) !== $day) { continue; }
+			(new KreaBankReconciliationScope($this->db,$this->entity))->assertDocument('native_bank',(int) $row->rowid,(int) $source['bank_account_id']);
+			return null;
+		}
+		$truncated = $truncated || count($own) >= 101;
+		$line['amount_decimal'] = $amount;
+		return array('line'=>$line,'evidence'=>'amount_date','status'=>$truncated ? 'truncated' : (count($candidates) === 1 ? 'unique' : 'ambiguous'),
+			'candidates'=>array_values($candidates),'truncated'=>$truncated);
+	}
+
 	/** Reload a corrected movement through the ordinary same-account candidate projection. */
 	public function getCorrectedAccountMovement($stagingId, $bankLineId)
 	{
@@ -2871,7 +2924,7 @@ class KreaBankService
 		$salaryReadable = $salaryAvailable && $salary->readableSql('s.fk_user') !== '0=1';
 		$salaryUserLink = $salaryAvailable ? "EXISTS (SELECT 1 FROM {$p}payment_salary ps JOIN {$p}salary s ON s.rowid=ps.fk_salary AND s.entity=ba.entity WHERE ps.fk_bank=b.rowid AND ps.entity=ba.entity AND s.fk_user=u.url_id)" : '0=1';
 		$sql = "SELECT b.rowid,b.fk_account,b.amount,b.dateo,b.datev,b.label,b.num_chq,b.rappro,b.fk_bordereau,b.fk_type,"
-			. " ba.ref AS account_ref,ba.currency_code,l.amount AS source_amount,l.operation_date AS source_date,l.currency AS source_currency,"
+			. " ba.ref AS account_ref,ba.label AS account_label,ba.currency_code,l.amount AS source_amount,l.operation_date AS source_date,l.currency AS source_currency,"
 			. " l.description AS source_description,l.payment_reference AS source_reference,l.bank_reference AS source_bank_reference,l.counterparty_name AS source_counterparty,"
 			. " (SELECT GROUP_CONCAT(CONCAT_WS(' ',u.label,cp.ref,cp.num_paiement,sp.ref,sp.num_paiement) SEPARATOR ' ')"
 			. " FROM {$p}bank_url u LEFT JOIN {$p}paiement cp ON u.type='payment' AND cp.rowid=u.url_id AND cp.entity=ba.entity AND cp.fk_bank=b.rowid"

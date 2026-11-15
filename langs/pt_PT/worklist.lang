@@ -37,6 +37,7 @@ KreaBankWorklistBatchIncomplete=Selecione um ou mais movimentos elegíveis com o
 KreaBankWorklistReady=Pronto
 KreaBankWorklistChangeAccount=Alterar banco
 KreaBankWorklistAccountMismatch=Pagamento registado noutro banco.
+KreaBankWorklistPossibleOtherAccount=Possível pagamento noutro banco. Reveja o movimento bancário.
 KreaBankWorklistAccountCorrectionRequired=Corrija o banco do pagamento antes de reconciliar.
 KreaBankWorklistFromAccount=De
 KreaBankWorklistToAccount=Para

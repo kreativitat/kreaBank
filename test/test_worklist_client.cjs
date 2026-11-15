@@ -102,7 +102,9 @@ async function browserChecks(directory) {
         await page.evaluate(() => document.fonts.ready);
         const correctionUrl = page.url();
         const correctionRequests = resourceRequests.length;
-        const opener = page.getByRole('button',{name:'PAYMENT-BANK',exact:true});
+        const opener = page.locator('.kb-wl-payment-bank button[data-kb-dialog]');
+        assert.equal(await opener.innerText(),'PAYMENT-BANK');browserCount++;
+        assert.equal(await page.locator('button.kb-wl-icon[data-kb-account-warning]').count(),0,'Bank warning and reference are one underlined text control');browserCount++;
         await opener.click();
         const dialog = page.getByRole('dialog');
         assert.equal(await dialog.isVisible(), true); browserCount++;
@@ -114,8 +116,8 @@ async function browserChecks(directory) {
         await page.keyboard.press('Escape');
         assert.equal(await dialog.isVisible(), false); browserCount++;
         assert.equal(await opener.evaluate(button => document.activeElement === button), true); browserCount++;
-        const iconOpener = page.locator('button[data-kb-account-warning]');
-        await iconOpener.click();
+        const iconOpener = opener;
+        await iconOpener.locator('.fa-exclamation-circle').click();
         assert.equal(await dialog.isVisible(), true); browserCount++;
         await page.keyboard.press('Escape');
         assert.equal(await iconOpener.evaluate(button => document.activeElement === button), true); browserCount++;
@@ -144,12 +146,45 @@ async function browserChecks(directory) {
         assert.ok(submission.includes('correct_account') && submission.includes('synthetic-direct-review') && !submission.includes('confirm_pair')); browserCount++;
 
         await open('other');
-        const candidateAccount = page.getByRole('button',{name:'OTHER-BANK',exact:true});
+        await page.evaluate(() => document.fonts.ready);
+        const weakRequests=resourceRequests.length;
+        const weakUrl=page.url();
+        const candidateAccount = page.locator('.kb-wl-payment-bank button[data-kb-dialog]');
+        assert.equal(await candidateAccount.innerText(),'OTHER-BANK');browserCount++;
+        assert.equal(await page.locator('.kb-wl-match').innerText(),'No match','Weak evidence stays outside the Match column');browserCount++;
+        assert.equal(await page.locator('.kb-wl-other-review,.kb-wl-other-account').count(),0,'The separate other-bank section and cards are removed');browserCount++;
+        await page.screenshot({path:path.join(directory,'worklist-weak-bank-column.png'),fullPage:true});
         await candidateAccount.focus();
         await page.keyboard.press('Enter');
         assert.equal(await page.getByRole('dialog').isVisible(), true); browserCount++;
         await page.getByRole('button',{name:'Cancel',exact:true}).click();
         assert.equal(await candidateAccount.evaluate(button => document.activeElement === button), true); browserCount++;
+        assert.equal(resourceRequests.length,weakRequests,'Weak bank-column Cancel makes no request or scan');browserCount++;
+        assert.equal(page.url(),weakUrl);browserCount++;
+        await page.setViewportSize({width:390,height:844});
+        await candidateAccount.click();
+        const weakBounds=await page.getByRole('dialog').boundingBox();
+        assert.ok(weakBounds.x>=0&&weakBounds.x+weakBounds.width<=390);browserCount++;
+        await page.screenshot({path:path.join(directory,'worklist-weak-bank-mobile.png'),fullPage:true});
+        await page.getByRole('button',{name:'Cancel',exact:true}).click();
+        await page.setViewportSize({width:1280,height:900});
+
+        await open('other_collapsed');
+        const collapsedBank=page.locator('.kb-wl-payment-bank button[data-kb-dialog]');
+        assert.equal(await collapsedBank.count(),1,'The weak bank review is available without opening the batch selector');browserCount++;
+        assert.equal(await page.locator('.kb-wl-detail-row').count(),0);browserCount++;
+        assert.equal(await page.locator('.kb-wl-match').innerText(),'No match');browserCount++;
+        assert.equal(await collapsedBank.evaluate(element=>getComputedStyle(element).textDecorationLine),'underline');browserCount++;
+        assert.equal(await collapsedBank.evaluate(element=>getComputedStyle(element).color),'rgb(145, 96, 0)');browserCount++;
+        await page.screenshot({path:path.join(directory,'worklist-weak-bank-collapsed.png'),fullPage:true});
+        await collapsedBank.click();
+        assert.ok((await page.getByRole('dialog').innerText()).includes('PAY-0090'),'The collapsed bank control still identifies the exact reviewed movement');browserCount++;
+        await page.getByRole('button',{name:'Cancel',exact:true}).click();
+
+        await open('other_ambiguous');
+        assert.equal(await page.locator('.kb-wl-payment-bank [data-kb-account-warning]').count(),2,'Same-bank competing movements remain distinct');browserCount++;
+        assert.equal(await page.locator('.kb-wl-payment-bank button,dialog').count(),0,'Competing evidence exposes no arbitrary correction Save');browserCount++;
+        assert.equal(await page.locator('.kb-wl-other-review,.kb-wl-other-account').count(),0);browserCount++;
 
         await open('reviewed');
         assert.equal(await page.locator('[data-kb-member]').count(), 0); browserCount++;
@@ -245,7 +280,7 @@ async function browserChecks(directory) {
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)); browserCount++;
         await page.setViewportSize({width:1280,height:900});
         await open('direct_correction-pt_PT');
-        await page.getByRole('button',{name:'PAYMENT-BANK',exact:true}).click();
+        await page.locator('.kb-wl-payment-bank button[data-kb-dialog]').click();
         assert.equal(await page.getByRole('dialog').isVisible(),true); browserCount++;
         assert.equal(await page.getByRole('button',{name:'Guardar',exact:true}).count(),1); browserCount++;
         await page.screenshot({path:path.join(directory,'worklist-account-dialog-pt_PT.png'),fullPage:true});
