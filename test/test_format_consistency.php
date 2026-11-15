@@ -26,6 +26,12 @@ $fixtures = array(
 );
 
 $baselineFile = '5717__mt940.txt';
+foreach ($fixtures as $fixture) {
+	if (!is_readable($fixturesDir . '/' . $fixture)) {
+		fwrite(STDOUT, 'SKIP: bank format fixtures are unavailable (missing ' . $fixture . ')' . PHP_EOL);
+		exit(0);
+	}
+}
 $parser = new KreaBankParser();
 
 /**

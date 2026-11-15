@@ -11,7 +11,6 @@
 $rootDir = dirname(__DIR__);
 require_once $rootDir.'/class/KreaBankParser.class.php';
 
-$parser = new KreaBankParser();
 $fixtures = array(
 	'5700__norma43.txt' => 'norma43',
 	'5703__norma43_registo24.txt' => 'norma43_r24',
@@ -24,6 +23,14 @@ $fixtures = array(
 	'5716__emc.txt' => 'emc',
 	'5717__mt940.txt' => 'mt940',
 );
+
+foreach (array_keys($fixtures) as $fixture) {
+	if (!is_readable(__DIR__ . '/' . $fixture)) {
+		fwrite(STDOUT, 'SKIP: bank format fixtures are unavailable (missing ' . $fixture . ')' . PHP_EOL);
+		exit(0);
+	}
+}
+$parser = new KreaBankParser();
 
 $expectedFirstFive = array(
 	array('date' => '2026-01-20', 'amount' => -8.49),

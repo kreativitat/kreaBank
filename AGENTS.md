@@ -1,5 +1,9 @@
 # AGENTS.md — KreaBank
 
+## Continuous integration
+
+- 2026-11-15: GitHub Actions runs every non-database PHP test and Node CJS suite with Dolibarr 24 source on PHP 8.1/8.3. Missing private parser fixtures skip explicitly; database suites remain restricted to their documented disposable fixtures.
+
 ## Separate reconciliation list
 
 - `reconciliationlist.php` is additive; keep `reconcile.php` and its assets unchanged

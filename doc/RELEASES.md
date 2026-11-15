@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.41 — 2026-11-15
+
+- Run PHP syntax, non-database regression and Node tests in GitHub Actions on PHP 8.1/8.3 with Dolibarr 24 source. Report missing private bank fixtures as explicit skips.
+
 ## 1.20.40 — 2026-11-15
 
 - Open the top-five transfer description suggestions on click or keyboard focus while retaining free-text entry. Reuse the native autocomplete menu.

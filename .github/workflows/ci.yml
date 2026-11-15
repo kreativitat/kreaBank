@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: PHP ${{ matrix.php }} / Node 20
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.3']
+    env:
+      KREABANK_DOLIBARR_ROOT: ${{ github.workspace }}/dolibarr/htdocs
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: module
+      - uses: actions/checkout@v4
+        with:
+          repository: Dolibarr/dolibarr
+          ref: '24.0.0'
+          path: dolibarr
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, mysqli, dom, xml, xmlreader, simplexml, zip, bcmath
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: PHP syntax
+        working-directory: module
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            php -l "$file"
+          done < <(find . -type d -name vendor -prune -o -type f -name '*.php' -print0)
+      - name: PHP non-database regression suites
+        working-directory: module
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in test/*.php; do
+            case "$file" in *_database.php) continue ;; esac
+            echo "Running $file"
+            php "$file"
+          done
+      - name: Node regression suites
+        working-directory: module
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in test/*.cjs; do
+            echo "Running $file"
+            node "$file"
+          done
