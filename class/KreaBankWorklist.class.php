@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 require_once __DIR__ . '/kreabankintegration.class.php';
+require_once __DIR__ . '/KreaBankPlannedPayment.class.php';
 require_once __DIR__ . '/../lib/kreabank_worklist.lib.php';
 require_once __DIR__ . '/../lib/kreabank_manual_review.lib.php';
 require_once __DIR__ . '/../lib/kreabank_integration.lib.php';
@@ -134,6 +135,21 @@ class KreaBankWorklist
 			$prepared = ($this->callbacks['prepareReviewRow'])($line);
 			if (!empty($prepared['suggestion']['doc_id'])) { $pair = $prepared; }
 			$accountCandidates = $prepared['account_review']['candidates'] ?? array();
+			$payments = new KreaBankPlannedPayment($this->db,$this->service->user,$this->entity,$this->service);
+			if (($pair['suggestion']['doc_type'] ?? '') === 'tax' && $payments->permissions('tax')) {
+				try { $payments->snapshot($line,'tax',(int) $pair['suggestion']['doc_id']); }
+				catch (DomainException $error) { $pair = null; }
+			}
+			// Existing native/document proposals take precedence. Payroll advice never enters the matcher.
+			if (!$pair && !$accountCandidates && empty($batch['draft']) && empty($line['needs_review'])) {
+				$advice = $payments->propose($line);
+				if (($advice['status'] ?? '') === 'unique') {
+					$c = $advice['candidate'];
+					$pair = array('line'=>$line,'suggestion'=>array('doc_type'=>$c['type'],'doc_id'=>(int) $c['id'],'doc_ref'=>$c['reference'],
+						'doc_date'=>$c['doc_date'],'amount_open'=>'-' . $c['remaining'],'thirdparty_name'=>$c['label']),
+						'preselected'=>false,'is_bulk_safe'=>false);
+				}
+			}
 		}
 		if ((int) $line['status'] === 2 && empty($batch['active']) && !empty($line['native_bank_line_id'])) {
 			$p = $this->db->prefix();

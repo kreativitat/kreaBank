@@ -16,7 +16,7 @@ function kreabankHistoryCodeLabel($value, $kind, $langs)
 		'payment_various'=>'VariousPayment','payment_expensereport'=>'ExpenseReportPayment','payment_donation'=>'DonationPayment',
 		'payment_loan'=>'LoanPayment','payment_withdraw'=>'WithdrawalPayment','banktransfert'=>'BankTransfer',
 		'company'=>'ThirdParty','user'=>'User','bank_line'=>'KreaBankHistoryNativeEntry','native_bank'=>'KreaBankHistoryNativeEntry',
-		'customer_invoice'=>'CustomerInvoice','supplier_invoice'=>'SupplierInvoice','tax'=>'SocialContribution','sc'=>'SocialContribution',
+		'customer_invoice'=>'CustomerInvoice','supplier_invoice'=>'SupplierInvoice','tax'=>'SocialContribution','sc'=>'SocialContribution','salary'=>'Salary',
 		'quick_entry'=>'KreaBankHistoryActionQuickEntry',
 	);
 	$actions = array(
@@ -25,6 +25,7 @@ function kreabankHistoryCodeLabel($value, $kind, $langs)
 		'quick_supplier_invoice'=>'KreaBankHistoryActionQuickSupplierInvoice','batch_approve'=>'KreaBankHistoryActionBatchApprove',
 		'feed_sync'=>'KreaBankHistoryActionFeedSync','skip'=>'KreaBankHistoryActionSkip','delete_statement'=>'KreaBankHistoryActionDeleteStatement',
 		'account_correction'=>'KreaBankHistoryActionAccountCorrection','invoice_validation'=>'KreaBankHistoryActionInvoiceValidation',
+		'planned_payment_create'=>'Payment',
 		'statement_evidence'=>'KreaBankHistoryActionStatementEvidence','audit_purge'=>'KreaBankHistoryActionAuditPurge',
 		'trigger_event'=>'KreaBankHistoryActionTriggerEvent',
 	);
@@ -35,6 +36,7 @@ function kreabankHistoryCodeLabel($value, $kind, $langs)
 		'auto_pair'=>'KreaBankHistoryTypeAutomaticTransfer','auto_tpa'=>'KreaBankHistoryTypeAutomaticCard',
 		'manual_payment_batch'=>'KreaBankHistoryTypePaymentBatch','manual_worklist_movement'=>'KreaBankHistoryTypeCreatedMovement',
 		'quick_entry'=>$actions['quick_entry'],'quick_tax_entry'=>$actions['quick_tax_entry'],'quick_supplier_invoice'=>$actions['quick_supplier_invoice'],
+		'planned_payment_create'=>$actions['planned_payment_create'],
 	);
 	$maps = array('document'=>$documents,'action'=>$actions,'strategy'=>$strategies);
 	$key = $maps[$kind][$value] ?? '';

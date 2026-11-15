@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.54 — 2026-11-15
+
+- Suggest existing unpaid salary and tax records in the reconciliation list with the same Record payment control as invoices. Require exact remaining balance, complete identity, bounded dates and current native visibility; never add salary advice to unattended or bulk matching.
+- Record salary/tax payments through native business objects in a guarded dialog. Lock and recheck the owned statement, bank, parent and allocations; reject existing movements, unbanked payments, conflicting claims and stale or replayed reviews. Keep amount, date and bank fixed to the statement, audit atomically and leave reconciliation separate. No parent document creation or schema change.
+- Recognize the native `add_payment` submission in the shared dialog lifecycle. X, Escape and Cancel preserve the list without restarting search; an actual POST requests one scoped return refresh.
+
 ## 1.20.53 — 2026-11-15
 
 - Fix History Undo token parsing on installed Dolibarr: use the supported `aZ09` request filter so a valid displayed review reaches the existing single-use ownership, expiry and locked-state checks. The unsupported `alphanum` filter discarded valid tokens and prevented undo without changing records.

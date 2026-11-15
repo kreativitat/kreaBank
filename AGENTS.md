@@ -35,6 +35,14 @@
 
 ## Separate reconciliation list
 
+- Existing unpaid salary/tax payment advice is list-only in
+  `KreaBankPlannedPayment`; never add salaries to the unattended/bulk matcher.
+  `recordpayment.php` creates only native payments for existing parents under
+  owned source/account/parent/payment locks and a single-use displayed context.
+  Keep reconciliation separate, preserve salary employee visibility, and block
+  possible duplicate/unbanked payments. The native standalone salary/tax forms
+  do not provide this locking contract. See [list](doc/RECONCILIATION_LIST.md).
+
 - 1.20.50: New pending batches use only the source booking day, including retained
   selections and locked execution. `KreaBankPaymentBatchSuggestion` preselects
   only a unique exact signed-decimal subset from complete unsearched candidates;

@@ -254,7 +254,7 @@
                     const submitted = event => {
                         const form = event.target;
                         if (String(form.method).toLowerCase() !== 'post' || event.submitter && event.submitter.name === 'cancel'
-                            || !form.elements.action || !['add_paiement','confirm_paiement'].includes(form.elements.action.value)) return;
+                            || !form.elements.action || !['add_paiement','confirm_paiement','add_payment'].includes(form.elements.action.value)) return;
                         const previous = state.submitted;
                         state.submitted = true;
                         queueMicrotask(() => { if (event.defaultPrevented) state.submitted = previous; });

@@ -115,6 +115,7 @@ function kreabankWorklistDocumentUrl($type, $id)
 		'payment'=>'/compta/paiement/card.php?id=', 'payment_linked'=>'/compta/paiement/card.php?id=',
 		'payment_supplier'=>'/fourn/paiement/card.php?id=', 'payment_supplier_linked'=>'/fourn/paiement/card.php?id=',
 		'tax'=>'/compta/sociales/card.php?id=', 'payment_tax'=>'/compta/payment_sc/card.php?id=',
+		'salary'=>'/salaries/card.php?id=',
 	);
 	if (!is_string($type) || !isset($paths[$type]) || (!is_int($id) && !is_string($id))
 		|| !preg_match('/^[1-9][0-9]{0,9}$/D',(string) $id)) { return ''; }
@@ -150,13 +151,20 @@ function kreabankWorklistPaymentButton($candidate, $line, $key, $id, $model, $la
 {
 	$url = (string) ($candidate['payment_url'] ?? '');
 	if ($url === '') { return ''; }
-	$paths = array('customer_invoice'=>'/compta/paiement.php','supplier_invoice'=>'/fourn/facture/paiement.php');
+	$paths = array('customer_invoice'=>'/compta/paiement.php','supplier_invoice'=>'/fourn/facture/paiement.php',
+		'salary'=>'/custom/kreabank/recordpayment.php','tax'=>'/custom/kreabank/recordpayment.php');
 	$parts = parse_url($url); $type = $candidate['doc_type'] ?? '';
 	if (!$parts || isset($parts['scheme']) || isset($parts['host'])
 		|| !isset($paths[$type]) || ($parts['path'] ?? '') !== $paths[$type] || isset($parts['fragment'])) { return ''; }
 	parse_str($parts['query'] ?? '',$params);
 	$docId = (int) ($candidate['doc_id'] ?? 0); $amountKey = 'amount_' . $docId;
-	$allowed = array('action','facid','accountid','year','month','day','reyear','remonth','reday',$amountKey);
+	$guarded = in_array($type,array('salary','tax'),true);
+	$allowed = $guarded ? array('action','type','id','review') : array('action','facid','accountid','year','month','day','reyear','remonth','reday',$amountKey);
+	if ($guarded) {
+		if (array_diff(array_keys($params),$allowed) || ($params['action'] ?? '') !== 'create' || ($params['type'] ?? '') !== $type
+			|| (string) ($params['id'] ?? '') !== (string) $docId || $docId <= 0
+			|| !is_string($params['review'] ?? null) || !preg_match('/^[a-f0-9]{48}$/D',$params['review'])) { return ''; }
+	} else {
 	if (array_diff(array_keys($params),$allowed) || ($params['action'] ?? '') !== 'create' || $docId <= 0
 		|| (string) ($params['facid'] ?? '') !== (string) $docId
 		|| (string) ($params['accountid'] ?? '') !== (string) (int) ($line['bank_account_id'] ?? 0)) { return ''; }
@@ -164,6 +172,7 @@ function kreabankWorklistPaymentButton($candidate, $line, $key, $id, $model, $la
 		if (!is_string($params[$name] ?? null) || !preg_match('/^[1-9][0-9]{0,9}$/D',$params[$name])) { return ''; }
 	}
 	if (!is_string($params[$amountKey] ?? null) || !preg_match('/^\d+(?:[.,]\d{1,8})?$/D',$params[$amountKey])) { return ''; }
+	}
 	$url = $paths[$type] . '?' . http_build_query($params,'','&',PHP_QUERY_RFC3986);
 	$label = kreabankWorklistTranslate($langs,'KreaBankWorklistRecordPayment');
 	$button = kreabankWorklistIcon('money-bill-wave') . ' ' . kreabankWorklistEscape($label);
@@ -308,7 +317,7 @@ function kreabankWorklistTable($model, $langs)
 		$html .= '</td><td class="right nowrap kb-wl-actions">';
 		if ($canWrite && !$done && !empty($review['action'])) {
 			$formId = $id . '-approve';
-			$disabled = !empty($review['action']['disabled']) || in_array($review['doc_type'] ?? '',array('customer_invoice','supplier_invoice','tax'),true);
+			$disabled = !empty($review['action']['disabled']) || in_array($review['doc_type'] ?? '',array('customer_invoice','supplier_invoice','tax','salary'),true);
 			$html .= kreabankWorklistButton(kreabankWorklistTranslate($langs, $disabled ? 'KreaBankWorklistPaymentRequired' : ($review['action']['label'] ?? 'KreaBankWorklistReconcile')), 'check', $disabled ? 'type="button"' : 'type="submit" form="' . $formId . '"', !$disabled, $disabled);
 			if (!$disabled) { $forms .= kreabankWorklistPostForm($formId, $review['action'], $model); }
 		}
@@ -390,7 +399,7 @@ function kreabankWorklistTable($model, $langs)
 			$html .= '</div><div class="kb-wl-candidate-actions">';
 			if (!$batchMode && !$isOther && !$done && $canWrite && !empty($candidate['action'])) {
 				$actionId = $candidateId . '-approve';
-				$disabled = !empty($candidate['action']['disabled']) || in_array($candidate['doc_type'] ?? '',array('customer_invoice','supplier_invoice','tax'),true);
+				$disabled = !empty($candidate['action']['disabled']) || in_array($candidate['doc_type'] ?? '',array('customer_invoice','supplier_invoice','tax','salary'),true);
 				$html .= kreabankWorklistButton(kreabankWorklistTranslate($langs, $disabled ? 'KreaBankWorklistPaymentRequired' : ($candidate['action']['label'] ?? 'KreaBankWorklistReconcile')), 'check', $disabled ? 'type="button"' : 'type="submit" form="' . $actionId . '"', !$disabled, $disabled);
 				if (!$disabled) { $forms .= kreabankWorklistPostForm($actionId, $candidate['action'], $model); }
 			}

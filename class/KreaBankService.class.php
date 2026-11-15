@@ -6200,6 +6200,12 @@ class KreaBankService
 		return (bool) $resql;
 	}
 
+	/** Existing-document payment adapter owns the locked transaction; this records no reconciliation. */
+	public function recordPlannedPaymentAudit($stagingId, $payload)
+	{
+		return $this->logAudit('planned_payment_create', (int) $stagingId, null, $payload);
+	}
+
 	/**
 	 * Persist one audit row.
 	 *

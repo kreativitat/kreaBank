@@ -63,12 +63,24 @@ class DoliDB
 }
 class User
 {
+	private $fixtureDb;
 	public $id = 7;
 	public $admin = 1;
 	public $entity = 0;
 	public $socid = 0;
 	public $statut = 1;
 	public $allowed = true;
+	public function __construct($db = null) { $this->fixtureDb = $db; }
+	/** Native Salary::fetch_user() needs the real synthetic employee identity. */
+	public function fetch($id) {
+		$result = $this->fixtureDb->query('SELECT * FROM ' . MAIN_DB_PREFIX . 'user WHERE rowid=' . (int) $id);
+		$row = $result ? $this->fixtureDb->fetch_object($result) : null;
+		if (!$row) { return 0; }
+		foreach ((array) $row as $key=>$value) { $this->$key = $value; }
+		$this->id = (int) $row->rowid;
+		return 1;
+	}
+	public function getFullName($langs) { return trim(($this->firstname ?? '') . ' ' . ($this->lastname ?? '')); }
 	public function loadRights($a = '', $b = 0) {}
 	public function hasRight($a, $b, $c = '') { return $this->allowed; }
 }

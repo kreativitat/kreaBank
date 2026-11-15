@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const {initialise} = require('../js/worklist.js');
 let checks = 0;
 const settle = () => new Promise(resolve => setImmediate(resolve));
-function harness(scanOptions) {
+function harness(scanOptions, paymentAction = 'add_paiement') {
     const handlers = () => ({events:new Map(),addEventListener(name,fn){const list=this.events.get(name)||[];list.push(fn);this.events.set(name,list);},removeEventListener(name,fn){this.events.set(name,(this.events.get(name)||[]).filter(x=>x!==fn));},emit(name,event){for(const fn of this.events.get(name)||[])fn(event);}});
     const assigned=[]; let reloads=0,focused=0;
     global.window={location:{href:'https://bank.example.test/reconciliationlist.php?search_account=101',origin:'https://bank.example.test',pathname:'/reconciliationlist.php',assign:url=>assigned.push(url),reload:()=>{reloads++;}},addEventListener(){}};
@@ -20,25 +20,39 @@ function harness(scanOptions) {
     initialise(root);
     return {root,popup,doc,frame,form,scan,assigned,get reloads(){return reloads;},get focused(){return focused;},
         async open(){root.emit('click',{target:opener});await settle();},
-        submit(cancel=false,prevented=false){doc.emit('submit',{target:{method:'POST',elements:{action:{value:'add_paiement'}}},submitter:{name:cancel?'cancel':'save'},defaultPrevented:prevented});},
+        submit(cancel=false,prevented=false){const event={target:{method:'POST',elements:{action:{value:paymentAction}}},submitter:{name:cancel?'cancel':'save'},defaultPrevented:prevented};doc.emit('submit',event);return event;},
         close(){root.emit('kb-worklist-payment-close',{target:popup});}};
 }
 async function main() {
-    for (const close of ['X','Escape','Cancel']) {
-        const h=harness();await h.open();if(close==='Cancel')h.submit(true);h.close();await settle();
-        assert.equal(h.assigned.length,0,close+' does not navigate or refresh');checks++;
-        assert.equal(h.reloads,0,close+' does not restart analysis');checks++;
-        assert.equal(h.focused,1,'Focus returns without scrolling');checks++;
-        assert.equal((h.doc.events.get('submit')||[]).length,0,'Frame listeners are released');checks++;
-        h.close();assert.equal(h.focused,1,'Duplicate close is ignored');checks++;
+    for (const action of ['add_paiement','confirm_paiement','add_payment']) {
+        for (const close of ['X','Escape','Cancel']) {
+            const h=harness(undefined,action);await h.open();if(close==='Cancel')h.submit(true);h.close();await settle();
+            assert.equal(h.assigned.length,0,action+': '+close+' does not navigate or refresh');checks++;
+            assert.equal(h.reloads,0,action+': '+close+' does not restart analysis');checks++;
+            assert.equal(h.focused,1,'Focus returns without scrolling');checks++;
+            assert.equal((h.doc.events.get('submit')||[]).length,0,'Frame listeners are released');checks++;
+            h.close();assert.equal(h.focused,1,'Duplicate close is ignored');checks++;
+        }
+        const saved=harness(undefined,action);await saved.open();saved.submit();saved.close();saved.close();
+        assert.equal(saved.assigned.length,1,action+': a native POST causes exactly one owned row refresh');checks++;
+        assert.equal(new URL(saved.assigned[0]).searchParams.get('refresh_payment'),'staged:11');checks++;
+        const prevented=harness(undefined,action);await prevented.open();prevented.frame.emit('load',{});
+        assert.equal((prevented.doc.events.get('submit')||[]).length,1,'Repeated frame loads bind once per document');checks++;
+        prevented.submit(false,true);await settle();prevented.close();
+        assert.equal(prevented.assigned.length,0,action+': prevented submissions do not cause refresh');checks++;
+        const latePrevented=harness(undefined,action);await latePrevented.open();
+        const event=latePrevented.submit();event.defaultPrevented=true;await settle();latePrevented.close();
+        assert.equal(latePrevented.assigned.length,0,action+': native validation can prevent the POST after capture');checks++;
     }
-    const saved=harness();await saved.open();saved.submit();saved.close();saved.close();
-    assert.equal(saved.assigned.length,1,'A native POST causes exactly one owned row refresh');checks++;
-    assert.equal(new URL(saved.assigned[0]).searchParams.get('refresh_payment'),'staged:11');checks++;
-    const prevented=harness();await prevented.open();prevented.frame.emit('load',{});
-    assert.equal((prevented.doc.events.get('submit')||[]).length,1,'Repeated frame loads bind once per document');checks++;
-    prevented.submit(false,true);await settle();prevented.close();
-    assert.equal(prevented.assigned.length,0,'Prevented submissions do not cause refresh');checks++;
+    const objectSaved=harness(undefined,'add_payment');await objectSaved.open();objectSaved.submit();objectSaved.submit();
+    // Native salary/tax success redirects to a receipt GET before the popup closes.
+    objectSaved.frame.contentDocument={addEventListener(){},removeEventListener(){}};objectSaved.frame.emit('load',{});
+    objectSaved.close();objectSaved.close();
+    assert.equal(objectSaved.assigned.length,1,'Repeated direct native submissions and receipt navigation still refresh once on close');checks++;
+    assert.equal(objectSaved.reloads,0,'The direct native receipt close does not restart list analysis');checks++;
+    assert.equal((objectSaved.doc.events.get('submit')||[]).length,0,'Receipt close releases listeners from the original payment document');checks++;
+    const unrelated=harness(undefined,'create');await unrelated.open();unrelated.submit();unrelated.close();
+    assert.equal(unrelated.assigned.length,0,'An unrelated iframe form action cannot request a payment refresh');checks++;
     for (const url of ['https://other.example.test/reconciliationlist.php?refresh_payment=staged:11','https://bank.example.test/accounts.php?refresh_payment=staged:11','https://bank.example.test/reconciliationlist.php?refresh_payment=staged:12','https://bank.example.test/reconciliationlist.php?refresh_payment=staged:11&action=confirm_pair']) {
         const h=harness();h.popup.dataset.kbPaymentRefresh=url;await h.open();h.submit();h.close();
         assert.equal(h.assigned.length,0,'Unsafe or different-source refresh is denied');checks++;

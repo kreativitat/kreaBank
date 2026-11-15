@@ -50,10 +50,26 @@ analysis stays paused after return; neither a close nor a POST attempt means
 payment succeeded or automatically reconciles the line. The existing-movement selector remains available to find recorded payments.
 
 The payment shortcut requires owned, pending, unallocated, unmapped staged
-evidence in company currency. Legacy ledger imports, mapped/partial sources and
-tax proposals do not use this shortcut: the native tax form does not provide the
-required parent ownership and remaining-balance locking contract. No core payment
-controller or financial lifecycle is replaced.
+evidence in company currency. Legacy ledger imports and mapped/partial sources
+remain excluded. Existing unpaid salaries and taxes use `recordpayment.php` and
+`KreaBankPlannedPayment`: the native standalone salary/tax payment controllers
+lack the parent ownership and locked remaining-balance checks required here.
+The adapter uses native payment objects and bank attachment inside one guarded
+transaction; it creates no parent document and never reconciles the source.
+Amount, date and bank come from the displayed statement; payment method,
+reference and note remain explicit choices. Native invoice payment forms retain
+their existing routes.
+
+Salary advice stays outside the matcher and bulk execution. A suggestion needs
+an exact unpaid balance, complete employee identity in the statement and a nearby
+salary period. Native salary visibility (`readall`, or read plus employee
+hierarchy) applies before reading names. Tax advice similarly needs exact balance
+and meaningful identity. Ambiguous/truncated results remain pending. Existing
+movements, unbanked payments, other-account warnings, restricted accounts and
+active batches block new payment creation. Private actor/company-bound contexts
+expire after fifteen minutes and are single-use on POST. Parent, payments,
+source and bank are checked again under locks before native creation; the audit
+commits with the payment and source stays pending for separate reconciliation.
 
 Compact status tabs replace the redundant status column while preserving native
 header filters and pagination. A selected bank hides the repeated statement-bank
