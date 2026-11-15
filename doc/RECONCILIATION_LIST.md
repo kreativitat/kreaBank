@@ -1,7 +1,9 @@
 # Reconciliation list
 
 `reconciliationlist.php` is the banking reconciliation list. Its row actions are
-Search, payment batches and ordinary bank-movement creation. More options and
+one selector for existing movements (the layers button) and ordinary bank-movement creation.
+The standalone Search row action and panel were removed in 1.20.51. The selector
+accepts one or more movements; its text filter remains available. More options and
 all `more_entry`, `more_rule`, `more_writeoff` and `more_draft` actions were removed
 in 1.20.49; stale POSTs are rejected before workspace/service dispatch.
 
@@ -33,11 +35,11 @@ show the statement account as the payment's planned destination, with a clock
 tooltip; existing movements and payments retain their recorded bank. The same
 projection supplies displayed references, payment-bank filters and sorting.
 Unpaid invoice and tax suggestions have a grey disabled Reconcile action until a
-payment is recorded. Neither rows nor expanded search cards issue approval tokens
+payment is recorded. Rows never issue approval tokens
 for these documents; the controller also rejects earlier signed invoice/tax reviews.
 Existing native movements and recorded payments retain their reviewed approval.
 Eligible unpaid customer/supplier invoice proposals offer **Record payment** in
-the row and expanded Search card. This opens the installed native payment form
+the row. This opens the installed native payment form
 in Dolibarr's iframe dialog, with the invoice, statement account, booking date
 and exact bounded amount prefilled. Native payment permissions and confirmation
 remain authoritative. Closing with X or Escape, or cancelling without a native payment POST, returns
@@ -45,8 +47,7 @@ to the unchanged list without navigation, candidate reads or restarted analysis.
 A native payment POST attempt invalidates only that row's advisory approvals and
 requests one fresh row read through a consumed, canonical return URL. Automatic
 analysis stays paused after return; neither a close nor a POST attempt means
-payment succeeded or automatically reconciles the line. Search and Create batch remain available as
-alternative ways to find recorded payments.
+payment succeeded or automatically reconciles the line. The existing-movement selector remains available to find recorded payments.
 
 The payment shortcut requires owned, pending, unallocated, unmapped staged
 evidence in company currency. Legacy ledger imports, mapped/partial sources and
@@ -61,11 +62,16 @@ view retains the bank column and its filter. Statements follows the same conditi
 rule and drops stale filters for its hidden column.
 Exceptional review warnings remain beside the match evidence.
 
-Unique suggestions and explicit search choices use the
-existing signed manual review and `KreaBankService::reconcileLine()`; ambiguous
-records are never preselected. Typed searches filter eligible native entries,
-existing payments and invoices before their bounded limits, across all dates.
-Approval rechecks the same search context and exact displayed target.
+Suggested row pairs retain the existing signed manual review. The unified selector
+lists only movements on the source booking day, in its owned bank account and
+currency. One exact signed movement uses `selected_native` through
+`KreaBankService::reconcileLine()`, including eligible transfers, restricted-account
+transfer counterparts and legacy imports. Its source, target, linked payment and
+transfer facts are signed and rechecked under the shared reconciliation locks.
+No one-member group is created. A successful staged scalar selection removes
+only the current user's stale private group draft in the same transaction.
+Multiple movements retain the existing batch service and its stricter eligibility.
+Other-account correction cards sit outside the allocation list and totals.
 
 Bank correction reuses `changeMovementAccount()` with a single-use reviewed
 snapshot. Its destination is the statement account. Native modifier permission
@@ -75,7 +81,7 @@ unchecked and does not reconcile it.
 
 ## Payment batches
 
-**Create batch** groups existing native payment movements, including salary
+**Select existing movements** groups existing native payment movements, including salary
 payments already recorded in the bank ledger. It does not initiate payroll or
 send payments. Drafts are private to the current user and company. Selected
 members survive search changes; unavailable members require explicit removal.
@@ -130,7 +136,7 @@ Keep normalized history tables; do not drop them as a routine rollback.
 ## Validation and references
 
 Pure/controller suites: `test_worklist.php`, `test_worklist_view.php`,
-`test_worklist_native_translation.php`, `test_payment_batches.php`, and
+`test_worklist_native_translation.php`, `test_worklist_selection.php`, `test_payment_batches.php`, and
 `node test/test_worklist_client.cjs`.
 The view fixture supports `--html <case> [en_US|pt_PT]` with intercepted submissions.
 
@@ -167,7 +173,7 @@ batch. Stale views cannot replace newer state; failed workers return their curre
 retry cursor while preserving completed summaries.
 
 Row actions preserve the active row, horizontal scroll and keyboard focus across
-Search/Create batch opening and closing, inline searches, POST redirects and
+Selector opening and closing, inline searches, POST redirects and
 read-only analysis refreshes. Position hints expire after two minutes and are
 bound to the session/company/user, filter/sort context and page; no financial
 inputs or review tokens are stored in the browser.
@@ -186,7 +192,7 @@ Proposed, searched and completed references open their typed native detail card 
 a new tab. Links use the same constant route mapping as native/bulk review, never
 parsed labels or stored URLs. Batch component references open each existing native
 bank movement; aggregate batch names and unavailable placeholders remain text.
-The eligible Create movement plus icon sits beside the expanded Search control,
+The eligible Create movement plus icon remains in the row,
 with the existing permission/no-results conditions and row-position navigation.
 
 ## Same-day batch selection
@@ -195,8 +201,9 @@ New pending batch discovery, retained selections, review and locked execution us
 the source booking calendar day. Searches never widen it. Historical active
 groups, projections and undo preserve their original evidence.
 
-Initial batch opening preselects only a unique exact signed-decimal subset of at
-least two eligible owned-account native payments. The advisory helper uses the
+Initial selector opening preselects only a unique exact signed-decimal choice of
+one eligible movement or at least two eligible native payments. Exact singleton
+choices compete with group choices; any competing choice leaves selection manual. The advisory helper uses the
 complete, unsearched candidate set and bounded exact arithmetic, including a
 complementary-sum proof for near-total batches. Truncation, competing combinations,
 changed evidence or exhausted budgets leave selection manual. Saved drafts and

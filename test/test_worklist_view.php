@@ -48,7 +48,7 @@ function worklistViewFixture($case)
 	$line = array('rowid'=>11, 'operation_date'=>'2026-11-11', 'amount'=>'-3300.00000000', 'currency'=>'EUR', 'bank_account_ref'=>'STATEMENT-BANK', 'description'=>'SALARIES NOVEMBER', 'status'=>0);
 	$candidates = array();
 	foreach (array('1000.00000000', '1100.00000000', '1200.00000000') as $index => $amount) {
-		$candidates[] = array('key'=>'native_bank__' . ($index + 21), 'doc_type'=>'native_bank','doc_id'=>$index + 21,'reference'=>'Salary payment SAL-' . ($index + 1), 'description'=>'Employee ' . chr(65 + $index), 'date'=>'2026-11-11', 'amount'=>'-' . $amount, 'currency'=>'EUR', 'account_ref'=>'STATEMENT-BANK', 'selectable'=>true, 'selected'=>true);
+		$candidates[] = array('key'=>(string) ($index + 21), 'doc_type'=>'native_bank','doc_id'=>$index + 21,'reference'=>'Salary payment SAL-' . ($index + 1), 'description'=>'Employee ' . chr(65 + $index), 'date'=>'2026-11-11', 'amount'=>'-' . $amount, 'currency'=>'EUR', 'account_ref'=>'STATEMENT-BANK', 'selectable'=>true, 'selected'=>true);
 	}
 	$row = array('key'=>'staged:11', 'line'=>$line, 'review'=>array('doc_type'=>'payment_supplier_linked','doc_id'=>51,'reference'=>'PAY-0011', 'date'=>'2026-11-11', 'amount'=>'-3300.00000000', 'currency'=>'EUR', 'description'=>'Supplier example', 'account_ref'=>'PAYMENT-BANK', 'action'=>$action), 'candidates'=>$candidates,
 		'batch_candidates'=>$candidates, 'expanded'=>false, 'batch_mode'=>false, 'search'=>'', 'batch_form'=>array('fields'=>array('source_key'=>'staged:11', 'snapshot'=>'exact-source-snapshot'), 'save_action'=>'save_draft', 'review_action'=>'review_batch', 'selected_total'=>'-3300.00000000', 'difference'=>'0.00000000'));
@@ -64,13 +64,13 @@ function worklistViewFixture($case)
 	}
 	if ($case === 'batchlong') {
 		$model['rows'][0]['batch_suggestion']='unique';
-		for ($i=0;$i<45;$i++) { $model['rows'][0]['batch_candidates'][]=array('key'=>'native_bank__'.(100+$i),'doc_type'=>'native_bank','doc_id'=>100+$i,'reference'=>'Synthetic payment '.(100+$i),'description'=>'Synthetic counterparty','date'=>'2026-11-11','amount'=>'-10.00000000','currency'=>'EUR','account_ref'=>'STATEMENT-BANK','selectable'=>true); }
+		for ($i=0;$i<45;$i++) { $model['rows'][0]['batch_candidates'][]=array('key'=>(string) (100+$i),'doc_type'=>'native_bank','doc_id'=>100+$i,'reference'=>'Synthetic payment '.(100+$i),'description'=>'Synthetic counterparty','date'=>'2026-11-11','amount'=>'-10.00000000','currency'=>'EUR','account_ref'=>'STATEMENT-BANK','selectable'=>true); }
 	}
 	if (in_array($case, array('other', 'unsafe', 'readonly'), true)) {
 		$model['rows'][0]['expanded'] = true;
 		$model['rows'][0]['other_accounts'] = array(array('key'=>'native_bank__90', 'doc_type'=>'native_bank','doc_id'=>90,'reference'=>'PAY-0090', 'date'=>'2026-11-11', 'amount'=>'-3300.00000000', 'currency'=>'EUR', 'description'=>'Office supplier', 'account_ref'=>'OTHER-BANK', 'selectable'=>false,
 			'correction'=>array('action'=>'correct_account', 'fields'=>array('source_key'=>'staged:11','account_move_review'=>'synthetic-move-token'), 'from_account_ref'=>'OTHER-BANK', 'to_account_ref'=>'STATEMENT-BANK')));
-		$model['rows'][0]['candidates'] = array();
+		$model['rows'][0]['candidates'] = array(); $model['rows'][0]['batch_candidates'] = array();
 	}
 	if (in_array($case,array('creation','creation_unavailable'),true)) {
         $model['rows'][0]['review']=null; $model['rows'][0]['candidates']=array();
@@ -117,7 +117,15 @@ function worklistViewFixture($case)
 		$model['rows'][0]['candidates']=array($model['rows'][0]['review']);
 	}
 	if ($case === 'single_bank') { $model['hide_statement_account']=true; $model['filters']['search_account']='10'; $model['state']['search_account']='10'; }
-	if ($case === 'empty_search') { $model['rows'][0]['expanded']=true; $model['rows'][0]['review']=null; $model['rows'][0]['candidates']=array(); $model['rows'][0]['create_available']=true; }
+	if ($case === 'empty_search') { $model['rows'][0]['expanded']=true; $model['rows'][0]['review']=null; $model['rows'][0]['candidates']=array(); $model['rows'][0]['batch_candidates']=array(); $model['rows'][0]['create_available']=true; }
+	if (in_array($case,array('selection_single','selection_single_review','selection_legacy'),true)) {
+		$r=&$model['rows'][0]; $r['expanded']=true; $r['review']=null;
+		$r['batch_candidates']=array(array_merge($candidates[0],array('amount'=>'-3300.00000000','single_eligible'=>true,'group_eligible'=>false)));
+		$r['draft']=array('name'=>'','member_keys'=>array($candidates[0]['key']));
+		if ($case==='selection_single_review') { $r['batch_review']=array('action'=>'confirm_pair','fields'=>array('review'=>'signed-single-pair')); $r['batch_components']=$r['batch_candidates']; }
+		if ($case==='selection_legacy') { $r['key']='native:11'; $r['max_members']=1; $r['batch_form']['grouping_available']=false; }
+		unset($r);
+	}
 	if ($case === 'empty') { $model['rows'] = array(); }
 	if ($case === 'unsafe') {
 		$model['rows'][0]['line']['description'] = '<img src=x onerror=alert(1)>';
@@ -153,7 +161,7 @@ $checks = 0;
 function checkWorklistView($condition, $message) { global $checks; if (!$condition) { throw new RuntimeException($message); } $checks++; }
 foreach (array('en_US','pt_PT') as $locale) {
 	$langs = worklistFixtureLanguages($locale);
-	foreach (array('ready','batch','reviewed','batchlong','other','readonly','empty','unsafe','ambiguous','loading','direct_correction','completed','unavailable','needs_review','creation','creation_unavailable','empty_search','planned_invoice','payment_popup','single_bank') as $case) {
+	foreach (array('ready','batch','reviewed','batchlong','other','readonly','empty','unsafe','ambiguous','loading','direct_correction','completed','unavailable','needs_review','creation','creation_unavailable','empty_search','planned_invoice','payment_popup','single_bank','selection_single','selection_single_review','selection_legacy') as $case) {
 		$html = kreabankWorklistTable(worklistViewFixture($case), $langs);
 		$dom = new DOMDocument();
 		$previous = libxml_use_internal_errors(true);
@@ -188,14 +196,22 @@ foreach (array('en_US','pt_PT') as $locale) {
         if ($case==='creation_unavailable') {
             checkWorklistView($xpath->query('//input[@name="action" and @value="create_movement"]')->length===0, 'Unavailable source has no financial creation action');
 		}
+		checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-row")]//a[contains(@href,"mode=search")]')->length===0 && strpos($html,'KreaBankWorklistFindMatch')===false, $case . ': no standalone search row action or workspace');
+		if (in_array($case,array('selection_single','selection_single_review','selection_legacy'),true)) {
+			checkWorklistView($xpath->query('//input[@name="action" and @value="confirm_batch"]')->length===0, 'One selected movement never has a group confirmation');
+			checkWorklistView($xpath->query('//*[@data-kb-group-name and not(@hidden)]')->length===0, 'Scalar review has no visible group name');
+			if ($case==='selection_single_review') { checkWorklistView($xpath->query('//input[@name="action" and @value="confirm_pair"]')->length===1 && $xpath->query('//input[@type="checkbox"]')->length===0, 'A signed scalar review displays the sole movement readonly and confirms the ordinary pair'); }
+			else { checkWorklistView($xpath->query('//input[@data-kb-member and @checked and @data-single-eligible="1" and @data-group-eligible="0"]')->length===1 && $xpath->query('//*[@data-kb-save-draft and @hidden]')->length===1, 'A single exact movement is selectable while group draft controls stay hidden'); }
+			if ($case==='selection_legacy') { checkWorklistView($xpath->query('//*[@data-kb-batch and @data-max-members="1"]')->length===1, 'Legacy/no-group sources retain scalar selection'); }
+		}
 		if ($case === 'planned_invoice') {
 			$planned=$xpath->query('//td/span[@class="kb-wl-planned-account"]')->item(0);
 			checkWorklistView($planned && strpos($planned->textContent,'STATEMENT-BANK')!==false && $planned->getAttribute('title')===$langs->trans('KreaBankWorklistPlannedPaymentAccount'), 'Unpaid invoice shows the statement bank as a clearly planned payment destination');
 			checkWorklistView($xpath->query('//td/span[@class="kb-wl-planned-account"]//span[contains(@class,"fa-clock")]')->length===1
 				&& $xpath->query('//button[@data-kb-dialog]')->length===0, 'Planned bank has a compact clock hint and no existing-payment correction action');
-			checkWorklistView($xpath->query('//button[@disabled and @type="button" and not(@form) and not(contains(@class,"kb-wl-primary"))]//span[contains(@class,"fa-check")]')->length === 2
-				&& $xpath->query('//input[@name="action" and @value="confirm_pair"]')->length === 0, 'Unpaid row and expanded card retain grey disabled checks without any approval forms or submit binding');
-			checkWorklistView($xpath->query('//button[@disabled and @title="' . $langs->trans('KreaBankWorklistPaymentRequired') . '"]')->length === 2, 'Both unpaid approval hints explain that payment must be recorded first');
+			checkWorklistView($xpath->query('//button[@disabled and @type="button" and not(@form) and not(contains(@class,"kb-wl-primary"))]//span[contains(@class,"fa-check")]')->length === 1
+				&& $xpath->query('//input[@name="action" and @value="confirm_pair"]')->length === 0, 'Unpaid row retain grey disabled checks without any approval forms or submit binding');
+			checkWorklistView($xpath->query('//button[@disabled and @title="' . $langs->trans('KreaBankWorklistPaymentRequired') . '"]')->length === 1, 'The unpaid approval hint explain that payment must be recorded first');
 		}
 		if (in_array($case,array('batch','reviewed','batchlong'),true)) {
 			checkWorklistView($xpath->query('//div[contains(@class,"kb-wl-batch-controls")]//*[@data-kb-selected-total]')->length===1 && $xpath->query('//div[contains(@class,"kb-wl-members")]//*[@data-kb-selected-total or @data-kb-batch-review]')->length===0, 'Batch totals and review action remain outside the scrolling payment list');
@@ -203,13 +219,13 @@ foreach (array('en_US','pt_PT') as $locale) {
 		}
 		if ($case === 'payment_popup' || $case === 'single_bank') {
 			$popups=$xpath->query('//div[@data-kb-payment-popup]');
-			checkWorklistView($popups->length===2 && $xpath->query('//a[contains(@class,"kb-wl-record-payment")]')->length===2, 'Both unpaid row and search card use the native payment popup');
+			checkWorklistView($popups->length===1 && $xpath->query('//a[contains(@class,"kb-wl-record-payment")]')->length===1, 'The unpaid row retains the native payment popup');
 			$ids=array(); foreach($popups as $popup) {
 				$ids[]=$popup->getAttribute('id'); parse_str(parse_url($popup->getAttribute('data-kb-payment-refresh'),PHP_URL_QUERY),$query);
 				checkWorklistView(($query['refresh_payment']??'')==='staged:11' && ($query['search_description']??'')==='Salary' && !isset($query['token'],$query['action']), 'Native POST refresh is bound to the exact source/filter without a financial action');
 			}
-			checkWorklistView($xpath->query('//div[@data-kb-payment-popup and starts-with(@data-kb-payment-frame,"iframedialog")]')->length===2, 'Each native dialog identifies its own submission frame');
-			checkWorklistView(count(array_unique($ids))===2 && $xpath->query('//input[@name="action" and @value="confirm_pair"]')->length===0, 'Native payment dialogs are unique and do not re-enable unpaid reconciliation');
+			checkWorklistView($xpath->query('//div[@data-kb-payment-popup and starts-with(@data-kb-payment-frame,"iframedialog")]')->length===1, 'The native dialog identifies its own submission frame');
+			checkWorklistView(count(array_unique($ids))===1 && $xpath->query('//input[@name="action" and @value="confirm_pair"]')->length===0, 'Native payment dialogs are unique and do not re-enable unpaid reconciliation');
 		}
 		if ($case==='single_bank') {
 			checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-row")]/td')->length===6 && $xpath->query('//tr[@class="kb-wl-detail-row"]/td[@colspan="6"]')->length===1, 'Selected-bank rows and expanded details omit the repeated account/status columns');
@@ -217,8 +233,8 @@ foreach (array('en_US','pt_PT') as $locale) {
 		}
         if ($case === 'empty_search') {
             checkWorklistView($xpath->query('//div[@class="kb-wl-search"]/span[@class="kb-wl-search-actions"]/button[@type="submit"]')->length === 1
-                && $xpath->query('//div[@class="kb-wl-search"]/span[@class="kb-wl-search-actions"]/a[contains(@href,"mode=create") and @data-kb-row-navigation]')->length === 1,
-                'Search and create are adjacent compact controls in the same toolbar');
+                && $xpath->query('//div[@class="kb-wl-search"]/span[@class="kb-wl-search-actions"]/a[contains(@href,"mode=create") and @data-kb-row-navigation]')->length === 0,
+                'The unified selector filter has no duplicate creation shortcut');
             checkWorklistView($xpath->query('//section[contains(@class,"kb-wl-detail")]/a[contains(@href,"mode=create")]')->length === 0,
                 'Creation is not repeated below the empty search result');
 		}
@@ -269,6 +285,7 @@ foreach (array('en_US','pt_PT') as $locale) {
 			checkWorklistView($xpath->query('//dialog[@aria-labelledby and @aria-describedby]')->length === 1, 'Bank correction has named modal and stated effect');
 			checkWorklistView(strpos($html,'OTHER-BANK') !== false && strpos($html,'STATEMENT-BANK') !== false, 'Correction shows old and destination banks');
 			checkWorklistView($xpath->query('//input[@name="account_move_review" and @value="synthetic-move-token"]')->length === 1, 'Correction submits exact prepared review');
+			checkWorklistView($xpath->query('//*[@data-kb-batch]//div[contains(@class,"kb-wl-other-account")]')->length===0, 'Other-account review cards remain outside allocation controls');
 		}
 	if ($case === 'readonly') {
 			checkWorklistView($xpath->query('//form[@method="post"]')->length === 0, 'Read-only view has no financial action form');
@@ -318,7 +335,7 @@ foreach (array('en_US','pt_PT') as $locale) {
 		checkWorklistView($xpath->query('//a[contains(@href,"mode=more")] | //input[@name="entry_submit_action"] | //*[@data-krea-supplier-modal-open]')->length === 0 && strpos($html, 'fa-ellipsis-h') === false, 'Every list view omits More options and its financial forms');
 	$selection = $xpath->query('//input[@data-kb-member]')->item(0);
 	checkWorklistView($selection->getAttribute('aria-label') === $langs->trans('Select') . ' DG01-PAY-0001 / ' . $langs->trans('Payment'), 'Batch selection announces the same translated payment label');
-	checkWorklistView($selection->getAttribute('value') === 'native_bank__21' && $selection->getAttribute('data-amount') === '-1000.00000000', 'Native labels never change selected identities or exact allocation evidence');
+	checkWorklistView($selection->getAttribute('value') === '21' && $selection->getAttribute('data-amount') === '-1000.00000000', 'Native labels never change selected identities or exact allocation evidence');
 	checkWorklistView($xpath->query('//input[@name="search_match"]')->item(0)->getAttribute('value') === '(paiement)'
 		&& $xpath->query('//input[@name="review_snapshot"]')->item(0)->getAttribute('value') === '(banktransfert) / (paiement)', 'Raw search and signed POST evidence remain unchanged');
 	checkWorklistView(serialize($markerModel) === $originalModel, 'Rendering translated native labels does not mutate the prepared model');

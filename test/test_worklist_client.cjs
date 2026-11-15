@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later */
 'use strict';
 const assert = require('node:assert/strict');
-const {decimal8, allocation, money} = require('../js/worklist.js');
+const {decimal8, allocation, selectionReady, money} = require('../js/worklist.js');
 let checks = 0;
 function check(target, amounts, expectedReady, expectedDifference) {
     const original = [...amounts];
@@ -15,7 +15,7 @@ function check(target, amounts, expectedReady, expectedDifference) {
 check('-3300.00000000', ['-1000.00000000','-1100.00000000','-1200.00000000'], true, '0');
 check('-3300', [], false, '-3300');
 check('-3300', ['-1000','-1100'], false, '-1200');
-check('-3300', ['-3300'], false, '0');
+check('-3300', ['-3300'], true, '0');
 check('-3300', ['-3300','0'], false, '0');
 check('-3300', ['-4000','700'], false, '0');
 check('-3300', ['-1000','-2300.00000001'], false, '0.00000001');
@@ -27,6 +27,16 @@ for (const value of ['NaN','1e4','1,00','','1.000000001','--1','Infinity','<scri
     assert.throws(() => decimal8(value), TypeError);
     checks++;
 }
+for (const [target,members,max,expected] of [
+    ['-50',[{amount:'-50',singleEligible:true,groupEligible:false}],1,true],
+    ['-50',[{amount:'-50',singleEligible:false,groupEligible:true}],500,false],
+    ['-50',[{amount:'-20',groupEligible:true},{amount:'-30',groupEligible:true}],500,true],
+    ['-50',[{amount:'-20',groupEligible:true},{amount:'-30',groupEligible:false}],500,false],
+    ['-50',[{amount:'-20',groupEligible:true},{amount:'-30',groupEligible:true}],1,false],
+    ['-50',[],1,false],
+    ['-50',[{amount:'-49.99999999',singleEligible:true}],1,false],
+    ['-50',[{amount:'50',singleEligible:true}],1,false]
+]) { assert.equal(selectionReady(target,members,max),expected); checks++; }
 assert.equal(money(decimal8('-3300'), 'EUR', 'en-US'), '−3,300.00 EUR'); checks++;
 assert.equal(money(decimal8('-3300'), 'EUR', 'pt-PT').replace(/\s/g,''), '−3300,00EUR'); checks++;
 assert.equal(money(decimal8('9007199254740993.01'), 'EUR', 'en-US'), '9,007,199,254,740,993.01 EUR'); checks++;
@@ -292,7 +302,7 @@ async function navigationBrowserChecks() {
         };
         const hidden = extra => [...state,...Object.entries(extra)].map(([name,value]) => '<input type="hidden" name="' + escape(name) + '" value="' + escape(value) + '">').join('');
         const expanded = input.get('expand');
-        const mode = input.get('mode') || 'search';
+        const mode = input.get('mode') || 'batch';
         const context = JSON.stringify([state.get('sortorder'),state.get('limit'),state.get('search_description'),state.get('search_account'),state.get('search_status')]);
         let forms = '';
         let html = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding-top:80px;font:16px Arial}#id-top{position:fixed;inset:0 0 auto;height:60px;background:#ddd;z-index:5}.kb-worklist{margin:16px}.spacer{height:260px}.bottom{height:1000px}.div-table-responsive{overflow:auto}table{border-collapse:collapse;min-width:1000px;width:100%}.kb-wl-row{height:90px}td{border-bottom:1px solid #ddd;padding:10px}a,button{display:inline-block;margin:4px;padding:8px}dialog{max-width:400px}.kb-wl-detail{padding:16px}.kb-wl-dialog:not([open]){display:none}</style><div id="id-top">Native fixed header</div><div class="kb-worklist" data-navigation-scope="fixture-' + escape(state.get('company')) + '" data-navigation-context="' + escape(context) + '" data-navigation-page="' + number + '">';
@@ -308,7 +318,7 @@ async function navigationBrowserChecks() {
             const key = 'staged:' + id;
             const marker = ' data-kb-row-navigation="' + key + '"';
             const base = {expand:key,mode};
-            html += '<tr class="kb-wl-row" data-line-key="' + key + '" id="row-' + id + '"><td>' + key + '</td><td>125.12345678 EUR</td><td class="kb-wl-actions"><a aria-label="Search ' + id + '"' + marker + ' href="' + href({expand:key,mode:'search'}) + '">Search</a><a aria-label="Batch ' + id + '"' + marker + ' href="' + href({expand:key,mode:'batch'}) + '">Batch</a><button type="submit" aria-label="Approve ' + id + '" form="approve-' + id + '">Approve</button><button type="button" aria-label="Correct ' + id + '" data-kb-dialog="dialog-' + id + '">Bank</button><div style="display:inline-block" id="payment-popup-' + id + '" data-kb-payment-popup data-line-key="' + key + '" data-kb-payment-refresh="' + href({refresh_payment:key,scan:input.has('scan') ? '1' : null}) + '"><a class="kb-wl-record-payment" aria-label="Record payment ' + id + '" href="#">Payment</a></div></td></tr>';
+            html += '<tr class="kb-wl-row" data-line-key="' + key + '" id="row-' + id + '"><td>' + key + '</td><td>125.12345678 EUR</td><td class="kb-wl-actions"><a aria-label="Batch ' + id + '"' + marker + ' href="' + href({expand:key,mode:'batch'}) + '">Batch</a><button type="submit" aria-label="Approve ' + id + '" form="approve-' + id + '">Approve</button><button type="button" aria-label="Correct ' + id + '" data-kb-dialog="dialog-' + id + '">Bank</button><div style="display:inline-block" id="payment-popup-' + id + '" data-kb-payment-popup data-line-key="' + key + '" data-kb-payment-refresh="' + href({refresh_payment:key,scan:input.has('scan') ? '1' : null}) + '"><a class="kb-wl-record-payment" aria-label="Record payment ' + id + '" href="#">Payment</a></div></td></tr>';
             forms += '<form method="post" action="' + app + '" id="approve-' + id + '">' + hidden({action:'confirm_pair',row:key,token:'fixture-token',review:'fixture-review'}) + '</form>';
             forms += '<form method="post" action="' + app + '" id="correct-' + id + '">' + hidden({action:'correct_account',row:key,token:'fixture-token',review:'fixture-correction'}) + '</form><dialog class="kb-wl-dialog" id="dialog-' + id + '"><button type="button" data-kb-dialog-close autofocus>Cancel dialog</button><button type="submit" form="correct-' + id + '">Save correction</button></dialog>';
             if (expanded !== key) continue;
@@ -377,7 +387,7 @@ async function navigationBrowserChecks() {
     },{storageKey,changes});
     try {
         await page.goto(app);
-        for (const mode of ['Search','Batch']) {
+        for (const mode of ['Batch']) {
             await place(12);
             let before = await offset(12);
             await cycle(()=>page.getByRole('link',{name:mode+' 12',exact:true}).click());
@@ -388,7 +398,7 @@ async function navigationBrowserChecks() {
             await sameOffset(12,before,mode+' X closes at its parent row');
         }
         await place(12);
-        await cycle(()=>page.getByRole('link',{name:'Search 12',exact:true}).click());
+        await cycle(()=>page.getByRole('link',{name:'Batch 12',exact:true}).click());
         await page.locator('#query-12').fill('Synthetic lookup');
         let before = await offset(12);
         await cycle(()=>page.locator('#query-12').press('Enter'));
@@ -450,13 +460,13 @@ async function navigationBrowserChecks() {
 
         await page.goto(app);
         await place(13,30);
-        await cycle(()=>page.getByRole('link',{name:'Search 13',exact:true}).click());
+        await cycle(()=>page.getByRole('link',{name:'Batch 13',exact:true}).click());
         assert.ok(await offset(13)>=68); count++;
         await cycle(()=>page.getByRole('link',{name:'Close',exact:true}).click());
         await page.setViewportSize({width:500,height:900});
         await page.locator('.div-table-responsive').evaluate(wrapper=>{wrapper.scrollLeft=350;});
         await place(13);
-        await cycle(()=>page.getByRole('link',{name:'Search 13',exact:true}).evaluate(link=>link.click()));
+        await cycle(()=>page.getByRole('link',{name:'Batch 13',exact:true}).evaluate(link=>link.click()));
         assert.equal(await page.locator('.div-table-responsive').evaluate(wrapper=>wrapper.scrollLeft),350); count++;
         await cycle(()=>page.getByRole('link',{name:'Close',exact:true}).evaluate(link=>link.click()));
         assert.equal(await page.locator('.div-table-responsive').evaluate(wrapper=>wrapper.scrollLeft),350); count++;
@@ -468,7 +478,7 @@ async function navigationBrowserChecks() {
                 event.preventDefault();
             },{once:true});
         },storageKey);
-        await page.getByRole('link',{name:'Search 13',exact:true}).click();
+        await page.getByRole('link',{name:'Batch 13',exact:true}).click();
         await page.waitForTimeout(30);
         const snapshot = await page.evaluate(()=>window.__positionSnapshot);
         assert.deepEqual(Object.keys(snapshot).sort(),['context','focusId','index','keyboard','kind','left','offset','page','row','scope','time']); count++;

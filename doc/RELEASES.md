@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.51 — 2026-11-15
+
+- Remove the separate Search row action and panel. Use the layers button to select one or more existing movements, with the same-day filter and visible allocation totals.
+- Reconcile one selected movement through the ordinary signed native path, including eligible transfers and legacy imports. Keep multi-movement groups, their stricter membership rules and atomic undo unchanged. Competing scalar/group choices are never preselected.
+- Recheck exact scalar source, target, date and linked evidence under existing locks; clear only the current user's stale staged group draft on success. Keep other-account corrections outside allocation controls and retain native invoice Record payment.
+
 ## 1.20.50 — 2026-11-15
 
 - Restrict new payment batches to native payments on the statement booking day. On initial opening, preselect only a proved unique exact-decimal group from the complete same-day candidates; ambiguity, truncation and bounded-search exhaustion leave selection manual. Saved choices take precedence, and review/confirmation remain explicit.

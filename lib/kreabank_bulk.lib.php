@@ -59,6 +59,7 @@ function kreabankBulkReviewSignature($row, $scope, $expires, $secret)
 	}
 	$document['amount_open'] = number_format((float) ($suggestion['amount_open'] ?? 0), 8, '.', '');
 	if (!empty($row['writeoff'])) { $document['writeoff'] = $row['writeoff']; }
+	if (isset($row['worklist_selection'])) { $document['worklist_selection'] = $row['worklist_selection']; }
 	if (!empty($row['bank_rule'])) {
 		$document['bank_rule'] = $row['bank_rule'];
 		$document['bank_rule_target'] = $row['bank_rule_target'] ?? null;

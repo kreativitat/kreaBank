@@ -4,6 +4,17 @@
 
 - 2026-11-15: GitHub Actions runs every non-database PHP test and Node CJS suite with Dolibarr 24 source on PHP 8.1/8.3. Missing private parser fixtures skip explicitly; database suites remain restricted to their documented disposable fixtures.
 
+## Unified existing-movement selector
+
+- 1.20.51: The list has no standalone Search row action/panel. The layers selector
+  supports one or more same-day existing movements. A singleton uses a signed
+  `selected_native` review through `reconcileLine()`, never a one-member batch.
+  `KreaBankWorklistSelectionTrait` signs/rechecks exact source/target and linked
+  facts under existing locks; scalar completion clears only that user's stale
+  staged draft. Groups retain all existing batch invariants. Competing singles
+  and exact groups leave advisory selection manual. Other-account correction
+  cards never participate in allocation. Legacy workspace search is unchanged.
+
 ## Advisory bank rules
 
 - 2026-11-15: Rule management uses permission `15656004`. Preserve historical KreaBank rights and legacy KreaTaxMatch `156564`; check definitions and orphan user/group grants before registering a newly allocated right.
@@ -436,5 +447,5 @@
   controller. `php test/test_line_workspace_route.php` checks the routing contract.
 - 1.20.49 removes More options and its four list actions, plus skip, tax creation
   and supplier invoice creation everywhere. Do not restore these retired features
-  or the deleted supplier-dialog script. Preserve Search, batches, ordinary bank
+  or the deleted supplier-dialog script. Preserve the unified existing-movement selector, batches, ordinary bank
   movements and the other signed legacy workspace reviews.

@@ -77,3 +77,7 @@
 .kb-worklist .krea-modal-dialog .kb-wl-batch-footer { justify-content:flex-start; flex-wrap:wrap; margin-top:10px; }
 .kb-worklist .krea-modal-dialog .kb-wl-batch-footer > span { margin-right:0; }
 @media(max-width:700px) { .kb-wl-create-fields { grid-template-columns:minmax(0,1fr); gap:6px; } }
+
+.kb-worklist [data-kb-group-name][hidden],.kb-worklist [data-kb-save-draft][hidden] { display:none; }
+.kb-worklist .kb-wl-other-review { margin-top:18px; border-top:1px solid color-mix(in srgb,currentColor 20%,transparent); padding-top:12px; }
+.kb-worklist .kb-wl-other-review h4 { font-size:1em; margin:0 0 8px; }

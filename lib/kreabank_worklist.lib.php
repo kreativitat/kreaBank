@@ -18,6 +18,24 @@ function kreabankWorklistPaymentAccount($pair)
 		'ref'=>(string) ($planned ? ($pair['line']['bank_account_ref'] ?? '') : ($suggestion['bank_account_ref'] ?? '')), 'planned'=>$planned);
 }
 
+/** A cached review may render only beneath the exact source it describes. */
+function kreabankWorklistSelectionReviewMatches($stored, $key, $line, $scope, $now)
+{
+	if (!is_array($stored) || ($stored['scope'] ?? '') !== $scope || ($stored['expires'] ?? 0) < $now
+		|| ($stored['payload']['key'] ?? '') !== $key) { return false; }
+	if (($stored['kind'] ?? '') === 'pair' && !empty($stored['payload']['selection'])) {
+		$source = $stored['payload']['pair']['line'] ?? array();
+		return (int) ($source['rowid'] ?? 0) === (int) $line['rowid']
+			&& (int) ($source['bank_account_id'] ?? 0) === (int) $line['bank_account_id']
+			&& (!empty($source['fk_statement']) ? 'staged:' : 'native:') . (int) ($source['rowid'] ?? 0) === $key;
+	}
+	$batch = $stored['payload']['batch'] ?? array(); $source = $batch['source'] ?? array();
+	return ($stored['kind'] ?? '') === 'batch' && ($batch['action'] ?? '') === 'reconcile'
+		&& $key === 'staged:' . (int) ($batch['staging_id'] ?? 0)
+		&& (int) ($source['rowid'] ?? 0) === (int) $line['rowid']
+		&& (int) ($source['bank_account_id'] ?? 0) === (int) $line['bank_account_id'];
+}
+
 /** Open an existing native invoice-payment form; this helper never records or reconciles. */
 function kreabankWorklistPaymentUrl($pair, $permissions, $companyCurrency)
 {

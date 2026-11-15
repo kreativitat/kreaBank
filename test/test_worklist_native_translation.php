@@ -48,7 +48,7 @@ foreach (array('en_US'=>'Reconciliation list', 'pt_PT'=>'Lista de reconciliaçã
 		'notice'=>kreabankWorklistTranslate($langs, 'KreaBankWorklistBatchesUnavailable'),
 		'rows'=>array(array('key'=>'staged:1', 'expanded'=>true, 'line'=>array('operation_date'=>'2026-11-14','bank_account_ref'=>'BANK-A','amount'=>'-1234.56789012','currency'=>'EUR','description'=>$description),
 			'review'=>array('reference'=>'PAY-1','description'=>$description,'date'=>'2026-11-14','amount'=>'-1234.56789012','currency'=>'EUR','account_ref'=>'BANK-B','correction'=>$correction),
-			'candidates'=>array(array('key'=>'native_bank__2','reference'=>'PAY-2','date'=>'2026-11-14','amount'=>'-1234.56789012','currency'=>'EUR','account_ref'=>'BANK-A', 'consequence'=>'KreaBankWorklistRecordsPayment',
+			'batch_candidates'=>array(array('key'=>'native_bank__2','reference'=>'PAY-2','date'=>'2026-11-14','amount'=>'-1234.56789012','currency'=>'EUR','account_ref'=>'BANK-A', 'consequence'=>'KreaBankWorklistRecordsPayment',
 				'action'=>array('action'=>'confirm_pair','fields'=>array('review'=>'synthetic'),'label'=>'KreaBankWorklistReconcile'))))));
 	$html = kreabankWorklistTable($model, $langs);
 	$text = html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -58,13 +58,13 @@ foreach (array('en_US'=>'Reconciliation list', 'pt_PT'=>'Lista de reconciliaçã
 	checkWorklistNativeTranslation(strpos($html, '<script>unsafe()') === false && strpos($html, '&lt;script&gt;unsafe()&lt;/script&gt;') !== false, 'Untrusted source markup remains escaped in ' . $locale);
 	checkWorklistNativeTranslation(strpos($text, $description) !== false, 'Literal source entities remain evidence rather than being decoded as translations in ' . $locale);
 	checkWorklistNativeTranslation(strpos($html, '&amp;ccedil;') === false && strpos($html, '&amp;ecirc;') === false, 'Portuguese control labels are never double encoded');
-	checkWorklistNativeTranslation(strpos($html, '1234.56789012') === false, 'Visible monetary evidence retains the native two-decimal display');
+	checkWorklistNativeTranslation(strpos($text, '1234.56789012') === false, 'Visible monetary evidence retains the native two-decimal display');
 	$paymentRef = 'DG01-PAY-0001 / (paiement) / Ação &amp; Filhos';
 	$model['rows'][0]['review']['reference'] = $paymentRef;
 	$model['rows'][0]['review']['description'] = '(paiement) / Ação &amp; Filhos';
 	$model['rows'][0]['review']['correction']['fields']['review_label'] = $paymentRef;
-	$model['rows'][0]['candidates'][0]['reference'] = '(banktransfert)';
-	$model['rows'][0]['candidates'][0]['description'] = 'Customer (paiement) department';
+	$model['rows'][0]['batch_candidates'][0]['reference'] = '(banktransfert)';
+	$model['rows'][0]['batch_candidates'][0]['description'] = 'Customer (paiement) department';
 	$model['filters']['search_match'] = '(banktransfert)';
 	$before = serialize($model);
 	$html = kreabankWorklistTable($model, $langs);

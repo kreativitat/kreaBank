@@ -280,4 +280,62 @@ checkAuto($service->searchWorklistNativeDocuments($searchLine,'ORIGINAL-PAYMENT'
 $db->query('UPDATE kbauto_facture_fourn SET entity=1 WHERE rowid=98301');
 $searchAsReader=$readOnlyService->searchWorklistNativeDocuments($searchLine,'HISTORICAL-INVOICE-98301');
 checkAuto(count($searchAsReader['suggestions'])===1,'Native and module read rights can search without granting approval');
+
+// The unified selector dispatches one movement through the existing scalar service.
+require_once __DIR__.'/../lib/kreabank_manual_review.lib.php';
+stageAuto(95500,'-137.23000001','SCALAR-SELECTION');
+bankAuto(96600,'-137.23000001','SCALAR-SELECTION');
+bankAuto(96601,'-137.23000001','SCALAR-SELECTION-OFF-DAY',101,'2026-11-02');
+$selection=$service->listWorklistSelectionCandidates('staged:95500');
+checkAuto(in_array(96600,array_map('intval',array_column($selection['rows'],'rowid')),true) && !in_array(96601,array_map('intval',array_column($selection['rows'],'rowid')),true),'Unified discovery retains the exact scalar movement and excludes neighboring days');
+$scalar=$service->prepareWorklistSelectionPair('staged:95500',96600);
+checkAuto($scalar['approval_context']==='selected_native' && $scalar['worklist_selection']['target']['record']['amount_decimal']==='-137.23000001','Scalar review uses ordinary selected-native approval with exact persisted evidence');
+$sourceBefore=$db->query('SELECT * FROM kbauto_kreabank_statement_line WHERE rowid=95500')->fetch_all(MYSQLI_ASSOC);
+$auditBefore=countAuto('kreabank_recon_audit');
+foreach(array("dateo='2026-11-02'","amount=-137.23000002","label='Changed after display'") as $change){
+	$db->query('UPDATE kbauto_bank SET '.$change.' WHERE rowid=96600');
+	rejectAuto(static function()use($service,$scalar){kreabankExecuteManualReview($service,$scalar);},'Locked scalar selection rejects edited date, decimal amount or native evidence');
+	checkAuto($sourceBefore===$db->query('SELECT * FROM kbauto_kreabank_statement_line WHERE rowid=95500')->fetch_all(MYSQLI_ASSOC) && $auditBefore===countAuto('kreabank_recon_audit') && $db->depth===0,'Rejected scalar selection rolls back without source/audit writes');
+	$db->query("UPDATE kbauto_bank SET dateo='2026-11-01',amount=-137.23000001,label='Existing movement' WHERE rowid=96600");
+}
+$service->savePaymentBatchDraft(95500,array(96600),'Planning a scalar selection');
+$otherService->savePaymentBatchDraft(95500,array(96600),'Other reviewer planning state');
+$scalar=$service->prepareWorklistSelectionPair('staged:95500',96600);
+$nativeBefore=countAuto('bank');$groupsBefore=countAuto('kreabank_payment_batch');
+checkAuto(kreabankExecuteManualReview($service,$scalar)===95500,'One reviewed selection executes through the ordinary reconciliation service');
+checkAuto($nativeBefore===countAuto('bank') && $groupsBefore===countAuto('kreabank_payment_batch'),'Scalar selection creates neither a native movement nor a one-member group');
+checkAuto((int)$db->query('SELECT fk_native_bank_line FROM kbauto_kreabank_statement_line WHERE rowid=95500')->fetch_object()->fk_native_bank_line===96600,'Scalar selection preserves the ordinary staging/native mapping');
+$remainingDrafts=$db->query('SELECT fk_user,name FROM kbauto_kreabank_payment_batch_draft WHERE entity=1 AND fk_statement_line=95500 ORDER BY fk_user')->fetch_all(MYSQLI_ASSOC);
+checkAuto(count($remainingDrafts)===1 && (int)$remainingDrafts[0]['fk_user']===(int)$otherUser->id && $remainingDrafts[0]['name']==='Other reviewer planning state','Scalar completion atomically removes only the current reviewer draft');
+
+// Restricted accounts retain their supported reciprocal-transfer scalar path.
+$savedPairs=$db->query("SELECT value FROM kbauto_const WHERE entity=1 AND name='KREABANK_ACCOUNT_PAIRS'")->fetch_all(MYSQLI_ASSOC);
+$db->query("DELETE FROM kbauto_const WHERE entity=1 AND name='KREABANK_ACCOUNT_PAIRS'");
+$db->query("INSERT INTO kbauto_const(entity,name,value) VALUES(1,'KREABANK_ACCOUNT_PAIRS','{\"102\":101}')");
+stageAuto(95511,'-17.00','SCALAR-TRANSFER',102);
+bankAuto(96611,'-17.00','SCALAR-TRANSFER',102);bankAuto(96612,'17.00','SCALAR-TRANSFER',101);bankAuto(96613,'-17.00','RESTRICTED-BARE',102);
+$db->query("INSERT INTO kbauto_bank_url(fk_bank,url_id,url,label,type) VALUES(96611,96612,'/synthetic/','Reciprocal transfer','banktransfert'),(96612,96611,'/synthetic/','Reciprocal transfer','banktransfert')");
+$restricted=$service->listWorklistSelectionCandidates('staged:95511');
+checkAuto(!$restricted['grouping_available'] && array_map('intval',array_column($restricted['rows'],'rowid'))===array(96611),'Restricted accounts show only the eligible native transfer and never enable grouping');
+checkAuto($service->prepareWorklistSelectionPair('staged:95511',96611)['approval_context']==='selected_native','Restricted reciprocal transfers use the same signed scalar review');
+$db->query('UPDATE kbauto_bank SET amount=17.01 WHERE rowid=96612');
+rejectAuto(static function()use($service){$service->prepareWorklistSelectionPair('staged:95511',96611);},'A changed restricted transfer counterpart remains ineligible');
+$db->query('UPDATE kbauto_bank SET amount=17.00 WHERE rowid=96612');
+$db->query("DELETE FROM kbauto_const WHERE entity=1 AND name='KREABANK_ACCOUNT_PAIRS'");
+foreach($savedPairs as $savedPair){$db->query("INSERT INTO kbauto_const(entity,name,value) VALUES(1,'KREABANK_ACCOUNT_PAIRS','".$db->escape($savedPair['value'])."')");}
+
+bankAuto(96620,'-18.00','LEGACY-SCALAR-SOURCE');bankAuto(96621,'-18.00','LEGACY-SCALAR-TARGET');
+$db->query("UPDATE kbauto_bank SET num_releve='LEGACY-SCALAR-STATEMENT' WHERE rowid=96620");
+$db->query("INSERT INTO kbauto_kreabank_bankmeta(entity,fk_bank_line,bank_account_id,source_type,idempotency_hash,amount,currency,status,datec) VALUES(1,96620,101,'csv',SHA2('legacy-scalar-selector',256),-18,'EUR',0,NOW())");
+$legacy=$service->prepareWorklistSelectionPair('native:96620',96621);
+checkAuto(empty($legacy['line']['fk_statement']) && $legacy['worklist_selection']['key']==='native:96620','Legacy native imports retain their explicit namespace in scalar review');
+rejectAuto(static function()use($service){$service->prepareWorklistSelectionPair('native:96621',96620);},'An ordinary native movement cannot masquerade as an imported source');
+bankAuto(96622,'-19.00','OLD-IMPORT-SOURCE');bankAuto(96623,'-19.00','OLD-IMPORT-TARGET');
+$db->query("UPDATE kbauto_bank SET num_releve='OLD-IMPORT-STATEMENT',note='KreaBank import fixture.csv' WHERE rowid=96622");
+$oldImport=$service->prepareWorklistSelectionPair('native:96622',96623);
+checkAuto($oldImport['worklist_selection']['source']['meta']===array(),'A visible historical import with only its import note/reference remains selectable');
+stageAuto(95522,'-19.00','MAPPED-OLD-IMPORT');
+$db->query('UPDATE kbauto_kreabank_statement_line SET fk_native_bank_line=96622 WHERE rowid=95522');
+rejectAuto(static function()use($service){$service->prepareWorklistSelectionPair('native:96622',96623);},'A staging mapping removes the native source from legacy selection');
+rejectAuto(static function()use($service,$oldImport){kreabankExecuteManualReview($service,$oldImport);},'A newly mapped historical source cannot execute an earlier scalar review');
 echo 'OK: '.($checks-$initialChecks)." payment batch database checks\n";

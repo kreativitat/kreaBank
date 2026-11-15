@@ -17,6 +17,7 @@ require_once __DIR__ . '/KreaBankStatementEvidence.class.php';
 require_once __DIR__ . '/KreaBankExistingMovementException.class.php';
 require_once __DIR__ . '/KreaBankPaymentBatchTrait.php';
 require_once __DIR__ . '/KreaBankWorklistMovementTrait.php';
+require_once __DIR__ . '/KreaBankWorklistSelectionTrait.php';
 require_once __DIR__ . '/KreaBankRuleServiceTrait.php';
 require_once __DIR__ . '/KreaBankWriteOffServiceTrait.php';
 require_once __DIR__ . '/../lib/kreabank.lib.php';
@@ -43,6 +44,7 @@ class KreaBankService
 {
 	use KreaBankPaymentBatchTrait;
 	use KreaBankWorklistMovementTrait;
+	use KreaBankWorklistSelectionTrait;
 	use KreaBankRuleServiceTrait;
 	use KreaBankWriteOffServiceTrait;
 
@@ -2362,6 +2364,7 @@ class KreaBankService
 				$links[0]['match_reasons'] = $fresh['suggestion']['details'];
 			}
 			$scope->assertLine($line);
+			if ($isReviewedBulk) { $this->assertWorklistSelectionReview($reviewedRow, $line); }
 			if ($isReviewedBulk) { $this->assertBankRuleReview($reviewedRow, $line); }
 			if ($isWriteOff) { $reviewedRow = $this->revalidateWriteOffReview($reviewedRow, $line); }
 			if (!empty($line['fk_statement']) && $this->paymentBatchMapsAvailable()) {
@@ -2561,6 +2564,7 @@ class KreaBankService
 				+ ($isSelectedNativeReview ? array('approval_context'=>'selected_native',
 					'other_account_warning'=>!empty($reviewedRow['other_account_warning'])) : array()) : null,
 				$isReviewedBulk ? $this->bankRuleCategory($reviewedRow) : 0);
+			if ($isReviewedBulk) { $this->clearWorklistSelectionDraft($reviewedRow, $line); }
 			if ($writeOffAudit && !$this->logAudit('manual_writeoff', (int) $line['rowid'], (int) $line['rowid'],
 				array('source'=>$reviewSource, 'native_bank_line_id'=>$nativeLineId, 'writeoff'=>$writeOffAudit))) {
 				throw new RuntimeException('Failed to persist invoice difference audit');

@@ -19,7 +19,14 @@
         const total = units.reduce((sum, amount) => sum + amount, 0n);
         const difference = targetUnits - total;
         const sameDirection = targetUnits !== 0n && units.every(amount => amount !== 0n && (amount > 0n) === (targetUnits > 0n));
-        return {total, difference, count:units.length, ready:units.length >= 2 && sameDirection && difference === 0n};
+        return {total, difference, count:units.length, ready:units.length >= 1 && sameDirection && difference === 0n};
+    }
+
+    function selectionReady(target, members, maxMembers = 500) {
+        const state = allocation(target, members.map(member => member.amount));
+        const eligible = members.length === 1 ? members[0].singleEligible !== false
+            : members.length <= maxMembers && members.every(member => member.groupEligible !== false);
+        return state.ready && eligible;
     }
 
     function money(units, currency, locale, nativeFormat) {
@@ -176,6 +183,7 @@
                 let state;
                 try { state = allocation(batch.dataset.target, checked.map(input => input.dataset.amount)); }
                 catch (_) { state = null; }
+                const ready = !!state && selectionReady(batch.dataset.target, checked.map(input => ({amount:input.dataset.amount, singleEligible:input.dataset.singleEligible !== '0', groupEligible:input.dataset.groupEligible !== '0'})), Number(batch.dataset.maxMembers || 500));
                 const selected = batch.querySelector('[data-kb-selected-total]');
                 const difference = batch.querySelector('[data-kb-difference]');
                 selected.textContent = state ? money(state.total, batch.dataset.currency, locale, nativeFormat) : '—';
@@ -184,8 +192,12 @@
                 difference.title = state ? exactAmount(state.difference) + ' ' + batch.dataset.currency : '';
                 const count = batch.querySelector('[data-kb-selected-count]');
                 count.textContent = count.dataset.label + ': ' + String(checked.length);
-                batch.querySelector('[data-kb-batch-feedback]').textContent = state && state.ready ? batch.dataset.ready : batch.dataset.incomplete;
-                batch.querySelectorAll('[data-kb-batch-review]').forEach(button => { button.disabled = !state || !state.ready; });
+                batch.querySelector('[data-kb-batch-feedback]').textContent = ready ? batch.dataset.ready : batch.dataset.incomplete;
+                batch.querySelectorAll('[data-kb-batch-review]').forEach(button => { button.disabled = !ready; });
+                const detail = batch.closest('.kb-wl-detail');
+                const groupName = detail && detail.querySelector('[data-kb-group-name]');
+                if (groupName) groupName.hidden = checked.length < 2;
+                batch.querySelectorAll('[data-kb-save-draft]').forEach(button => { button.hidden = checked.length === 1 || Number(batch.dataset.maxMembers || 500) === 1; });
             };
             batch.addEventListener('change', update);
             update();
@@ -338,7 +350,7 @@
         }
     }
 
-    if (typeof module !== 'undefined' && module.exports) module.exports = {decimal8, allocation, money, initialise};
+    if (typeof module !== 'undefined' && module.exports) module.exports = {decimal8, allocation, selectionReady, money, initialise};
     if (typeof document !== 'undefined') {
         const start = () => document.querySelectorAll('.kb-worklist').forEach(initialise);
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
