@@ -417,3 +417,8 @@
   has no bootstrap and refuses direct requests. `kreabankWorkspaceUrl('reconcile')` is the
   only URL builder; never link to `reconcile.php`. Never remove a workspace feature without
   first providing it in the list. `php test/test_line_workspace_route.php` checks this contract.
+- 2026-11-15: List rows never link to the workspace. The row **More options** button expands in place
+  (`mode=more`, list action `more_entry`) with only tax entry, supplier invoice and skip; it reuses
+  `js/reconcile-supplier.js`/`css/reconcile.css` for the invoice dialog and fails closed on possible
+  existing movements. Do not duplicate Search, batch or movement creation there. The workspace stays
+  reachable from its other entry points for write-offs, rule entries and draft validation.

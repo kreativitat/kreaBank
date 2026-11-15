@@ -65,4 +65,4 @@ KreaBankWorklistMovementCreated=Bank movement created and reconciled.
 KreaBankWorklistPlannedPaymentAccount=Bank for the payment to be created
 KreaBankWorklistPaymentRequired=Record the payment before reconciling.
 KreaBankWorklistRecordPayment=Record payment
-KreaBankWorklistMoreOptions=More options: payment, tax, supplier invoice, difference, rule, draft, skip
+KreaBankWorklistMoreOptions=More options: tax entry, supplier invoice, skip

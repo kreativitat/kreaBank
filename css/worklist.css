@@ -65,5 +65,7 @@
 }
 .kb-wl-create-fields { display:grid; grid-template-columns:max-content minmax(160px,420px); gap:12px; align-items:start; margin:18px 0; }
 .kb-wl-create-fields label { padding-top:6px; }
-.kb-wl-create-fields select, .kb-wl-create-fields textarea { box-sizing:border-box; width:100%; }
+.kb-wl-create-fields select, .kb-wl-create-fields textarea, .kb-wl-create-fields input[type=text] { box-sizing:border-box; width:100%; }
+.kb-worklist .krea-modal-dialog .kb-wl-batch-footer { justify-content:flex-start; flex-wrap:wrap; margin-top:10px; }
+.kb-worklist .krea-modal-dialog .kb-wl-batch-footer > span { margin-right:0; }
 @media(max-width:700px) { .kb-wl-create-fields { grid-template-columns:minmax(0,1fr); gap:6px; } }

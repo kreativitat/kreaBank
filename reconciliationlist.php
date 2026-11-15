@@ -34,6 +34,9 @@ $paymentPermissions = array(
 		&& ($user->hasRight('fournisseur','facture','creer') || $user->hasRight('supplier_invoice','creer')),
 );
 $canUndo = $canWrite && $user->hasRight('kreabank','reconciliation','undo');
+// Row "more options": only the creation choices the list has no other tool for.
+$canTaxEntry = $canWrite && isModEnabled('tax') && $user->hasRight('tax','charges','lire') && $user->hasRight('tax','charges','creer');
+$canInvoiceEntry = $canWrite && isModEnabled('supplier_invoice') && $user->hasRight('fournisseur','facture','lire') && $user->hasRight('fournisseur','facture','creer');
 $url = dol_buildpath('/custom/kreabank/reconciliationlist.php', 1);
 $action = GETPOST('action','aZ09');
 $post = $_SERVER['REQUEST_METHOD'] === 'POST';
@@ -44,11 +47,11 @@ try { $state = kreabankWorklistState(array_merge($_GET,$_POST), max(1,(int) $con
 catch (InvalidArgumentException $e) { $invalidFilters = true; $state = kreabankWorklistState(array(), max(1,(int) $conf->liste_limit)); setEventMessages($langs->trans('KreaBankWorklistInvalidFilter'),null,'errors'); }
 $baseParams = $state['params'] + array('page'=>$state['page']);
 $expand = GETPOST('expand','alphanohtml');
-$mode = in_array(GETPOST('mode','alpha'),array('batch','create'),true) ? GETPOST('mode','alpha') : 'search';
+$mode = in_array(GETPOST('mode','alpha'),array('batch','create','more'),true) ? GETPOST('mode','alpha') : 'search';
 $search = substr((string) GETPOST('q','alphanohtml'),0,256);
 $scope = (int) $conf->entity . '|' . (int) $user->id;
 if (($_SESSION['kreabank_worklist_scope'] ?? '') !== $scope) {
-	unset($_SESSION['kreabank_worklist_inputs'],$_SESSION['kreabank_worklist_corrected'],$_SESSION['kreabank_worklist_batch_review'],$_SESSION['kreabank_worklist_scan'],$_SESSION['kreabank_worklist_movement_inputs'],$_SESSION['kreabank_worklist_movement_reviews']);
+	unset($_SESSION['kreabank_worklist_inputs'],$_SESSION['kreabank_worklist_corrected'],$_SESSION['kreabank_worklist_batch_review'],$_SESSION['kreabank_worklist_scan'],$_SESSION['kreabank_worklist_movement_inputs'],$_SESSION['kreabank_worklist_movement_reviews'],$_SESSION['kreabank_worklist_more_inputs']);
 	$_SESSION['kreabank_worklist_scope'] = $scope;
 }
 if (empty($_SESSION['kreabank_worklist_secret'])) { $_SESSION['kreabank_worklist_secret'] = bin2hex(random_bytes(32)); }
@@ -124,6 +127,53 @@ if ($post && $action !== '' && !in_array($action, array('advance_scan','more_sca
 			$service->createWorklistMovementAndReconcile($r['movement'],$paymentMode,$note);
 			unset($_SESSION['kreabank_worklist_movement_inputs'][$key]);
 			$expand = ''; setEventMessages($langs->trans('KreaBankWorklistMovementCreated'),null,'mesgs');
+		} elseif ($action === 'more_entry') {
+			$r = $take('more'); $key = $r['key']; list($source,$id) = kreabankWorklistSource($key);
+			$expand = $key; $mode = 'more';
+			$line = $worklist->load($key);
+			if ($source !== 'staged' || (int) $line['status'] === 2) { throw new RuntimeException('KreaBankWorklistChanged'); }
+			$submit = (string) GETPOST('entry_submit_action','aZ09');
+			$label = mb_substr(trim((string) GETPOST('entry_label','alphanohtml')),0,190,'UTF-8');
+			$note = mb_substr((string) GETPOST('entry_note','restricthtml'),0,1000,'UTF-8');
+			if ($submit === 'skip_line') {
+				$service->skipLine($id,trim((string) GETPOST('entry_note','alphanohtml')));
+				setEventMessages($langs->trans('KreaBankSkipDone'),null,'mesgs');
+			} elseif (in_array($submit,array('tax_entry','supplier_invoice'),true)) {
+				if (!($submit === 'tax_entry' ? $canTaxEntry : $canInvoiceEntry)) { accessforbidden(); }
+				$lines = array(); $decoded = json_decode((string) GETPOST('entry_product_lines_json','none'),true);
+				foreach (array_slice(is_array($decoded) ? $decoded : array(),0,12) as $item) {
+					if (!is_array($item)) { continue; }
+					$productLine = array('product_id'=>max(0,(int) ($item['product_id'] ?? 0)),'label'=>mb_substr(trim((string) ($item['label'] ?? '')),0,255,'UTF-8'),
+						'qty'=>abs((float) price2num((string) ($item['qty'] ?? 0),'MS')),'amount'=>abs((float) price2num((string) ($item['amount'] ?? 0),'MU')));
+					if ($productLine['product_id'] > 0 || $productLine['qty'] > 0.00001 || $productLine['amount'] > 0.00001) { $lines[] = $productLine; }
+				}
+				$supplierId = max(0,GETPOSTINT('entry_supplier_socid')); $supplierRef = mb_substr(trim((string) GETPOST('entry_ref_supplier','alphanohtml')),0,180,'UTF-8');
+				$_SESSION['kreabank_worklist_more_inputs'][$key] = array('label'=>$label,'note'=>$note,'supplier_id'=>$supplierId,'supplier_ref'=>$supplierRef,'lines'=>$lines);
+				if (count($_SESSION['kreabank_worklist_more_inputs']) > 30) { $_SESSION['kreabank_worklist_more_inputs'] = array_slice($_SESSION['kreabank_worklist_more_inputs'],-30,null,true); }
+				$amount = abs((float) $line['amount']);
+				// The list holds no existing-movement override: a possible duplicate keeps the line pending.
+				$service->assertNoExistingMovementForCreation($id);
+				if ($submit === 'supplier_invoice') {
+					if ($supplierId <= 0) {
+						$resolved = $service->resolveSupplierFromVatOrName(trim((string) GETPOST('entry_supplier_lookup','alphanohtml')),0);
+						$supplierId = (int) ($resolved['id'] ?? 0);
+					}
+					if ($supplierId <= 0 || !$lines) {
+						setEventMessages($supplierId <= 0 ? $langs->trans('ErrorFieldRequired',$langs->transnoentitiesnoconv('KreaBankQuickSupplierInvoiceSupplier')) : $langs->trans('KreaBankQuickSupplierLinesNoSelection'),null,'errors');
+						$redirect(array('expand'=>$key,'mode'=>'more'));
+					}
+					$created = $service->createQuickSupplierInvoiceAndReconcile($id,$label,$amount,$supplierId,$note,$supplierRef,$lines);
+					$createdId = (int) ($created['invoice_id'] ?? 0); $createdRef = (string) ($created['invoice_ref'] ?? '');
+					$createdUrl = $createdId > 0 ? dol_buildpath('/fourn/facture/card.php?facid=' . $createdId,1) : ''; $done = 'KreaBankQuickSupplierInvoiceDone';
+				} else {
+					$created = $service->createQuickTaxContributionAndReconcile($id,$label,$amount,$note);
+					$createdId = (int) ($created['social_contribution_id'] ?? 0); $createdRef = (string) ($created['social_contribution_ref'] ?? '');
+					$createdUrl = $createdId > 0 ? dol_buildpath('/compta/sociales/card.php?id=' . $createdId,1) : ''; $done = 'KreaBankQuickTaxEntryDone';
+				}
+				unset($_SESSION['kreabank_worklist_more_inputs'][$key]);
+				setEventMessages($langs->trans($done) . ($createdUrl !== '' ? ' <a href="' . dol_escape_htmltag($createdUrl) . '" target="_blank" rel="noopener">' . dol_escape_htmltag($createdRef !== '' ? $createdRef : '#' . $createdId) . '</a>' : ''),null,'mesgs');
+			} else { throw new RuntimeException('KreaBankWorklistChanged'); }
+			$expand = '';
 		} elseif ($action === 'correct_account') {
 			if (!$canMove) { accessforbidden(); }
 			$r = $take('move'); $key = $r['key']; list($source,$id) = kreabankWorklistSource($key);
@@ -165,6 +215,13 @@ if ($post && $action !== '' && !in_array($action, array('advance_scan','more_sca
 		// SQL, source payloads and provider details are never copied into UI errors.
 		dol_syslog('KreaBank worklist action failed: ' . get_class($error),LOG_ERR);
 		$message = $error->getMessage();
+		if ($error instanceof KreaBankExistingMovementException) {
+			// A possible duplicate is a review step: name the movements, create nothing.
+			$existing = array();
+			foreach ($error->movementIds as $existingId) { $existing[] = '<a href="' . dol_escape_htmltag(DOL_URL_ROOT . '/compta/bank/line.php?rowid=' . (int) $existingId) . '" target="_blank" rel="noopener">#' . (int) $existingId . '</a>'; }
+			setEventMessages(dol_escape_htmltag($langs->transnoentitiesnoconv($error->complete ? 'KreaBankExistingMovementBlocked' : 'KreaBankExistingMovementIncomplete')) . ' ' . implode(', ',$existing),null,'errors');
+			$redirect($expand !== '' ? array('expand'=>$expand,'mode'=>$mode,'q'=>$search) : array());
+		}
 		$key = $message === 'KreaBankWorklistPaymentRequired' ? $message : (preg_match('/changed|expired|already|review.*again|unavailable/i',$message) ? 'KreaBankWorklistChanged' : (preg_match('/exact.*amount|exact.*total|total.*equal|at least|requires 2/i',$message) ? 'KreaBankWorklistBatchIncomplete' : 'KreaBankWorklistActionFailed'));
 		setEventMessages($langs->trans($key),null,'errors');
 	}
@@ -279,6 +336,7 @@ if ($expand !== '') {
 $page = kreabankWorklistPage($filtered,$state);
 $baseParams['page'] = $page['page'];
 $accounts = $worklist->accounts(); $modelRows = array();
+$form = new Form($db); $moreAssets = false;
 $paymentUrl = static function ($pair) use ($paymentPermissions,$conf,$db) {
 	$url = kreabankWorklistPaymentUrl($pair,$paymentPermissions,(string) $conf->currency);
 	if ($url !== '') {
@@ -296,7 +354,7 @@ $candidateModel = static function ($pair,$paymentUrl = '') {
 };
 foreach ($page['rows'] as $indexRow) {
 	$key = $indexRow['key']; $isExpanded = $expand === $key;
-	$row = array('key'=>$key,'line'=>$indexRow['line'],'expanded'=>$isExpanded,'batch_mode'=>$mode === 'batch','create_mode'=>$mode === 'create','search'=>$search,
+	$row = array('key'=>$key,'line'=>$indexRow['line'],'expanded'=>$isExpanded,'batch_mode'=>$mode === 'batch','create_mode'=>$mode === 'create','more_mode'=>$mode === 'more','search'=>$search,
 		'payment_account_ref'=>$indexRow['payment_account'] ?? '',
 		'pending_analysis'=>!isset($cache['summaries'][$key]),'batch_unavailable'=>!$worklist->batchesAvailable() || strpos($key,'staged:') !== 0);
 	try {
@@ -343,7 +401,32 @@ foreach ($page['rows'] as $indexRow) {
 					}
 				}
 			}
-			if ($isExpanded && $mode !== 'create' && empty($row['batch_active'])) {
+			if ($isExpanded && $mode === 'more' && $canWrite && strpos($key,'staged:') === 0 && (int) $row['line']['status'] !== 2 && empty($batch['active'])) {
+				$line = $row['line']; $inputs = $_SESSION['kreabank_worklist_more_inputs'][$key] ?? array();
+				$outflow = (float) $line['amount'] < 0;
+				try { $restricted = (new KreaBankAccountPairs($db,(int) $conf->entity))->mainAccount((int) $line['bank_account_id']) > 0; } catch (Throwable $pairError) { $restricted = true; }
+				$amount = number_format(abs((float) $line['amount']),2,'.','');
+				$row['more_form'] = array('action'=>'more_entry','fields'=>array_merge($baseParams,array('expand'=>$key,'mode'=>'more','review'=>$remember('more',array('key'=>$key)))),
+					'line_id'=>(int) $line['rowid'],'amount'=>$amount,'currency'=>$line['currency'],'label'=>$inputs['label'] ?? dol_trunc(trim((string) preg_replace('/\s+/',' ',(string) $line['description'])),190,'right','UTF-8',1),
+					'note'=>$inputs['note'] ?? '','supplier_ref'=>$inputs['supplier_ref'] ?? '','lines'=>$inputs['lines'] ?? array(),
+					'tax'=>$canTaxEntry && $outflow && !$restricted,'invoice'=>$canInvoiceEntry && $outflow && !$restricted);
+				if ($row['more_form']['invoice']) {
+					$supplierId = (int) ($inputs['supplier_id'] ?? 0); $supplierName = '';
+					if ($supplierId <= 0) {
+						try {
+							$prediction = $service->predictSupplierForLine((int) $line['rowid']);
+							if (!empty($prediction['is_confident']) && !empty($prediction['predicted_socid'])) { $supplierId = (int) $prediction['predicted_socid']; $supplierName = (string) $prediction['predicted_name']; }
+						} catch (Throwable $predictionError) { $supplierId = 0; }
+					}
+					// Native selectors only; the view receives ready markup and performs no lookup.
+					$row['more_form']['supplier_select'] = $form->select_company($supplierId > 0 ? $supplierId : '','entry_supplier_socid','(s.fournisseur:>:0)','KreaBankQuickSupplierLookupPlaceholder',0,0,array(),0,'minwidth300','',$supplierName,1);
+					for ($slot = 0; $slot < 6; $slot++) {
+						$row['more_form']['product_selects'][$slot] = $form->select_produits(0,'entry_product_line_product_' . $slot,'',0,0,1,2,'',2,array(),0,'',0,'minwidth200',1,'',null,1,1);
+					}
+					$moreAssets = true;
+				}
+			}
+			if ($isExpanded && !in_array($mode,array('create','more'),true) && empty($row['batch_active'])) {
 				$line = $row['line'];
 				if ($mode === 'batch' && !$row['batch_unavailable'] && $canWrite) {
 					$candidates = $service->listBatchCandidates((int) $line['rowid'],$search);
@@ -394,7 +477,6 @@ foreach ($page['rows'] as $indexRow) {
 	}
 	$modelRows[] = $row;
 }
-$form = new Form($db);
 ob_start();
 print_barre_liste($langs->trans('KreaBankWorklistTitle'),$page['page'],$_SERVER['PHP_SELF'],'&' . http_build_query($state['params'],'','&',PHP_QUERY_RFC3986),$state['sort']['field'],$state['sort']['order'],'',$page['num'],$page['total'],'bank',0,'','',$page['limit'],0,0,1);
 $pagination = ob_get_clean();
@@ -417,6 +499,11 @@ print kreabankBankingHeader('worklist',$navigationAccount,false);
 $assetRoot = dol_buildpath('/custom/kreabank/',1);
 print '<link rel="stylesheet" href="' . dol_escape_htmltag($assetRoot . 'css/worklist.css?v=' . filemtime(__DIR__ . '/css/worklist.css')) . '">';
 print '<script defer src="' . dol_escape_htmltag($assetRoot . 'js/worklist.js?v=' . filemtime(__DIR__ . '/js/worklist.js')) . '"></script>';
+if ($moreAssets) {
+	// The supplier-invoice dialog reuses the existing product-line assets unchanged.
+	print '<link rel="stylesheet" href="' . dol_escape_htmltag($assetRoot . 'css/reconcile.css?v=' . filemtime(__DIR__ . '/css/reconcile.css')) . '">';
+	print '<script defer src="' . dol_escape_htmltag($assetRoot . 'js/reconcile-supplier.js?v=' . filemtime(__DIR__ . '/js/reconcile-supplier.js')) . '"></script>';
+}
 print kreabankWorklistTable(array('url'=>$url,'token'=>newToken(),'state'=>$baseParams,'filters'=>array_combine(array_map(static function ($k) { return 'search_' . $k; },array_keys($state['filters'])),array_values($state['filters'])),
 	'navigation_scope'=>hash('sha256',$scope . '|' . $secret),'navigation_context'=>hash('sha256',json_encode(array($state['filters'],$state['sort'],$state['limit']))),'navigation_page'=>$page['page'],
 	'accounts'=>$accounts,'rows'=>$modelRows,'can_write'=>$canWrite,'sort'=>$state['sort'],'pagination'=>$pagination,'headers'=>$headers,'filter_buttons'=>$form->showFilterButtons(),'scan'=>$scan,
