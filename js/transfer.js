@@ -14,6 +14,14 @@
         // Leave an unfamiliar native layout intact rather than hide unlabelled fields.
         if (!form || !add || !actions || !rows.length || rows.some(function (row) { return row.cells.length !== headers.length; })) return;
         var labels = JSON.parse(config.textContent);
+        var descriptions = document.createElement('datalist');
+        descriptions.id = 'kb-transfer-descriptions';
+        (Array.isArray(labels.descriptions) ? labels.descriptions : []).slice(0, 10).forEach(function (description) {
+            var option = document.createElement('option');
+            option.value = description;
+            descriptions.appendChild(option);
+        });
+        form.appendChild(descriptions);
 
         rows.forEach(function (row, index) {
             Array.from(row.cells).forEach(function (cell, column) {
@@ -36,6 +44,19 @@
                     combobox.setAttribute('aria-labelledby', label.id + (selectedLabel ? ' ' + selectedLabel : ''));
                 }
                 if (name === 'amount' || name === 'amountto') control.setAttribute('inputmode', 'decimal');
+                if (name === 'label') {
+                    control.setAttribute('list', descriptions.id);
+                    control.setAttribute('autocomplete', 'off');
+                    control.setAttribute('placeholder', labels.descriptionPlaceholder);
+                    if (labels.descriptionError) {
+                        var error = document.createElement('small');
+                        error.className = 'opacitymedium';
+                        error.id = control.id + '-history-error';
+                        error.textContent = labels.descriptionError;
+                        cell.appendChild(error);
+                        control.setAttribute('aria-describedby', error.id);
+                    }
+                }
             });
             var heading = document.createElement('td');
             heading.className = 'kb-transfer-row-heading';

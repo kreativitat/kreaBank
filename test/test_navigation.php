@@ -45,9 +45,10 @@ class NavigationTestDb
 		}
 		return false;
 	}
+	public function free($result) {}
 	public function escape($value) { return addslashes((string) $value); }
 	public function idate($time) { return gmdate('Y-m-d H:i:s', $time); }
-	public function plimit($limit, $offset) { return ' LIMIT ' . (int) $offset . ', ' . (int) $limit; }
+	public function plimit($limit, $offset = 0) { return ' LIMIT ' . (int) $offset . ', ' . (int) $limit; }
 }
 class NavigationTestAdapter extends KreaBankNativeBankAdapter
 {
@@ -105,6 +106,7 @@ checkNavigation($hooks->completeTabsHead($parameters, $object, $action, null) ==
 $user->allowed[] = 'kreabank.reconciliation.read';
 $parameters['type'] = 'bank';
 checkNavigation($hooks->completeTabsHead($parameters, $object, $action, null) === 0, 'Native hook never adds a second bank tab bar');
+function dol_syslog($message, $level = 0) {}
 function getNonce() { return 'navigation-test'; }
 function dol_escape_htmltag($text) { return htmlspecialchars((string) $text, ENT_QUOTES, 'UTF-8'); }
 function GETPOSTINT($key) { return (int) ($GLOBALS['navigationRequest'][$key] ?? 0); }
@@ -202,6 +204,17 @@ checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0
 	&& strpos($hooks->resprints, 'transfer.js') !== false && strpos($hooks->resprints, 'transfer.css') !== false
 	&& strpos($hooks->resprints, 'kb-header') === false && strpos($hooks->resprints, 'kb-primary') === false,
 	'Internal transfers enhance presentation without queries, a workspace header, selector or tabs');
+$user->allowed[] = 'banque.transfer';
+checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0 && count($db->queries) === $queryCount + 1
+	&& strpos(end($db->queries), 'source_account.entity=7') !== false && strpos(end($db->queries), 'target_account.entity=7') !== false
+	&& strpos(end($db->queries), ' LIMIT 0, 10') !== false && strpos($hooks->resprints, '"descriptionError":""') !== false,
+	'Transfer writers receive bounded current-company history through the native footer');
+$db->fail = true;
+checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0
+	&& strpos($hooks->resprints, 'KreaBankTransferDescriptionsUnavailable') !== false && strpos($hooks->resprints, 'transfer.js') !== false,
+	'History failure is visible without blocking native transfer entry');
+$db->fail = false;
+$queryCount = count($db->queries);
 $user->allowed = array('banque.lire');
 checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0 && $hooks->resprints === '' && count($db->queries) === $queryCount, 'Native-only readers retain the original transfer presentation');
 $user->allowed = array('banque.lire', 'kreabank.reconciliation.read');

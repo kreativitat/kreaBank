@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.38 — 2026-11-15
+
+- Suggest the ten most-used descriptions from committed, company-owned internal transfers. Reuse native history without extra writes or schema changes.
+
 ## 1.20.37 — 2026-11-15
 
 - Expand transfer cards to the available width and align native date controls.

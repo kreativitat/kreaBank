@@ -847,3 +847,6 @@ KreaBankAboutCapabilityTransfer=Registar transferências internas através do fo
 KreaBankAboutDocumentation=Documentação
 KreaBankAboutReadme=Apresentação do módulo
 KreaBankAboutReleaseNotes=Notas de versão
+
+KreaBankTransferDescriptionPlaceholder=Escrever ou escolher uma descrição
+KreaBankTransferDescriptionsUnavailable=As descrições frequentes estão indisponíveis.

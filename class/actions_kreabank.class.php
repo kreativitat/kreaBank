@@ -281,13 +281,23 @@ class ActionsKreaBank extends CommonHookActions
 	/** Replace the duplicate native navigation with the same single banking header. */
 	public function printCommonFooter($parameters, &$object, &$action, $hookmanager)
 	{
+		global $user, $conf, $langs;
 		$this->resprints = '';
 		// Standalone forms retain native navigation and execution.
 		$page = basename($_SERVER['PHP_SELF'] ?? '');
 		if ($page === 'transfer.php') {
 			if ($this->bankingContextAllowed()) {
 				require_once __DIR__ . '/../lib/kreabank_transfer.lib.php';
-				$this->resprints = kreabankTransferAssets();
+				$descriptions = array();
+				$descriptionError = '';
+				try {
+					$descriptions = kreabankTransferDescriptions($this->db, $user, $conf->entity);
+				} catch (Throwable $e) {
+					$langs->load('kreabank@kreabank');
+					$descriptionError = $langs->transnoentities('KreaBankTransferDescriptionsUnavailable');
+					dol_syslog('KreaBank transfer description history lookup failed', LOG_WARNING);
+				}
+				$this->resprints = kreabankTransferAssets($descriptions, $descriptionError);
 			}
 			return 0;
 		}

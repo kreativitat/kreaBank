@@ -847,3 +847,6 @@ KreaBankAboutCapabilityTransfer=Record internal transfers through the native Dol
 KreaBankAboutDocumentation=Documentation
 KreaBankAboutReadme=Module overview
 KreaBankAboutReleaseNotes=Release notes
+
+KreaBankTransferDescriptionPlaceholder=Type or choose a description
+KreaBankTransferDescriptionsUnavailable=Frequent descriptions are unavailable.
