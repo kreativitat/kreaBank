@@ -54,7 +54,9 @@ async function browserChecks(directory) {
     const browser = await chromium.launch({executablePath:process.env.KREABANK_CHROMIUM || '/usr/bin/chromium', headless:true, args:['--no-sandbox']});
     let page = await browser.newPage({viewport:{width:1440,height:1000},locale:'en-US'});
     const errors = [];
+    const resourceRequests = [];
     page.on('pageerror', error => errors.push(error.message));
+    page.on('request', request => resourceRequests.push(request.url()));
     let browserCount = 0;
     const open = async (name, hash = '') => {
         await page.goto('about:blank');
@@ -83,9 +85,11 @@ async function browserChecks(directory) {
         assert.equal(await second.getAttribute('data-amount'), originalAmount); browserCount++;
         await page.getByRole('button',{name:'Save draft',exact:true}).click();
         let submission = await page.locator('#fixture-submit').innerText();
-        assert.ok(submission.includes('save_draft') && submission.includes('native_bank__21') && submission.includes('native_bank__23') && !submission.includes('native_bank__22')); browserCount++;
+        const draftFields = JSON.parse(submission.replace(/^Synthetic submission: /,''));
+        assert.equal(draftFields.find(([key])=>key==='action')[1],'save_draft');
+        assert.deepEqual(draftFields.filter(([key])=>key==='batch_members[]').map(([,value])=>value),['21','23']); browserCount++;
         await second.check();
-        await page.getByRole('button',{name:'Review batch',exact:true}).click();
+        await page.getByRole('button',{name:'Review selection',exact:true}).click();
         submission = await page.locator('#fixture-submit').innerText();
         assert.ok(submission.includes('review_batch') && submission.includes('exact-source-snapshot')); browserCount++;
         await page.setViewportSize({width:390,height:844});
@@ -95,6 +99,9 @@ async function browserChecks(directory) {
 
         await page.setViewportSize({width:1280,height:900});
         await open('direct_correction');
+        await page.evaluate(() => document.fonts.ready);
+        const correctionUrl = page.url();
+        const correctionRequests = resourceRequests.length;
         const opener = page.getByRole('button',{name:'PAYMENT-BANK',exact:true});
         await opener.click();
         const dialog = page.getByRole('dialog');
@@ -107,11 +114,30 @@ async function browserChecks(directory) {
         await page.keyboard.press('Escape');
         assert.equal(await dialog.isVisible(), false); browserCount++;
         assert.equal(await opener.evaluate(button => document.activeElement === button), true); browserCount++;
-        const iconOpener = page.getByRole('button',{name:'Change bank',exact:true});
+        const iconOpener = page.locator('button[data-kb-account-warning]');
         await iconOpener.click();
         assert.equal(await dialog.isVisible(), true); browserCount++;
         await page.keyboard.press('Escape');
         assert.equal(await iconOpener.evaluate(button => document.activeElement === button), true); browserCount++;
+        await iconOpener.click();
+        await dialog.getByRole('button',{name:'Close',exact:true}).click();
+        assert.equal(await dialog.isVisible(),false); browserCount++;
+        assert.equal(await iconOpener.evaluate(button => document.activeElement === button),true); browserCount++;
+        await opener.click();
+        await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
+        assert.equal(await opener.evaluate(button => document.activeElement === button),true); browserCount++;
+        assert.equal(await page.locator('.kb-wl-actions button:disabled').getAttribute('title'),'Correct the payment bank before reconciling.'); browserCount++;
+        assert.equal(page.url(),correctionUrl); browserCount++;
+        assert.equal(resourceRequests.length,correctionRequests,'Correction Cancel, X and Escape make no request or restarted scan'); browserCount++;
+        assert.equal(await page.locator('#fixture-submit').innerText(),''); browserCount++;
+        await page.setViewportSize({width:390,height:844});
+        await iconOpener.click();
+        const correctionBounds=await dialog.boundingBox();
+        assert.ok(correctionBounds.x>=0&&correctionBounds.x+correctionBounds.width<=390,'Correction dialog fits the mobile viewport'); browserCount++;
+        await page.screenshot({path:path.join(directory,'worklist-account-dialog-mobile.png'),fullPage:true});
+        await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
+        assert.equal(resourceRequests.length,correctionRequests,'Mobile correction cancellation does not request or navigate'); browserCount++;
+        await page.setViewportSize({width:1280,height:900});
         await opener.click();
         await page.getByRole('button',{name:'Save',exact:true}).click();
         submission = await page.locator('#fixture-submit').innerText();
@@ -128,7 +154,7 @@ async function browserChecks(directory) {
         await open('reviewed');
         assert.equal(await page.locator('[data-kb-member]').count(), 0); browserCount++;
         assert.equal(await page.locator('input[name="batch_name"]').count(), 0); browserCount++;
-        await page.getByRole('button',{name:'Reconcile batch',exact:true}).click();
+        await page.getByRole('button',{name:'Reconcile selection',exact:true}).click();
         submission = await page.locator('#fixture-submit').innerText();
         assert.ok(submission.includes('confirm_batch') && submission.includes('signed-group') && submission.includes('native_bank__23')); browserCount++;
 

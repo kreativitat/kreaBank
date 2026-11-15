@@ -2,6 +2,7 @@
 /* Copyright (C) 2026 Kreativität Works <mail@kreativitat.com>
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
+require_once __DIR__ . '/KreaBankMatcher.class.php';
 
 /** Native tax projections and payment lifecycle, called only by the shared service. */
 class KreaBankTaxReconciliation
@@ -49,23 +50,36 @@ class KreaBankTaxReconciliation
 		return $negative && $out !== '0' ? '-' . $out : $out;
 	}
 
-	/** Tax-like evidence plus exact amount/date is advisory, never automatic identity. */
-	public function accountReview($line, $range)
+	/** Specific liability/payment identity plus exact amount/date is advisory, never automatic evidence. */
+	public function accountReview($line, $range, &$truncated = null)
 	{
-		$amount = self::persistedDecimal($line['amount'] ?? '');
-		if (!$this->canRead() || $amount === '' || $amount[0] !== '-'
-			|| !preg_match('/\b(DUC|IVA|IRS|IRC|IUC|IMI|IMT|TSU|tax|taxa|imposto|finan[çc]as|seguran[çc]a\s+social)\b/iu', $line['description'] . ' ' . $line['counterparty_name'])) {
+		$truncated = false;
+		$amount = self::persistedDecimal($line['amount_decimal'] ?? ($line['amount'] ?? ''));
+		if (!$this->canRead() || $amount === '' || $amount[0] !== '-') {
 			return array();
 		}
 		$p = $this->db->prefix();
-		$sql = "SELECT b.rowid,b.fk_account,b.amount,b.dateo,b.rappro,ba.ref AS account_ref,ba.label AS account_label,pc.rowid AS payment_id,t.libelle"
+		$sql = "SELECT b.rowid,b.fk_account,b.amount,b.dateo,b.rappro,b.num_chq,ba.ref AS account_ref,ba.label AS account_label,pc.rowid AS payment_id,pc.num_paiement,t.ref,t.libelle"
 			. " FROM {$p}paiementcharge pc JOIN {$p}chargesociales t ON t.rowid=pc.fk_charge"
 			. " JOIN {$p}bank b ON b.rowid=pc.fk_bank JOIN {$p}bank_account ba ON ba.rowid=b.fk_account AND ba.entity=t.entity"
 			. ' WHERE t.entity=' . $this->entity . ' AND ba.rowid<>' . (int) $line['bank_account_id']
-			. " AND ba.currency_code='" . $this->db->escape($line['currency']) . "' AND b.amount=$amount AND pc.amount=ABS(b.amount)"
+			. " AND ba.currency_code='" . $this->db->escape($line['currency']) . "' AND CAST(b.amount AS DECIMAL(24,8))=$amount AND CAST(pc.amount AS DECIMAL(24,8))=ABS(CAST(b.amount AS DECIMAL(24,8)))"
 			. " AND b.dateo>='" . $range['start'] . "' AND b.dateo<='" . $range['end'] . " 23:59:59'"
 			. self::bankOwnershipSql($p) . ' ORDER BY b.dateo,b.rowid,pc.rowid' . $this->db->plimit(101);
-		return $this->rows($sql);
+		$rows = $this->rows($sql); $truncated = count($rows) >= 101;
+		return array_values(array_filter($rows, static function ($payment) use ($line) {
+			foreach (array($payment->num_paiement,$payment->num_chq,$payment->ref) as $reference) {
+				$reference = trim((string) $reference);
+				if (strlen(preg_replace('/[^a-z0-9]/i','',$reference)) < 8 || !preg_match('/[0-9]/',$reference)) { continue; }
+				foreach (array('payment_reference','bank_reference','description') as $field) {
+					if (preg_match('/(?<![a-z0-9])' . preg_quote($reference,'/') . '(?![a-z0-9])/i',(string) ($line[$field] ?? ''))) { return true; }
+				}
+			}
+			if (trim((string) ($line['payment_reference'] ?? '')) !== '') { return false; }
+			$label = (string) $payment->libelle;
+			$period = preg_match('/\b(?:20[0-9]{2}|[0-9]{6,}|janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|january|february|march|april|may|june|july|august|september|october|november|december)\b/iu',$label);
+			return $period && (new KreaBankMatcher())->hasCompleteCounterpartyNameMatch($line,$label);
+		}));
 	}
 
 	private function rows($sql)

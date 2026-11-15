@@ -111,8 +111,9 @@ taxFixture(90005,'53.29',1); bankAuto(92005,'-53.29','',102); taxPaymentFixture(
 $db->query("INSERT INTO kbauto_bank_url(fk_bank,url_id,url,label,type) VALUES (92005,95005,'/compta/payment_sc/card.php?id=','Payment','payment_sc'),(92005,90005,'/compta/sociales/card.php?id=','Synthetic tax 90005','sc')");
 stageAuto(90005,'-53.29','');
 $db->query("UPDATE kbauto_kreabank_statement_line SET description='Pag. DUC 123456789012345' WHERE rowid=90005");
+$db->query("UPDATE kbauto_chargesociales SET ref='123456789012345' WHERE rowid=90005");
 $warning=$service->getPaymentAccountReview(90005,array(101));
-checkAuto($warning && $warning['candidates'][0]['payment_type']==='payment_tax', 'DUC debit flags a same-amount/date tax payment in another owned account');
+checkAuto($warning && $warning['candidates'][0]['payment_type']==='payment_tax', 'Complete DUC liability identity flags a same-amount/date tax payment in another owned account');
 checkAuto($service->getAutomaticNativeSuggestion(90005,array(101))===null && !taxReviewFixture(90005,'tax',90005), 'Wrong-account tax cannot trigger unattended or duplicate payment approval');
 $entry=$service->searchOtherAccountMovements(90005,'Synthetic tax 90005')[0] ?? null;
 checkAuto($entry && $entry['can_move'] && strpos($entry['tax_docs'],'90005')!==false, 'Tax references are searchable and eligible for reviewed account correction');

@@ -40,7 +40,8 @@ current page size; **More** processes another bounded group.
   unpaid proposals cannot be reconciled.
 - Correct an eligible payment's bank account through the reviewed change-bank
   dialog. Protected, posted, imported, transferred or reconciled movements cannot
-  be moved by this shortcut.
+  be moved by this shortcut. Wrong-bank invoice, salary and tax payments show a
+  warning beside the recorded bank; reconciliation remains disabled until corrected.
 - Create a missing movement through **Create and reconcile**, after reviewing its
   payment mode and persisted bank evidence.
 - Use **Create batch** for one bank transaction covering several already recorded

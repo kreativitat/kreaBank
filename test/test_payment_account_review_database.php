@@ -177,4 +177,34 @@ $db->query('UPDATE kbauto_bank SET fk_account=202 WHERE rowid=71003');
 checkAuto($service->getPaymentAccountReview(70003,array(101))===null, 'Name evidence cannot disclose foreign bank accounts');
 $db->query('UPDATE kbauto_bank SET fk_account=102,rappro=1 WHERE rowid=71003');
 checkAuto($service->getPaymentAccountReview(70003,array(101))['candidates'][0]['reconciled'], 'Name-based warnings preserve existing reconciliation locks');
+// Tax authorities/kinds are not liability identity, even at the same amount/date.
+$GLOBALS['taxFixtureEnabled']=true;
+stageAuto(76000,'-84.19',''); bankAuto(77000,'-84.19','',102);
+$db->query("INSERT INTO kbauto_chargesociales(rowid,entity,date_ech,libelle,ref,fk_type,amount,paye) VALUES(76000,1,'2026-11-01','Pagamento de imposto',NULL,1,84.19,1)");
+$db->query("INSERT INTO kbauto_paiementcharge(rowid,fk_charge,datep,amount,fk_typepaiement,num_paiement,fk_bank) VALUES(76000,76000,'2026-11-01',84.19,1,'',77000)");
+foreach(array('Pag. DUC 123456789012345','IRS','Pagamento de imposto','Autoridade Tributária Aduaneira') as $description) {
+	$db->query("UPDATE kbauto_kreabank_statement_line SET description='$description' WHERE rowid=76000");
+	checkAuto($service->getPaymentAccountReview(76000,array(101))===null,'Generic tax authority/kind and an unrelated DUC do not identify an existing liability');
+}
+$db->query("UPDATE kbauto_chargesociales SET ref='123456789012345' WHERE rowid=76000");
+$db->query("UPDATE kbauto_kreabank_statement_line SET description='Pag. DUC 123456789012345' WHERE rowid=76000");
+checkAuto($service->getPaymentAccountReview(76000,array(101))['candidates'][0]['payment_type']==='payment_tax','A complete owned liability reference identifies the tax payment account error');
+$db->query("UPDATE kbauto_kreabank_statement_line SET description='Pag. DUC 12345678901234' WHERE rowid=76000");
+checkAuto($service->getPaymentAccountReview(76000,array(101))===null,'A liability reference prefix is not an identity match');
+$db->query("UPDATE kbauto_chargesociales SET ref=NULL,libelle='Synthetic tax October 2026' WHERE rowid=76000");
+$db->query("UPDATE kbauto_kreabank_statement_line SET description='Payment Synthetic tax October 2026' WHERE rowid=76000");
+checkAuto($service->getPaymentAccountReview(76000,array(101))!==null,'A complete period-bearing liability label supports explicit account review');
+$db->query("UPDATE kbauto_kreabank_statement_line SET payment_reference='CONFLICTING-REF-12345' WHERE rowid=76000");
+checkAuto($service->getPaymentAccountReview(76000,array(101))===null,'A label cannot override a conflicting explicit tax payment reference');
+$db->query("UPDATE kbauto_kreabank_statement_line SET description='No tax identity',payment_reference=NULL WHERE rowid=76000");
+for($i=0;$i<101;$i++) {
+	$id=77100+$i; bankAuto($id,'-84.19','',102);
+	$db->query("INSERT INTO kbauto_paiementcharge(rowid,fk_charge,datep,amount,fk_typepaiement,num_paiement,fk_bank) VALUES($id,76000,'2026-11-01',84.19,1,'',$id)");
+}
+$overflow=$service->getPaymentAccountReview(76000,array(101));
+checkAuto($overflow && $overflow['truncated'] && !$overflow['candidates'],'Unmatched tax overflow remains blocking instead of proving no identity conflicts');
+$db->query('DELETE FROM kbauto_paiementcharge WHERE fk_charge=76000'); $db->query('DELETE FROM kbauto_chargesociales WHERE rowid=76000');
+$db->query('DELETE FROM kbauto_bank WHERE rowid=77000 OR rowid BETWEEN 77100 AND 77200');
+$db->query('DELETE FROM kbauto_kreabank_statement_line WHERE rowid=76000'); $db->query('DELETE FROM kbauto_kreabank_statement WHERE rowid=76000');
+$GLOBALS['taxFixtureEnabled']=false;
 echo 'OK: '.($checks-$initialChecks)." payment account review database checks\n";

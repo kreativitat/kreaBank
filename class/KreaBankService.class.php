@@ -13,6 +13,7 @@ require_once __DIR__ . '/KreaBankDraftInvoiceReview.class.php';
 require_once __DIR__ . '/KreaBankNativeBankAdapter.class.php';
 require_once __DIR__ . '/KreaBankReconciliationScope.class.php';
 require_once __DIR__ . '/KreaBankTaxReconciliation.class.php';
+require_once __DIR__ . '/KreaBankSalaryPaymentReview.class.php';
 require_once __DIR__ . '/KreaBankStatementEvidence.class.php';
 require_once __DIR__ . '/KreaBankExistingMovementException.class.php';
 require_once __DIR__ . '/KreaBankPaymentBatchTrait.php';
@@ -95,6 +96,9 @@ class KreaBankService
 
 	/** @var array<int,int[]> Existing movements the user confirmed as different, per statement line. */
 	private $confirmedExistingMovements = array();
+
+	/** @var KreaBankSalaryPaymentReview|null Read-only native schema availability is request-local. */
+	private $salaryPaymentReviewer;
 
 	/** @var array<int,string> */
 	protected $bankCurrencyCache = array();
@@ -2349,7 +2353,7 @@ class KreaBankService
 					|| (bool) $accountReview !== !empty($reviewedRow['other_account_warning']))) {
 					throw new Exception($this->langs->trans('KreaBankBulkMatchReviewChanged', '1'));
 				}
-				if ($accountReview && !$isSelectedNativeReview) {
+				if ($accountReview) {
 					throw new Exception($this->langs->trans('KreaBankAccountReviewTitle'));
 				}
 			}
@@ -2734,7 +2738,7 @@ class KreaBankService
 	}
 
 	/**
-	 * Possible invoice payments recorded in another owned account. Read-only:
+	 * Possible invoice, salary and tax payments recorded in another owned account. Read-only:
 	 * these are review evidence, never cross-account reconciliation candidates.
 	 * $lineId is explicitly a staging ID; source accounts must be selected by the caller.
 	 */
@@ -2754,6 +2758,7 @@ class KreaBankService
 		if (!$rows) { return null; }
 		$line = $this->native->getStatementLineById((int) $lineId);
 		if (!$line || self::automaticDecimal($rows[0]->amount) !== self::automaticDecimal($line['amount'])) { return null; }
+		$line['amount_decimal'] = self::automaticDecimal($rows[0]->amount);
 		$date = (string) $line['operation_date'];
 		if (!preg_match('/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D', $date, $parts)
 			|| !checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])) { return null; }
@@ -2776,8 +2781,8 @@ class KreaBankService
 			. " JOIN {$p}{$paymentTable} p ON p.fk_bank=b.rowid AND p.entity=ba.entity"
 			. ' WHERE ba.entity=' . $this->entity . ' AND b.fk_account<>' . (int) $line['bank_account_id']
 			. ' AND ba.currency_code=' . $this->sqlText($line['currency'])
-			. ' AND b.amount=' . self::automaticDecimal($rows[0]->amount)
-			. ' AND p.amount>0 AND p.amount=ABS(b.amount) AND b.dateo>=' . $this->sqlDate($range['start'])
+			. ' AND CAST(b.amount AS DECIMAL(24,8))=' . self::automaticDecimal($rows[0]->amount)
+			. ' AND p.amount>0 AND CAST(p.amount AS DECIMAL(24,8))=ABS(CAST(b.amount AS DECIMAL(24,8))) AND b.dateo>=' . $this->sqlDate($range['start'])
 			. ' AND b.dateo<' . $this->sqlDate(gmdate('Y-m-d', strtotime($range['end'] . ' UTC') + 86400))
 			. " AND EXISTS (SELECT 1 FROM {$p}{$linkTable} pf JOIN {$p}{$invoiceTable} f ON f.rowid=pf.{$invoiceKey}"
 			. " WHERE pf.{$paymentKey}=p.rowid AND f.entity=p.entity AND f.type<>2)"
@@ -2811,7 +2816,7 @@ class KreaBankService
 				'payment_type'=>$supplier ? 'payment_supplier' : 'payment','reference'=>$reference,
 				'amount'=>(string) $payment->amount,'date'=>$payment->dateo,'reconciled'=>(bool) $payment->rappro);
 		}
-		$taxPayments = (new KreaBankTaxReconciliation($this->db, $this->user, $this->entity))->accountReview($line, $range);
+		$taxPayments = (new KreaBankTaxReconciliation($this->db, $this->user, $this->entity))->accountReview($line, $range, $taxTruncated);
 		foreach ($taxPayments as $payment) {
 			if ($policy->mainAccount((int) $payment->fk_account)) { continue; }
 			$candidates[] = array('bank_line_id'=>(int) $payment->rowid,'bank_account_id'=>(int) $payment->fk_account,
@@ -2820,7 +2825,16 @@ class KreaBankService
 				'payment_type'=>'payment_tax','reference'=>$payment->libelle,'amount'=>(string) $payment->amount,
 				'date'=>$payment->dateo,'reconciled'=>(bool) $payment->rappro);
 		}
-		$truncated = count($payments) >= 101 || count($taxPayments) >= 101;
+		$salaryPayments = $this->salaryPaymentReview()->accountReview($line, $range, $salaryTruncated);
+		foreach ($salaryPayments as $payment) {
+			if ($policy->mainAccount((int) $payment['fk_account'])) { continue; }
+			$candidates[] = array('bank_line_id'=>(int) $payment['rowid'],'bank_account_id'=>(int) $payment['fk_account'],
+				'account_ref'=>$payment['account_ref'],'account_label'=>$payment['account_label'],'payment_id'=>(int) $payment['payment_id'],
+				'payment_ref'=>trim((string) $payment['num_payment']) ?: (trim((string) $payment['salary_ref']) ?: '#' . $payment['payment_id']),
+				'payment_type'=>'payment_salary','reference'=>$payment['identity'],'amount'=>(string) $payment['amount'],'date'=>$payment['dateo'],
+				'reconciled'=>(bool) $payment['rappro'],'parent_type'=>'salary','parent_id'=>(int) $payment['salary_id'],'parent_label'=>$payment['salary_label']);
+		}
+		$truncated = count($payments) >= 101 || $taxTruncated || $salaryTruncated;
 		// A truncated search is itself a review condition; never assume there are no conflicts.
 		return $candidates || $truncated
 			? array('line'=>$line,'candidates'=>$candidates,'truncated'=>$truncated) : null;
@@ -2852,6 +2866,10 @@ class KreaBankService
 		$policy = new KreaBankAccountPairs($this->db, $this->entity);
 		if ($policy->mainAccount((int) $line['bank_account_id'])) { return array(); }
 		$taxRead = (int) (new KreaBankTaxReconciliation($this->db, $this->user, $this->entity))->canRead();
+		$salary = $this->salaryPaymentReview();
+		$salaryAvailable = $salary->available();
+		$salaryReadable = $salaryAvailable && $salary->readableSql('s.fk_user') !== '0=1';
+		$salaryUserLink = $salaryAvailable ? "EXISTS (SELECT 1 FROM {$p}payment_salary ps JOIN {$p}salary s ON s.rowid=ps.fk_salary AND s.entity=ba.entity WHERE ps.fk_bank=b.rowid AND ps.entity=ba.entity AND s.fk_user=u.url_id)" : '0=1';
 		$sql = "SELECT b.rowid,b.fk_account,b.amount,b.dateo,b.datev,b.label,b.num_chq,b.rappro,b.fk_bordereau,b.fk_type,"
 			. " ba.ref AS account_ref,ba.currency_code,l.amount AS source_amount,l.operation_date AS source_date,l.currency AS source_currency,"
 			. " l.description AS source_description,l.payment_reference AS source_reference,l.bank_reference AS source_bank_reference,l.counterparty_name AS source_counterparty,"
@@ -2871,8 +2889,8 @@ class KreaBankService
 			. " NOT EXISTS (SELECT 1 FROM {$p}paiementcharge pc WHERE pc.fk_bank=b.rowid AND (pc.amount<=0 OR pc.amount<>ABS(b.amount))) AS tax_coherent,"
 			. " (SELECT SHA2(GROUP_CONCAT(CONCAT_WS(':',pc.rowid,pc.fk_charge,pc.amount,pc.datep,pc.num_paiement,pc.fk_typepaiement,t.entity,t.fk_type,t.fk_mode_reglement,t.paye,t.fk_user,t.amount,t.libelle) ORDER BY pc.rowid),256)"
 			. " FROM {$p}paiementcharge pc JOIN {$p}chargesociales t ON t.rowid=pc.fk_charge WHERE pc.fk_bank=b.rowid) AS tax_facts,"
-			. " EXISTS (SELECT 1 FROM {$p}bank_url u WHERE u.fk_bank=b.rowid AND u.type NOT IN ('payment','payment_supplier','company','payment_sc','sc')"
-			. " AND NOT (u.type='user' AND EXISTS (SELECT 1 FROM {$p}paiementcharge pc JOIN {$p}chargesociales t ON t.rowid=pc.fk_charge AND t.entity=ba.entity WHERE pc.fk_bank=b.rowid AND t.fk_user=u.url_id))) AS special_links"
+			. " EXISTS (SELECT 1 FROM {$p}bank_url u WHERE u.fk_bank=b.rowid AND u.type NOT IN ('payment','payment_supplier','company','payment_sc','sc'" . ($salaryAvailable ? ",'payment_salary'" : '') . ")"
+			. " AND NOT (u.type='user' AND (EXISTS (SELECT 1 FROM {$p}paiementcharge pc JOIN {$p}chargesociales t ON t.rowid=pc.fk_charge AND t.entity=ba.entity WHERE pc.fk_bank=b.rowid AND t.fk_user=u.url_id) OR $salaryUserLink))) AS special_links"
 			. " FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account"
 			. " JOIN {$p}kreabank_statement_line l ON l.rowid=$id AND l.entity=" . $this->entity
 			. " JOIN {$p}kreabank_statement st ON st.rowid=l.fk_statement AND st.entity=l.entity"
@@ -2884,6 +2902,7 @@ class KreaBankService
 			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_bankmeta m WHERE m.fk_bank_line=b.rowid)"
 			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement_line mapped WHERE mapped.fk_native_bank_line=b.rowid)";
 		$sql .= KreaBankTaxReconciliation::bankOwnershipSql($p);
+		$sql .= $salary->bankOwnershipSql() . $salary->visibilitySql();
 		$sql .= $this->paymentBatchUnclaimedSql();
 		// A foreign/missing parent is never made visible through an owned native bank row.
 		foreach (array(array('paiement','paiement_facture','facture','fk_paiement','fk_facture','payment'),
@@ -2924,6 +2943,7 @@ class KreaBankService
 					. $this->sqlText('%' . $needle . '%') . " ESCAPE '!')";
 			}
 			if ($taxRead) { $condition .= " OR EXISTS (SELECT 1 FROM {$p}paiementcharge pc JOIN {$p}chargesociales t ON t.rowid=pc.fk_charge AND t.entity=ba.entity WHERE pc.fk_bank=b.rowid AND CONCAT_WS(' ',pc.rowid,pc.num_paiement,t.rowid,t.ref,t.libelle) LIKE " . $this->sqlText('%' . $needle . '%') . " ESCAPE '!')"; }
+			if ($salaryReadable) { $condition .= " OR EXISTS (SELECT 1 FROM {$p}payment_salary ps JOIN {$p}salary s ON s.rowid=ps.fk_salary AND s.entity=ba.entity JOIN {$p}user eu ON eu.rowid=s.fk_user WHERE ps.fk_bank=b.rowid AND ps.entity=ba.entity AND CONCAT_WS(' ',ps.num_payment,s.ref,s.label,eu.firstname,eu.lastname) LIKE " . $this->sqlText('%' . $needle . '%') . " ESCAPE '!')"; }
 			$number = str_replace(',', '.', ltrim($token, '+-'));
 			if (preg_match('/^[0-9]+(?:\.[0-9]{1,8})?$/D', $number)) { $condition .= ' OR ABS(b.amount)=' . self::automaticDecimal($number); }
 			$conditions[] = '(' . $condition . ')';
@@ -2933,8 +2953,10 @@ class KreaBankService
 		$rows = array();
 		foreach ($this->transferRows($sql) as $row) {
 			$entry = (array) $row;
+			$entry['salary_facts'] = $salary->correctionFacts((int) $row->rowid, (string) $row->amount);
 			$native = new AccountLine($this->db);
 			$entry['can_move'] = !(int) $row->rappro && !(int) $row->fk_bordereau && !(int) $row->special_links
+				&& $entry['salary_facts']['can_move']
 				&& ((int) $row->tax_payment_count === 0 || ((int) $row->tax_payment_count === 1 && (int) $row->tax_coherent && isModEnabled('tax') && $this->user->hasRight('tax', 'charges', 'lire') && $this->user->hasRight('tax', 'charges', 'creer')))
 				&& $native->fetch((int) $row->rowid) > 0 && (int) $native->getVentilExportCompta() === 0;
 			$entry['source_id'] = $id;
@@ -2969,6 +2991,9 @@ class KreaBankService
 					. " LEFT JOIN {$p}{$invoice} f ON f.rowid=a.{$invoiceKey} WHERE pay.fk_bank=" . (int) $bankLineId . ' FOR UPDATE');
 			}
 			$this->transferRows("SELECT pc.rowid,t.rowid AS tax_id FROM {$p}paiementcharge pc LEFT JOIN {$p}chargesociales t ON t.rowid=pc.fk_charge WHERE pc.fk_bank=" . (int) $bankLineId . ' FOR UPDATE');
+			$bankFacts = $this->transferRows("SELECT CAST(amount AS DECIMAL(24,8)) AS amount FROM {$p}bank WHERE rowid=" . (int) $bankLineId . ' FOR UPDATE');
+			if (count($bankFacts) !== 1) { throw new Exception('The native movement is unavailable'); }
+			$this->salaryPaymentReview()->correctionFacts((int) $bankLineId, (string) $bankFacts[0]->amount, true);
 			$fresh = $this->searchOtherAccountMovements($stagingId, '', (int) $bankLineId);
 			if (count($fresh) !== 1 || !$fresh[0]['can_move'] || (int) $fresh[0]['fk_account'] !== (int) $oldAccountId
 				|| (int) $fresh[0]['target_account_id'] !== (int) $targetAccountId || !hash_equals($fresh[0]['snapshot'], (string) $expectedSnapshot)) {
@@ -2982,6 +3007,12 @@ class KreaBankService
 			if (!$this->db->commit()) { throw new Exception('Cannot commit bank account correction'); }
 			return true;
 		} catch (Throwable $e) { $this->db->rollback(); throw $e; }
+	}
+
+	private function salaryPaymentReview()
+	{
+		if (!$this->salaryPaymentReviewer) { $this->salaryPaymentReviewer = new KreaBankSalaryPaymentReview($this->db, $this->user, $this->entity); }
+		return $this->salaryPaymentReviewer;
 	}
 
 	/** Shared company boundary; read-only account reviews require both native and module read rights. */

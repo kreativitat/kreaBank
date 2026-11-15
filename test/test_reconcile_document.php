@@ -181,14 +181,10 @@ $service->suggestions[] = array_merge($service->suggestions[0], array('doc_type'
 	'amount_open'=>-47.66, 'bank_account_id'=>81));
 $callbacks = kreabankManualReviewCallbacks($service, 3, 100);
 $choices = $callbacks['prepareDocumentReviews']($service->line);
-checkDirect(array_keys($choices) === array('native_bank__24') && $choices['native_bank__24']['other_account_warning']
-	&& !$choices['native_bank__24']['preselected'], 'Other-account evidence permits only an explicit same-account native choice');
+checkDirect($choices === array(), 'Other-account evidence blocks every direct approval until corrected');
 checkDirect($callbacks['prepareReviewRow']($service->line) === null, 'Matched review remains blocked by the same warning');
 $request['review_doc'] = 'native_bank__24';
-$request['review_signature'] = kreabankBulkReviewSignature($choices['native_bank__24'], '7|9|81', $request['review_expires'], $_SESSION['kreabank_bulk_review_secret']);
-checkDirect(submitDirectReview() !== null && count($service->executions) === 1
-	&& $service->executions[0][1][0]['fk_doc'] === 24 && $service->executions[0][7]['approval_context'] === 'selected_native',
-	'Signed direct approval selects the existing same-account movement without an account-change action');
+checkDirect(submitDirectReview() === null && !$service->executions, 'An old same-account card cannot bypass the account correction gate');
 resetDirectReview();
 $service->suggestions[0] = array_merge($service->suggestions[0], array('doc_type'=>'native_bank', 'bank_account_id'=>81, 'amount_open'=>-47.66));
 $row = kreabankManualReviewCallbacks($service,3,100)['prepareDocumentReviews']($service->line)['native_bank__22'];

@@ -78,6 +78,16 @@ view retains the bank column and its filter. Statements follows the same conditi
 rule and drops stale filters for its hidden column.
 Exceptional review warnings remain beside the match evidence.
 
+An identity-supported payment in another owned bank appears as the same compact
+candidate card, with its recorded bank reference and an exclamation mark. Eligible
+bank references open the existing reviewed account-correction dialog. Invoice,
+salary and tax payments retain their native ownership, visibility and financial
+locks. Reconciled, posted, deposited, claimed and protected movements cannot be
+moved through this shortcut. Reconciliation stays disabled until fresh evidence
+clears the account mismatch; the single-payment selector cannot override it.
+Competing or incomplete wrong-bank results never select an arbitrary payment.
+Closing the correction dialog does not submit, navigate or restart analysis.
+
 Suggested row pairs retain the existing signed manual review. The unified selector
 lists only movements on the source booking day, in its owned bank account and
 currency. One exact signed movement uses `selected_native` through

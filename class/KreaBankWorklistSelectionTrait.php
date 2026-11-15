@@ -84,10 +84,9 @@ trait KreaBankWorklistSelectionTrait
 		$document = $this->worklistSelectionDocument($source, $ids[0]);
 		$suggestions = $this->matcher->getSuggestions($source['line'], array($document), $this->getPatterns(), 1, 0);
 		if (count($suggestions) !== 1) { throw new DomainException('Selected movement is unavailable'); }
-		$warning = $this->getPaymentAccountReview((int) $source['line']['rowid'], array($source['line']['bank_account_id']));
 		return array('line'=>$source['line'], 'suggestion'=>$suggestions[0], 'allocation'=>(float) KreaBankPaymentBatchDecimal::absolute($source['amount']),
 			'preselected'=>false, 'is_bulk_safe'=>false, 'score'=>(int) $suggestions[0]['score'], 'approval_context'=>'selected_native',
-			'other_account_warning'=>(bool) $warning, 'worklist_selection'=>array('version'=>1,'key'=>$key,'source'=>$source['facts'],'target'=>$target));
+			'other_account_warning'=>false, 'worklist_selection'=>array('version'=>1,'key'=>$key,'source'=>$source['facts'],'target'=>$target));
 	}
 
 	/** Called only after reconcileLine() has acquired its account/source/native locks. */
@@ -132,6 +131,9 @@ trait KreaBankWorklistSelectionTrait
 		$id = (int) $parts[1]; $p = $this->db->prefix(); $e = (int) $this->entity;
 		$line = $this->getBulkReviewLine($id, 'staged');
 		if (!$line || empty($line['fk_statement']) || (int) $line['status'] !== 0 || !empty($line['is_duplicate']) || (float) $line['allocated_amount'] !== 0.0) { throw new DomainException('Statement is unavailable'); }
+		if ($this->getPaymentAccountReview($id, array($line['bank_account_id']))) {
+			throw new DomainException('Correct the payment bank account before reconciling this statement');
+		}
 		$sql = "SELECT l.*,s.ref AS source_statement_ref,s.currency AS source_statement_currency,s.source_type,s.bank_account_id,ba.currency_code AS bank_currency,ba.ref AS bank_account_ref"
 			. " FROM {$p}kreabank_statement_line l JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
 			. " JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=s.entity WHERE l.entity=$e AND l.rowid=$id"

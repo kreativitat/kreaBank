@@ -300,14 +300,12 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 			return array();
 		}
 		$accountReview = !empty($line['fk_statement']) && $service->getPaymentAccountReview($lineId, array($line['bank_account_id']));
+		if ($accountReview) { return array(); }
 		$suggestionsByLine = $service->getSuggestionsForLines(array($line), 0, $dateTolerance, null, false);
 		$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestionsByLine[$lineId] ?? array(), $dateTolerance);
 		if ($singleReview && method_exists($service, 'appendBankRuleManualSuggestions')) { $suggestions = $service->appendBankRuleManualSuggestions($line, $suggestions); }
 		$rows = array();
 		foreach ($suggestions as $suggestion) {
-			// A reviewed existing movement cannot create or move the other payment.
-			// Invoice/payment creation and matched/bulk approval keep their warning gate.
-			if ($accountReview && $suggestion['doc_type'] !== 'native_bank') { continue; }
 			if (!in_array($suggestion['doc_type'], array('native_bank', 'customer_invoice', 'supplier_invoice', 'payment', 'payment_supplier', 'payment_linked', 'payment_supplier_linked', 'tax', 'payment_tax'), true)) {
 				continue;
 			}

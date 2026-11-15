@@ -35,7 +35,9 @@ function kreabankPaymentAccountReviewHtml($review, $langs)
 		. $langs->trans('KreaBankAccountReviewRecordedAccount') . '</th><th scope="col">' . $langs->trans('KreaBankDocument')
 		. '</th><th scope="col">' . $langs->trans('KreaBankDate') . '</th><th scope="col">' . $langs->trans('KreaBankAction') . '</th></tr>';
 	foreach ($review['candidates'] as $candidate) {
-		$paymentPath = $candidate['payment_type'] === 'payment_tax' ? '/compta/payment_sc/card.php?id=' : ($candidate['payment_type'] === 'payment_supplier' ? '/fourn/paiement/card.php?id=' : '/compta/paiement/card.php?id=');
+		$paymentPaths = array('payment_tax'=>'/compta/payment_sc/card.php?id=', 'payment_salary'=>'/salaries/payment_salary/card.php?id=',
+			'payment_supplier'=>'/fourn/paiement/card.php?id=', 'payment'=>'/compta/paiement/card.php?id=');
+		$paymentPath = $paymentPaths[$candidate['payment_type']] ?? '/compta/paiement/card.php?id=';
 		$html .= '<tr class="oddeven"><td>' . dol_escape_htmltag(trim($candidate['account_ref'] . ' — ' . $candidate['account_label']))
 			. '</td><td><a href="' . dol_escape_htmltag(dol_buildpath($paymentPath . (int) $candidate['payment_id'], 1)) . '">'
 			. dol_escape_htmltag($candidate['payment_ref']) . '</a><br>' . dol_escape_htmltag($candidate['reference'])

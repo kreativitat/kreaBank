@@ -130,18 +130,19 @@ class KreaBankWorklist
 	{
 		$line = $this->load($key);
 		$batch = $this->batches && !empty($line['fk_statement']) ? $this->readBatch($line) : array();
-		$pair = null; $accountCandidates = array(); $completed = null;
+		$pair = null; $accountCandidates = array(); $accountReview = null; $completed = null;
 		if ((int) $line['status'] === 0 && $line['account_open'] && empty($batch['active'])) {
 			$prepared = ($this->callbacks['prepareReviewRow'])($line);
-			if (!empty($prepared['suggestion']['doc_id'])) { $pair = $prepared; }
-			$accountCandidates = $prepared['account_review']['candidates'] ?? array();
+			$accountReview = $prepared['account_review'] ?? null;
+			if (!$accountReview && !empty($prepared['suggestion']['doc_id'])) { $pair = $prepared; }
+			$accountCandidates = $accountReview['candidates'] ?? array();
 			$payments = new KreaBankPlannedPayment($this->db,$this->service->user,$this->entity,$this->service);
 			if (($pair['suggestion']['doc_type'] ?? '') === 'tax' && $payments->permissions('tax')) {
 				try { $payments->snapshot($line,'tax',(int) $pair['suggestion']['doc_id']); }
 				catch (DomainException $error) { $pair = null; }
 			}
 			// Existing native/document proposals take precedence. Payroll advice never enters the matcher.
-			if (!$pair && !$accountCandidates && empty($batch['draft']) && empty($line['needs_review'])) {
+			if (!$pair && !$accountReview && empty($batch['draft']) && empty($line['needs_review'])) {
 				$advice = $payments->propose($line);
 				if (($advice['status'] ?? '') === 'unique') {
 					$c = $advice['candidate'];
@@ -157,7 +158,7 @@ class KreaBankWorklist
 				. ' WHERE b.rowid=' . (int) $line['native_bank_line_id'] . ' AND b.fk_account=' . (int) $line['bank_account_id']);
 			if ($native) { $n=$native[0]; $completed = array('doc_type'=>'native_bank','doc_id'=>(int) $n['rowid'],'reference'=>$n['num_chq'] ?: '#' . $n['rowid'],'date'=>$n['dateo'],'amount'=>$n['amount'],'currency'=>$line['currency'],'account_ref'=>$line['bank_account_ref'],'description'=>$n['label']); }
 		}
-		return array('key'=>$key,'line'=>$line,'pair'=>$pair,'account_candidates'=>$accountCandidates,'batch'=>$batch,'completed'=>$completed);
+		return array('key'=>$key,'line'=>$line,'pair'=>$pair,'account_review'=>$accountReview,'account_candidates'=>$accountCandidates,'batch'=>$batch,'completed'=>$completed);
 	}
 
 	/** Viewing drafts/history must not impose the executor's pending/unmapped requirements. */
@@ -184,6 +185,7 @@ class KreaBankWorklist
 	/** Explicit manual choices use the same per-card eligibility as the existing workspace. */
 	public function candidates($line, $search = '')
 	{
+		if (!empty($line['fk_statement']) && $this->service->getPaymentAccountReview((int) $line['rowid'],array($line['bank_account_id']))) { return array(); }
 		$rows = ($this->callbacks['prepareDocumentReviews'])($line);
 		$this->searchTruncated = false; $suggestions = array(); $searchedKeys = array();
 		if ($search !== '') {

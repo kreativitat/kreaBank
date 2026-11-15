@@ -260,7 +260,8 @@
 ## Payment account review
 
 - `KreaBankService::getPaymentAccountReview()` accepts explicit staging IDs and
-  checks current-company invoice payments in other owned accounts. It returns
+  checks current-company invoice, salary and tax payments in other owned accounts.
+  It returns
   review evidence only; never feed these records into cross-account execution.
 - Exact signed persisted amount/currency and nearby booking dates are required,
   with a complete payment/check reference or, when the bank reference is absent,
@@ -370,13 +371,14 @@
   See `doc/RECONCILIATION_UI.md` and the pure/disposable `test_account_correction`
   suites. Bulk account warnings retain their native correction links.
 
-- A signed one-by-one `selected_native` review may approve an exact existing
-  native movement in the statement account despite an other-account warning.
-  Sign the context and warning state; revalidate them with source/target ownership,
-  amount, currency and locks, and retain the warning in the atomic audit. This
-  changes no other-account payment or account. Bulk/matched, unattended and
-  invoice/payment creation keep their warning gate. Validate with the synthetic
-  controller/view suites and guarded `test_manual_native_account_review_database.php`.
+- Wrong-account payment evidence blocks all approvals, including signed
+  `selected_native` choices and retained selector drafts. Preserve the full
+  review/truncation state; never promote an arbitrary or incomplete warning.
+  The list displays the actual recorded bank with an accessible exclamation,
+  an eligible reviewed correction dialog and disabled reconciliation. Recheck
+  after correction; no cross-account payment becomes a reconciliation target.
+  Validate with the worklist/controller/view suites and guarded
+  `test_manual_native_account_review_database.php`.
 
 ## Existing tax reconciliation
 

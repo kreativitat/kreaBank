@@ -53,6 +53,9 @@ $customer['truncated']=true;
 $customerHtml = kreabankPaymentAccountReviewHtml($customer,$langs);
 checkReview(strpos($customerHtml,'/compta/paiement/card.php?id=701')!==false, 'Customer payment links use the native customer payment card');
 checkReview(strpos($customerHtml,'Já reconciliado')!==false && strpos($customerHtml,'lista pode estar incompleta')!==false, 'Locked and truncated evidence stays explicit');
+$salary = $review; $salary['candidates'][0]['payment_type']='payment_salary';
+checkReview(strpos(kreabankPaymentAccountReviewHtml($salary,$langs),'/salaries/payment_salary/card.php?id=701')!==false,
+	'Salary warning references open the existing native salary payment');
 $source = array(array('rowid'=>17,'status'=>0));
 $prepare = static function ($line) use ($review) {
 	return array('line'=>$line,'account_review'=>$review,'suggestion'=>array('doc_type'=>'account_review','doc_id'=>0),

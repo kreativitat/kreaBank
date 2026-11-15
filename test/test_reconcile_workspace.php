@@ -362,10 +362,10 @@ $previousLibxmlErrors = libxml_use_internal_errors(true);
 $manualWarningDom->loadHTML($manualWarningHtml);
 libxml_clear_errors(); libxml_use_internal_errors($previousLibxmlErrors);
 $manualWarningXpath = new DOMXPath($manualWarningDom);
-workspaceCheck($manualWarningXpath->query('//button[@form="kb-document-review-native_bank__242" and not(@disabled)]')->length === 1,
-	'An existing same-account movement has an enabled signed action despite an other-account warning');
-workspaceCheck(strpos($manualWarningHtml,'mantém esse pagamento e a respetiva conta inalterados')!==false,
-	'The native card explains that approval preserves the other payment and account');
+workspaceCheck($manualWarningXpath->query('//button[@form="kb-document-review-native_bank__242" and not(@disabled)]')->length === 0,
+	'An existing same-account movement cannot bypass a wrong-account warning');
+workspaceCheck($manualWarningXpath->query('//button[@disabled and contains(@class,"kb-primary-action")]')->length > 0,
+	'The native card keeps reconciliation visibly disabled until the account warning clears');
 // Initial GET must reveal an already-paid tax in another account without Search.
 $automaticTaxEntry = array('rowid'=>501,'fk_account'=>82,'label'=>'(SocialContributionPayment)',
     'account_ref'=>'WRONG-BANK','dateo'=>'2026-11-03','amount'=>'-125.50','currency_code'=>'EUR',

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.59 — 2026-11-15
+
+- Show identity-supported invoice, salary and tax payments recorded in another owned bank with a warning beside the editable bank reference. Reuse the reviewed correction dialog and preserve native payment allocations, accounting and reconciliation locks.
+- Block every reconciliation approval while an account mismatch remains, including retained or previously signed single-movement choices. Recheck after correction; incomplete and competing warnings never select a payment automatically.
+- Require specific liability or payment identity for tax account warnings. Preserve salary visibility and employee hierarchy when finding or correcting payroll payments.
+
 ## 1.20.58 — 2026-11-15
 
 - Accept Dolibarr's native absent bank-reference representation when the optional payment number is blank. Preserve the exact payment reference, including native zero-reference semantics, and all amount, date, account, mode and ownership checks. Previously a successful native creation was rejected and rolled back by comparing NULL with an empty string.
