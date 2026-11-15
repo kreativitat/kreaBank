@@ -65,10 +65,13 @@ Exceptional review warnings remain beside the match evidence.
 Suggested row pairs retain the existing signed manual review. The unified selector
 lists only movements on the source booking day, in its owned bank account and
 currency. One exact signed movement uses `selected_native` through
-`KreaBankService::reconcileLine()`, including eligible transfers, restricted-account
-transfer counterparts and legacy imports. Its source, target, linked payment and
+`KreaBankService::reconcileLine()`, including eligible transfers and restricted-account
+transfer counterparts. Its source, target, linked payment and
 transfer facts are signed and rechecked under the shared reconciliation locks.
-No one-member group is created. A successful staged scalar selection removes
+No one-member group is created. Legacy imports already occupy native ledger rows;
+the selector rejects them, because choosing another ledger row is a duplicate
+correction rather than an ordinary reconciliation. Existing legacy workspace
+entry points remain separate. A successful staged scalar selection removes
 only the current user's stale private group draft in the same transaction.
 Multiple movements retain the existing batch service and its stricter eligibility.
 Other-account correction cards sit outside the allocation list and totals.

@@ -13,7 +13,10 @@
   facts under existing locks; scalar completion clears only that user's stale
   staged draft. Groups retain all existing batch invariants. Competing singles
   and exact groups leave advisory selection manual. Other-account correction
-  cards never participate in allocation. Legacy workspace search is unchanged.
+  cards never participate in allocation.
+- 1.20.52: The selector accepts staged sources only; legacy imports already occupy
+  native ledger rows and need duplicate review before choosing another row. Legacy
+  workspace search is unchanged.
 
 ## Advisory bank rules
 

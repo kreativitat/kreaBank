@@ -139,7 +139,7 @@ class WorklistControllerService
 	public $failCreation = false;
 	public $selectionPair;
 	public $selectionReads = array();
-	public function prepareWorklistSelectionPair($key,$id) { $this->selectionReads[]=array($key,$id); $pair=$this->selectionPair; $pair['suggestion']['doc_id']=$id; list($source,$lineId)=kreabankWorklistSource($key); $pair['line']['rowid']=$lineId; $pair['line']['fk_statement']=$source==='staged'?$lineId:0; $pair['approval_context']='selected_native'; $pair['worklist_selection']=array('version'=>1,'key'=>$key,'source'=>array('day'=>$pair['line']['operation_date']),'target'=>array('id'=>$id,'day'=>$pair['suggestion']['doc_date'])); return $pair; }
+	public function prepareWorklistSelectionPair($key,$id) { if(strpos($key,'native:')===0)throw new DomainException('Legacy source requires review'); $this->selectionReads[]=array($key,$id); $pair=$this->selectionPair; $pair['suggestion']['doc_id']=$id; list($source,$lineId)=kreabankWorklistSource($key); $pair['line']['rowid']=$lineId; $pair['line']['fk_statement']=$source==='staged'?$lineId:0; $pair['approval_context']='selected_native'; $pair['worklist_selection']=array('version'=>1,'key'=>$key,'source'=>array('day'=>$pair['line']['operation_date']),'target'=>array('id'=>$id,'day'=>$pair['suggestion']['doc_date'])); return $pair; }
 	public function createWorklistMovementAndReconcile(...$args) { if ($this->failCreation) { throw new RuntimeException('Review changed'); } $this->calls[] = array('createWorklistMovementAndReconcile',$args); return 88; }
 	public function reconcileLine(...$args) { $this->calls[] = array('reconcileLine',$args); return 8; }
 	public function changeMovementAccount(...$args) { $this->calls[] = array('changeMovementAccount',$args); return true; }
@@ -311,7 +311,7 @@ foreach (array('key','staging_id','rowid','bank_account_id') as $field) {
 }
 checkWorklist(!kreabankWorklistSelectionReviewMatches($batchEnvelope,'staged:8',$displayed,'2|7',time()) && !kreabankWorklistSelectionReviewMatches($batchEnvelope,'staged:8',$displayed,'1|7',time()+1000), 'Expired and foreign-scope group envelopes never restore');
 // The unified selector prepares a scalar pair without persisting a group or draft.
-foreach (array(array('staged:8',true),array('staged:8',false),array('native:8',false)) as $selectionCase) {
+foreach (array(array('staged:8',true),array('staged:8',false)) as $selectionCase) {
 	list($sourceKey,$schema)=$selectionCase;
 	$singlePost=array('action'=>'review_batch','source_key'=>$sourceKey,'batch_members'=>array('81'));
 	$selected=runWorklistController($singlePost,array(),array('batch_schema'=>$schema));
@@ -330,6 +330,8 @@ foreach (array(array('staged:8',true),array('staged:8',false),array('native:8',f
 	checkWorklist(!runWorklistController($confirmSingle,$selected['session'],array('entity'=>2))['calls'], 'Scalar selector review cannot cross company scope');
 	checkWorklist(!runWorklistController($singlePost,array(),array('csrf'=>false))['selection_reads'], 'Scalar selection requires CSRF before preparation');
 }
+$legacySelection=runWorklistController(array('action'=>'review_batch','source_key'=>'native:8','batch_members'=>array('81')));
+checkWorklist(!$legacySelection['calls'] && !isset($legacySelection['session']['kreabank_worklist_batch_review']['native:8']), 'Legacy imports cannot prepare a different-movement selector confirmation');
 $redirected=runWorklistController(array(),array(),array('method'=>'GET','get'=>array('expand'=>'staged:8','mode'=>'search','q'=>'Retain filter')));
 checkWorklist($redirected['redirect']['mode']==='batch' && $redirected['redirect']['q']==='Retain filter' && !$redirected['calls'], 'Old standalone search URLs canonicalize to the unified selector without financial writes');
 $undoSession = array('kreabank_worklist_reviews'=>array('undo'=>worklistControllerReview('undo',array('key'=>'staged:8','batch'=>array('signed'=>'undo proof')))));

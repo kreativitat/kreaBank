@@ -33,7 +33,6 @@ class SelectionFixtureDb
 		if(strpos($sql,'DELETE FROM llx_kreabank_payment_batch_draft WHERE entity=7 AND fk_user=9 AND fk_statement_line=11')===0){$this->writes[]=$sql;return (object)array('rows'=>array());}
 		if(strpos($sql,'SELECT ')!==0){throw new RuntimeException('Fixture forbids unexpected writes');}
 		if(strpos($sql,'SELECT l.*,s.ref AS source_statement_ref')===0){$rows=array($this->source);}
-		elseif(strpos($sql,'SELECT b.*,ba.currency_code AS bank_currency')===0){$rows=array($this->source);}
 		elseif(strpos($sql,'SELECT b.*,CAST(b.amount AS DECIMAL(24,8))')===0){
 			$rows=array_values($this->records);
 			if(preg_match('/ AND b.rowid=([0-9]+)/',$sql,$match)){$rows=array_filter($rows,static function($r)use($match){return $r['rowid']===(int)$match[1];});}
@@ -42,7 +41,6 @@ class SelectionFixtureDb
 			if(strpos($sql,"LIKE '%nomatch%'")!==false){$rows=array();}
 			$rows=array_slice(array_values($rows),0,strpos($sql,'LIMIT 101')!==false?101:1000);
 		}
-		elseif(strpos($sql,'SELECT * FROM llx_kreabank_bankmeta WHERE entity=7 AND fk_bank_line=11')===0){$rows=$this->meta;}
 		else{foreach($this->facts as $needle=>$records){if(strpos($sql,$needle)!==false){$rows=$records;break;}}}
 		return (object)array('rows'=>array_values($rows));
 	}
@@ -149,18 +147,17 @@ selectionReject(static function()use($s){$s->prepareWorklistSelectionPair('stage
 $s->clearDraft($pair);selectionCheck(count($s->db->writes)===1&&strpos($s->db->writes[0],'fk_user=9')!==false,'Scalar completion deletes only the current reviewer draft');
 $s->draftTable=false;$s->clearDraft($pair);selectionCheck(count($s->db->writes)===1,'Missing optional draft schema is left untouched');
 $s->draftTable=true;$s->clearDraft(array());selectionCheck(count($s->db->writes)===1,'Other reconciliation entrypoints never clear drafts');
-$s->legacy();$legacy=$s->prepareWorklistSelectionPair('native:11',21);$s->locked($legacy);
-selectionCheck(empty($legacy['line']['fk_statement'])&&$legacy['worklist_selection']['source']['meta'][0]['source_type']==='csv','Legacy imported sources retain their explicit namespace and evidence');
-$s->clearDraft($legacy);selectionCheck(count($s->db->writes)===1,'Legacy scalar completion performs no staged draft writes');
-$s->db->meta[0]['source_type']='';selectionCheck($s->prepareWorklistSelectionPair('native:11',21)['worklist_selection']['source']['meta'][0]['source_type']==='','Existing metadata with an empty source type follows the owning projection');
-$s->db->meta=array();$oldImport=$s->prepareWorklistSelectionPair('native:11',21);$s->locked($oldImport);
-selectionCheck($oldImport['worklist_selection']['source']['meta']===array(),'Recognizable old native imports work without bankmeta');
-$s->db->source['note']='KreaBank staged import csv / fixture.csv';selectionCheck($s->prepareWorklistSelectionPair('native:11',21)['approval_context']==='selected_native','Both historical import-note prefixes remain supported');
-$s->db->facts['FROM llx_kreabank_statement_line WHERE fk_native_bank_line=11']=array(array('rowid'=>91));
-selectionReject(static function()use($s){$s->prepareWorklistSelectionPair('native:11',21);},'A staged mapping prevents the same native import being offered again');
-selectionReject(static function()use($s,$oldImport){$s->locked($oldImport);},'A mapping added after display is denied under execution locks');$s->db->facts=array();
-$s->db->source['note']='Ordinary native movement';selectionReject(static function()use($s){$s->prepareWorklistSelectionPair('native:11',21);},'An ordinary native movement cannot masquerade as an imported source');
-$s->db->source['note']='KreaBank import fixture.csv';$s->db->source['num_releve']='';selectionReject(static function()use($s){$s->prepareWorklistSelectionPair('native:11',21);},'Legacy admission requires the retained imported statement reference');
+$s->legacy();$queriesBeforeLegacy=count($s->db->queries);
+selectionReject(static function()use($s){$s->listWorklistSelectionCandidates('native:11');},'Legacy ledger imports cannot discover replacement native targets through the unified selector');
+selectionReject(static function()use($s){$s->getWorklistSelectionMembers('native:11',array(21));},'Retained legacy selector members cannot reopen a replacement ledger mapping');
+selectionReject(static function()use($s){$s->prepareWorklistSelectionPair('native:11',21);},'Legacy imported bank evidence cannot be remapped to a distinct native movement');
+selectionReject(static function()use($s){$s->prepareWorklistSelectionPair('native:11',11);},'Legacy own-ledger identity cannot masquerade as a staged selection');
+$oldLegacy=$pair;$oldLegacy['line']=$s->line;$oldLegacy['worklist_selection']['key']='native:11';
+selectionReject(static function()use($s,$oldLegacy){$s->locked($oldLegacy);},'Previously displayed legacy selector approvals fail closed at the execution assertion');
+selectionReject(static function()use($s,$pair){$s->locked($pair);},'An overlapping native source ID cannot execute a staged selector review');
+selectionCheck(count($s->db->queries)===$queriesBeforeLegacy,'Unsupported legacy selector requests stop before candidate SQL or financial changes');
+$s->db->meta=array();$s->db->source['note']='KreaBank staged import csv / fixture.csv';
+selectionReject(static function()use($s){$s->prepareWorklistSelectionPair('native:11',21);},'Historical imports without metadata retain the same staged-only selector boundary');
 $s->readAllowed=false;selectionReject(static function()use($s){$s->listWorklistSelectionCandidates('staged:11');},'Selector discovery enforces the existing actor gate');
 $runtime=file_get_contents(__DIR__.'/../class/KreaBankService.class.php');
 $hook=strpos($runtime,'$this->assertWorklistSelectionReview($reviewedRow, $line)');

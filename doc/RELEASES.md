@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.52 — 2026-11-15
+
+- Reject legacy imported ledger rows as sources in the unified existing-movement selector. They already occupy native bank rows; selecting another row requires duplicate correction and cannot use ordinary staged reconciliation. Reject stale approvals under locks and retain legacy workspace entry points.
+- Add guarded integration coverage joining list POST review/confirmation, native persistence, statement and History projections, undo, replay and ownership checks. Record the verified metadata-only recovery for an orphaned historical quick-tax link without recreating financial records.
+
 ## 1.20.51 — 2026-11-15
 
 - Remove the separate Search row action and panel. Use the layers button to select one or more existing movements, with the same-day filter and visible allocation totals.

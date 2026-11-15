@@ -80,3 +80,5 @@ KreaBankWorklistSingleOnly=Selecione um movimento existente para esta linha de e
 KreaBankWorklistSelectedMovement=Movimento selecionado
 KreaBankWorklistMovement=movimento
 KreaBankWorklistMovements=movimentos
+
+KreaBankWorklistLegacySelectionUnavailable=Esta importação antiga já tem um movimento bancário. Reveja eventuais movimentos duplicados antes de selecionar outro movimento.

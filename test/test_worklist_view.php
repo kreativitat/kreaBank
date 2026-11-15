@@ -123,7 +123,7 @@ function worklistViewFixture($case)
 		$r['batch_candidates']=array(array_merge($candidates[0],array('amount'=>'-3300.00000000','single_eligible'=>true,'group_eligible'=>false)));
 		$r['draft']=array('name'=>'','member_keys'=>array($candidates[0]['key']));
 		if ($case==='selection_single_review') { $r['batch_review']=array('action'=>'confirm_pair','fields'=>array('review'=>'signed-single-pair')); $r['batch_components']=$r['batch_candidates']; }
-		if ($case==='selection_legacy') { $r['key']='native:11'; $r['max_members']=1; $r['batch_form']['grouping_available']=false; }
+		if ($case==='selection_legacy') { $r['key']='native:11'; $r['batch_unavailable']=true; $r['expanded']=false; $r['max_members']=1; $r['batch_form']['grouping_available']=false; }
 		unset($r);
 	}
 	if ($case === 'empty') { $model['rows'] = array(); }
@@ -197,13 +197,14 @@ foreach (array('en_US','pt_PT') as $locale) {
             checkWorklistView($xpath->query('//input[@name="action" and @value="create_movement"]')->length===0, 'Unavailable source has no financial creation action');
 		}
 		checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-row")]//a[contains(@href,"mode=search")]')->length===0 && strpos($html,'KreaBankWorklistFindMatch')===false, $case . ': no standalone search row action or workspace');
-		if (in_array($case,array('selection_single','selection_single_review','selection_legacy'),true)) {
+		if (in_array($case,array('selection_single','selection_single_review'),true)) {
 			checkWorklistView($xpath->query('//input[@name="action" and @value="confirm_batch"]')->length===0, 'One selected movement never has a group confirmation');
 			checkWorklistView($xpath->query('//*[@data-kb-group-name and not(@hidden)]')->length===0, 'Scalar review has no visible group name');
 			if ($case==='selection_single_review') { checkWorklistView($xpath->query('//input[@name="action" and @value="confirm_pair"]')->length===1 && $xpath->query('//input[@type="checkbox"]')->length===0, 'A signed scalar review displays the sole movement readonly and confirms the ordinary pair'); }
 			else { checkWorklistView($xpath->query('//input[@data-kb-member and @checked and @data-single-eligible="1" and @data-group-eligible="0"]')->length===1 && $xpath->query('//*[@data-kb-save-draft and @hidden]')->length===1, 'A single exact movement is selectable while group draft controls stay hidden'); }
-			if ($case==='selection_legacy') { checkWorklistView($xpath->query('//*[@data-kb-batch and @data-max-members="1"]')->length===1, 'Legacy/no-group sources retain scalar selection'); }
+
 		}
+		if ($case==='selection_legacy') { checkWorklistView($xpath->query('//tr[contains(@class,"kb-wl-row")]//a[contains(@href,"mode=batch")]')->length===0, 'Legacy ledger imports do not offer another native movement through the selector'); }
 		if ($case === 'planned_invoice') {
 			$planned=$xpath->query('//td/span[@class="kb-wl-planned-account"]')->item(0);
 			checkWorklistView($planned && strpos($planned->textContent,'STATEMENT-BANK')!==false && $planned->getAttribute('title')===$langs->trans('KreaBankWorklistPlannedPaymentAccount'), 'Unpaid invoice shows the statement bank as a clearly planned payment destination');

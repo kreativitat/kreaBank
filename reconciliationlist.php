@@ -337,7 +337,8 @@ foreach ($page['rows'] as $indexRow) {
 		if (isset($cache['summaries'][$key]) || $isExpanded || (int) $indexRow['line']['status'] === 2) {
 			$prepared = $worklist->prepare($key); $row['line'] = $prepared['line'];
 			$row['needs_review'] = !empty($row['line']['needs_review']);
-			$row['batch_unavailable'] = $row['batch_unavailable'] || empty($row['line']['account_open']) || (int) $row['line']['status'] !== 0;
+			$row['batch_unavailable'] = $row['batch_unavailable'] || strpos($key,'native:') === 0 || empty($row['line']['account_open']) || (int) $row['line']['status'] !== 0;
+			if (strpos($key,'native:') === 0 && (int) $row['line']['status'] === 0) { $row['notice'] = kreabankWorklistTranslate($langs,'KreaBankWorklistLegacySelectionUnavailable'); }
 			if (!empty($prepared['pair'])) {
 				$row['review'] = $candidateModel($prepared['pair'],empty($prepared['account_candidates']) && empty($prepared['batch']['active']) && empty($prepared['batch']['draft']) ? $paymentUrl($prepared['pair']) : '');
 				if ($canWrite) { $row['review']['action'] = $pairDescriptor($key,$prepared['pair']); }

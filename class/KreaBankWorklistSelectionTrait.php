@@ -84,7 +84,7 @@ trait KreaBankWorklistSelectionTrait
 		$document = $this->worklistSelectionDocument($source, $ids[0]);
 		$suggestions = $this->matcher->getSuggestions($source['line'], array($document), $this->getPatterns(), 1, 0);
 		if (count($suggestions) !== 1) { throw new DomainException('Selected movement is unavailable'); }
-		$warning = !empty($source['line']['fk_statement']) && $this->getPaymentAccountReview((int) $source['line']['rowid'], array($source['line']['bank_account_id']));
+		$warning = $this->getPaymentAccountReview((int) $source['line']['rowid'], array($source['line']['bank_account_id']));
 		return array('line'=>$source['line'], 'suggestion'=>$suggestions[0], 'allocation'=>(float) KreaBankPaymentBatchDecimal::absolute($source['amount']),
 			'preselected'=>false, 'is_bulk_safe'=>false, 'score'=>(int) $suggestions[0]['score'], 'approval_context'=>'selected_native',
 			'other_account_warning'=>(bool) $warning, 'worklist_selection'=>array('version'=>1,'key'=>$key,'source'=>$source['facts'],'target'=>$target));
@@ -95,10 +95,10 @@ trait KreaBankWorklistSelectionTrait
 	{
 		if (!isset($review['worklist_selection'])) { return; }
 		$selection = $review['worklist_selection'];
-		if (!is_array($selection) || ($selection['version'] ?? null) !== 1 || ($review['approval_context'] ?? '') !== 'selected_native'
+		if (empty($line['fk_statement']) || !is_array($selection) || ($selection['version'] ?? null) !== 1 || ($review['approval_context'] ?? '') !== 'selected_native'
 			|| ($review['suggestion']['doc_type'] ?? '') !== 'native_bank') { throw new DomainException('Invalid movement selector review'); }
 		$source = $this->worklistSelectionSource($selection['key'] ?? '', true);
-		$expectedKey = (!empty($line['fk_statement']) ? 'staged:' : 'native:') . (int) $line['rowid'];
+		$expectedKey = 'staged:' . (int) $line['rowid'];
 		if ($expectedKey !== $selection['key'] || $source['facts'] !== ($selection['source'] ?? null)
 			|| $this->worklistSelectionTarget($source, (int) $review['suggestion']['doc_id'], true) !== ($selection['target'] ?? null)) {
 			throw new DomainException('Statement or selected movement changed; review them again');
@@ -117,49 +117,39 @@ trait KreaBankWorklistSelectionTrait
 
 	private function worklistSelectionGrouping($key)
 	{
-		if (strpos($key, 'staged:') !== 0 || !$this->hasPaymentBatchSchema()) { return false; }
+		if (!$this->hasPaymentBatchSchema()) { return false; }
 		try { $this->paymentBatchSource((int) substr($key, 7)); return true; }
 		catch (DomainException $error) { return false; }
 	}
 
+	/** Only staging evidence can be mapped to another existing ledger movement. */
 	private function worklistSelectionSource($key, $lock = false)
 	{
-		if (!is_string($key) || !preg_match('/^(staged|native):([1-9][0-9]{0,9})$/D', $key, $parts)) { throw new DomainException('Invalid statement identity'); }
-		$type = $parts[1]; $id = (int) $parts[2]; $p = $this->db->prefix(); $e = (int) $this->entity;
-		$line = $this->getBulkReviewLine($id, $type);
-		if (!$line || (int) $line['status'] !== 0 || !empty($line['is_duplicate']) || (float) $line['allocated_amount'] !== 0.0) { throw new DomainException('Statement is unavailable'); }
-		if ($type === 'staged') {
-			$sql = "SELECT l.*,s.ref AS source_statement_ref,s.currency AS source_statement_currency,s.source_type,s.bank_account_id,ba.currency_code AS bank_currency,ba.ref AS bank_account_ref"
-				. " FROM {$p}kreabank_statement_line l JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
-				. " JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=s.entity WHERE l.entity=$e AND l.rowid=$id";
-		} else {
-			$sql = "SELECT b.*,ba.currency_code AS bank_currency,ba.ref AS bank_account_ref,b.fk_account AS bank_account_id FROM {$p}bank b"
-				. " JOIN {$p}bank_account ba ON ba.rowid=b.fk_account WHERE ba.entity=$e AND b.rowid=$id";
+		if (is_string($key) && preg_match('/^native:[1-9][0-9]{0,9}$/D', $key)) {
+			throw new DomainException('Legacy native imports already occupy their bank movement and cannot select another movement');
 		}
-		$sql .= ' AND ba.clos=0 AND ba.rappro=1 AND ba.courant<>2' . ($lock ? ' FOR UPDATE' : '');
+		if (!is_string($key) || !preg_match('/^staged:([1-9][0-9]{0,9})$/D', $key, $parts)) { throw new DomainException('Invalid staged statement identity'); }
+		$id = (int) $parts[1]; $p = $this->db->prefix(); $e = (int) $this->entity;
+		$line = $this->getBulkReviewLine($id, 'staged');
+		if (!$line || empty($line['fk_statement']) || (int) $line['status'] !== 0 || !empty($line['is_duplicate']) || (float) $line['allocated_amount'] !== 0.0) { throw new DomainException('Statement is unavailable'); }
+		$sql = "SELECT l.*,s.ref AS source_statement_ref,s.currency AS source_statement_currency,s.source_type,s.bank_account_id,ba.currency_code AS bank_currency,ba.ref AS bank_account_ref"
+			. " FROM {$p}kreabank_statement_line l JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
+			. " JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=s.entity WHERE l.entity=$e AND l.rowid=$id"
+			. ' AND ba.clos=0 AND ba.rappro=1 AND ba.courant<>2' . ($lock ? ' FOR UPDATE' : '');
 		$rows = $this->paymentBatchRows($sql);
 		if (count($rows) !== 1) { throw new DomainException('Statement ownership changed'); }
-		$raw = $rows[0]; $meta = array();
-		if ($type === 'native') {
-			$meta = $this->paymentBatchRows("SELECT * FROM {$p}kreabank_bankmeta WHERE entity=$e AND fk_bank_line=$id" . ($lock ? ' FOR UPDATE' : ''));
-			// Match the owning statement projection, including imports predating bankmeta.
-			$note = (string) ($raw['note'] ?? '');
-			$imported = count($meta) === 1 || stripos($note, 'KreaBank import ') === 0 || stripos($note, 'KreaBank staged import ') === 0;
-			if (count($meta) > 1 || !$imported || trim((string) ($raw['num_releve'] ?? '')) === '' || (int) $raw['rappro'] !== 0
-				|| $this->paymentBatchRows("SELECT rowid FROM {$p}kreabank_statement_line WHERE fk_native_bank_line=$id" . ($lock ? ' FOR UPDATE' : ''))) {
-				throw new DomainException('Legacy statement import is unavailable or belongs to a staged source');
-			}
-		} elseif ((int) $raw['status'] !== 0 || (int) $raw['is_duplicate'] || KreaBankPaymentBatchDecimal::normalize($raw['allocated_amount']) !== '0.00000000'
+		$raw = $rows[0];
+		if ((int) $raw['status'] !== 0 || (int) $raw['is_duplicate'] || KreaBankPaymentBatchDecimal::normalize($raw['allocated_amount']) !== '0.00000000'
 			|| $raw['currency'] !== $raw['source_statement_currency']) { throw new DomainException('Statement evidence changed'); }
 		$amount = KreaBankPaymentBatchDecimal::normalize($raw['amount']);
-		$day = substr((string) ($type === 'staged' ? $raw['operation_date'] : $raw['dateo']), 0, 10);
+		$day = substr((string) $raw['operation_date'], 0, 10);
 		if (!preg_match('/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D', $day, $date) || !checkdate((int) $date[2], (int) $date[3], (int) $date[1])
 			|| $amount === '0.00000000' || $line['currency'] !== $raw['bank_currency']
 			|| self::automaticDecimal($line['amount']) !== self::automaticDecimal($amount)) { throw new DomainException('Statement exact amount, currency or date changed'); }
-		if ($type === 'staged' && $raw['source_type'] === 'fintable' && !$this->automaticFeedEvidenceValid($id, $lock)) { throw new DomainException('Bank feed evidence changed'); }
+		if ($raw['source_type'] === 'fintable' && !$this->automaticFeedEvidenceValid($id, $lock)) { throw new DomainException('Bank feed evidence changed'); }
 		$line['amount_decimal'] = $amount;
 		(new KreaBankReconciliationScope($this->db, $this->entity))->assertLine($line);
-		return array('line'=>$line,'amount'=>$amount,'day'=>$day,'facts'=>array('key'=>$key,'record'=>$raw,'meta'=>$meta));
+		return array('line'=>$line,'amount'=>$amount,'day'=>$day,'facts'=>array('key'=>$key,'record'=>$raw,'meta'=>array()));
 	}
 
 	/** Exact singles use the shared native provider after this bounded identity search. */
@@ -173,7 +163,7 @@ trait KreaBankWorklistSelectionTrait
 			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_bankmeta m WHERE m.fk_bank_line=b.rowid AND COALESCE(m.source_type,'')<>'')"
 			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement_line m WHERE m.fk_native_bank_line=b.rowid)"
 			. $this->paymentBatchUnclaimedSql() . $this->paymentBatchOwnershipSql(false);
-		$own = (int) ($line['native_bank_line_id'] ?? (empty($line['fk_statement']) ? $line['rowid'] : 0));
+		$own = (int) ($line['native_bank_line_id'] ?? 0);
 		if ($own > 0) { $sql .= ' AND b.rowid<>' . $own; }
 		if ($id > 0) { $sql .= ' AND b.rowid=' . (int) $id; }
 		if ($search !== '') {
