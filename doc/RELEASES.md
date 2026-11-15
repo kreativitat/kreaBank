@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.65 — 2026-11-15
+
+- Preserve existing native reference evidence when enriching recorded customer transfers, so receipt details do not suppress a previously eligible match. Keep existing score and ambiguity safeguards unchanged.
+- After reviewed payment-difference Undo, invalidate the restored invoice/payment and exact-amount peers while retaining unaffected reconciliation results.
+
 ## 1.20.64 — 2026-11-15
 
 - Match existing customer transfer receipts whose customer is explicitly shared through Dolibarr, while retaining direct company ownership of all financial records and fresh visibility checks.

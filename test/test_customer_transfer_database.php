@@ -194,6 +194,36 @@ checkAuto(customerTransferFinancialState()===$sharedFinancial && $sharedCounts==
 rejectAuto(static function()use($sharedRow){customerTransferSignedApply($sharedRow);},'A shared-customer signed reconciliation cannot be replayed');
 unset($GLOBALS['customerTransferFixtureSocieteEntities']);
 
+// A recorded native label may be the only identity present in the statement.
+// Adding receipt/invoice facts must not erase that evidence and create a tie.
+$label=customerTransferFixture(844000,'627.31');
+$db->query("UPDATE kbauto_kreabank_statement_line SET payment_reference='' WHERE rowid={$label['source']}");
+$db->query("UPDATE kbauto_bank SET num_chq='NATIVE-REFERENCE-844000' WHERE rowid={$label['bank']}");
+$db->query("UPDATE kbauto_bank_url SET label='Avery Synthetic Trading Lda' WHERE fk_bank={$label['bank']}");
+$db->query("INSERT INTO kbauto_bank_url(fk_bank,url_id,url,label,type) VALUES({$label['bank']},860001,'/societe/card.php?socid=','Avery Synthetic Trading Lda','company')");
+bankAuto(844101,'627.31','UNRELATED-NATIVE-REFERENCE',101,'2031-04-10');
+$labelLine=$service->getBulkReviewLine($label['source'],'staged');
+$labelRaw=$service->defaultNativeCandidate($label['bank'])[0];
+$labelEnriched=$service->nativeCandidate($label['bank'])[0];
+$labelMetadata=$labelEnriched['customer_transfer'];
+checkAuto(strpos($labelEnriched['ref_client'],$labelRaw['ref_client'].', ')===0 && $labelEnriched['ref']===$labelRaw['ref'],
+	'Additive receipt enrichment preserves the exact original native reference and bank-link label prefix');
+foreach($labelMetadata['invoice_refs'] as $reference){checkAuto(substr_count($labelEnriched['ref_client'],$reference)===1,'Each verified invoice reference is appended once: '.$reference);}
+checkAuto((new KreaBankCustomerTransfer($db,$user,1))->enrich(array($labelEnriched))[0]===$labelEnriched,'Repeated enrichment cannot duplicate native labels or verified invoice references');
+$competitor=$service->defaultNativeCandidate(844101)[0];$matcher=new KreaBankMatcher();
+$rawAdvice=$matcher->getSuggestions($labelLine,array($labelRaw,$competitor),array(),3,0);
+$enrichedAdvice=$matcher->getSuggestions($labelLine,array($labelEnriched,$competitor),array(),3,0);
+checkAuto($rawAdvice[0]['score']===160 && $enrichedAdvice[0]['score']===160 && in_array('ref_client',$enrichedAdvice[0]['details'],true)
+	&& in_array('name_description',$enrichedAdvice[0]['details'],true),'Existing complete bank-label identity retains its original shared-matcher score when receipt numbers are absent from the statement');
+$overwritten=$labelEnriched;$overwritten['ref_client']=implode(', ',$labelMetadata['invoice_refs']);
+$lostAdvice=$matcher->getSuggestions($labelLine,array($overwritten,$competitor),array(),3,0);
+checkAuto($lostAdvice[0]['score']===125 && !kreabankBulkSuggestionIsUnambiguous($lostAdvice)
+	&& kreabankBulkSuggestionIsUnambiguous($enrichedAdvice),'The old overwritten-label shape loses the35-point lead; additive native evidence restores it without changing ambiguity rules');
+$labelPrepared=(new KreaBankWorklist($db,1,$service))->prepare('staged:'.$label['source']);
+checkAuto(($labelPrepared['pair']['suggestion']['doc_id']??0)===$label['bank'] && $labelPrepared['pair']['suggestion']['score']===160
+	&& $labelPrepared['pair']['suggestion']['customer_transfer']===$labelMetadata && empty($labelPrepared['pair']['is_bulk_safe']),
+	'Actual list preparation retains the recorded customer transfer as a manual proposal with native-label-only identity');
+
 $wrong=customerTransferFixture(841000,'451.73',102);$worklist=new KreaBankWorklist($db,1,$service);$wrongPrepared=$worklist->prepare('staged:'.$wrong['source']);
 checkAuto(!empty($wrongPrepared['account_review']) && $wrongPrepared['pair']===null
 	&& $wrongPrepared['account_candidates'][0]['bank_line_id']===$wrong['bank'],'A recorded customer transfer in another owned bank remains a warning without an executable match');

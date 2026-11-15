@@ -93,4 +93,63 @@ $history->rows['staged:71']=undoRow(); $prepared=kreabankWorklistPrepareUndo($hi
 $_SERVER['REQUEST_METHOD']='POST'; $_GET=array(); $_POST=array('undo_review'=>' '.$prepared['nonce'].' ');
 $key='staged:71'; $line=array('bank_account_id'=>101);
 undoCheck(eval('return '.$match[1].';')===$prepared['snapshot'],'The actual list Undo request consumes its exact native History snapshot');
+
+// A reviewed write-off reversal changes an invoice balance and deletes its created
+// payment. Those targets can be cached under completely different statement amounts.
+foreach (array('customer_invoice'=>1,'supplier_invoice'=>-1) as $invoiceType=>$direction) {
+	$line=undoRow(); $line['amount']=$line['native_amount']=($direction<0?'-':'').'98.00000000';
+	$ordinary=KreaBankHistory::snapshot($line);
+	$ordinaryEffect=kreabankWorklistUndoEffect('staged:71',$line,$ordinary);
+	undoCheck($ordinaryEffect['tokens']===array('native_bank:801') && $ordinaryEffect['keys']===array('staged:71') && $ordinaryEffect['financial'],
+		'Ordinary scalar Undo preserves its existing native/source invalidation contract');
+	$writeoff=array('invoice_type'=>$invoiceType,'invoice_id'=>501,'payment_id'=>502,'amount_open'=>'100.00',
+		'bank_amount'=>'98.00','native_bank_line_id'=>801,'invoice_after'=>str_repeat('a',64),'allocations_after'=>str_repeat('b',64),'payment_after'=>str_repeat('c',64));
+	$line['history_audit']=array('rowid'=>901,'audit_type'=>'reconcile','fk_statement_line'=>71,'payload_json'=>json_encode(array(
+		'strategy'=>'manual_writeoff','source'=>'staged','native_bank_line_id'=>801,'writeoff'=>$writeoff)));
+	$review=KreaBankHistory::snapshot($line);
+	$effect=kreabankWorklistUndoEffect('staged:71',$line,$review);
+	$paymentType=$direction>0?'payment':'payment_supplier'; $restored=($direction<0?'-':'').'100.00000000';
+	undoCheck($effect['tokens']===array('native_bank:801',$invoiceType.':501',$paymentType.':502'),
+		'Write-off Undo invalidates the exact invoice and created payment types: '.$invoiceType);
+	undoCheck(count($effect['footprints'])===2 && $effect['footprints'][1]['amount']===$restored && $effect['footprints'][1]['currency']==='EUR'
+		&& $effect['footprints'][1]['account']===101 && $effect['footprints'][1]['all_dates']===true,
+		'Restored invoice amount has an exact signed footprint without an invented invoice date: '.$invoiceType);
+	$source=static function($id,$amount,$date='2031-04-10',$currency='EUR') { return array('rowid'=>$id,'bank_account_id'=>101,'currency'=>$currency,'operation_date'=>$date,'amount_decimal'=>$amount); };
+	$sources=array('staged:71'=>$source(71,$line['amount']),'staged:72'=>$source(72,'777.00000000','2045-04-10'),
+		'staged:73'=>$source(73,'888.00000000','2045-04-10'),'staged:74'=>$source(74,$restored,'2045-04-10'),
+		'staged:75'=>$source(75,'333.00000000'),'staged:76'=>$source(76,$restored,'2031-04-10','USD'),
+		'staged:77'=>$source(77,$line['amount'],'2031-04-11'),'staged:78'=>$source(78,($direction>0?'-':'').'100.00000000'),
+		'staged:79'=>$source(79,'333.00000000'));
+	$scan=array('context'=>'synthetic-undo','scope'=>'synthetic-scope','generation'=>'before','cursor'=>8,'sources'=>kreabankWorklistSourceState($sources),'summaries'=>array(),'presentations'=>array());
+	foreach ($sources as $key=>$raw) {
+		$tokens=$key==='staged:72'?array($invoiceType.':501'):($key==='staged:73'?array($paymentType.':502'):($key==='staged:79'?array($invoiceType.':999'):array()));
+		$scan['summaries'][$key]=array('key'=>$key,'dependencies'=>array('tokens'=>$tokens,'footprints'=>array(kreabankWorklistFootprint($raw))));
+		$scan['presentations'][$key]=array('synthetic'=>'cached-'.$key);
+	}
+	$session=array('kreabank_worklist_scan'=>$scan,'kreabank_worklist_reviews'=>array('affected'=>array('payload'=>array('key'=>'staged:72')),'unrelated'=>array('payload'=>array('key'=>'staged:75'))));
+	kreabankWorklistInvalidateScan($session,$effect,true);
+	$remaining=array('staged:75','staged:76','staged:78','staged:79');
+	undoCheck(array_keys($session['kreabank_worklist_scan']['summaries'])===$remaining,
+		'Invoice/payment dependencies and restored-amount no-pair peers are evicted while unrelated amounts/currencies/signs remain: '.$invoiceType);
+	undoCheck(array_keys($session['kreabank_worklist_scan']['presentations'])===$remaining,
+		'Affected prepared details are evicted with their summaries: '.$invoiceType);
+	undoCheck(array_keys($session['kreabank_worklist_reviews'])===array('unrelated') && $session['kreabank_worklist_scan']['generation']!=='before',
+		'Stale dependent approvals are cleared without discarding unrelated progress: '.$invoiceType);
+}
+$validReview=$review; $validLine=$line;
+foreach (array('missing_wrapper','missing_writeoff','invalid_audit','invalid_hash','invalid_type','invalid_invoice','invalid_payment','missing_amount','negative_amount','nested_amount') as $malformed) {
+	$changed=$validReview;
+	if ($malformed==='missing_wrapper') { $changed['writeoff']=null; }
+	elseif ($malformed==='missing_writeoff') { unset($changed['writeoff']['writeoff']); }
+	elseif ($malformed==='invalid_audit') { $changed['writeoff']['audit_id']=array(901); }
+	elseif ($malformed==='invalid_hash') { $changed['writeoff']['audit_hash']='not-a-snapshot'; }
+	elseif ($malformed==='invalid_type') { $changed['writeoff']['writeoff']['invoice_type']='native_bank'; }
+	elseif ($malformed==='invalid_invoice') { $changed['writeoff']['writeoff']['invoice_id']='501other'; }
+	elseif ($malformed==='invalid_payment') { $changed['writeoff']['writeoff']['payment_id']=0; }
+	elseif ($malformed==='missing_amount') { unset($changed['writeoff']['writeoff']['amount_open']); }
+	elseif ($malformed==='negative_amount') { $changed['writeoff']['writeoff']['amount_open']='-100.00'; }
+	elseif ($malformed==='nested_amount') { $changed['writeoff']['writeoff']['amount_open']=array('100.00'); }
+	undoReject(static function()use($validLine,$changed){kreabankWorklistUndoEffect('staged:71',$validLine,$changed);},
+		'Malformed write-off evidence cannot return a success-shaped incomplete invalidation: '.$malformed);
+}
 echo 'OK: '.$checks." worklist scalar Undo checks (installed GETPOST, native History nonce/snapshot, no database)\n";

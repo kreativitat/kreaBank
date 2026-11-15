@@ -53,7 +53,11 @@ final class KreaBankCustomerTransfer
 			$id=(int)($document['rowid']??0);
 			if (($document['doc_type']??'')!=='native_bank' || !isset($metadata[$id])) { continue; }
 			$receipt=$metadata[$id];
-			$document['ref_client']=implode(', ', $receipt['invoice_refs']);
+			// Enrichment must retain the native labels already used as matching evidence.
+			$nativeReferences=(string)($document['ref_client']??'');
+			$existing=preg_split('/\s*[,;|]\s*|\s+\/\s+/',trim($nativeReferences)) ?: array();
+			$invoiceReferences=array_values(array_diff($receipt['invoice_refs'],$existing));
+			$document['ref_client']=$nativeReferences . ($nativeReferences!=='' && $invoiceReferences ? ', ' : '') . implode(', ',$invoiceReferences);
 			$document['payment_ref']=implode(' / ',array_unique(array_filter(array($receipt['ref'],$receipt['number']),static function($value){return $value!=='';})));
 			$document['thirdparty_name']=$receipt['customer_name'];
 			$document['fk_soc']=$receipt['customer_id'];

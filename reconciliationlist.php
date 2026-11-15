@@ -188,8 +188,7 @@ if ($post && $action !== '' && !in_array($action, array('advance_scan','more_sca
 			$key = (string) GETPOST('source_key','alphanohtml');
 			$line = $worklist->load($key);
 			$review = kreabankWorklistTakeUndo($history,$key,(int) $line['bank_account_id'],GETPOST('undo_review','aZ09'));
-			$scanEffect = kreabankWorklistActionEffect($key,array('line'=>$line));
-			$scanEffect['tokens'][] = 'native_bank:' . (int) $review['native_bank_line_id'];
+			$scanEffect = kreabankWorklistUndoEffect($key,$line,$review);
 			list($source,$id) = kreabankWorklistSource($key);
 			$service->undoReconciliation($id,mb_substr((string) GETPOST('reason','alphanohtml'),0,1000,'UTF-8'),$review);
 			$expand = ''; setEventMessages($langs->trans('KreaBankWorklistReconciliationUndone'),null,'mesgs');

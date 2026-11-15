@@ -348,7 +348,7 @@ function kreabankWorklistAffectedKeys($scan,$effect)
 			try { if (kreabankWorklistCompareDecimal($peer['amount'],$changed['amount'])!==0) { continue; } }
 			catch (InvalidArgumentException $error) { /* Incomplete evidence must invalidate conservatively. */ }
 			$a=strtotime($peer['day'].' UTC'); $b=strtotime($changed['day'].' UTC');
-			if ($a!==false && $b!==false && abs($a-$b)>86400*($effect['radius']??31)) { continue; }
+			if (empty($changed['all_dates']) && $a!==false && $b!==false && abs($a-$b)>86400*($effect['radius']??31)) { continue; }
 			// Other-account advice means equal amount/date peers in other owned banks also depend on this movement.
 			$keys[$key]=true;
 		}

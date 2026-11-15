@@ -91,6 +91,16 @@ $nameLine=$line;$nameLine['payment_reference']='';$nameLine['description']='TRF 
 $nameAdvice=$matcher->getSuggestions($nameLine,array($document),array(),3,0);
 customerTransferCheck(in_array('name_description',$nameAdvice[0]['details'],true) && $nameAdvice[0]['score']===125,'Complete recorded customer identity supplies the existing manual name advice');
 customerTransferCheck($matcher->getSafeSuggestion($nameAdvice,100)===null,'A customer name never becomes strong unattended reference evidence');
+$nativeLabel=$document;unset($nativeLabel['customer_transfer']);
+$nativeLabel['ref']='UNRELATED-NATIVE-REFERENCE';$nativeLabel['ref_client']=$metadata['customer_name'];
+$additive=$nativeLabel;$additive['customer_transfer']=$metadata;$additive['ref_client'].=', '.implode(', ',$metadata['invoice_refs']);
+$other=$nativeLabel;$other['rowid']=202;$other['ref_client']='';$other['thirdparty_name']='';
+$labelAdvice=$matcher->getSuggestions($nameLine,array($additive,$other),array(),3,0);
+$nativeLabelAdvice=$matcher->getSuggestions($nameLine,array($nativeLabel,$other),array(),3,0);
+customerTransferCheck($labelAdvice[0]['score']===160 && $labelAdvice[0]['score']===$nativeLabelAdvice[0]['score']
+	&& in_array('ref_client',$labelAdvice[0]['details'],true),'Appending invoice evidence preserves pre-existing complete native-label identity and its unchanged score');
+customerTransferCheck(kreabankBulkSuggestionIsUnambiguous($labelAdvice) && !array_intersect(array('ref_payment','ref_exact'),$labelAdvice[0]['details'])
+	&& $matcher->getSafeSuggestion($labelAdvice,150)===null,'Preserved native-label advice retains the35-point manual lead without granting strong or unattended identity');
 $second=$document;$second['rowid']=202;
 $tie=$matcher->getSuggestions($line,array($document,$second),array(),3,0);
 customerTransferCheck($matcher->getSafeSuggestion($tie,150)===null && !kreabankBulkSuggestionIsUnambiguous($tie),'Competing equal recorded transfers never choose an arbitrary first receipt');
