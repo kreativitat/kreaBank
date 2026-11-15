@@ -80,6 +80,17 @@ class KreaBankNativeBankAdapter
 	}
 
 	/**
+	 * The shared service verified this deployed schema version already; skip per-request DDL.
+	 *
+	 * @return void
+	 */
+	public function markSchemaVerified()
+	{
+		$this->metaTableChecked = true;
+		$this->stagingTablesChecked = true;
+	}
+
+	/**
 	 * Import parsed statement lines into KreaBank staging tables.
 	 *
 	 * @param array<int,array<string,mixed>> $lines
@@ -1237,6 +1248,36 @@ class KreaBankNativeBankAdapter
 		$this->ensureMetaTable();
 		$this->ensureStagingTables();
 
+		// The reconciled check and the delete share one transaction and row locks:
+		// a concurrent reconciliation either finishes first (and blocks) or waits.
+		if (!$this->db->begin()) {
+			throw new Exception('Failed to start database transaction');
+		}
+		try {
+			if (!$this->db->query('SELECT rowid FROM ' . $this->db->prefix() . 'bank_account WHERE entity = ' . ((int) $this->entity) . ' AND rowid = ' . ((int) $bankAccountId) . ' FOR UPDATE')) {
+				throw new Exception('Cannot lock bank statement owner');
+			}
+			$result = $this->deleteImportedStatementLocked($bankAccountId, $statementRef, $allowReconciled);
+			$this->db->commit();
+		} catch (Exception $e) {
+			$this->db->rollback();
+			throw $e;
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Delete one imported statement inside the caller's transaction and account lock.
+	 *
+	 * @param int $bankAccountId
+	 * @param string $statementRef
+	 * @param bool $allowReconciled
+	 * @return array<string,mixed>
+	 */
+	private function deleteImportedStatementLocked($bankAccountId, $statementRef, $allowReconciled = false)
+	{
+
 		$bankAccountId = (int) $bankAccountId;
 		$statementRef = trim((string) $statementRef);
 		if ($bankAccountId <= 0 || $statementRef === '') {
@@ -1253,6 +1294,7 @@ class KreaBankNativeBankAdapter
 		$sqlStatement .= ' AND bank_account_id = ' . $bankAccountId;
 		$sqlStatement .= ' AND ref = ' . $this->sqlText($statementRef);
 		$sqlStatement .= $this->db->plimit(1, 0);
+		$sqlStatement .= ' FOR UPDATE';
 		$resStatement = $this->db->query($sqlStatement);
 		$objStatement = ($resStatement ? $this->db->fetch_object($resStatement) : null);
 		if (empty($objStatement->rowid)) {
@@ -1266,6 +1308,7 @@ class KreaBankNativeBankAdapter
 		$sqlLines .= ' WHERE l.entity = ' . ((int) $this->entity);
 		$sqlLines .= ' AND l.fk_statement = ' . $statementId;
 		$sqlLines .= ' ORDER BY l.rowid ASC';
+		$sqlLines .= ' FOR UPDATE';
 		$resLines = $this->db->query($sqlLines);
 		if (!$resLines) {
 			throw new Exception($this->db->lasterror());
@@ -1739,6 +1782,7 @@ class KreaBankNativeBankAdapter
 		$sql .= ' AND b.fk_account = ' . ((int) $bankAccountId);
 		$sql .= ' AND b.num_releve = ' . $this->sqlText($statementRef);
 		$sql .= ' ORDER BY b.rowid ASC';
+		$sql .= ' FOR UPDATE';
 		$resql = $this->db->query($sql);
 		if (!$resql) {
 			throw new Exception($this->db->lasterror());

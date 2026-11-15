@@ -927,3 +927,6 @@ KreaBankWriteOffSupplierOutcome=Regista o montante bancário. A fatura do fornec
 KreaBankWriteOffDone=Pagamento com diferença registado e conciliado.
 KreaBankWriteOffSupplierPartialDone=Pagamento registado e conciliado. A fatura do fornecedor mantém-se parcialmente paga, com o saldo remanescente.
 KreaBankWriteOffUnavailable=A revisão da diferença de pagamento está indisponível. Atualize a fatura antes de aprovar.
+KreaBankExistingMovementBlocked=Não foi criado um novo movimento bancário: já existe um movimento com a mesma conta, montante e data. Reconcilie a linha com esse movimento ou confirme abaixo que é uma transação diferente. Existente:
+KreaBankExistingMovementIncomplete=Não foi criado um novo movimento bancário: existem demasiados movimentos com a mesma conta, montante e data. Reveja primeiro os movimentos bancários. Exemplos:
+KreaBankExistingMovementConfirm=Confirmo que os movimentos existentes %s são transações diferentes e que deve ser criado um novo movimento.

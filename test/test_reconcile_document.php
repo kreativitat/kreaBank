@@ -53,6 +53,7 @@ class DirectReviewFixtureService
 		$this->line['status'] = $this->partial ? 1 : 2;
 	}
 	public function createQuickEntryAndReconcile(...$args) { $this->reconcileLine(...$args); }
+	public function assertNoExistingMovementForCreation(...$args) {}
 	public function createQuickSupplierInvoiceAndReconcile(...$args) { $this->reconcileLine(...$args); return array('invoice_id'=>22,'invoice_ref'=>'SYNTHETIC'); }
 	public function createQuickTaxContributionAndReconcile(...$args) { $this->reconcileLine(...$args); return array('social_contribution_id'=>22); }
 }

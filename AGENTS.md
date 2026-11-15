@@ -377,3 +377,21 @@
   imported statement references so undone lines remain available for review.
   Groups use the existing group controller. See `doc/LISTS.md`; regression checks
   are `test/test_history.php` and guarded disposable `test/test_history_database.php`.
+
+## Existing-movement creation guard
+
+- `KreaBankService::assertNoExistingMovementForCreation()` runs before every selected-line
+  creation choice and inside `createQuickEntryAndReconcile()`. Same owned account, exact
+  signed persisted amount and booking date within tolerance block creation, whatever the
+  reconciled state; movements mapped to another imported line are distinct evidence.
+  Only the user's confirmation of the exact current list overrides, with an
+  `existing_movement_override` audit. Rule entries and truncated searches never override.
+- Statement deletion checks reconciled lines under account/statement/line locks in one
+  transaction with its audit. Never move that check or the audit outside the transaction.
+- Table checks run once per `KreaBankService::schemaFingerprint()` (stored globally in
+  `KREABANK_SCHEMA_FINGERPRINT`, cleared on module activation). Never add per-request DDL.
+- `kreabankIsTokenValid()` intentionally accepts the current and the next-request session
+  token: both are session secrets and background/multi-tab POSTs need the latter when
+  per-call token renewal is enabled.
+- `php test/test_existing_movement_guard.php` is pure; its database counterpart uses ONLY
+  the guarded disposable localhost:33317 fixture.

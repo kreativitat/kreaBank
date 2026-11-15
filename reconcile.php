@@ -543,7 +543,10 @@ if ($action === 'quick_entry' && $user->hasRight('kreabank', 'reconciliation', '
 			setEventMessages($langs->trans('KreaBankInvalidInput'), null, 'warnings');
 		}
 	} elseif ($lineId > 0 && $label !== '' && $amount > 0) {
+		$confirmedMovementIds = array_filter(array_map('intval', explode(',', (string) GETPOST('confirm_existing_movements', 'alphanohtml'))));
 		try {
+			// Every creation choice would add a native movement: review possible existing ones first.
+			$service->assertNoExistingMovementForCreation($lineId, $confirmedMovementIds);
 			if ($submitAction === 'supplier_invoice') {
 				if (!$canQuickSupplierInvoice) {
 					accessforbidden($langs->trans('KreaBankNoPermission'));
@@ -583,7 +586,7 @@ if ($action === 'quick_entry' && $user->hasRight('kreabank', 'reconciliation', '
 				);
 			} else {
 				$fkSoc = ((int) $supplierSocid > 0 ? (int) $supplierSocid : 0);
-				$service->createQuickEntryAndReconcile($lineId, $entryType ?: 'expense', $label, $amount, $fkSoc, $note);
+				$service->createQuickEntryAndReconcile($lineId, $entryType ?: 'expense', $label, $amount, $fkSoc, $note, null, $confirmedMovementIds);
 				setEventMessages($langs->trans('KreaBankQuickEntryDone'), null, 'mesgs');
 			}
 			$queueContinue = true;
@@ -598,7 +601,17 @@ if ($action === 'quick_entry' && $user->hasRight('kreabank', 'reconciliation', '
 			if ($errorMessage === 'Unable to resolve supplier from VAT/name lookup or ML prediction.') {
 				$errorMessage = $langs->trans('ErrorFieldRequired', $langs->transnoentitiesnoconv('KreaBankQuickSupplierInvoiceSupplier'));
 			}
-			$reportActionException($e, 'quick_entry', (string) $sanitizeUiErrorMessage($errorMessage));
+			if ($e instanceof KreaBankExistingMovementException) {
+				$existingMovementLinks = array();
+				foreach ($e->movementIds as $existingMovementId) {
+					$existingMovementLinks[] = '<a href="' . dol_escape_htmltag(DOL_URL_ROOT . '/compta/bank/line.php?rowid=' . ((int) $existingMovementId)) . '" target="_blank" rel="noopener">#' . ((int) $existingMovementId) . '</a>';
+				}
+				if ($e->complete) { $quickEntryFormState['existing_movements'] = $e->movementIds; }
+				dol_syslog('KreaBank reconcile action error [quick_entry]: ' . $e->getMessage() . ' ' . implode(',', $e->movementIds), LOG_WARNING);
+				setEventMessages(dol_escape_htmltag($langs->transnoentitiesnoconv($e->complete ? 'KreaBankExistingMovementBlocked' : 'KreaBankExistingMovementIncomplete')) . ' ' . implode(', ', $existingMovementLinks), null, 'errors');
+			} else {
+				$reportActionException($e, 'quick_entry', (string) $sanitizeUiErrorMessage($errorMessage));
+			}
 		}
 	} else {
 		setEventMessages($langs->trans('KreaBankInvalidInput'), null, 'warnings');
@@ -1609,6 +1622,12 @@ $renderQuickEntryForm = static function ($line, $openDocSearch, $prefillLabel, $
 	print '<small data-kb-supplier-feedback role="alert" hidden></small></div>';
 	print '<div class="kb-field kb-field-wide" data-kb-invoice-field><label for="kb-entry-ref">' . $langs->trans('KreaBankQuickSupplierInvoiceRefSupplier') . '</label><input id="kb-entry-ref" type="text" name="entry_ref_supplier" value="' . dol_escape_htmltag((string) $supplierRefPrefill) . '"></div>';
 	print '<div class="kb-field kb-field-wide"><label for="kb-entry-note">' . $langs->trans('KreaBankReason') . '</label><textarea id="kb-entry-note" name="entry_note" rows="2">' . dol_escape_htmltag((string) $prefillNote, 0, 1) . '</textarea></div></div>';
+	if (!empty($quickEntryFormState['existing_movements'])) {
+		// Explicit, exact-list confirmation; the service rechecks the current list.
+		$existingMovementIds = array_map('intval', (array) $quickEntryFormState['existing_movements']);
+		print '<div class="kb-field kb-field-wide"><label for="kb-entry-confirm-existing"><input id="kb-entry-confirm-existing" type="checkbox" name="confirm_existing_movements" value="' . implode(',', $existingMovementIds) . '"> '
+			. dol_escape_htmltag($langs->transnoentitiesnoconv('KreaBankExistingMovementConfirm', '#' . implode(', #', $existingMovementIds))) . '</label></div>';
+	}
 	print '<div class="kb-create-actions">';
 	print '<button class="button kb-primary-action" data-kb-create-action="payment_entry" type="submit" name="entry_submit_action" value="payment_entry">' . $langs->trans('KreaBankWorkspaceCreateBank') . '</button>';
 	if ($showTaxEntryButton) { print '<button class="button kb-primary-action" data-kb-create-action="tax_entry" type="submit" name="entry_submit_action" value="tax_entry">' . $langs->trans('KreaBankWorkspaceCreateTax') . '</button>'; }

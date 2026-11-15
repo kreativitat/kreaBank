@@ -50,7 +50,7 @@ class modKreaBank extends DolibarrModules
 		$this->descriptionlong = 'ModuleKreaBankDescLong';
 		$this->editor_name = 'Kreativität Works';
 		$this->editor_url = 'http://kreativitat.com';
-		$this->version = '1.20.44';
+		$this->version = '1.20.45';
 		$this->const_name = 'MAIN_MODULE_' . strtoupper($this->name);
 		$this->picto = 'kreaproducts@kreaproducts';
 
@@ -179,6 +179,10 @@ class modKreaBank extends DolibarrModules
 
 		$this->remove($options);
 		$sql = array();
+
+		// Re-verify module tables on the next request after (re)activation.
+		require_once DOL_DOCUMENT_ROOT . '/core/lib/admin.lib.php';
+		dolibarr_del_const($this->db, 'KREABANK_SCHEMA_FINGERPRINT', 0);
 
 		return $this->_init($sql, $options);
 	}

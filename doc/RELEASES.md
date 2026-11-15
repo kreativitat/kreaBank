@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20.45 — 2026-11-15
+
+- Refuse creating a second bank movement from the selected-line creation choices (bank entry, tax, supplier invoice) and rule entries while a movement with the same owned account, exact signed amount and nearby date exists. The message links the existing movements; only an explicit, audited confirmation of the exact current list allows creation. Rule entries cannot override.
+- Statement deletion locks the owner account, statement and lines before counting reconciled lines, and commits its audit with the deletion.
+- Verify module tables once per deployed code version instead of on every request; module activation forces a new check. No schema change and no migration.
+- Tax wrong-account review compares the exact persisted decimal amount.
+
 ## 1.20.44 — 2026-11-15
 
 - Allocate the new bank-rule management permission in KreaBank's module-qualified range, preserving the legacy KreaTaxMatch permission and all existing grants.

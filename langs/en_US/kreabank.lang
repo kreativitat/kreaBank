@@ -927,3 +927,6 @@ KreaBankWriteOffSupplierOutcome=Records the bank amount. The supplier invoice re
 KreaBankWriteOffDone=Payment with difference recorded and reconciled.
 KreaBankWriteOffSupplierPartialDone=Payment recorded and reconciled. The supplier invoice remains partially paid with its remaining balance.
 KreaBankWriteOffUnavailable=Payment-difference review is unavailable. Reload the invoice before approving it.
+KreaBankExistingMovementBlocked=No new bank movement was created: a movement with the same account, amount and date already exists. Reconcile the line with it, or confirm below that it is a different transaction. Existing:
+KreaBankExistingMovementIncomplete=No new bank movement was created: too many movements with the same account, amount and date exist. Review the bank entries first. Examples:
+KreaBankExistingMovementConfirm=I confirm that the existing movements %s are different transactions and a new movement must be created.

@@ -13,6 +13,7 @@ require_once __DIR__ . '/KreaBankNativeBankAdapter.class.php';
 require_once __DIR__ . '/KreaBankReconciliationScope.class.php';
 require_once __DIR__ . '/KreaBankTaxReconciliation.class.php';
 require_once __DIR__ . '/KreaBankStatementEvidence.class.php';
+require_once __DIR__ . '/KreaBankExistingMovementException.class.php';
 require_once __DIR__ . '/KreaBankPaymentBatchTrait.php';
 require_once __DIR__ . '/KreaBankWorklistMovementTrait.php';
 require_once __DIR__ . '/KreaBankRuleServiceTrait.php';
@@ -135,12 +136,64 @@ class KreaBankService
 		}
 		$this->coreSchemaChecked = true;
 
+		// Table checks are DDL (implicit commit, metadata locks): run them once per
+		// deployed code version instead of on every request.
+		$fingerprint = self::schemaFingerprint();
+		if ($fingerprint !== '' && function_exists('getDolGlobalString')
+			&& hash_equals($fingerprint, (string) getDolGlobalString('KREABANK_SCHEMA_FINGERPRINT'))) {
+			$this->native->markSchemaVerified();
+			$this->importProfileTableChecked = true;
+			$this->reconAuditTableChecked = true;
+			$this->quickEntryTableChecked = true;
+			$this->patternTableChecked = true;
+			$this->batchMlSampleTableChecked = true;
+			return;
+		}
+		if (!empty($this->db->transaction_opened) && function_exists('dol_syslog')) {
+			dol_syslog('KreaBank schema verification requested inside an open transaction', LOG_WARNING);
+		}
+
 		$this->native->ensureSchema();
 		$this->ensureImportProfileTable();
 		$this->ensureReconAuditTable();
 		$this->ensureQuickEntryTable();
 		$this->ensurePatternTable();
 		$this->ensureBatchMlSampleTable();
+
+		// Reached only when every check above completed without an exception.
+		if ($fingerprint !== '' && empty($this->db->transaction_opened) && defined('DOL_DOCUMENT_ROOT')
+			&& is_file(DOL_DOCUMENT_ROOT . '/core/lib/admin.lib.php')) {
+			try {
+				require_once DOL_DOCUMENT_ROOT . '/core/lib/admin.lib.php';
+				$stored = function_exists('dolibarr_set_const')
+					? dolibarr_set_const($this->db, 'KREABANK_SCHEMA_FINGERPRINT', $fingerprint, 'chaine', 0, 'KreaBank verified schema code version', 0) : 0;
+			} catch (Throwable $e) {
+				$stored = 0;
+			}
+			// Not stored: the checks simply run again on the next request, as before.
+			if ($stored <= 0 && function_exists('dol_syslog')) {
+				dol_syslog('KreaBank could not store its verified schema version', LOG_WARNING);
+			}
+		}
+	}
+
+	/**
+	 * Identity of the deployed schema-owning code; changes with every deployment of it.
+	 *
+	 * @return string Empty when the files cannot be inspected (checks then always run).
+	 */
+	public static function schemaFingerprint()
+	{
+		$parts = array();
+		foreach (array(__FILE__, __DIR__ . '/KreaBankNativeBankAdapter.class.php') as $file) {
+			$size = @filesize($file);
+			$time = @filemtime($file);
+			if ($size === false || $time === false) {
+				return '';
+			}
+			$parts[] = basename($file) . ':' . $size . ':' . $time;
+		}
+		return hash('sha256', implode('|', $parts));
 	}
 
 	/**
@@ -906,24 +959,27 @@ class KreaBankService
 				throw new Exception($this->langs->trans('KreaBankImportDeleteNotFound'));
 			}
 
+			// The deletion and its audit commit together.
+			if (!$this->logAudit(
+				'delete_statement',
+				null,
+				null,
+				array(
+					'statement_ref' => $statementRef,
+					'bank_account_id' => $bankAccountId,
+					'deleted_lines' => (int) $result['deleted_lines'],
+					'reconciled_lines' => (int) $result['reconciled_lines'],
+					'native' => 1,
+				)
+			)) {
+				throw new Exception('Failed to record the statement deletion audit');
+			}
+
 			$this->db->commit();
 		} catch (Exception $e) {
 			$this->db->rollback();
 			throw $e;
 		}
-
-		$this->logAudit(
-			'delete_statement',
-			null,
-			null,
-			array(
-				'statement_ref' => $statementRef,
-				'bank_account_id' => $bankAccountId,
-				'deleted_lines' => (int) $result['deleted_lines'],
-				'reconciled_lines' => (int) $result['reconciled_lines'],
-				'native' => 1,
-			)
-		);
 
 		return $result;
 	}
@@ -3258,7 +3314,7 @@ class KreaBankService
 	 * @param string $note
 	 * @return int
 	 */
-	public function createQuickEntryAndReconcile($lineId, $entryType, $label, $amount, $fkSoc = 0, $note = '', $ruleReview = null)
+	public function createQuickEntryAndReconcile($lineId, $entryType, $label, $amount, $fkSoc = 0, $note = '', $ruleReview = null, $confirmedMovementIds = array())
 	{
 		$this->ensureQuickEntryTable();
 
@@ -3266,6 +3322,8 @@ class KreaBankService
 		if (!$line) {
 			throw new Exception('Unknown statement line');
 		}
+		// Rule entries have no confirmation step: an existing movement always fails closed there.
+		$this->assertNoExistingMovementForCreation($line, $ruleReview ? array() : $confirmedMovementIds);
 		(new KreaBankAccountPairs($this->db, $this->entity))->assertDocument('quick_entry', 0, (int) $line['bank_account_id']);
 		if ((int) (!empty($line['status']) ? $line['status'] : 0) === 2) {
 			throw new Exception('Bank line already reconciled');
@@ -3373,6 +3431,77 @@ class KreaBankService
 		);
 
 		return $quickEntryId;
+	}
+
+	/**
+	 * Possible existing native movements for a statement line that would get a new one.
+	 *
+	 * Same owned account, exact signed persisted amount and booking date within the
+	 * matching tolerance. Movements that already represent another imported line are
+	 * distinct bank evidence, not duplicates. Bounded to 101 rows.
+	 *
+	 * @param array<string,mixed> $line
+	 * @return int[]
+	 */
+	public function findExistingMovementsForCreation($line)
+	{
+		if (empty($line['fk_statement']) || !empty($line['native_bank_line_id'])) {
+			return array(); // No new native movement is created for this line.
+		}
+		$p = $this->db->prefix();
+		$tolerance = max(0, min(31, (int) getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE', 3)));
+		$range = $this->resolveOpenDocumentsDateRange((string) $line['operation_date'], $tolerance);
+		if (empty($range['enabled'])) {
+			return array();
+		}
+		$rows = $this->transferRows("SELECT b.rowid FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account"
+			. " LEFT JOIN {$p}kreabank_bankmeta m ON m.entity=" . $this->entity . ' AND m.fk_bank_line=b.rowid'
+			. ' WHERE ba.entity=' . $this->entity . ' AND b.fk_account=' . (int) $line['bank_account_id']
+			. ' AND CAST(b.amount AS DECIMAL(24,8))=' . self::automaticDecimal((string) $line['amount'])
+			. ' AND b.dateo>=' . $this->sqlDate($range['start'])
+			. ' AND b.dateo<' . $this->sqlDate(gmdate('Y-m-d', strtotime($range['end'] . ' UTC') + 86400))
+			. " AND (m.source_type IS NULL OR m.source_type='')"
+			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement_line o WHERE o.entity=" . $this->entity
+			. ' AND o.fk_native_bank_line=b.rowid AND o.rowid<>' . (int) $line['rowid'] . ')'
+			. ' ORDER BY b.rowid' . $this->db->plimit(101));
+		return array_map(static function ($row) { return (int) $row->rowid; }, $rows);
+	}
+
+	/**
+	 * Refuse creating a second native movement while a possible existing one is unreviewed.
+	 *
+	 * The only override is the user's explicit confirmation of the exact current list.
+	 *
+	 * @param array<string,mixed>|int $line Statement line or its explicit staging/native ID.
+	 * @param int[] $confirmedMovementIds
+	 * @return void
+	 */
+	public function assertNoExistingMovementForCreation($line, $confirmedMovementIds = array())
+	{
+		if (!is_array($line)) {
+			$line = $this->getLineById((int) $line);
+			if (!$line) {
+				throw new Exception('Unknown statement line');
+			}
+		}
+		$existing = $this->findExistingMovementsForCreation($line);
+		if (!$existing) {
+			return;
+		}
+		if (count($existing) > 100) {
+			throw new KreaBankExistingMovementException(array_slice($existing, 0, 100), false);
+		}
+		$confirmed = array_values(array_unique(array_filter(array_map('intval', (array) $confirmedMovementIds))));
+		sort($confirmed, SORT_NUMERIC);
+		if ($confirmed !== $existing) {
+			throw new KreaBankExistingMovementException($existing);
+		}
+		if (!$this->logAudit('existing_movement_override', (int) $line['rowid'], null, array(
+			'bank_account_id' => (int) $line['bank_account_id'],
+			'confirmed_movement_ids' => $existing,
+		))) {
+			throw new Exception('Failed to record the existing-movement confirmation audit');
+		}
 	}
 
 	/**

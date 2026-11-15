@@ -315,6 +315,9 @@ function kreabankIsTokenValid($token = null)
 		return false;
 	}
 
+	// Both values are secrets of this session only. Native Dolibarr keeps them equal unless
+	// MAIN_SECURITY_CSRF_TOKEN_RENEWAL_ON_EACH_CALL is set; with it, background scan and
+	// multi-tab POSTs legitimately carry the token rendered for the following request.
 	$currentToken = function_exists('currentToken') ? (string) currentToken() : '';
 	$newToken = function_exists('newToken') ? (string) newToken() : '';
 
