@@ -48,6 +48,48 @@
                     control.setAttribute('list', descriptions.id);
                     control.setAttribute('autocomplete', 'off');
                     control.setAttribute('placeholder', labels.descriptionPlaceholder);
+                    if (window.jQuery && window.jQuery.fn.autocomplete && descriptions.options.length) {
+                        var field = window.jQuery(control);
+                        field.autocomplete({
+                            source: Array.from(descriptions.options).map(function (option) { return option.value; }),
+                            minLength: 0,
+                            delay: 0,
+                            autoFocus: false,
+                            appendTo: cell,
+                            position: { collision: 'flipfit' },
+                            messages: {
+                                noResults: labels.descriptionNoResults,
+                                results: function (count) { return labels.descriptionResults.replace('%s', String(count)); }
+                            },
+                            // Browsing suggestions must not replace a description before selection.
+                            focus: function (event) { event.preventDefault(); },
+                            open: function () { control.setAttribute('aria-expanded', 'true'); },
+                            close: function () {
+                                control.setAttribute('aria-expanded', 'false');
+                                control.removeAttribute('aria-activedescendant');
+                            }
+                        });
+                        var menu = field.autocomplete('widget');
+                        menu.addClass('kb-transfer-descriptions').attr('role', 'listbox').menu('option', 'role', 'listbox');
+                        menu.on('menufocus', function (event, ui) {
+                            control.setAttribute('aria-activedescendant', ui.item.children('.ui-menu-item-wrapper').attr('id'));
+                        });
+                        menu.on('menublur', function () { control.removeAttribute('aria-activedescendant'); });
+                        control.removeAttribute('list');
+                        control.setAttribute('role', 'combobox');
+                        control.setAttribute('aria-autocomplete', 'list');
+                        control.setAttribute('aria-controls', menu.attr('id'));
+                        control.setAttribute('aria-expanded', 'false');
+                        // Show the complete top five on every click, including a populated field.
+                        field.on('focus.kbTransfer click.kbTransfer', function () { field.autocomplete('search', ''); });
+                        field.on('keydown.kbTransfer', function (event) {
+                            // Enter dismisses unselected hints instead of submitting a transfer.
+                            if (event.key === 'Enter' && menu.is(':visible')) {
+                                event.preventDefault();
+                                field.autocomplete('close');
+                            }
+                        });
+                    }
                     if (labels.descriptionError) {
                         var error = document.createElement('small');
                         error.className = 'opacitymedium';

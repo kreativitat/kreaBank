@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.40 — 2026-11-15
+
+- Open the top-five transfer description suggestions on click or keyboard focus while retaining free-text entry. Reuse the native autocomplete menu.
+
 ## 1.20.39 — 2026-11-15
 
 - Limit reusable transfer descriptions to the five most-used entries.

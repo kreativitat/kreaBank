@@ -850,3 +850,6 @@ KreaBankAboutReleaseNotes=Release notes
 
 KreaBankTransferDescriptionPlaceholder=Type or choose a description
 KreaBankTransferDescriptionsUnavailable=Frequent descriptions are unavailable.
+
+KreaBankTransferDescriptionNoResults=No suggestions.
+KreaBankTransferDescriptionResults=%s suggestions available. Use the arrow keys to choose.

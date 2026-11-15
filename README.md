@@ -56,8 +56,9 @@ its direct routes, with its existing creation and review flows. See the
 Native internal transfers use Dolibarr's own transfer form and posting lifecycle.
 KreaBank presents its controls as labelled, full-width responsive cards, including
 additional transfers, without replacing native validation or financial execution.
-The description field suggests the five most-used descriptions from successful transfers in the active
-company. Each transfer counts once; new text remains editable.
+The description field suggests the five most-used descriptions from successful
+transfers in the active company as soon as the field is clicked. Each transfer counts once; suggestions
+can be selected by mouse or keyboard, and new text remains editable.
 
 ## Imports and bank connections
 

@@ -850,3 +850,6 @@ KreaBankAboutReleaseNotes=Notas de versão
 
 KreaBankTransferDescriptionPlaceholder=Escrever ou escolher uma descrição
 KreaBankTransferDescriptionsUnavailable=As descrições frequentes estão indisponíveis.
+
+KreaBankTransferDescriptionNoResults=Sem sugestões.
+KreaBankTransferDescriptionResults=%s sugestões disponíveis. Use as setas para escolher.
