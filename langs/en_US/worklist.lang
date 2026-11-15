@@ -94,3 +94,8 @@ KreaBankWorklistLegacySelectionUnavailable=This legacy import already has a bank
 # Recorded customer transfers
 KreaBankWorklistCustomerTransfer=Customer bank transfer
 KreaBankWorklistAllocatedInvoices=Invoices paid
+
+KreaBankWorklistUndoReconciliation=Undo reconciliation
+KreaBankWorklistReconciliationUndone=Reconciliation undone
+KreaBankWorklistUndoReconciliationEffect=Returns this statement line to pending. Keeps the existing payments and bank entries.
+KreaBankWorklistUndoWriteoffEffect=Returns this statement line to pending and reverses the payment created for the reviewed payment difference.

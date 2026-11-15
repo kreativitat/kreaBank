@@ -53,7 +53,7 @@ function syntheticScanSources()
 		$rows['staged:' . $id] = array('rowid'=>$id,'source_storage'=>'staging','amount'=>'1.00','currency'=>'EUR',
 			'operation_date'=>gmdate('Y-m-d',strtotime('2026-01-01 UTC') + ($id-1)*86400),
 			'description'=>'Synthetic transaction '.$id,'payment_reference'=>'REFERENCE-'.$id,'bank_reference'=>'BANK-'.$id,
-			'status'=>0,'native_id'=>null,'native_amount'=>null,'native_currency'=>'EUR','num_releve'=>null,'rappro'=>0,
+			'status'=>0,'worklist_status'=>'pending','native_id'=>null,'native_amount'=>null,'native_currency'=>'EUR','num_releve'=>null,'rappro'=>0,
 			'group_id'=>0,'group_valid'=>0,'group_count'=>0,'group_date'=>null,'statement_id'=>$id,'line_rank'=>1,
 			'bank_account_id'=>101,'bank_account_ref'=>'SYNTHETIC','is_duplicate'=>0);
 	}

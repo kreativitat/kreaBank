@@ -80,7 +80,10 @@ $filters = $list['filters'];
 $limit = $list['limit'];
 $page = $list['page'];
 $where = kreabankStatementListWhere($db, $filters);
-$total = (int) $db->fetch_object($report->query('SELECT COUNT(*) nb FROM ' . $source . $where))->nb;
+$countRow = $db->fetch_object($report->query(kreabankStatementListStatusCountsSql($db, $source, $filters)));
+$statusCounts = array(''=>(int) $countRow->total);
+foreach (kreabankStatementListStatusOptions() as $status=>$label) { $statusCounts[$status] = (int) $countRow->$status; }
+$total = $statusCounts[$filters['status']] ?? 0;
 if ($page * $limit >= $total) {
 	$page = 0;
 }
@@ -93,16 +96,16 @@ $param = '&' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
 $form = new Form($db);
 llxHeader('', $langs->trans('KreaBankBankStatement'));
 kreabankPrintWorkspaceNavigation('bankstatement', $account);
-print '<nav class="kb-view-switch kb-statement-status-tabs" aria-label="' . dol_escape_htmltag($langs->trans('Status')) . '">';
-foreach (array_merge(kreabankStatementListStatusOptions(), array(''=>'All')) as $status=>$label) {
+print '<div class="div-table-responsive"><nav class="kb-view-switch kb-statement-status-tabs" aria-label="' . dol_escape_htmltag($langs->trans('Status')) . '">';
+foreach (kreabankStatementListStatusTabs($statusCounts, $filters['status']) as $status=>$label) {
 	$tabParams = array_merge($params, array('sortfield'=>$sort['field'], 'sortorder'=>$sort['order'], 'page'=>0));
 	unset($tabParams['search_status']);
 	if ($status !== '') { $tabParams['search_status'] = $status; }
 	$tabUrl = $_SERVER['PHP_SELF'] . '?' . http_build_query($tabParams, '', '&', PHP_QUERY_RFC3986);
 	print '<a href="' . dol_escape_htmltag($tabUrl) . '"' . ($filters['status'] === $status ? ' class="active" aria-current="page"' : '') . '>'
-		. dol_escape_htmltag($langs->trans($status === 'pending' ? 'KreaBankWorklistPending' : $label)) . '</a>';
+		. dol_escape_htmltag($langs->trans($status === 'pending' ? 'KreaBankWorklistPending' : $label)) . '<span class="opacitymedium"> (' . $statusCounts[$status] . ')</span></a>';
 }
-print '</nav>';
+print '</nav></div>';
 print '<form method="GET" id="searchFormList" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 print kreabankNavigationHiddenFields($accountId);
 foreach (array('mainmenu'=>'bank', 'leftmenu'=>'kreabank_bankstatement', 'sortfield'=>$sort['field'], 'sortorder'=>$sort['order'], 'page'=>$page, 'search_status'=>$filters['status']) as $field=>$value) {

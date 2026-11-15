@@ -234,6 +234,7 @@ $summaryLinesCount = 0;
 $summaryCreditTotal = array();
 $summaryDebitTotal = array();
 $summaryLinkedDocs = 0;
+$historyStatusCounts = array('all'=>0, 'reconciled'=>0, 'review'=>0, 'reversed'=>0);
 
 try {
 	$lineLinksCache = $historyReader->links($recent, new KreaBankNativeBankAdapter($db, $user, $langs, $conf->entity));
@@ -273,6 +274,7 @@ foreach ($recent as $row) {
 			'doc_type_label' => kreabankHistoryCodeLabel($docType, 'document', $langs),
 			'doc_ref_label' => kreabankHistoryReferenceLabel($docRef, $docId, $langs),
 			'doc_url' => $docUrl,
+			'native_bank_line_id' => (int) ($link['native_bank_line_id'] ?? 0),
 		);
 	}
 	$auditInfo = $row['history_audit'] ?? array();
@@ -284,7 +286,6 @@ foreach ($recent as $row) {
 	}
 
 	$displayStatus = !empty($row['needs_review']) ? 'review' : (!empty($row['is_reversed']) ? 'reversed' : 'reconciled');
-	if ($historyStatus !== 'all' && $historyStatus !== $displayStatus) { continue; }
 	if (!kreabankHistoryAmountMatches((string) $row['amount'], $historyAmount)) { continue; }
 	$amount = (float) (isset($row['amount']) ? $row['amount'] : 0.0);
 	$descriptionRaw = (string) (isset($row['description']) ? $row['description'] : '');
@@ -337,6 +338,9 @@ foreach ($recent as $row) {
 	if ($normalizedSearch !== '' && strpos($rowSearchBlob, $normalizedSearch) === false) {
 		continue;
 	}
+	$historyStatusCounts['all']++;
+	$historyStatusCounts[$displayStatus]++;
+	if ($historyStatus !== 'all' && $historyStatus !== $displayStatus) { continue; }
 
 	$preparedRecentRows[] = array(
 		'row' => $row,
@@ -650,8 +654,10 @@ print '.krea-history-kpi .item .value{font-size:20px;font-weight:700;line-height
 print '.krea-history-link{display:inline-block;margin:2px 4px 2px 0;padding:2px 6px;border-radius:4px;background:#eef6ff;border:1px solid #d2e5ff;font-size:11px}';
 print '.krea-history-filter-stack{display:flex;flex-direction:column;gap:4px}';
 print '.krea-history-row-top td{vertical-align:top!important}';
-print '.krea-history-salary-group{margin:0 0 10px 0;padding:7px 10px;border:1px dashed #d9dee6;border-radius:4px;background:#fbfcfe}';
-print '.krea-history-salary-group:last-child{margin-bottom:0}';
+print '.krea-history-component{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:2px 12px;padding:5px 0;border-bottom:1px solid #e4e4e4}';
+print '.krea-history-component:first-child{padding-top:0}.krea-history-component:last-child{padding-bottom:0;border-bottom:0}';
+print '.krea-history-component-documents{flex:1 1 180px;min-width:0;overflow-wrap:anywhere}.krea-history-document{display:inline-block;margin-right:8px}';
+print '.krea-history-component-bank{flex:0 1 auto;overflow-wrap:anywhere}';
 print '.krea-history-sub{color:#666;font-size:12px}';
 print '.krea-history-pre{max-height:160px;overflow:auto;font-size:11px;line-height:1.35;background:#f7f7f7;border:1px solid #e4e4e4;padding:6px;border-radius:4px;white-space:pre-wrap;word-break:break-word}';
 print '.krea-history-row-top .button.krea-history-action-btn{box-sizing:border-box;display:inline-flex!important;align-items:center;justify-content:center;vertical-align:middle;width:112px;height:28px;margin:0!important;padding:3px 8px!important;border:1px solid #4b4b4b;border-radius:3px;background:#4b4b4b;color:#fff!important;font-family:inherit;font-size:11px!important;font-weight:600;line-height:1!important;text-align:center;text-decoration:none;text-transform:uppercase;appearance:none;cursor:pointer}';
@@ -678,13 +684,15 @@ print '<div class="item"><div class="label">' . $langs->trans('KreaBankHistorySu
 print '<div class="item"><div class="label">' . $langs->trans('KreaBankHistorySummaryLinks') . '</div><div class="value">' . ((int) $summaryLinkedDocs) . '</div></div>';
 print '</div></details>';
 
-print '<nav class="kb-view-switch kb-history-status-tabs" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankStatus')) . '">';
+print '<div class="div-table-responsive"><nav class="kb-view-switch kb-history-status-tabs" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankStatus')) . '">';
 foreach (array('all'=>'All','reconciled'=>'KreaBankStatusReconciled','review'=>'KreaBankLinkNeedsReview','reversed'=>'KreaBankReversed') as $status => $label) {
+	if (in_array($status, array('review','reversed'), true) && !$historyStatusCounts[$status] && $historyStatus !== $status) { continue; }
 	$tabParams = array_merge($historyHeaderParams, array('hist_status'=>$status, 'page'=>0, 'history_page'=>0));
 	print '<a href="' . dol_escape_htmltag($_SERVER['PHP_SELF'] . '?' . http_build_query($tabParams, '', '&', PHP_QUERY_RFC3986)) . '"'
-		. ($historyStatus === $status ? ' class="active" aria-current="page"' : '') . '>' . dol_escape_htmltag($langs->trans($label)) . '</a>';
+		. ($historyStatus === $status ? ' class="active" aria-current="page"' : '') . '>' . dol_escape_htmltag($langs->trans($label))
+		. ' <span class="opacitymedium">(' . $historyStatusCounts[$status] . ')</span></a>';
 }
-print '</nav>';
+print '</nav></div>';
 
 print '<form method="GET" id="kreaHistoryFilterForm" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 print kreabankNavigationHiddenFields($navigationAccountId);
@@ -764,14 +772,14 @@ print '</tr>';
 		$linkDocId = (int) (isset($link['fk_doc']) ? $link['fk_doc'] : 0);
 		$linkText = $linkRef !== '' ? ($link['doc_ref_label'] ?? kreabankHistoryReferenceLabel($linkRef,$linkDocId,$langs)) : ('#' . $linkDocId);
 		$linkDocUrl = trim((string) (isset($link['doc_url']) ? $link['doc_url'] : ''));
-		$out = '<div>';
+		$out = '<span class="krea-history-document">';
 		$out .= '<span class="krea-history-link">' . dol_escape_htmltag($linkTypeLabel) . '</span>';
 		if ($linkDocUrl !== '') {
 			$out .= '<a href="' . dol_escape_htmltag($linkDocUrl) . '" target="_blank" rel="noopener">' . dol_escape_htmltag($linkText) . '</a>';
 		} else {
 			$out .= '<span>' . dol_escape_htmltag($linkText) . '</span>';
 		}
-		$out .= '</div>';
+		$out .= '</span>';
 
 		return $out;
 	};
@@ -822,74 +830,19 @@ if ($historyTotalRecords === 0) {
 		if (empty($links)) {
 			print '<span class="opacitymedium">' . $langs->trans('KreaBankNoLinks') . '</span>';
 		} else {
-			$containsSalaryPayment = false;
-			foreach ($links as $candidateLink) {
-				if (!is_array($candidateLink)) {
-					continue;
-				}
-				$candidateType = trim((string) (isset($candidateLink['doc_type']) ? $candidateLink['doc_type'] : ''));
-				if ($candidateType === 'payment_salary') {
-					$containsSalaryPayment = true;
-					break;
-				}
-			}
-			if ($containsSalaryPayment) {
-				$salaryGroups = array();
-				$ungroupedLinks = array();
-				$currentGroupIndex = -1;
-				foreach ($links as $link) {
-					if (!is_array($link)) {
-						continue;
-					}
-					$linkType = trim((string) (isset($link['doc_type']) ? $link['doc_type'] : ''));
-					if ($linkType === 'payment_salary') {
-						$salaryGroups[] = array(
-							'payment_salary' => $link,
-							'user' => array(),
-							'bank_line' => array(),
-							'other' => array(),
-						);
-						$currentGroupIndex = (count($salaryGroups) - 1);
-						continue;
-					}
-					if ($currentGroupIndex >= 0 && $linkType === 'user' && empty($salaryGroups[$currentGroupIndex]['user'])) {
-						$salaryGroups[$currentGroupIndex]['user'] = $link;
-						continue;
-					}
-					if ($currentGroupIndex >= 0 && $linkType === 'bank_line' && empty($salaryGroups[$currentGroupIndex]['bank_line'])) {
-						$salaryGroups[$currentGroupIndex]['bank_line'] = $link;
-						continue;
-					}
-					if ($currentGroupIndex >= 0) {
-						$salaryGroups[$currentGroupIndex]['other'][] = $link;
-						continue;
-					}
-					$ungroupedLinks[] = $link;
-				}
-
-				foreach ($salaryGroups as $salaryGroup) {
-					print '<div class="krea-history-salary-group">';
-					print $renderLinkedDocument($salaryGroup['payment_salary']);
-					if (!empty($salaryGroup['user'])) {
-						print $renderLinkedDocument($salaryGroup['user']);
-					}
-					if (!empty($salaryGroup['bank_line'])) {
-						print $renderLinkedDocument($salaryGroup['bank_line']);
-					}
-					if (!empty($salaryGroup['other'])) {
-						foreach ($salaryGroup['other'] as $otherLink) {
-							print $renderLinkedDocument($otherLink);
-						}
-					}
+			foreach (kreabankHistoryLinkComponents($links) as $component) {
+				print '<div class="krea-history-component" data-native-bank-line-id="' . $component['native_bank_line_id'] . '">';
+				if ($component['documents']) {
+					print '<div class="krea-history-component-documents">';
+					foreach ($component['documents'] as $link) { print $renderLinkedDocument($link); }
 					print '</div>';
 				}
-				foreach ($ungroupedLinks as $ungroupedLink) {
-					print $renderLinkedDocument($ungroupedLink);
+				if ($component['bank_entries']) {
+					print '<div class="krea-history-component-bank">';
+					foreach ($component['bank_entries'] as $link) { print $renderLinkedDocument($link); }
+					print '</div>';
 				}
-			} else {
-				foreach ($links as $link) {
-					print $renderLinkedDocument($link);
-				}
+				print '</div>';
 			}
 		}
 		print '</td>';

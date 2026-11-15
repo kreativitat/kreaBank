@@ -431,4 +431,27 @@ checkWorklistView(strpos($html,'<a ')===false && strpos($html,'javascript:')===f
 unset($GLOBALS['worklistFixtureUrlRoot']);
 checkWorklistView(kreabankWorklistDate('2026-02-31') === '—', 'Invalid date is not normalized into another date');
 checkWorklistView(kreabankWorklistDate('2026-11-11') === '11/11/2026', 'Calendar date formatted without timezone drift');
+// Completed rows use the native Undo review contract without nesting a financial form in filters.
+foreach (array('en_US','pt_PT') as $locale) {
+	$langs=worklistFixtureLanguages($locale);
+	$model=worklistViewFixture('matched'); $model['rows'][0]['line']['status']=2;
+	$model['rows'][0]['undo_review']=array('action'=>'undo_pair','fields'=>array('source_key'=>'staged:11','undo_review'=>'signed-immutable-history-snapshot'));
+	$model['status_counts']=array('pending'=>3,'reconciled'=>2,'draft'=>0,'review'=>0,'all'=>5);
+	$model['filters']['search_status']='reconciled';
+	$html=kreabankWorklistTable($model,$langs); $dom=new DOMDocument();
+	libxml_use_internal_errors(true); $dom->loadHTML('<?xml encoding="utf-8" ?>'.$html); libxml_clear_errors();
+	$xp=new DOMXPath($dom);
+	checkWorklistView($xp->query('//dialog')->length===1 && $xp->query('//button[@data-kb-dialog]')->length===1,'Completed scalar row exposes one local Undo dialog');
+	checkWorklistView($xp->query('//dialog//button[@type="button" and @data-kb-dialog-close]')->length===2,'Undo Cancel and X close locally without form submission');
+	checkWorklistView($xp->query('//form[@method="get"]//form')->length===0 && $xp->query('//form[@method="post"]//input[@name="undo_review" and @value="signed-immutable-history-snapshot"]')->length===1,'Undo uses separate CSRF-protected native snapshot form');
+	checkWorklistView($xp->query('//dialog//button[@type="submit" and @form]')->length===1 && $xp->query('//dialog//input[@name="reason" and @form]')->length===1,'Undo confirmation and optional reason explicitly target their POST form');
+	checkWorklistView($xp->query('//nav//a[contains(@href,"search_status=draft") or contains(@href,"search_status=review")]')->length===0 && strpos($html,'(5)')!==false,'Zero exceptional status tabs are hidden and primary counts remain visible');
+	$model['filters']['search_status']='draft';
+	checkWorklistView(strpos(kreabankWorklistTable($model,$langs),'search_status=draft')!==false,'Selected empty exceptional status retains its navigation');
+	$model['rows'][0]['needs_review']=true;
+	checkWorklistView(strpos(kreabankWorklistTable($model,$langs),'<dialog')===false,'Broken-link rows never receive an Undo approval');
+	$model['rows'][0]['needs_review']=false; $model['can_write']=false;
+	checkWorklistView(strpos(kreabankWorklistTable($model,$langs),'<dialog')===false,'Read-only users cannot receive stale Undo descriptors');
+}
+
 echo 'OK: ' . $checks . " worklist view checks (synthetic, no database)\n";

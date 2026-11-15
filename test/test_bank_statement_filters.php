@@ -28,6 +28,10 @@ foreach (array(array('operation_from'=>'2026-02-30'),array('debit'=>'1 OR 1=1'),
 	checkStatementFilter(strpos(kreabankStatementListWhere($db,$filters),'AND 1=0')!==false,'Invalid dates, amounts and statuses fail closed');
 }
 checkStatementFilter(strpos(kreabankStatementListWhere($db,array('description'=>'100%_!')),'100!%!_!!')!==false,'Text filters treat percent, underscore and escape characters literally');
+$countsSql=kreabankStatementListStatusCountsSql($db,'(COMPLETE_OWNED_BALANCES) h',array('description'=>'visible','status'=>'review'));
+checkStatementFilter(strpos($countsSql,"h.description LIKE '%visible%'")!==false && strpos($countsSql,")='review'")===false && strpos($countsSql,'FROM (COMPLETE_OWNED_BALANCES) h')!==false,'Status counts retain other predicates after the complete balance projection and ignore only the active status');
+checkStatementFilter(array_keys(kreabankStatementListStatusTabs(array()))===array('pending','reconciled',''),'Empty statements retain All, Pending and Reconciled without irrelevant exceptional tabs');
+checkStatementFilter(array_keys(kreabankStatementListStatusTabs(array('registered'=>3,'duplicate'=>1),'skipped'))===array('pending','registered','reconciled','skipped','duplicate',''),'Nonempty exceptional states and a selected empty legacy state remain available');
 
 // Run the actual controller's scoped list preparation and row template without ERP bootstrap.
 require_once __DIR__.'/../lib/kreabank_list.lib.php';
@@ -70,14 +74,20 @@ $run=static function($accountId,$request,$overrides=array())use($controller,$sta
    foreach($this->overrides as $key=>$value){$row->$key=$value;}
    $this->original=serialize($row);$rows=array(clone $row,clone $row);
    if($this->account===105 || strpos($sql,"h.statement_ref LIKE '%ABSENT%'")!==false || strpos($sql,"h.bank_account_ref LIKE '%ABSENT%'")!==false || strpos($sql,'AND 1=0')!==false){$rows=array();}
-   if(strpos($sql,'SELECT COUNT(*)')===0){return(object)array('rows'=>array((object)array('nb'=>count($rows))));}
+   $status=array_search(kreabankIntegrationLineState($row,$row->statement_ref),kreabankStatementListStatusOptions(),true);
+   if(strpos($sql,'SELECT COUNT(*) total')===0){
+    $counts=array_fill_keys(array_keys(kreabankStatementListStatusOptions()),0);$counts['total']=count($rows);$counts[$status]=count($rows);$counts['duplicate']=$row->is_duplicate?count($rows):0;
+    return(object)array('rows'=>array((object)$counts));
+   }
+   if(preg_match("/\\)='(pending|registered|reconciled|review|skipped)'/",$sql,$match) && $status!==$match[1]){$rows=array();}
+   if(strpos($sql,'AND h.is_duplicate>0')!==false && !$row->is_duplicate){$rows=array();}
    if(preg_match('/ LIMIT (\d+),(\d+)$/',$sql,$parts)){$rows=array_slice($rows,(int)$parts[1],(int)$parts[2]);}
    return(object)array('rows'=>$rows);
   }
  };
  eval(substr($controller,$start,$end-$start));
  ob_start();eval(substr($controller,$end,$viewEnd-$end));$html=ob_get_clean();
- return compact('columns','filters','sort','params','where','source','total','page','num','report','html');
+ return compact('columns','filters','sort','params','where','source','total','statusCounts','page','num','report','html');
 };
 $selected=$run(101,array('search_statement_ref'=>'ABSENT','search_bank_account_ref'=>'ABSENT','sortfield'=>'bank_account_ref','limit'=>1,'page'=>1));
 checkStatementFilter(!isset($selected['columns']['statement_ref']) && !isset($selected['columns']['bank_account_ref']) && !isset($selected['columns']['status']) && $selected['filters']['statement_ref']==='' && $selected['filters']['bank_account_ref']==='', 'Selected owned bank omits repeated source/account and status columns and clears invisible filters');
@@ -96,14 +106,14 @@ foreach(array($selected,$all) as $case){
 }
 $tabCase=$run(101,array('search_status'=>'review','search_description'=>'A & <B>','search_credit'=>'>=1.23456789','sortfield'=>'credit','sortorder'=>'ASC','limit'=>1,'page'=>1,'action'=>'delete','token'=>'private-token','kind'=>'cash'));
 $xp=statementFilterXPath($tabCase['html']);$tabs=$xp->query('//nav[contains(@class,"kb-statement-status-tabs")]/a');
-checkStatementFilter($tabs->length===7 && $xp->query('//nav/a[@aria-current="page"]')->length===1, 'Every existing evidence filter has a compact tab with one current selection');
+checkStatementFilter($tabs->length===4 && $xp->query('//nav/a[@aria-current="page"]')->length===1, 'Ordinary states and selected empty Review remain visible while unused exceptional tabs are hidden');
 $statuses=array();
 foreach($tabs as $link){
  $q=statementFilterLinkQuery($link);$status=$q['search_status']??'';$statuses[]=$status;
  checkStatementFilter($q['account_context']==='101' && $q['limit']==='1' && $q['page']==='0' && $q['sortfield']==='credit' && $q['sortorder']==='ASC' && $q['search_description']==='A & <B>' && $q['search_credit']==='>=1.23456789' && !isset($q['action']) && !isset($q['token']) && !isset($q['kind']), 'Status tabs preserve scoped exact filters, size and sorting, reset page and exclude write/overview state');
  if($link->hasAttribute('aria-current')){checkStatementFilter($status==='review','Selected tab follows the normalized evidence filter');}
 }
-checkStatementFilter($statuses===array_merge(array_keys(kreabankStatementListStatusOptions()),array('')),'All tab uses the statement empty value, preserving existing status semantics');
+checkStatementFilter($statuses===array('pending','reconciled','review',''),'All tab uses the statement empty value, preserving existing status semantics');
 checkStatementFilter($xp->query('//input[@name="search_status"]')->item(0)->getAttribute('value')==='review' && statementFilterLinkQuery($xp->query('//a[@data-native-page]')->item(0))['search_status']==='review', 'Header submission and native page links retain the active status');
 $reset=$run(101,array('search_status'=>'review','search_description'=>'REMOVE','search_credit'=>'0','button_removefilter_x'=>'x','page'=>1));
 checkStatementFilter($reset['page']===0 && array_filter($reset['filters'],static function($value){return $value!=='';})===array('status'=>'review'), 'Column reset clears table predicates while keeping the selected status tab');
@@ -113,6 +123,16 @@ checkStatementFilter($invalid['total']===0 && strpos($invalid['where'],'AND 1=0'
 $review=$run(101,array(),array('status'=>2,'expected_native_id'=>987,'native_id'=>987,'native_currency'=>'EUR','native_amount'=>'-16.00','rappro'=>1,'num_releve'=>'SOURCE-REF','is_duplicate'=>1));
 $xp=statementFilterXPath($review['html']);$description=$xp->query('//tbody/tr[1]/td[contains(@class,"kb-statement-description")]')->item(0);
 checkStatementFilter(strpos($description->textContent,'KreaBankLinkNeedsReview')!==false && strpos($description->textContent,'KreaBankDuplicate')!==false && $xp->query('.//a[contains(@href,"line.php?rowid=987")]',$description)->length===1,'Review/duplicate warnings and native movement identity survive removal of the Status column');
+$native=array('expected_native_id'=>987,'native_id'=>987,'native_currency'=>'EUR','native_amount'=>'-15.80000000','rappro'=>0,'num_releve'=>'SOURCE-REF');
+foreach(array('pending'=>array(),'registered'=>$native,'reconciled'=>array_merge($native,array('status'=>2,'rappro'=>1)),
+ 'review'=>array_merge($native,array('status'=>2,'native_amount'=>'-16.00')),'skipped'=>array('status'=>3),'duplicate'=>array('is_duplicate'=>1)) as $status=>$overrides){
+ $case=$run(101,array('search_status'=>$status,'limit'=>1,'page'=>1),$overrides);$xp=statementFilterXPath($case['html']);
+ checkStatementFilter($case['total']===2 && $case['num']===1 && $case['page']===1 && $case['statusCounts'][$status]===2,'Distinct '.$status.' evidence has matching scoped count and paginated rows');
+ checkStatementFilter($xp->query('//nav/a[@aria-current="page"]')->length===1 && preg_match('/\\(2\\)$/',$xp->query('//nav/a[@aria-current="page"]')->item(0)->textContent)===1,'Selected '.$status.' displays its real count');
+}
+checkStatementFilter($review['statusCounts']['review']===2 && $review['statusCounts']['duplicate']===2 && $review['statusCounts']['']===2,'Duplicate warnings overlap ordinary evidence states without inflating All');
+$xp=statementFilterXPath($selected['html']);
+checkStatementFilter($xp->query('//nav/a')->length===3 && $xp->query('//nav/a[contains(@href,"search_status=registered")]')->length===0,'A normal pending statement offers only useful ordinary navigation');
 $batch=$run(101,array(),array('group_id'=>8,'group_count'=>3,'group_valid'=>1,'status'=>2));
 $xp=statementFilterXPath($batch['html']);$link=$xp->query('//tbody/tr[1]/td[contains(@class,"kb-statement-description")]//a')->item(0);$q=statementFilterLinkQuery($link);
 checkStatementFilter($q['search_account']==='101' && $q['expand']==='staged:1' && $q['mode']==='batch' && strpos($link->textContent,'(3)')!==false,'Batch review retains its explicit statement/account identity and member count');

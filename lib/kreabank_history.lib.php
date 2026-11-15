@@ -131,6 +131,22 @@ function kreabankHistoryFilterButtons($form, $formId)
 	return str_replace('<button ', '<button form="' . dol_escape_htmltag($formId) . '" ', $form->showFilterButtons());
 }
 
+/** Group only explicitly associated native evidence; never infer from link order. */
+function kreabankHistoryLinkComponents($links)
+{
+	$components = array();
+	foreach ($links as $index => $link) {
+		$id = (int) ($link['native_bank_line_id'] ?? 0);
+		$key = $id > 0 ? 'native:' . $id : 'unpaired:' . $index;
+		if (!isset($components[$key])) {
+			$components[$key] = array('native_bank_line_id'=>$id, 'documents'=>array(), 'bank_entries'=>array());
+		}
+		$isOwnBankEntry = $id > 0 && ($link['doc_type'] ?? '') === 'bank_line' && (int) ($link['fk_doc'] ?? 0) === $id;
+		$components[$key][$isOwnBankEntry ? 'bank_entries' : 'documents'][] = $link;
+	}
+	return array_values($components);
+}
+
 /** Exact displayed amount comparisons; no rounding or binary float conversion. */
 function kreabankHistoryAmountMatches($value, $filter)
 {

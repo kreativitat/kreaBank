@@ -95,6 +95,7 @@ class HistoryFixtureDb {
 			return new HistoryFixtureResult($rows);
 		}
 		if(strpos($sql,'SELECT a.*,u.login')===0){return new HistoryFixtureResult($GLOBALS['fixtureAudits']);}
+		if(strpos($sql,'SELECT g.rowid batch_id,b.rowid FROM ')===0){return new HistoryFixtureResult($GLOBALS['fixtureGroupMembers'] ?? array());}
 		if(strpos($sql,'SELECT fk_bank,')===0){return new HistoryFixtureResult($GLOBALS['fixtureLinks']);}
 		if(strpos($sql,'SELECT rowid, dateo')===0){return new HistoryFixtureResult(array(array('rowid'=>6001,'dateo'=>'2026-11-10')));}
 		return new HistoryFixtureResult(array());
@@ -124,6 +125,10 @@ historyCheck(!$fixtureErrors && preg_match_all('/<tr\b[^>]*class="[^"]*\bkrea-hi
 historyCheck(strpos($html,'125,00 EUR')!==false && strpos($html,'17,00 USD')!==false && strpos($html,'142,00')===false,'Summary amounts remain separated by currency');
 historyCheck(strpos($html,'name="undo_review"')!==false && strpos($html,'id="kreaUndoFormstaged5001"')!==false && strpos($html,'id="kreaUndoFormnative5001"')!==false,'Colliding IDs have separate displayed Undo reviews/forms');
 historyCheck(strpos($html,'min-width:600px')===false,'Global search can shrink on narrow screens');
+$baseStatusXp=historyXPath($html);
+historyCheck($baseStatusXp->query('//nav[contains(@class,"kb-history-status-tabs")]/a')->length===2 && $baseStatusXp->query('//nav[contains(@class,"kb-history-status-tabs")]/a/span[text()="(3)"]')->length===2,'Only ordinary states remain when the scoped History has no exceptions; both counts cover all rows');
+$selectedEmptyXp=historyXPath(renderHistory(array('hist_status'=>'review')));
+historyCheck($selectedEmptyXp->query('//nav[contains(@class,"kb-history-status-tabs")]/a')->length===3 && $selectedEmptyXp->query('//nav[contains(@class,"kb-history-status-tabs")]/a[@aria-current="page"]/span[text()="(0)"]')->length===1,'A direct empty exceptional-state URL retains its active tab and explicit zero count');
 $html=renderHistory(array('hist_audit_type'=>'auto_native'));
 historyCheck(strpos($html,'Synthetic staged receipt')!==false && strpos($html,'Synthetic native receipt')===false && strpos($html,'Synthetic debit')===false,'Type filters History by its displayed reconciliation strategy');
 $html=renderHistory(array('hist_description'=>'debit','hist_direction'=>'debit','hist_date_to'=>'2026-11-11'));
@@ -187,9 +192,27 @@ foreach(array('all'=>3,'reconciled'=>1,'review'=>1,'reversed'=>1,'unsupported'=>
 	$statusXp=historyXPath($statusHtml);
 	historyCheck($statusXp->query('//table[@id="kreaHistoryTable"]/tr[contains(@class,"krea-history-row-top")]')->length===$expectedRows,'Status tabs retain the current derived-state priority and invalid values fail closed: '.$status);
 	historyCheck($statusXp->query('//nav[contains(@class,"kb-history-status-tabs")]/a')->length===4 && $statusXp->query('//nav[contains(@class,"kb-history-status-tabs")]/a[@aria-current="page"]')->length===($status==='unsupported'?0:1),'Status navigation exposes the four existing states and one current valid tab');
+	historyCheck($statusXp->query('//nav[contains(@class,"kb-history-status-tabs")]/a/span[text()="(3)"]')->length===1 && $statusXp->query('//nav[contains(@class,"kb-history-status-tabs")]/a/span[text()="(1)"]')->length===3,'Status counts retain the complete non-status-filtered set regardless of the selected tab: '.$status);
 	if($status==='all'){
 		historyCheck($statusXp->query('//tr[contains(@class,"krea-history-row-top")]/td[2]/span[contains(@class,"badge-status3")]')->length===1 && $statusXp->query('//tr[contains(@class,"krea-history-row-top")]/td[2]/span[contains(@class,"badge-status7")]')->length===1,'All keeps review and reversal warnings beside their descriptions');
 	}elseif($expectedRows===0){historyCheck($statusXp->query('//table[@id="kreaHistoryTable"]//td[@colspan="6"]')->length===1,'Empty History spans all six columns');}
+}
+foreach(array(
+	array('hist_description'=>'native','all'=>1,'reconciled'=>0,'reversed'=>1),
+	array('hist_amount'=>'<0','all'=>1,'reconciled'=>1),
+	array('hist_link_type'=>'payment','all'=>1,'reconciled'=>0,'review'=>1),
+	array('hist_audit_type'=>'auto_native','all'=>1,'reconciled'=>0,'review'=>1),
+	array('hist_date_from'=>'2026-11-14','all'=>1,'reconciled'=>0,'review'=>1),
+	array('hist_search'=>'Synthetic native','all'=>1,'reconciled'=>0,'reversed'=>1),
+	array('account_context'=>102,'all'=>1,'reconciled'=>0,'reversed'=>1),
+	array('hist_date_from'=>'2026-02-30','all'=>0,'reconciled'=>0),
+) as $case){
+	$counts=array_intersect_key($case,array_flip(array('all','reconciled','review','reversed')));
+	$request=array_diff_key($case,$counts)+array('hist_status'=>'all','limit'=>1,'page'=>4,'audit_search_user'=>'not present');
+	$countXp=historyXPath(renderHistory($request));
+	$tabCounts=array();
+	foreach($countXp->query('//nav[contains(@class,"kb-history-status-tabs")]/a') as $tab){parse_str(parse_url($tab->getAttribute('href'),PHP_URL_QUERY),$query);$tabCounts[$query['hist_status']]=(int)trim($tab->lastChild->textContent,'()');}
+	historyCheck($tabCounts===$counts,'Counts combine other filters and owned account before status/pagination, without independent audit filters: '.json_encode($request));
 }
 $fixtureRows=$savedRows;
 for($i=1;$i<=4;$i++){$payload=json_decode($savedAudits[0]['payload_json'],true);$payload['marker']='receipt';$fixtureAudits[]=array_merge($savedAudits[0],array('rowid'=>100+$i,'payload_json'=>json_encode($payload)));}
@@ -206,6 +229,47 @@ $fixtureAudits=$savedAudits;
 $scopedHtml=renderHistory(array('account_context'=>101,'hist_status'=>'review','sortfield'=>'status','sortorder'=>'ASC'));
 $scopedXp=historyXPath($scopedHtml);
 foreach($scopedXp->query('//nav[contains(@class,"kb-history-status-tabs")]/a') as $link){parse_str(parse_url($link->getAttribute('href'),PHP_URL_QUERY),$query);historyCheck($query['account_context']==='101' && $query['sortfield']==='event_ts','Account-scoped status links preserve ownership context and discard the removed column sort');}
+
+// Exercise the real History projection and native adapter, with deliberately
+// nonsequential member IDs so positional guesses cannot pair the evidence.
+$savedLinks=$fixtureLinks;
+$fixtureRows=array(array_merge($base,array('rowid'=>5900,'native_id'=>0,'expected_native_id'=>0,'amount'=>'-1600.00000000','native_amount'=>'-1600.00000000','group_id'=>7000,'group_valid'=>1,'description'=>'Synthetic payroll batch')));
+$fixtureAudits=array();$fixtureLinks=array();$fixtureGroupMembers=array();$expectedMembers=array();
+for($i=1;$i<=16;$i++){
+	$id=6100+(($i*7)%16);$payment=7100+$i;$employee=8100+$i;
+	$fixtureGroupMembers[]=array('batch_id'=>7000,'rowid'=>$id);
+	$fixtureLinks[]=array('fk_bank'=>$id,'url_id'=>$payment,'url'=>'/salaries/payment_salary/card.php?id=','label'=>'PAY-'.$payment,'type'=>'payment_salary');
+	$fixtureLinks[]=array('fk_bank'=>$id,'url_id'=>$employee,'url'=>'/user/card.php?id=','label'=>'Employee '.$employee.' <synthetic>','type'=>'user');
+	$expectedMembers[$id]=array($payment,$employee);
+}
+$sourceEvidence=serialize(array($fixtureRows,$fixtureLinks,$fixtureGroupMembers));
+$batchXp=historyXPath(renderHistory());
+historyCheck($batchXp->query('//tr[contains(@class,"krea-history-row-top")]')->length===1 && $batchXp->query('//div[@class="krea-history-component"]')->length===16,'A verified sixteen-member batch renders sixteen compact associated components');
+foreach($expectedMembers as $id=>$identities){
+	$component=$batchXp->query('//div[@class="krea-history-component" and @data-native-bank-line-id="'.$id.'"]')->item(0);
+	historyCheck($component && $batchXp->query('.//a[@href="/salaries/payment_salary/card.php?id='.$identities[0].'"]',$component)->length===1
+		&& $batchXp->query('.//a[@href="/user/card.php?id='.$identities[1].'"]',$component)->length===1
+		&& $batchXp->query('./div[@class="krea-history-component-bank"]//a[@href="/compta/bank/line.php?rowid='.$id.'"]',$component)->length===1
+		&& $batchXp->query('.//a',$component)->length===3,'Each salary payment and employee stay beside their exact owned native entry: '.$id);
+}
+historyCheck($batchXp->query('//div[@class="krea-history-component"]//synthetic')->length===0 && $batchXp->query('//div[@class="krea-history-component"]//a[contains(text(),"<synthetic>")]')->length===16,'Compact employee evidence remains escaped and complete');
+historyCheck($batchXp->query('//form[@method="POST"]')->length===0 && $batchXp->query('//a[contains(@href,"expand=staged:5900")]')->length===1,'Component presentation leaves the existing group review action and Undo admission unchanged');
+historyCheck(serialize(array($fixtureRows,$fixtureLinks,$fixtureGroupMembers))===$sourceEvidence,'Grouping never mutates financial source identities, links or references');
+$reader=new KreaBankHistory(new HistoryFixtureDb(),1);
+$preparedGroup=$reader->recent()[0];
+historyCheck((int)$preparedGroup['native_bank_line_id']===0 && (int)$preparedGroup['group_id']===7000 && !$preparedGroup['needs_review'],'Grouped History retains its group strategy and has no representative native line');
+$fixtureLinks=array();$fixtureGroupMembers=array(array('batch_id'=>7000,'rowid'=>6999));
+$orphanXp=historyXPath(renderHistory());
+historyCheck($orphanXp->query('//div[@data-native-bank-line-id="6999"]//a[@href="/compta/bank/line.php?rowid=6999"]')->length===1 && $orphanXp->query('//div[@class="krea-history-component-documents"]')->length===0,'A component without document links keeps its native entry without inventing a payment or parent');
+$fixtureRows[0]['group_valid']=0;
+$reviewXp=historyXPath(renderHistory());
+historyCheck($reviewXp->query('//div[@class="krea-history-component"]')->length===0 && $reviewXp->query('//span[contains(@class,"badge-status3")]')->length===1,'Invalid group evidence remains a review warning and cannot display guessed members');
+$unpaired=array(array('doc_type'=>'payment_salary','fk_doc'=>1),array('doc_type'=>'user','fk_doc'=>2),array('doc_type'=>'bank_line','fk_doc'=>3));
+$unpairedComponents=kreabankHistoryLinkComponents($unpaired);
+historyCheck(count($unpairedComponents)===3 && array_column($unpairedComponents,'native_bank_line_id')===array(0,0,0),'Untagged historical links remain unpaired rather than guessing from adjacency');
+$conflicting=kreabankHistoryLinkComponents(array(array('native_bank_line_id'=>6999,'doc_type'=>'bank_line','fk_doc'=>6000)));
+historyCheck(count($conflicting[0]['documents'])===1 && !$conflicting[0]['bank_entries'],'A different linked native entry is retained as evidence, never relabelled as its owning component');
+$fixtureRows=$savedRows;$fixtureAudits=$savedAudits;$fixtureLinks=$savedLinks;$fixtureGroupMembers=array();
 
 // The actual controller translates reserved labels only, never persisted evidence.
 $payload = array('strategy'=>'bulk_manual','source'=>'staged','native_bank_line_id'=>6001,'confidence_score'=>100,

@@ -48,6 +48,17 @@ foreach(array('kreabank','banque','facture')as$module){
 	unset($conf->modules[$module]);customerTransferCheck(!$helper->canRead(),'Every participating native/module read scope remains required');$conf->modules[$module]=1;
 }
 
+// Exercise native getEntity(), including its Multicompany return contract. A
+// malformed parent scope must fail before any customer or financial query.
+$previousMc=$GLOBALS['mc']??null;$previousHooks=$GLOBALS['hookmanager']??null;
+$mc=new class { public $scope;public function getEntity($element,$shared,$object){return $this->scope;} };
+$hookmanager=new class { public $resPrint='';public function executeHooks(...$args){return 0;} };
+foreach(array('', '1,,2', '1,', '-1', '1.0', '1 OR 1=1', '1,2) OR (1=1', array(1,2), '12345678901') as $scope){
+	$mc->scope=$scope;
+	customerTransferCheck($helper->metadataForBankIds(array(201))===array(),'Malformed native customer-sharing scope fails closed before SQL');
+}
+$mc=$previousMc;$hookmanager=$previousHooks;
+
 $metadata=array('bank_line_id'=>201,'bank_account_id'=>101,'amount'=>'379.42000000','currency'=>'EUR',
 	'payment_id'=>301,'ref'=>'RC-2031-009 & <untrusted>','number'=>'SEPA-20310410-00123456','date'=>'2031-04-10',
 	'mode_code'=>'VIR','allocation_count'=>2,'invoice_refs'=>array('INV-2031-001','INV-2031-002'),

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20.64 — 2026-11-15
+
+- Match existing customer transfer receipts whose customer is explicitly shared through Dolibarr, while retaining direct company ownership of all financial records and fresh visibility checks.
+- Show scoped counts on reconciliation, statement and History status tabs; hide empty exceptional tabs, retaining selected states and their direct routes. Status counts do not start matching.
+- Add reviewed Undo dialogs to reconciled list rows through the existing History snapshots and reconciliation service. Cancellation stays in the list; unaffected scan results remain cached.
+- Align the list's amount and match filters with their headers. Group each History batch payment with its exact native bank entry.
+
 ## 1.20.63 — 2026-11-15
 
 - Identify existing customer bank-transfer receipts in manual review by their native payment reference, customer and complete invoice allocations while retaining the original bank movement. A receipt covering several invoices remains one payment and one reconciliation target. Unattended matching retains its existing evidence.

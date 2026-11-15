@@ -19,6 +19,31 @@ function kreabankStatementListStatusSql($referenceExpression = 'h.statement_ref'
 			. " WHEN h.rappro=1 THEN 'reconciled' ELSE 'registered' END WHEN h.status=3 THEN 'skipped' ELSE 'pending' END";
 }
 
+/** Count statuses after balance calculation, retaining every filter except status. */
+function kreabankStatementListStatusCountsSql($db, $source, $filters)
+{
+	$filters['status'] = '';
+	$columns = array('COUNT(*) total');
+	foreach (kreabankStatementListStatusOptions() as $status=>$label) {
+		$predicate = $status === 'duplicate' ? 's.is_duplicate>0' : "s.list_status='" . $status . "'";
+		$columns[] = 'COALESCE(SUM(CASE WHEN ' . $predicate . ' THEN 1 ELSE 0 END),0) ' . $status;
+	}
+	return 'SELECT ' . implode(',', $columns) . ' FROM (SELECT ' . kreabankStatementListStatusSql()
+		. ' list_status,h.is_duplicate FROM ' . $source . kreabankStatementListWhere($db, $filters) . ') s';
+}
+
+/** Preserve ordinary navigation; historical exception states remain visible when used. */
+function kreabankStatementListStatusTabs($counts, $selected = '')
+{
+	$tabs = array();
+	foreach (array_merge(kreabankStatementListStatusOptions(), array(''=>'All')) as $status=>$label) {
+		if (in_array($status, array('', 'pending', 'reconciled'), true) || $status === $selected || ($counts[$status] ?? 0) > 0) {
+			$tabs[$status] = $label;
+		}
+	}
+	return $tabs;
+}
+
 /** Reverse the original within-day sequence with the chosen date direction. */
 function kreabankStatementListOrder($order, $expression)
 {

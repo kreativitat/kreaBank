@@ -500,3 +500,10 @@
   and supplier invoice creation everywhere. Do not restore these retired features
   or the deleted supplier-dialog script. Preserve the unified existing-movement selector, batches, ordinary bank
   movements and the other signed legacy workspace reviews.
+
+## Status filters and reviewed list Undo
+
+- Reconciliation-list status admission/counts use persisted link integrity and actor-private batch drafts before matching. Draft is a private selection; Review is an integrity warning, never a no-match result. Keep counts scoped to the other filters; incomplete derived-filter counts remain unknown. Hide empty exceptional tabs without removing their routes.
+- List scalar Undo reuses fresh History snapshots and single-use scoped nonces through `lib/kreabank_worklist_undo.lib.php`, then the existing locked service. Groups keep complete-batch Undo; reviewed payment differences retain their native reversal. Cancellation is a local dialog close. Include the target native movement in scan invalidation dependencies.
+- History components pair documents/payments with explicit `native_bank_line_id`, never proximity/order. Customer transfer metadata alone follows native `getEntity('societe')` customer sharing; all financial parents still require direct owner-company scope, refreshed at display and execution.
+- `test_worklist_status.php`, `test_worklist_undo.php` and the view/controller suites are database-free. The status database suite uses only the guarded disposable automatic-reconciliation fixture.

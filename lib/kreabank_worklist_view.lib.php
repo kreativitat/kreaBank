@@ -241,6 +241,22 @@ function kreabankWorklistCorrection($candidate, $line, $id, $model, $langs)
 		'reference'=>$reference, 'form'=>kreabankWorklistPostForm($actionId, $correction, $model), 'dialog'=>$dialog);
 }
 
+/** The same native dialog interaction as bank correction; cancellation is local only. */
+function kreabankWorklistUndo($descriptor, $line, $id, $model, $langs)
+{
+	$e = 'kreabankWorklistEscape';
+	$t = static function ($key) use ($langs) { return kreabankWorklistEscape(kreabankWorklistTranslate($langs,$key)); };
+	$dialogId = $id . '-undo-dialog'; $formId = $dialogId . '-form';
+	$effect = $descriptor['effect'] ?? (($descriptor['action'] ?? '') === 'undo_batch' ? 'KreaBankWorklistUndoEffect' : 'KreaBankWorklistUndoReconciliationEffect');
+	$dialog = '<dialog class="kb-wl-dialog" id="' . $dialogId . '" aria-labelledby="' . $dialogId . '-title" aria-describedby="' . $dialogId . '-effect">'
+		. '<button type="button" class="button kb-wl-icon kb-wl-dialog-close" data-kb-dialog-close title="' . $t('Close') . '" aria-label="' . $t('Close') . '">' . kreabankWorklistIcon('times') . '</button><h2 id="' . $dialogId . '-title">' . $t('KreaBankWorklistUndoReconciliation') . '</h2>'
+		. '<p><strong>' . $e($line['description'] ?? '') . '</strong></p><dl><dt>' . $t('KreaBankDate') . '</dt><dd>' . $e(kreabankWorklistDate($line['operation_date'] ?? '')) . '</dd><dt>' . $t('Amount') . '</dt><dd>' . kreabankWorklistMoney($line['amount'],$line['currency']) . '</dd><dt>' . $t('KreaBankWorklistStatementAccount') . '</dt><dd>' . $e($line['bank_account_ref'] ?? '') . '</dd></dl><p id="' . $dialogId . '-effect">' . $t($effect) . '</p>';
+	if (($descriptor['action'] ?? '') === 'undo_pair') { $dialog .= '<label for="' . $dialogId . '-reason">' . $t('KreaBankReason') . '</label><input class="flat kb-wl-undo-reason" type="text" maxlength="1000" id="' . $dialogId . '-reason" name="reason" form="' . $formId . '">'; }
+	$dialog .= '<div class="kb-wl-dialog-actions"><button type="button" class="button" data-kb-dialog-close autofocus>' . $t('Cancel') . '</button><button type="submit" class="button" form="' . $formId . '">' . $t('KreaBankHistoryActionUndo') . '</button></div></dialog>';
+	return array('button'=>kreabankWorklistButton(kreabankWorklistTranslate($langs,'KreaBankWorklistUndoReconciliation'),'undo','type="button" data-kb-dialog="' . $dialogId . '" aria-controls="' . $dialogId . '" aria-haspopup="dialog"'),
+		'form'=>kreabankWorklistPostForm($formId,$descriptor,$model),'dialog'=>$dialog);
+}
+
 /**
  * Render the separate reconciliation list. This helper performs no matching or writes.
  * Controller-owned descriptors define every POST action and its authenticated fields.
@@ -268,8 +284,10 @@ function kreabankWorklistTable($model, $langs)
 	if (!empty($model['notice'])) { $html .= '<p role="status">' . $e($model['notice']) . '</p>'; }
 	$html .= '<div class="kb-wl-toolbar"><nav class="kb-view-switch kb-wl-status-tabs" aria-label="' . $t('Status') . '">';
 	foreach (array('pending'=>'KreaBankWorklistPending','reconciled'=>'KreaBankWorklistReconciled','draft'=>'Draft','review'=>'KreaBankLinkNeedsReview','all'=>'All') as $status=>$label) {
+		$count = $model['status_counts'][$status] ?? null;
+		if (isset($model['status_counts']) && in_array($status,array('draft','review'),true) && $count === 0 && ($filters['search_status'] ?? 'pending') !== $status) { continue; }
 		$html .= '<a href="' . $e(kreabankWorklistUrl($model,array('search_status'=>$status,'page'=>0,'expand'=>null,'mode'=>null,'q'=>null,'entry_search'=>null))) . '"'
-			. (($filters['search_status'] ?? 'pending') === $status ? ' class="active" aria-current="page"' : '') . '>' . $t($label) . '</a>';
+			. (($filters['search_status'] ?? 'pending') === $status ? ' class="active" aria-current="page"' : '') . '>' . $t($label) . ($count !== null ? ' <span class="opacitymedium">(' . (int) $count . ')</span>' : '') . '</a>';
 	}
 	$html .= '</nav></div>';
 	if (!empty($model['scan'])) {
@@ -296,7 +314,7 @@ function kreabankWorklistTable($model, $langs)
 	$html .= '<td class="liste_titre"><label class="kb-wl-sr" for="kb-wl-date-from">' . $t('KreaBankWorklistDateFrom') . '</label><input class="flat kb-wl-date" id="kb-wl-date-from" type="date" name="search_date_from" value="' . $e($filters['search_date_from'] ?? '') . '"><label class="kb-wl-sr" for="kb-wl-date-to">' . $t('KreaBankWorklistDateTo') . '</label><input class="flat kb-wl-date" id="kb-wl-date-to" type="date" name="search_date_to" value="' . $e($filters['search_date_to'] ?? '') . '"></td>';
 	if (!$hideStatementAccount) { $html .= '<td class="liste_titre">' . kreabankWorklistAccountFilter($model,$filters,$langs,'search_account','KreaBankWorklistStatementAccount') . '</td>'; }
 	foreach (array('search_description'=>'KreaBankReviewStatementLine', 'search_amount'=>'Amount', 'search_match'=>'KreaBankWorklistMatch') as $name => $label) {
-		$html .= '<td class="liste_titre"><label class="kb-wl-sr" for="kb-wl-' . $name . '">' . $t($label) . '</label><input class="flat ' . ($name === 'search_amount' ? 'width75 right' : 'maxwidth150') . '" id="kb-wl-' . $name . '" type="search" name="' . $name . '" value="' . $e($filters[$name] ?? '') . '"></td>';
+		$html .= '<td class="liste_titre kb-wl-filter-' . $name . ($name === 'search_amount' ? ' right' : '') . '"><label class="kb-wl-sr" for="kb-wl-' . $name . '">' . $t($label) . '</label><input class="flat ' . ($name === 'search_amount' ? 'width75 right' : 'maxwidth150') . '" id="kb-wl-' . $name . '" type="search" name="' . $name . '" value="' . $e($filters[$name] ?? '') . '"></td>';
 	}
 	$html .= '<td class="liste_titre">' . kreabankWorklistAccountFilter($model,$filters,$langs,'search_payment_account','KreaBankWorklistPaymentAccount',true) . '</td><td class="liste_titre center">';
 	$html .= $model['filter_buttons'] ?? (kreabankWorklistButton(kreabankWorklistTranslate($langs, 'Search'), 'search', 'type="submit" name="button_search" value="1"') . kreabankWorklistButton(kreabankWorklistTranslate($langs, 'RemoveFilter'), 'times', 'type="submit" name="button_removefilter" value="1"'));
@@ -362,6 +380,10 @@ function kreabankWorklistTable($model, $langs)
 		if ($done && $activeBatch) {
 			$html .= '<a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e(kreabankWorklistUrl($model, array('expand'=>$key, 'mode'=>'view'))) . '" title="' . $t('KreaBankWorklistViewBatch') . '" aria-label="' . $t('KreaBankWorklistViewBatch') . '" aria-controls="' . $id . '-detail" aria-expanded="' . ($expanded ? 'true' : 'false') . '">' . kreabankWorklistIcon('eye') . '</a>';
 		}
+		if ($canWrite && $done && !$needsReview && !empty($row['undo_review'])) {
+			$undo = kreabankWorklistUndo($row['undo_review'],$line,$id,$model,$langs);
+			$html .= $undo['button']; $forms .= $undo['form']; $dialogs .= $undo['dialog'];
+		}
 		$html .= '</td></tr>';
 		if (!$expanded || ($done && !$activeBatch)) { continue; }
 		$html .= '<tr class="kb-wl-detail-row" id="' . $id . '-detail" data-line-key="' . $e($key) . '"><td colspan="' . $columnCount . '"><section class="kb-wl-detail" aria-label="' . $e($line['description'] ?? '') . '"><div class="kb-wl-detail-heading"><strong>' . $t($createMode ? 'KreaBankWorklistCreateMovement' : ($activeBatch ? 'KreaBankWorklistPaymentBatch' : 'KreaBankWorklistSelectMovements')) . '</strong><a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e(kreabankWorklistUrl($model, array('expand'=>null, 'mode'=>null, 'entry_search'=>null, 'q'=>null))) . '" title="' . $t('Close') . '" aria-label="' . $t('Close') . '">' . kreabankWorklistIcon('times') . '</a></div>';
@@ -420,11 +442,7 @@ function kreabankWorklistTable($model, $langs)
 			$html .= '<div class="kb-wl-confirm-batch"><span>' . $t('KreaBankWorklistBatchReviewed') . '</span>' . kreabankWorklistButton(kreabankWorklistTranslate($langs, 'KreaBankWorklistReconcileSelection'), 'check', 'type="submit" form="' . $actionId . '"', true) . '</div>';
 			$forms .= kreabankWorklistPostForm($actionId, $row['batch_review'], $model);
 		}
-		if ($canWrite && $activeBatch && !empty($row['undo_review'])) {
-			$actionId = $id . '-undo-batch';
-			$html .= '<div class="kb-wl-confirm-batch"><span>' . $t('KreaBankWorklistUndoEffect') . '</span>' . kreabankWorklistButton(kreabankWorklistTranslate($langs, $row['undo_review']['label'] ?? 'KreaBankWorklistUndoBatch'), 'undo', 'type="submit" form="' . $actionId . '"') . '</div>';
-			$forms .= kreabankWorklistPostForm($actionId, $row['undo_review'], $model);
-		}
+
 		$html .= '</section></td></tr>';
 	}
 	if (empty($model['rows'])) { $html .= '<tr><td colspan="' . $columnCount . '" class="opacitymedium center">' . $t(!empty($model['analysis_pending']) ? 'KreaBankWorklistMoreForFilters' : 'KreaBankWorklistEmpty') . '</td></tr>'; }

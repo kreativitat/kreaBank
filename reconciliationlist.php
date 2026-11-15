@@ -13,6 +13,7 @@ require_once __DIR__ . '/class/KreaBankService.class.php';
 require_once __DIR__ . '/class/KreaBankWorklist.class.php';
 require_once __DIR__ . '/lib/kreabank_worklist_view.lib.php';
 require_once __DIR__ . '/lib/kreabank_planned_payment.lib.php';
+require_once __DIR__ . '/lib/kreabank_worklist_undo.lib.php';
 $langs->loadLangs(array('banks','bills','salaries','trips','donations','loan','kreabank@kreabank','worklist@kreabank'));
 if (!isModEnabled('kreabank') || !isModEnabled('banque') || !empty($user->socid)
 	|| !$user->hasRight('banque','lire') || !$user->hasRight('kreabank','reconciliation','read')) { accessforbidden(); }
@@ -27,6 +28,7 @@ if (GETPOST('workspace','aZ09') === '1' || ($_SERVER['REQUEST_METHOD'] === 'POST
 }
 $service = new KreaBankService($db, $user, $langs);
 $worklist = new KreaBankWorklist($db, $conf->entity, $service);
+$history = new KreaBankHistory($db, (int) $conf->entity);
 $canWrite = $user->hasRight('kreabank','reconciliation','write') && ($user->hasRight('banque','modifier') || $user->hasRight('banque','consolidate'));
 $canMove = $canWrite && $user->hasRight('banque','modifier');
 $canCreate = $canMove && !getDolGlobalInt('BANK_DISABLE_DIRECT_INPUT');
@@ -181,6 +183,16 @@ if ($post && $action !== '' && !in_array($action, array('advance_scan','more_sca
 			$r = $take('batch'); $scanEffect = kreabankWorklistActionEffect($r['key'],array('line'=>$r['batch']['source']??array(),'batch'=>array('active'=>$r['batch']))); $service->reconcilePaymentBatch($r['batch']);
 			unset($_SESSION['kreabank_worklist_batch_review'][$r['key']],$_SESSION['kreabank_worklist_inputs'][$r['key']]);
 			$expand = ''; setEventMessages($langs->trans('KreaBankWorklistReconciled'),null,'mesgs');
+		} elseif ($action === 'undo_pair') {
+			if (!$canUndo) { accessforbidden(); }
+			$key = (string) GETPOST('source_key','alphanohtml');
+			$line = $worklist->load($key);
+			$review = kreabankWorklistTakeUndo($history,$key,(int) $line['bank_account_id'],GETPOST('undo_review','aZ09'));
+			$scanEffect = kreabankWorklistActionEffect($key,array('line'=>$line));
+			$scanEffect['tokens'][] = 'native_bank:' . (int) $review['native_bank_line_id'];
+			list($source,$id) = kreabankWorklistSource($key);
+			$service->undoReconciliation($id,mb_substr((string) GETPOST('reason','alphanohtml'),0,1000,'UTF-8'),$review);
+			$expand = ''; setEventMessages($langs->trans('KreaBankWorklistReconciliationUndone'),null,'mesgs');
 		} elseif ($action === 'undo_batch') {
 			if (!$canUndo) { accessforbidden(); }
 			$r = $take('undo'); list($source,$id) = kreabankWorklistSource($r['key']);
@@ -210,10 +222,9 @@ if ($post && $action !== '' && !in_array($action, array('advance_scan','more_sca
 try { $sources = $invalidFilters ? array() : $worklist->sources($state); }
 catch (Throwable $error) { $sources = array(); setEventMessages($langs->trans($error->getMessage() === 'KreaBankWorklistRefineFilters' ? $error->getMessage() : 'KreaBankWorklistReadFailed'),null,'errors'); }
 $sourceKeys = array_keys($sources);
-$requiresComplete = $state['filters']['match'] !== '' || $state['filters']['payment_account'] !== '' || in_array($state['filters']['status'],array('draft','review'),true)
-	|| in_array($state['sort']['field'],array('match','payment_account','status'),true);
+$requiresComplete = $state['filters']['match'] !== '' || $state['filters']['payment_account'] !== ''
+	|| in_array($state['sort']['field'],array('match','payment_account'),true);
 $scanFilters = $state['filters']; unset($scanFilters['match'],$scanFilters['payment_account']);
-if ($scanFilters['status'] === 'draft') { $scanFilters['status'] = 'pending'; }
 $policy=array();
 foreach (array('KREABANK_AUTOMATCH_DATE_TOLERANCE','KREABANK_OPEN_DOC_DATE_INTERVAL_DAYS','KREABANK_BULKMATCH_MIN_SCORE','KREABANK_ACCOUNT_PAIRS') as $setting) { $policy[$setting]=$conf->global->$setting??null; }
 $access = kreabankWorklistAccessFingerprint($user,array($canWrite??false,$canMove??false,$canCreate??false,$canUndo??false,$paymentPermissions??array(),$policy,
@@ -247,7 +258,7 @@ if ($paymentReturn !== '' && isset($sources[$paymentReturn])) {
 $scanComplete = count($cache['summaries']) >= count($sourceKeys);
 $previewRows = array();
 foreach ($sources as $key=>$source) {
-	$summary = $cache['summaries'][$key] ?? array('key'=>$key,'status'=>(int) $source['status'] === 2 ? 'reconciled' : 'pending');
+	$summary = $cache['summaries'][$key] ?? array('key'=>$key,'status'=>$source['worklist_status']);
 	$summary['line'] = $source; $previewRows[] = $summary;
 }
 $previewFiltered = $requiresComplete && !$scanComplete ? array() : kreabankWorklistFilterRows($previewRows,$state);
@@ -322,7 +333,7 @@ $scanDone = count($cache['summaries']) >= count($sourceKeys);
 $indexed = array();
 foreach ($sources as $key=>$source) {
 	$line = $source; $line['fk_statement'] = (int) $source['statement_id'];
-	$summary = $cache['summaries'][$key] ?? array('key'=>$key,'status'=>(int) $source['status'] === 2 ? 'reconciled' : 'pending','pending_analysis'=>true);
+	$summary = $cache['summaries'][$key] ?? array('key'=>$key,'status'=>$source['worklist_status'],'pending_analysis'=>true);
 	$summary['line'] = $line; $indexed[] = $summary;
 }
 $filtered = $requiresComplete && !$scanDone ? array() : kreabankWorklistFilterRows($indexed,$state);
@@ -365,7 +376,7 @@ foreach ($page['rows'] as $indexRow) {
 		'payment_account_ref'=>$indexRow['payment_account'] ?? '',
 		'pending_analysis'=>!isset($cache['summaries'][$key]),'batch_unavailable'=>false);
 	try {
-		if (isset($cache['summaries'][$key]) || $isExpanded || (int) $indexRow['line']['status'] === 2) {
+		if (isset($cache['summaries'][$key]) || $isExpanded || ($indexRow['line']['worklist_status'] ?? '') === 'reconciled') {
 			$prepared = kreabankWorklistPreparedPresentation($cache,$key,$sources[$key]??$indexRow['line'],!empty($reusePrepared),
 				static function($sourceKey)use($worklist){return $worklist->compact($sourceKey);},null,
 				static function($presentation)use($worklist){return $worklist->presentationVisible($presentation);}); $row['line'] = $prepared['line'];
@@ -397,7 +408,12 @@ foreach ($page['rows'] as $indexRow) {
 				$row['review'] = array('reference'=>$batch['active']['name'] ?: kreabankWorklistTranslate($langs, 'KreaBankWorklistPaymentBatch'),'date'=>$row['line']['operation_date'],
 					'amount'=>$row['needs_review'] ? null : $row['line']['amount_decimal'],'currency'=>$row['line']['currency'],'account_ref'=>$row['payment_account_ref']);
 				foreach ($batch['active']['components'] as $c) { $row['batch_components'][] = array('key'=>(string) $c['fk_bank_line'],'doc_type'=>'native_bank','doc_id'=>(int) $c['fk_bank_line'],'reference'=>$c['ref'] ?: '#' . $c['fk_bank_line'],'date'=>$c['doc_date'],'amount'=>$c['current_amount'],'currency'=>$row['line']['currency'],'account_ref'=>$c['bank_account_ref'],'description'=>$c['description']); }
-				if ($isExpanded && $canUndo) { $row['undo_review'] = array('action'=>'undo_batch','fields'=>array_merge($baseParams,array('review'=>$remember('undo',array('key'=>$key,'batch'=>$service->preparePaymentBatchUndoReview((int) $row['line']['rowid'])))))); }
+				if ($canUndo && !$row['needs_review']) { $row['undo_review'] = array('action'=>'undo_batch','fields'=>array_merge($baseParams,array('review'=>$remember('undo',array('key'=>$key,'batch'=>$service->preparePaymentBatchUndoReview((int) $row['line']['rowid'])))))); }
+			}
+			if ($canUndo && empty($row['batch_active']) && !$row['needs_review'] && ($row['line']['worklist_status'] ?? '') === 'reconciled') {
+				$undo = kreabankWorklistPrepareUndo($history,$key,(int) $row['line']['bank_account_id']);
+				if ($undo) { $row['undo_review'] = array('action'=>'undo_pair','fields'=>array_merge($baseParams,array('source_key'=>$key,'undo_review'=>$undo['nonce'])),
+					'effect'=>!empty($undo['snapshot']['writeoff']) ? 'KreaBankWorklistUndoWriteoffEffect' : 'KreaBankWorklistUndoReconciliationEffect'); }
 			}
 			$row['create_available'] = $canCreate && strpos($key,'staged:') === 0 && !$row['batch_unavailable']
 				&& empty($row['needs_review']) && empty($prepared['pair']) && !$row['account_mismatch'] && empty($batch['draft']) && empty($batch['active']);
@@ -515,6 +531,6 @@ print kreabankWorklistTable(array('url'=>$url,'token'=>newToken(),'state'=>$base
 	'navigation_scope'=>hash('sha256',$scope . '|' . $secret),'navigation_context'=>hash('sha256',json_encode(array($state['filters'],$state['sort'],$state['limit']))),'navigation_page'=>$page['page'],
 	'accounts'=>$accounts,'rows'=>$modelRows,'can_write'=>$canWrite,'sort'=>$state['sort'],'pagination'=>$pagination,'headers'=>$headers,'filter_buttons'=>$form->showFilterButtons(),'scan'=>$scan,
 	'hide_statement_account'=>!empty($navigationAccount),
-	'analysis_pending'=>$requiresComplete && !$scanDone,
+	'analysis_pending'=>$requiresComplete && !$scanDone,'status_counts'=>$worklist->statusCounts($state,$cache['summaries'],$scanDone),
 	'notice'=>!$worklist->batchesAvailable() ? kreabankWorklistTranslate($langs, 'KreaBankWorklistBatchesUnavailable') : ''),$langs);
 llxFooter(); $db->close();

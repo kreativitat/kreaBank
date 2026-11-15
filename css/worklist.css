@@ -77,3 +77,8 @@
 @media(max-width:700px) { .kb-wl-create-fields { grid-template-columns:minmax(0,1fr); gap:6px; } }
 
 .kb-worklist [data-kb-save-draft][hidden] { display:none; }
+
+/* Header filters share their native column alignment rather than input margins. */
+.kb-worklist .kb-wl-filter-search_match input { margin-left:0; }
+.kb-worklist .kb-wl-filter-search_amount input { margin-right:0; }
+.kb-worklist .kb-wl-undo-reason { display:block; box-sizing:border-box; width:100%; margin:6px 0 0; }

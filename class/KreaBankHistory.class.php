@@ -124,12 +124,21 @@ class KreaBankHistory
 				. " WHERE g.entity=$e AND g.status=1 AND g.rowid IN (" . implode(',', array_keys($groups)) . ') ORDER BY g.rowid,m.rowid') as $member) {
 				$id = (int) $member['rowid']; $key = $groups[$member['batch_id']];
 				$ids[$id] = $id; $members[$key][] = $id;
-				$out[$key][] = array('doc_type'=>'bank_line','fk_doc'=>$id,'doc_ref'=>'#' . $id,'url'=>'/compta/bank/line.php?rowid=');
 			}
 		}
 		$links = $ids ? $adapter->getLineLinksBatch(array_values($ids), 'native') : array();
+		$groupKeys = array_fill_keys(array_values($groups), true);
 		foreach ($members as $key => $nativeIds) {
-			foreach ($nativeIds as $id) { $out[$key] = array_merge($out[$key], $links[$id] ?? array()); }
+			foreach ($nativeIds as $id) {
+				foreach ($links[$id] ?? array() as $link) {
+					$link['native_bank_line_id'] = $id;
+					$out[$key][] = $link;
+				}
+				if (isset($groupKeys[$key])) {
+					$out[$key][] = array('doc_type'=>'bank_line','fk_doc'=>$id,'doc_ref'=>'#' . $id,
+						'url'=>'/compta/bank/line.php?rowid=','native_bank_line_id'=>$id);
+				}
+			}
 		}
 		return $out;
 	}

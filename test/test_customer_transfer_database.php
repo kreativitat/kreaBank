@@ -152,6 +152,48 @@ $db->query('INSERT INTO kbauto_societe_commerciaux(fk_soc,fk_user) VALUES(860001
 checkAuto(isset(customerTransferMeta($f['bank'],$limited)[$f['bank']]),'Native sales-representative ownership permits the same existing receipt');
 $db->query('DELETE FROM kbauto_societe_commerciaux WHERE fk_soc=860001 AND fk_user=7');
 
+// Only the customer parent follows the native third-party sharing allowlist.
+// The receipt, every invoice, and the native account remain directly owned.
+$shared=customerTransferFixture(843000,'2400.00');
+$db->query("UPDATE kbauto_facture SET fk_soc=860003 WHERE rowid IN ({$shared['invoice1']},{$shared['invoice2']})");
+$sharedReader=new KreaBankCustomerTransfer($db,$user,1);
+checkAuto($sharedReader->metadataForBankIds(array($shared['bank']))===array(),'A foreign customer without explicit native sharing cannot enrich a directly owned receipt');
+$GLOBALS['customerTransferFixtureSocieteEntities']='2, 1,2';
+$sharedMeta=$sharedReader->metadataForBankIds(array($shared['bank']))[$shared['bank']]??null;
+checkAuto($sharedMeta && $sharedMeta['customer_id']===860003 && $sharedMeta['customer_name']==='Foreign Synthetic Customer Lda'
+	&& $sharedMeta['allocation_count']===2,'Native third-party sharing permits the actual shared customer parent of directly owned financial records');
+foreach(array(
+	array("UPDATE kbauto_facture SET entity=2 WHERE rowid={$shared['invoice1']}","UPDATE kbauto_facture SET entity=1 WHERE rowid={$shared['invoice1']}",'invoice'),
+	array("UPDATE kbauto_paiement SET entity=2 WHERE rowid={$shared['payment']}","UPDATE kbauto_paiement SET entity=1 WHERE rowid={$shared['payment']}",'receipt'),
+	array("UPDATE kbauto_bank SET fk_account=202 WHERE rowid={$shared['bank']}","UPDATE kbauto_bank SET fk_account=101 WHERE rowid={$shared['bank']}",'bank account'),
+) as $case){$db->query($case[0]);checkAuto($sharedReader->metadataForBankIds(array($shared['bank']))===array(),'Sharing the customer never grants ownership of a foreign '.$case[2]);$db->query($case[1]);}
+checkAuto(customerTransferMeta($shared['bank'],$limited)===array(),'Shared-customer visibility still requires its native sales-representative restriction');
+$db->query('INSERT INTO kbauto_societe_commerciaux(fk_soc,fk_user) VALUES(860003,7)');
+checkAuto(isset(customerTransferMeta($shared['bank'],$limited)[$shared['bank']]),'An assigned representative may inspect the explicitly shared customer receipt');
+$db->query('DELETE FROM kbauto_societe_commerciaux WHERE fk_soc=860003 AND fk_user=7');
+$sharedWorklist=new KreaBankWorklist($db,1,$service);$sharedPrepared=$sharedWorklist->prepare('staged:'.$shared['source']);
+checkAuto(($sharedPrepared['pair']['suggestion']['customer_transfer']??null)===$sharedMeta && $sharedWorklist->presentationVisible($sharedPrepared),'The actual list presents and validates the shared customer using the same recorded-receipt facts');
+$sharedRow=customerTransferPair($shared['source'],$shared['bank']);$sharedFinancial=customerTransferFinancialState();$sharedAudits=countAuto('kreabank_recon_audit');
+$GLOBALS['customerTransferFixtureSocieteEntities']='1';
+checkAuto($sharedReader->metadataForBankIds(array($shared['bank']))===array() && !$sharedWorklist->presentationVisible($sharedPrepared),'Revoking native customer sharing invalidates both a retained evidence reader and cached list presentation');
+rejectAuto(static function()use($sharedRow){customerTransferSignedApply($sharedRow);},'A stale signed approval cannot retain revoked customer-sharing authority');
+checkAuto(customerTransferFinancialState()===$sharedFinancial && countAuto('kreabank_recon_audit')===$sharedAudits,'Revoked sharing changes no financial evidence or reconciliation audit');
+$GLOBALS['customerTransferFixtureSocieteEntities']='1,2';
+$sharedRow=customerTransferPair($shared['source'],$shared['bank']);
+$db->beforeBegin=static function(){$GLOBALS['customerTransferFixtureSocieteEntities']='1';};
+$sharingFailure=null;try{customerTransferSignedApply($sharedRow);}catch(DomainException $error){$sharingFailure=$error;}
+checkAuto($sharingFailure && strpos($sharingFailure->getMessage(),'recorded customer transfer')!==false,'A sharing change immediately before the transaction is rejected by fresh recorded-transfer execution validation');
+checkAuto($db->depth===0 && customerTransferFinancialState()===$sharedFinancial && countAuto('kreabank_recon_audit')===$sharedAudits
+	&& empty($service->getBulkReviewLine($shared['source'],'staged')['native_bank_line_id']),'The locked sharing-revocation rejection rolls back source, native and audit state');
+$GLOBALS['customerTransferFixtureSocieteEntities']='1,2';
+$sharedRow=customerTransferPair($shared['source'],$shared['bank']);
+$sharedCounts=array(countAuto('bank'),countAuto('paiement'),countAuto('paiement_facture'),countAuto('kreabank_payment_batch'));
+checkAuto(customerTransferSignedApply($sharedRow)===$shared['source'],'Signed manual reconciliation accepts an explicitly shared customer with directly owned receipt, invoices and bank movement');
+checkAuto(customerTransferFinancialState()===$sharedFinancial && $sharedCounts===array(countAuto('bank'),countAuto('paiement'),countAuto('paiement_facture'),countAuto('kreabank_payment_batch'))
+	&& countAuto('kreabank_recon_audit')===$sharedAudits+1,'Shared-customer reconciliation reuses every recorded financial object and writes one audit only');
+rejectAuto(static function()use($sharedRow){customerTransferSignedApply($sharedRow);},'A shared-customer signed reconciliation cannot be replayed');
+unset($GLOBALS['customerTransferFixtureSocieteEntities']);
+
 $wrong=customerTransferFixture(841000,'451.73',102);$worklist=new KreaBankWorklist($db,1,$service);$wrongPrepared=$worklist->prepare('staged:'.$wrong['source']);
 checkAuto(!empty($wrongPrepared['account_review']) && $wrongPrepared['pair']===null
 	&& $wrongPrepared['account_candidates'][0]['bank_line_id']===$wrong['bank'],'A recorded customer transfer in another owned bank remains a warning without an executable match');

@@ -9,6 +9,49 @@ function kreabankWorklistPairCanReconcile($pair)
 	return in_array($pair['suggestion']['doc_type'] ?? '', array('native_bank','payment','payment_supplier','payment_linked','payment_supplier_linked','payment_tax'), true);
 }
 
+/** Status is persisted source/link evidence and private planning state, never a matching result. */
+function kreabankWorklistProjectionStatus($source, $hasDraft = false)
+{
+	require_once __DIR__ . '/kreabank_integration.lib.php';
+	$nativeState=kreabankIntegrationLineState((object)$source,(string)($source['statement_ref']??''));
+	if ($nativeState==='KreaBankLinkNeedsReview') { return 'review'; }
+	if ($nativeState==='KreaBankReconciled') { return 'reconciled'; }
+	return $hasDraft ? 'draft' : 'pending';
+}
+
+/** Match the existing Pending source gate; historic closed/skipped rows remain available in All. */
+function kreabankWorklistPendingSource($source)
+{
+	return in_array((int)$source['status'],array(0,1),true) && (int)($source['rappro']??0)===0
+		&& (int)($source['account_closed']??1)===0 && (int)($source['account_reconcilable']??0)===1;
+}
+
+/** Exact scoped counts never turn an incomplete derived filter into an apparent empty result. */
+function kreabankWorklistStatusCounts($sources, $state, $summaries = array(), $complete = false)
+{
+	$unknown=array_fill_keys(array('pending','reconciled','draft','review','all'),null);
+	$derived=$state['filters']['match']!=='' || $state['filters']['payment_account']!=='';
+	if ($derived && !$complete) { return $unknown; }
+	$rows=array();
+	foreach ($sources as $key=>$source) {
+		if ($derived && (!isset($summaries[$key]) || !array_key_exists('match',$summaries[$key]) || !array_key_exists('payment_accounts',$summaries[$key]))) { return $unknown; }
+		$row=$derived ? $summaries[$key] : array();
+		$row['key']=$key; $row['line']=$source; $row['status']=$source['worklist_status']; $rows[]=$row;
+	}
+	$state['filters']['status']='all';
+	$rows=kreabankWorklistFilterRows($rows,$state);
+	$counts=array_fill_keys(array_keys($unknown),0);
+	foreach ($rows as $row) {
+		$counts['all']++; $status=$row['status'];
+		if ($status==='review' || $status==='reconciled') { $counts[$status]++; }
+		elseif (kreabankWorklistPendingSource($row['line'])) {
+			$counts['pending']++;
+			if ($status==='draft') { $counts['draft']++; }
+		}
+	}
+	return $counts;
+}
+
 /** Unpaid documents show a planned account; existing payments retain their recorded account. */
 function kreabankWorklistPaymentAccount($pair)
 {

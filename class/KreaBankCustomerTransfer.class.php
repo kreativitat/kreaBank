@@ -73,6 +73,11 @@ final class KreaBankCustomerTransfer
 			if ((!is_int($id) && !is_string($id)) || !preg_match('/^[1-9][0-9]{0,9}$/D',(string)$id)) { return array(); }
 		}
 		$ids=array_values(array_unique(array_map('intval',$ids))); sort($ids,SORT_NUMERIC);
+		// Only the customer parent follows native third-party sharing. Financial
+		// records remain directly owned, and every display/locked read refreshes scope.
+		$customerScope=getEntity('societe');
+		if (!is_string($customerScope) || !preg_match('/^\s*[0-9]{1,10}(?:\s*,\s*[0-9]{1,10})*\s*$/D',$customerScope)) { return array(); }
+		$customerEntities=array_values(array_unique(array_map('intval',preg_split('/\s*,\s*/',trim($customerScope)))));
 		if (!$this->hasTable('c_paiement')) { return array(); }
 		$modeEntities=preg_split('/\s*,\s*/',trim((string)getEntity('c_paiement')));
 		if (!$modeEntities || array_filter($modeEntities,static function($id){return !ctype_digit($id);})) { return array(); }
@@ -112,14 +117,14 @@ final class KreaBankCustomerTransfer
 		$out=array();
 		foreach ($receipts as $receipt) {
 			$members=$byPayment[(int)$receipt['rowid']]??array();
-			try { $metadata=$this->metadata($receipt,$members); }
+			try { $metadata=$this->metadata($receipt,$members,$customerEntities); }
 			catch (DomainException $error) { continue; }
 			if ($metadata) { $out[(int)$receipt['bank_line_id']]=$metadata; }
 		}
 		return $out;
 	}
 
-	private function metadata($receipt, $allocations)
+	private function metadata($receipt, $allocations, $customerEntities)
 	{
 		$amount=KreaBankPaymentBatchDecimal::normalize($receipt['bank_amount']);
 		if ($amount==='0.00000000' || $amount[0]==='-' || $amount!==KreaBankPaymentBatchDecimal::normalize($receipt['payment_amount'])
@@ -128,7 +133,7 @@ final class KreaBankCustomerTransfer
 		foreach ($allocations as $allocation) {
 			if ((int)$allocation['invoice_id']<=0 || (int)$allocation['invoice_entity']!==$this->entity || (int)$allocation['invoice_type']===2
 				|| !in_array((int)$allocation['invoice_status'],array(1,2),true) || isset($invoices[(int)$allocation['invoice_id']])
-				|| (int)$allocation['customer_id']<=0 || (int)$allocation['customer_entity']!==$this->entity
+				|| (int)$allocation['customer_id']<=0 || !in_array((int)$allocation['customer_entity'],$customerEntities,true)
 				|| (isset($allocation['customer_visible']) && !(int)$allocation['customer_visible'])
 				|| !in_array((string)$allocation['invoice_currency'],array('',$currency),true)
 				|| !in_array((string)($allocation['multicurrency_code']??''),array('',$currency),true)) { return null; }

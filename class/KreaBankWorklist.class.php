@@ -21,6 +21,8 @@ class KreaBankWorklist
 	private $sourceRows = array();
 	private $searchTruncated = false;
 	private $customerTransferReviewer;
+	private $draftSourceIds;
+	private $draftActor = 0;
 
 	public function __construct($db, $entity, $service)
 	{
@@ -46,6 +48,36 @@ class KreaBankWorklist
 	/** Combined imported generations. SQL filters precede the bounded complete scan. */
 	public function sources($state)
 	{
+		$rows=$this->rows($this->sourceSql($state).$this->db->plimit(self::MAX_ROWS+1));
+		if (count($rows)>self::MAX_ROWS) { throw new RuntimeException('KreaBankWorklistRefineFilters'); }
+		$out=$this->classifySources($rows);
+		if ($state['filters']['status']!=='all') {
+			$out=array_filter($out,static function($row)use($state){
+				return $state['filters']['status']==='pending' ? in_array($row['worklist_status'],array('pending','draft'),true)
+					: $row['worklist_status']===$state['filters']['status'];
+			});
+		}
+		$this->sourceRows=$out;
+		return $out;
+	}
+
+	/** Other status tabs are counted from source evidence without running suggestions for those rows. */
+	public function statusCounts($state, $summaries = array(), $complete = false)
+	{
+		$unknown=array_fill_keys(array('pending','reconciled','draft','review','all'),null);
+		if (($state['filters']['match']!=='' || $state['filters']['payment_account']!=='') && !$complete) { return $unknown; }
+		$rows=$this->rows($this->sourceSql($state,false).$this->db->plimit(self::MAX_ROWS+1));
+		if (count($rows)>self::MAX_ROWS) { return $unknown; }
+		try { $sources=$this->classifySources($rows); }
+		catch (RuntimeException $error) {
+			if ($error->getMessage()==='KreaBankWorklistRefineFilters') { return $unknown; }
+			throw $error;
+		}
+		return kreabankWorklistStatusCounts($sources,$state,$summaries,$complete);
+	}
+
+	private function sourceSql($state, $includeStatus = true)
+	{
 		$f = $state['filters']; $projection = new KreaBankIntegration($this->db, $this->entity);
 		$where = ' WHERE h.is_duplicate=0 AND ba.courant<>2';
 		if ($f['account'] !== '') { $where .= ' AND h.bank_account_id=' . (int) $f['account']; }
@@ -59,20 +91,41 @@ class KreaBankWorklist
 			preg_match('/^(>=|<=|<>|>|<|=)?\s*([+-]?\d+(?:[.,]\d{1,8})?)$/D', $f['amount'], $m);
 			$where .= ' AND h.amount' . ($m[1] ?: '=') . str_replace(',', '.', $m[2]);
 		}
-		if (in_array($f['status'], array('pending','draft'), true)) { $where .= ' AND h.status IN (0,1) AND COALESCE(h.rappro,0)=0 AND ba.clos=0 AND ba.rappro=1'; }
-		elseif ($f['status'] === 'reconciled') { $where .= " AND (h.status=2 OR (h.source_storage='legacy_native' AND h.rappro=1))"; }
-		$sql = 'SELECT h.* FROM (' . $projection->bankStatementSql() . ') h JOIN ' . $this->db->prefix()
+		if ($includeStatus && in_array($f['status'], array('pending','draft'), true)) { $where .= ' AND h.status IN (0,1) AND COALESCE(h.rappro,0)=0 AND ba.clos=0 AND ba.rappro=1'; }
+		elseif ($includeStatus && $f['status'] === 'reconciled') { $where .= " AND (h.status=2 OR (h.source_storage='legacy_native' AND h.rappro=1))"; }
+		return 'SELECT h.*,ba.clos AS account_closed,ba.rappro AS account_reconcilable FROM (' . $projection->bankStatementSql((int)$f['account']) . ') h JOIN ' . $this->db->prefix()
 			. 'bank_account ba ON ba.rowid=h.bank_account_id AND ba.entity=' . $this->entity . $where
 			. ' ORDER BY h.operation_date,h.bank_account_id,h.statement_id,h.line_rank,h.rowid,h.source_storage';
-		$rows = $this->rows($sql . $this->db->plimit(self::MAX_ROWS + 1));
-		if (count($rows) > self::MAX_ROWS) { throw new RuntimeException('KreaBankWorklistRefineFilters'); }
-		$out = array();
+	}
+
+	private function classifySources($rows)
+	{
+		$drafts=$this->draftSourceIds(); $out=array();
 		foreach ($rows as $row) {
 			$key = ($row['source_storage'] === 'staging' ? 'staged:' : 'native:') . (int) $row['rowid'];
+			$row['worklist_status']=kreabankWorklistProjectionStatus($row,$row['source_storage']==='staging' && isset($drafts[(int)$row['rowid']]));
 			$out[$key] = $row;
 		}
-		$this->sourceRows = $out;
 		return $out;
+	}
+
+	/** The native planning table is actor-private; fetch its owned identities only once per request. */
+	private function draftSourceIds()
+	{
+		$actor=(int)($this->service->user->id??0);
+		if ($this->draftSourceIds!==null && $this->draftActor===$actor) { return $this->draftSourceIds; }
+		$this->draftActor=$actor; $this->draftSourceIds=null;
+		if (!$this->batches || $actor<=0) { return $this->draftSourceIds=array(); }
+		$p=$this->db->prefix(); $e=$this->entity;
+		$rows=$this->rows("SELECT d.fk_statement_line FROM {$p}kreabank_payment_batch_draft d"
+			. " JOIN {$p}kreabank_statement_line l ON l.rowid=d.fk_statement_line AND l.entity=d.entity"
+			. " JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
+			. " JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=s.entity"
+			. " WHERE d.entity=$e AND d.fk_user=$actor ORDER BY d.fk_statement_line".$this->db->plimit(self::MAX_ROWS+1));
+		if (count($rows)>self::MAX_ROWS) { throw new RuntimeException('KreaBankWorklistRefineFilters'); }
+		$this->draftSourceIds=array();
+		foreach ($rows as $row) { $this->draftSourceIds[(int)$row['fk_statement_line']]=true; }
+		return $this->draftSourceIds;
 	}
 
 	public function load($key)
@@ -96,6 +149,7 @@ class KreaBankWorklist
 		$line['amount_decimal'] = (string) $raw[0]['amount'];
 		foreach (array('group_id','group_count','group_valid','group_date') as $field) { $line[$field] = $raw[0][$field] ?? null; }
 		$line['needs_review'] = kreabankIntegrationLineState((object) $raw[0],$raw[0]['statement_ref']) === 'KreaBankLinkNeedsReview';
+		$line['worklist_status']=$raw[0]['worklist_status']??kreabankWorklistProjectionStatus($raw[0]);
 		return $line;
 	}
 
@@ -165,7 +219,7 @@ class KreaBankWorklist
 			foreach ($row['batch']['draft']['accounts'] as $a) { $accounts[] = (int) $a['id']; $accountRefs[] = $a['ref']; }
 		}
 		if (!empty($row['completed'])) { $references[] = $row['completed']['reference']; $accounts[] = (int) $row['line']['bank_account_id']; $accountRefs[] = $row['line']['bank_account_ref']; }
-		$status = $row['line']['needs_review'] ? 'review' : ((int) $row['line']['status'] === 2 ? 'reconciled' : (!empty($row['batch']['draft']) ? 'draft' : 'pending'));
+		$status = $row['line']['needs_review'] ? 'review' : (((int) $row['line']['status'] === 2 || ($row['line']['worklist_status']??'')==='reconciled') ? 'reconciled' : (!empty($row['batch']['draft']) ? 'draft' : 'pending'));
 		return array('key'=>$key,'match'=>implode(' ', $references),'payment_accounts'=>array_values(array_unique($accounts)),
 			'payment_account'=>implode(', ', array_unique($accountRefs)),'status'=>$status,
 			'dependencies'=>kreabankWorklistDependencies($row),'_prepared'=>$row);
@@ -176,7 +230,7 @@ class KreaBankWorklist
 		$line = $this->load($key);
 		$batch = $this->batches && !empty($line['fk_statement']) ? $this->readBatch($line) : array();
 		$pair = null; $accountCandidates = array(); $accountReview = null; $completed = null;
-		if ((int) $line['status'] === 0 && $line['account_open'] && empty($batch['active'])) {
+		if ((int) $line['status'] === 0 && $line['account_open'] && empty($line['needs_review']) && empty($batch['active'])) {
 			$accountReview = !empty($line['fk_statement']) ? $this->service->getWorklistPaymentAccountReview((int) $line['rowid'],array($line['bank_account_id'])) : null;
 			$prepared = $accountReview ? array() : ($this->callbacks['prepareReviewRow'])($line);
 			$accountReview = $accountReview ?: ($prepared['account_review'] ?? null);

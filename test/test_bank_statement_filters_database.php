@@ -52,4 +52,38 @@ checkAuto($filtered(array(),202)[0]===0 && $filtered(array('bank_account_ref'=>'
 $all=$filtered(array('credit'=>'>=0'),101);$seen=array();
 for($offset=0;$offset<$all[0];$offset+=7){list($count,$rows)=$filtered(array('credit'=>'>=0'),101,7,$offset);checkAuto($count===$all[0],'Count and rows share identical filters');foreach($rows as $row){$seen[]=$row->source_storage.':'.$row->rowid;}}
 checkAuto(count($seen)===$all[0] && count(array_unique($seen))===$all[0],'Filtered pagination has no missing or repeated equal-date rows');
+
+// Distinct persisted states demonstrate why exceptional tabs remain available.
+foreach (array(98001,98002,98003,98004,98005,98006) as $id) {
+	stageAuto($id,'7.25','STATUS-FILTER',120);
+	$db->query("UPDATE kbauto_kreabank_statement_line SET description='STATUS-FILTER-FIXTURE',running_balance=123.45678901 WHERE rowid=$id");
+}
+foreach (array(98002,98003,98004) as $id) {
+	bankAuto($id,'7.25','STATUS-FILTER',120);
+	$db->query("UPDATE kbauto_kreabank_statement_line SET fk_native_bank_line=$id,status=".($id===98002?1:2)." WHERE rowid=$id");
+}
+$db->query("UPDATE kbauto_bank SET rappro=1,num_releve='ST-98003' WHERE rowid=98003");
+$db->query("UPDATE kbauto_bank SET rappro=1,num_releve='ST-98004',amount=7.27 WHERE rowid=98004");
+$db->query('UPDATE kbauto_kreabank_statement_line SET status=3 WHERE rowid=98005');
+$db->query('UPDATE kbauto_kreabank_statement_line SET is_duplicate=1 WHERE rowid=98006');
+$source='('.$report->bankStatementWithBalancesSql(120).') h';
+$filters=array('description'=>'STATUS-FILTER-FIXTURE','status'=>'review');
+$counts=$db->fetch_object($report->query(kreabankStatementListStatusCountsSql($db,$source,$filters)));
+checkAuto((int)$counts->total===6 && (int)$counts->pending===2 && (int)$counts->registered===1 && (int)$counts->reconciled===1 && (int)$counts->review===1 && (int)$counts->skipped===1 && (int)$counts->duplicate===1,'Status counts cover distinct persisted evidence, ignore current status and count duplicate independently');
+$expected=array('pending'=>array(98006,98001),'registered'=>array(98002),'reconciled'=>array(98003),'review'=>array(98004),'skipped'=>array(98005),'duplicate'=>array(98006));
+$before=array(countAuto('bank'),countAuto('kreabank_statement_line'),countAuto('kreabank_recon_audit'));
+foreach ($expected as $status=>$expectedIds) {
+	$filters['status']=$status;
+	list($total,$rows)=$filtered($filters,120,1);
+	checkAuto($total===(int)$counts->$status && count($rows)===1 && (int)$rows[0]->rowid===$expectedIds[0],'Distinct '.$status.' count and first page agree with the current projection');
+	checkAuto($rows[0]->display_balance==='123.45678901','Status filtering preserves supplied balance evidence for '.$status);
+	$actual=array();for($offset=0;$offset<$total;$offset++){foreach($filtered($filters,120,1,$offset)[1] as $row){$actual[]=(int)$row->rowid;}}
+	checkAuto($actual===$expectedIds,'Status '.$status.' pagination neither repeats nor skips matching evidence');
+}
+$countsEmpty=$db->fetch_object($report->query(kreabankStatementListStatusCountsSql($db,$source,array('description'=>'NO-SUCH-SYNTHETIC-STATUS'))));
+checkAuto(array_sum(array_map('intval',(array)$countsEmpty))===0,'Empty column filters return numeric zero for every status');
+$foreign='('.$report->bankStatementWithBalancesSql(202).') h';
+$countsForeign=$db->fetch_object($report->query(kreabankStatementListStatusCountsSql($db,$foreign,array())));
+checkAuto((int)$countsForeign->total===0,'Status aggregation never broadens selected foreign account scope');
+checkAuto($before===array(countAuto('bank'),countAuto('kreabank_statement_line'),countAuto('kreabank_recon_audit')),'Status aggregation and pagination perform no source, ledger or audit writes');
 print "OK: $checks bank statement filter database checks\n";

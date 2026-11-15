@@ -94,3 +94,8 @@ KreaBankWorklistLegacySelectionUnavailable=Esta importação antiga já tem um m
 # Recorded customer transfers
 KreaBankWorklistCustomerTransfer=Transferência de cliente
 KreaBankWorklistAllocatedInvoices=Faturas pagas
+
+KreaBankWorklistUndoReconciliation=Desfazer reconciliação
+KreaBankWorklistReconciliationUndone=Reconciliação desfeita
+KreaBankWorklistUndoReconciliationEffect=Devolve esta linha de extrato a por reconciliar. Mantém os pagamentos e os lançamentos bancários existentes.
+KreaBankWorklistUndoWriteoffEffect=Devolve esta linha de extrato a por reconciliar e reverte o pagamento criado para a diferença de pagamento revista.
