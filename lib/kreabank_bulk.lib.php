@@ -8,6 +8,10 @@ require_once __DIR__ . '/kreabank_list.lib.php';
 /** Display native payment identities without changing the reference used for scoring. */
 function kreabankBulkSuggestionReference($suggestion)
 {
+	if (!empty($suggestion['customer_transfer']['ref'])) {
+		$transfer = $suggestion['customer_transfer'];
+		return $transfer['ref'] . (!empty($transfer['number']) && $transfer['number'] !== $transfer['ref'] ? ' / ' . $transfer['number'] : '');
+	}
 	$reference = trim((string) ($suggestion['doc_ref'] ?? '')) ?: '#' . (int) ($suggestion['doc_id'] ?? 0);
 	$payment = trim((string) ($suggestion['payment_ref'] ?? ''));
 	return $payment !== '' && $reference !== $payment && strpos($reference, $payment . ' / ') !== 0
@@ -58,6 +62,7 @@ function kreabankBulkReviewSignature($row, $scope, $expires, $secret)
 		foreach (array('tax_id','tax_type_id','tax_payment_mode_id') as $key) { $document[$key] = (int) ($suggestion[$key] ?? 0); }
 	}
 	$document['amount_open'] = number_format((float) ($suggestion['amount_open'] ?? 0), 8, '.', '');
+	if (!empty($suggestion['customer_transfer'])) { $document['customer_transfer'] = $suggestion['customer_transfer']; }
 	if (!empty($row['writeoff'])) { $document['writeoff'] = $row['writeoff']; }
 	if (isset($row['worklist_selection'])) { $document['worklist_selection'] = $row['worklist_selection']; }
 	if (!empty($row['bank_rule'])) {

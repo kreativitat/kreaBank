@@ -355,7 +355,8 @@ $candidateModel = static function ($pair,$paymentUrl = '') {
 	$s = $pair['suggestion']; $account = kreabankWorklistPaymentAccount($pair);
 	return array('key'=>$s['doc_type'] . '__' . (int) $s['doc_id'],'doc_type'=>$s['doc_type'],'doc_id'=>(int) $s['doc_id'],'reference'=>kreabankBulkSuggestionReference($s),'date'=>$s['doc_date'] ?? '',
 		'amount'=>$s['amount_open'],'currency'=>$pair['line']['currency'],'account_ref'=>$account['ref'],'account_planned'=>$account['planned'],
-		'description'=>$s['thirdparty_name'] ?? '', 'consequence'=>$account['planned'] ? 'KreaBankWorklistPaymentRequired' : '', 'payment_url'=>$paymentUrl);
+		'description'=>$s['thirdparty_name'] ?? '', 'consequence'=>$account['planned'] ? 'KreaBankWorklistPaymentRequired' : '', 'payment_url'=>$paymentUrl,
+		'customer_transfer'=>$s['customer_transfer'] ?? null);
 };
 kreabankWorklistPresentationPage($cache,array_column($page['rows'],'key'),$state['limit']);
 foreach ($page['rows'] as $indexRow) {

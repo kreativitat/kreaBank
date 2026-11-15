@@ -38,6 +38,13 @@
 
 ## Separate reconciliation list
 
+- Recorded customer bank-transfer enrichment is owned by `KreaBankCustomerTransfer`.
+  Accept native mode codes `TRF`/`VIR`, not numeric IDs or translated labels.
+  Keep one existing receipt/native target across its complete owned invoice
+  allocations, require exact decimal evidence, and sign/recheck the receipt facts.
+  This creates no customer payment or allocation. Enrichment is an explicit
+  manual-review opt-in; unattended scans keep their original candidate evidence.
+  Other payment methods and the shared safe matcher retain their contracts.
 - Existing unpaid salary/tax payment advice is list-only in
   `KreaBankPlannedPayment`; never add salaries to the unattended/bulk matcher.
   `recordpayment.php` creates only native payments for existing parents under

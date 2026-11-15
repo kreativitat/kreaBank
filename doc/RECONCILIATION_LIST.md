@@ -38,6 +38,18 @@ Unpaid invoice and tax suggestions have a grey disabled Reconcile action until a
 payment is recorded. Rows never issue approval tokens
 for these documents; the controller also rejects earlier signed invoice/tax reviews.
 Existing native movements and recorded payments retain their reviewed approval.
+Recorded customer transfers (`TRF` or `VIR`) retain one native movement per
+receipt, even when paid across several invoices. The compact row links its
+receipt reference to the native customer-payment card, shows the owned customer
+and invoice count, and uses the real receipt number/reference in the shared
+matcher for signed manual review. Unattended and automatic-safe scans retain
+their original candidate evidence. Complete positive allocations must sum exactly to the existing receipt
+and bank movement in company currency. Ambiguous, foreign, orphan, credit-note
+or incomplete allocation evidence never supplies this enrichment. The displayed
+receipt facts are signed and rechecked under the reconciliation locks. Existing
+wrong-bank warnings remain separate and block approval until corrected. This
+feature creates no payment or invoice allocation and does not infer settlement
+fees or payer aliases. Other payment methods retain their existing behavior.
 Eligible unpaid customer/supplier invoice proposals offer **Record payment** in
 the row. This opens the installed native payment form
 in Dolibarr's iframe dialog, with the invoice, statement account, booking date
@@ -181,6 +193,12 @@ Keep normalized history tables; do not drop them as a routine rollback.
 Pure/controller suites: `test_worklist.php`, `test_worklist_view.php`,
 `test_worklist_native_translation.php`, `test_worklist_selection.php`, `test_payment_batches.php`, and
 `node test/test_worklist_client.cjs`.
+`test_customer_transfer.php` covers recorded-transfer references, signed evidence
+and native translated card rendering without a database. Its guarded
+`test_customer_transfer_database.php` counterpart verifies existing multi-invoice
+receipts, exact source matching, manual-only discovery, permissions, stale facts,
+wrong-bank blocking and duplicate-free reconciliation on the same disposable
+localhost:33317 fixture. It never opens an installation database.
 The view fixture supports `--html <case> [en_US|pt_PT]` with intercepted submissions.
 
 Database suites `test_payment_batches_database.php`, `test_worklist_database.php`

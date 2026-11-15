@@ -8,6 +8,7 @@
  */
 
 require_once __DIR__ . '/../lib/kreabank.lib.php';
+require_once __DIR__ . '/KreaBankCustomerTransfer.class.php';
 
 /**
  * Multi-criteria matching engine.
@@ -94,6 +95,9 @@ class KreaBankMatcher
 				'details' => $scoreData['details'],
 				'strategy_level' => $scoreData['strategy_level'],
 			);
+			if (!empty($document['customer_transfer'])) {
+				$suggestions[count($suggestions) - 1]['customer_transfer'] = $document['customer_transfer'];
+			}
 		}
 
 		usort($suggestions, static function ($a, $b) {
@@ -123,6 +127,9 @@ class KreaBankMatcher
 	 */
 	public function scoreLineToDocument($line, $document, $patterns, $dateTolerance = 3)
 	{
+		if (!empty($document['customer_transfer']) && !KreaBankCustomerTransfer::matchesSource($document['customer_transfer'],$line)) {
+			return array('score'=>0,'details'=>array(),'strategy_level'=>0);
+		}
 		$score = 0;
 		$details = array();
 		$strategyLevel = 0;
@@ -178,12 +185,22 @@ class KreaBankMatcher
 		$lineRefText = kreabankNormalizeText(($line['payment_reference'] ?? '') . ' ' . ($line['description'] ?? ''));
 		$docRef = kreabankNormalizeText(($document['ref'] ?? ''));
 		$docRefClients = $this->extractNormalizedReferences(($document['ref_client'] ?? ''));
-		if ($this->hasStrongPaymentReferenceMatch(($line['payment_reference'] ?? ''), ($document['ref'] ?? ''))) {
+		$transferPaymentReference = false; $transferDescriptionReference = false;
+		foreach (array('number','ref') as $field) {
+			$reference = (string) ($document['customer_transfer'][$field] ?? '');
+			$core = $this->normalizeReferenceCore($reference);
+			if (strlen($core) < self::STRONG_REFERENCE_MIN_LENGTH || !preg_match('/[0-9]/',$core)) { continue; }
+			$transferPaymentReference = $transferPaymentReference || $this->hasStrongPaymentReferenceMatch(($line['payment_reference'] ?? ''),$reference);
+			$normalized = kreabankNormalizeText($reference);
+			$transferDescriptionReference = $transferDescriptionReference || ($normalized !== ''
+				&& preg_match('/(?<![a-z0-9])' . preg_quote($normalized,'/') . '(?![a-z0-9])/i',$lineRefText) === 1);
+		}
+		if ($transferPaymentReference || $this->hasStrongPaymentReferenceMatch(($line['payment_reference'] ?? ''), ($document['ref'] ?? ''))) {
 			$score += 120;
 			$details[] = 'ref_payment';
 			$hasStrongReferenceMatch = true;
 			$strategyLevel = max($strategyLevel, 3);
-		} elseif ($docRef !== '' && strpos($lineRefText, $docRef) !== false) {
+		} elseif ($transferDescriptionReference || ($docRef !== '' && strpos($lineRefText, $docRef) !== false)) {
 			$score += 50;
 			$details[] = 'ref_exact';
 			$hasStrongReferenceMatch = true;

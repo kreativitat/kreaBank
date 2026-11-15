@@ -160,6 +160,14 @@ function worklistViewFixture($case)
 		if ($case==='selection_legacy') { $r['key']='native:11'; $r['batch_unavailable']=true; $r['expanded']=false; $r['max_members']=1; $r['batch_form']['grouping_available']=false; }
 		unset($r);
 	}
+	if ($case === 'customer_transfer') {
+		$model['hide_statement_account'] = true;
+		$model['rows'][0]['line'] = array_replace($line,array('amount'=>'321.47000000','bank_account_ref'=>'CURRENT-BANK','description'=>'Incoming customer transfer INV-TRANSFER-202611'));
+		$model['rows'][0]['review'] = array('doc_type'=>'native_bank','doc_id'=>21,'reference'=>'PAY-TRANSFER-202611','date'=>'2026-11-11','amount'=>'321.47000000','currency'=>'EUR',
+			'description'=>'Customer example','account_ref'=>'CURRENT-BANK','action'=>$action,
+			'customer_transfer'=>array('payment_id'=>51,'ref'=>'PAY-TRANSFER-202611','number'=>'INV-TRANSFER-202611','allocation_count'=>20));
+		$model['rows'][0]['candidates'] = array(); $model['rows'][0]['batch_candidates'] = array();
+	}
 	if ($case === 'empty') { $model['rows'] = array(); }
 	if ($case === 'unsafe') {
 		$model['rows'][0]['line']['description'] = '<img src=x onerror=alert(1)>';

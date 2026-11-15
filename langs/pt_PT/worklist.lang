@@ -91,3 +91,6 @@ KreaBankWorklistMovement=movimento
 KreaBankWorklistMovements=movimentos
 
 KreaBankWorklistLegacySelectionUnavailable=Esta importação antiga já tem um movimento bancário. Reveja eventuais movimentos duplicados antes de selecionar outro movimento.
+# Recorded customer transfers
+KreaBankWorklistCustomerTransfer=Transferência de cliente
+KreaBankWorklistAllocatedInvoices=Faturas pagas

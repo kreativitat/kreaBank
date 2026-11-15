@@ -184,7 +184,7 @@ trait KreaBankWorklistSelectionTrait
 	private function worklistSelectionDocument($source, $id)
 	{
 		$line = $source['line'];
-		$documents = $this->getOpenNativeBankDocuments((int) $line['direction'], 20, null, 0, (int) ($line['native_bank_line_id'] ?? 0), (int) $line['bank_account_id'], $id);
+		$documents = $this->getOpenNativeBankDocuments((int) $line['direction'], 20, null, 0, (int) ($line['native_bank_line_id'] ?? 0), (int) $line['bank_account_id'], $id, true);
 		if (count($documents) !== 1) { throw new DomainException('Selected native movement is unavailable'); }
 		(new KreaBankReconciliationScope($this->db, $this->entity))->assertDocument('native_bank', $id, (int) $line['bank_account_id']);
 		return $documents[0];

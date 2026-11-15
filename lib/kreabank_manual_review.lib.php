@@ -284,7 +284,7 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 			return array('line'=>$line,'account_review'=>$review,'suggestion'=>array('doc_type'=>'account_review','doc_id'=>0),
 				'allocation'=>0,'preselected'=>false,'is_bulk_safe'=>false);
 		}
-		$suggestionsByLine = $service->getSuggestionsForLines(array($line), 0, $dateTolerance, null, false);
+		$suggestionsByLine = $service->getSuggestionsForLines(array($line), 0, $dateTolerance, null, false, true);
 		$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestionsByLine[$lineId] ?? array(), $dateTolerance);
 		$resolved = $resolveLineBestSuggestion($line, $suggestions);
 		if (empty($resolved['suggestion'])) {
@@ -301,7 +301,7 @@ function kreabankManualReviewCallbacks($service, $dateTolerance, $bulkMatchMinSc
 		}
 		$accountReview = !empty($line['fk_statement']) && $service->getPaymentAccountReview($lineId, array($line['bank_account_id']));
 		if ($accountReview) { return array(); }
-		$suggestionsByLine = $service->getSuggestionsForLines(array($line), 0, $dateTolerance, null, false);
+		$suggestionsByLine = $service->getSuggestionsForLines(array($line), 0, $dateTolerance, null, false, true);
 		$suggestions = $appendLinkedFallbackSuggestions($service, $line, $suggestionsByLine[$lineId] ?? array(), $dateTolerance);
 		if ($singleReview && method_exists($service, 'appendBankRuleManualSuggestions')) { $suggestions = $service->appendBankRuleManualSuggestions($line, $suggestions); }
 		$rows = array();

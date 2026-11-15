@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.63 — 2026-11-15
+
+- Identify existing customer bank-transfer receipts in manual review by their native payment reference, customer and complete invoice allocations while retaining the original bank movement. A receipt covering several invoices remains one payment and one reconciliation target. Unattended matching retains its existing evidence.
+- Require exact recorded amount, currency, ownership and allocation evidence for the enriched transfer match. Sign and recheck its current facts before reconciliation; create no customer payment or invoice allocation.
+
 ## 1.20.62 — 2026-11-15
 
 - Remove the existing-movement selector's search and optional batch-name fields. Keep Save draft and Review selection distinct with clear labels and explanations; final reconciliation remains a separate approval.

@@ -134,12 +134,18 @@ function kreabankWorklistCandidate($candidate, $langs)
 {
 	$reference = kreabankWorklistEscape(kreabankWorklistNativeLabel($candidate['reference'] ?? '', $langs));
 	$url = kreabankWorklistDocumentUrl($candidate['doc_type'] ?? '', $candidate['doc_id'] ?? 0);
+	$transfer = $candidate['customer_transfer'] ?? null;
+	if ($transfer) { $url = kreabankWorklistDocumentUrl('payment', $transfer['payment_id'] ?? 0); }
 	$html = '<strong>' . ($url !== '' ? '<a href="' . kreabankWorklistEscape($url) . '" target="_blank" rel="noopener noreferrer">' . $reference . '</a>' : $reference) . '</strong>';
 	if (!empty($candidate['description'])) { $html .= '<span class="kb-wl-caption">' . kreabankWorklistEscape(kreabankWorklistNativeLabel($candidate['description'], $langs)) . '</span>'; }
 	$html .= '<span class="kb-wl-caption">' . kreabankWorklistEscape(kreabankWorklistDate($candidate['date'] ?? ''));
 	if (isset($candidate['amount'])) { $html .= ' · ' . kreabankWorklistMoney($candidate['amount'], $candidate['currency'] ?? ''); }
 	elseif (array_key_exists('amount', $candidate)) { $html .= ' · —'; }
 	$html .= '</span>';
+	if ($transfer) {
+		$html .= '<span class="kb-wl-caption">' . kreabankWorklistEscape(kreabankWorklistTranslate($langs,'KreaBankWorklistCustomerTransfer'))
+			. ' · ' . kreabankWorklistEscape(kreabankWorklistTranslate($langs,'KreaBankWorklistAllocatedInvoices')) . ': ' . (int) ($transfer['allocation_count'] ?? 0) . '</span>';
+	}
 	if (!empty($candidate['consequence'])) { $html .= '<span class="kb-wl-caption">' . kreabankWorklistEscape(kreabankWorklistTranslate($langs, $candidate['consequence'])) . '</span>'; }
 	return $html;
 }

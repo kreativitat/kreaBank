@@ -20,6 +20,7 @@ class KreaBankWorklist
 	private $batches;
 	private $sourceRows = array();
 	private $searchTruncated = false;
+	private $customerTransferReviewer;
 
 	public function __construct($db, $entity, $service)
 	{
@@ -113,6 +114,11 @@ class KreaBankWorklist
 		$salary=new KreaBankSalaryPaymentReview($this->db,$this->service->user,$e);
 		foreach ($records as $record) {
 			$type=$record['doc_type']; $id=(int)$record['doc_id']; $account=(int)($record['bank_account_id']??$line['bank_account_id']);
+			if (!empty($record['customer_transfer'])) {
+				if (!$this->customerTransferReviewer) { $this->customerTransferReviewer = new KreaBankCustomerTransfer($this->db,$this->service->user,$e); }
+				$current = $this->customerTransferReviewer->metadataForBankIds(array($id));
+				if (($current[$id] ?? null) !== $record['customer_transfer']) { return false; }
+			}
 			if ($type==='salary') {
 				if (!$this->rows("SELECT s.rowid FROM {$p}salary s JOIN {$p}user eu ON eu.rowid=s.fk_user AND eu.entity IN (0,s.entity)"
 					. " WHERE s.rowid=$id AND s.entity=$e AND s.paye=0 AND (".$salary->readableSql('s.fk_user').')')) { return false; }

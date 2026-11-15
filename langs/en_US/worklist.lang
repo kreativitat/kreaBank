@@ -91,3 +91,6 @@ KreaBankWorklistMovement=movement
 KreaBankWorklistMovements=movements
 
 KreaBankWorklistLegacySelectionUnavailable=This legacy import already has a bank movement. Review duplicate ledger entries before selecting another movement.
+# Recorded customer transfers
+KreaBankWorklistCustomerTransfer=Customer bank transfer
+KreaBankWorklistAllocatedInvoices=Invoices paid

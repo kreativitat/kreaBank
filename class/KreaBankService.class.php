@@ -14,6 +14,7 @@ require_once __DIR__ . '/KreaBankNativeBankAdapter.class.php';
 require_once __DIR__ . '/KreaBankReconciliationScope.class.php';
 require_once __DIR__ . '/KreaBankTaxReconciliation.class.php';
 require_once __DIR__ . '/KreaBankSalaryPaymentReview.class.php';
+require_once __DIR__ . '/KreaBankCustomerTransfer.class.php';
 require_once __DIR__ . '/KreaBankStatementEvidence.class.php';
 require_once __DIR__ . '/KreaBankExistingMovementException.class.php';
 require_once __DIR__ . '/KreaBankPaymentBatchTrait.php';
@@ -99,6 +100,9 @@ class KreaBankService
 
 	/** @var KreaBankSalaryPaymentReview|null Read-only native schema availability is request-local. */
 	private $salaryPaymentReviewer;
+
+	/** @var KreaBankCustomerTransfer|null Read-only receipt enrichment is request-local. */
+	private $customerTransferReviewer;
 
 	/** @var array<int,string> */
 	protected $bankCurrencyCache = array();
@@ -1021,9 +1025,10 @@ class KreaBankService
 	 * @param string|null $anchorDate
 	 * @param int|null $intervalDays
 	 * @param bool $includeReconciledLinked Include linked payments already conciliated in native bank module
+	 * @param bool $includeCustomerTransfers Enrich recorded customer transfers for explicit manual review only
 	 * @return array<int,array<string,mixed>>
 	 */
-	public function getOpenDocuments($direction = 0, $limit = 250, $anchorDate = null, $intervalDays = null, $excludeBankLineId = 0, $bankAccountId = 0, $includeReconciledLinked = true)
+	public function getOpenDocuments($direction = 0, $limit = 250, $anchorDate = null, $intervalDays = null, $excludeBankLineId = 0, $bankAccountId = 0, $includeReconciledLinked = true, $includeCustomerTransfers = false)
 	{
 		$direction = (int) $direction;
 		$limit = max(20, (int) $limit);
@@ -1096,9 +1101,9 @@ class KreaBankService
 			}
 		};
 
-		$appendDocuments($this->getOpenNativeBankDocuments($direction, $limit, $anchorDate, $intervalDays, $excludeNativeLineId, (int) $bankAccountId));
+		$appendDocuments($this->getOpenNativeBankDocuments($direction, $limit, $anchorDate, $intervalDays, $excludeNativeLineId, (int) $bankAccountId, 0, (bool) $includeCustomerTransfers));
 		if ($direction !== 0) {
-			$appendDocuments($this->getOpenNativeBankDocuments(0, $limit, $anchorDate, $intervalDays, $excludeNativeLineId, (int) $bankAccountId));
+			$appendDocuments($this->getOpenNativeBankDocuments(0, $limit, $anchorDate, $intervalDays, $excludeNativeLineId, (int) $bankAccountId, 0, (bool) $includeCustomerTransfers));
 		}
 		if ((new KreaBankAccountPairs($this->db, $this->entity))->mainAccount($bankAccountId)) {
 			return array_values(array_filter($documents, function ($document) use ($bankAccountId) {
@@ -1128,9 +1133,10 @@ class KreaBankService
 	 * @param int|null $intervalDays
 	 * @param int $excludeBankLineId
 	 * @param int $bankAccountId
+	 * @param bool $includeCustomerTransfers Explicit manual review only; unattended candidates stay unchanged
 	 * @return array<int,array<string,mixed>>
 	 */
-	protected function getOpenNativeBankDocuments($direction = 0, $limit = 250, $anchorDate = null, $intervalDays = null, $excludeBankLineId = 0, $bankAccountId = 0, $onlyBankLineId = 0)
+	protected function getOpenNativeBankDocuments($direction = 0, $limit = 250, $anchorDate = null, $intervalDays = null, $excludeBankLineId = 0, $bankAccountId = 0, $onlyBankLineId = 0, $includeCustomerTransfers = false)
 	{
 		$limit = max(20, (int) $limit);
 		$excludeBankLineId = (int) $excludeBankLineId;
@@ -1239,7 +1245,7 @@ class KreaBankService
 			);
 		}
 
-		return $documents;
+		return $includeCustomerTransfers ? $this->customerTransferReview()->enrich($documents) : $documents;
 	}
 
 	/**
@@ -1777,9 +1783,10 @@ class KreaBankService
 	 * @param int $dateTolerance
 	 * @param int|null $openDocumentsIntervalDays
 	 * @param bool $includeReconciledLinked Include linked payments already conciliated in native bank module
+	 * @param bool $includeCustomerTransfers Explicit manual review only
 	 * @return array<int,array<string,mixed>>
 	 */
-	public function getSuggestionsForLine($lineId, $minScore = 0, $dateTolerance = 3, $openDocumentsIntervalDays = null, $includeReconciledLinked = true)
+	public function getSuggestionsForLine($lineId, $minScore = 0, $dateTolerance = 3, $openDocumentsIntervalDays = null, $includeReconciledLinked = true, $includeCustomerTransfers = false)
 	{
 		$line = $this->getLineById($lineId);
 		if (!$line) {
@@ -1789,7 +1796,7 @@ class KreaBankService
 		$patterns = $this->getPatterns();
 		$documentsCache = array();
 
-		return $this->getSuggestionsForPreparedLine($line, $patterns, (int) $minScore, (int) $dateTolerance, $documentsCache, $openDocumentsIntervalDays, (bool) $includeReconciledLinked);
+		return $this->getSuggestionsForPreparedLine($line, $patterns, (int) $minScore, (int) $dateTolerance, $documentsCache, $openDocumentsIntervalDays, (bool) $includeReconciledLinked, (bool) $includeCustomerTransfers);
 	}
 
 	/**
@@ -1800,9 +1807,10 @@ class KreaBankService
 	 * @param int $dateTolerance
 	 * @param int|null $openDocumentsIntervalDays
 	 * @param bool $includeReconciledLinked Include linked payments already conciliated in native bank module
+	 * @param bool $includeCustomerTransfers Explicit manual review only
 	 * @return array<int,array<int,array<string,mixed>>>
 	 */
-	public function getSuggestionsForLines($lines, $minScore = 0, $dateTolerance = 3, $openDocumentsIntervalDays = null, $includeReconciledLinked = true)
+	public function getSuggestionsForLines($lines, $minScore = 0, $dateTolerance = 3, $openDocumentsIntervalDays = null, $includeReconciledLinked = true, $includeCustomerTransfers = false)
 	{
 		if (!is_array($lines) || empty($lines)) {
 			return array();
@@ -1837,7 +1845,8 @@ class KreaBankService
 				(int) $dateTolerance,
 				$documentsCache,
 				$openDocumentsIntervalDays,
-				(bool) $includeReconciledLinked
+				(bool) $includeReconciledLinked,
+				(bool) $includeCustomerTransfers
 			);
 		}
 
@@ -1854,9 +1863,10 @@ class KreaBankService
 	 * @param array<string,array<int,array<string,mixed>>> $documentsCache
 	 * @param int|null $openDocumentsIntervalDays
 	 * @param bool $includeReconciledLinked Include linked payments already conciliated in native bank module
+	 * @param bool $includeCustomerTransfers Explicit manual review only
 	 * @return array<int,array<string,mixed>>
 	 */
-	protected function getSuggestionsForPreparedLine($line, $patterns, $minScore, $dateTolerance, &$documentsCache, $openDocumentsIntervalDays = null, $includeReconciledLinked = true)
+	protected function getSuggestionsForPreparedLine($line, $patterns, $minScore, $dateTolerance, &$documentsCache, $openDocumentsIntervalDays = null, $includeReconciledLinked = true, $includeCustomerTransfers = false)
 	{
 		$scope = new KreaBankReconciliationScope($this->db, $this->entity);
 		$scope->assertLine($line);
@@ -1865,7 +1875,7 @@ class KreaBankService
 		$direction = (int) (!empty($line['direction']) ? $line['direction'] : 0);
 		$bankAccountId = (int) (!empty($line['bank_account_id']) ? $line['bank_account_id'] : 0);
 		$intervalKey = ($openDocumentsIntervalDays === null ? 'default' : (string) ((int) $openDocumentsIntervalDays));
-		$cacheKey = $direction . '|' . $bankAccountId . '|' . $excludeNativeLineId . '|' . (string) $lineDate . '|' . $intervalKey . '|' . ((int) !empty($includeReconciledLinked));
+		$cacheKey = $direction . '|' . $bankAccountId . '|' . $excludeNativeLineId . '|' . (string) $lineDate . '|' . $intervalKey . '|' . ((int) !empty($includeReconciledLinked)) . '|' . ((int) !empty($includeCustomerTransfers));
 		if (!array_key_exists($cacheKey, $documentsCache)) {
 			$documentsCache[$cacheKey] = $this->getOpenDocuments(
 				$direction,
@@ -1874,7 +1884,8 @@ class KreaBankService
 				$openDocumentsIntervalDays,
 				(int) (!empty($line['rowid']) ? $line['rowid'] : 0),
 				$bankAccountId,
-				(bool) $includeReconciledLinked
+				(bool) $includeReconciledLinked,
+				(bool) $includeCustomerTransfers
 			);
 		}
 
@@ -2369,6 +2380,17 @@ class KreaBankService
 			}
 			$scope->assertLine($line);
 			if ($isReviewedBulk) { $this->assertWorklistSelectionReview($reviewedRow, $line); }
+			if ($isReviewedBulk && isset($reviewedRow['suggestion']['customer_transfer'])) {
+				$displayed=$reviewedRow['suggestion']['customer_transfer'];
+				if ($selectedNativeBankLink===null || ($reviewedRow['suggestion']['doc_type']??'')!=='native_bank'
+					|| !KreaBankCustomerTransfer::matchesSource($displayed,$line)) {
+					throw new DomainException('The recorded customer transfer no longer matches this statement');
+				}
+				$metadata=$this->customerTransferReview()->metadataForBankIds(array((int)$selectedNativeBankLink['fk_doc']),true);
+				if (($metadata[(int)$selectedNativeBankLink['fk_doc']]??null)!==$displayed) {
+					throw new DomainException('The recorded customer transfer changed; review it again');
+				}
+			}
 			if ($isReviewedBulk) { $this->assertBankRuleReview($reviewedRow, $line); }
 			if ($isWriteOff) { $reviewedRow = $this->revalidateWriteOffReview($reviewedRow, $line); }
 			if (!empty($line['fk_statement']) && $this->paymentBatchMapsAvailable()) {
@@ -2902,7 +2924,7 @@ class KreaBankService
 		$scope = new KreaBankReconciliationScope($this->db, $this->entity);
 		$scope->assertLine($line);
 		$scope->assertDocument('native_bank', (int) $bankLineId, (int) $line['bank_account_id']);
-		$rows = $this->getOpenNativeBankDocuments((int) $line['direction'], 20, null, 0, 0, (int) $line['bank_account_id'], (int) $bankLineId);
+		$rows = $this->getOpenNativeBankDocuments((int) $line['direction'], 20, null, 0, 0, (int) $line['bank_account_id'], (int) $bankLineId, true);
 		$rows = (new KreaBankTaxReconciliation($this->db, $this->user, $this->entity))->decorateMovements($rows);
 		return $rows ? $rows[0] : null;
 	}
@@ -3066,6 +3088,12 @@ class KreaBankService
 	{
 		if (!$this->salaryPaymentReviewer) { $this->salaryPaymentReviewer = new KreaBankSalaryPaymentReview($this->db, $this->user, $this->entity); }
 		return $this->salaryPaymentReviewer;
+	}
+
+	private function customerTransferReview()
+	{
+		if (!$this->customerTransferReviewer) { $this->customerTransferReviewer=new KreaBankCustomerTransfer($this->db,$this->user,$this->entity); }
+		return $this->customerTransferReviewer;
 	}
 
 	/** Shared company boundary; read-only account reviews require both native and module read rights. */
