@@ -65,4 +65,5 @@ KreaBankWorklistMovementCreated=Movimento bancário criado e reconciliado.
 KreaBankWorklistPlannedPaymentAccount=Banco do pagamento a criar
 KreaBankWorklistPaymentRequired=Registe o pagamento antes de reconciliar.
 KreaBankWorklistRecordPayment=Registar pagamento
-KreaBankWorklistMoreOptions=Mais opções: imposto, fatura de fornecedor, ignorar
+KreaBankWorklistMoreOptions=Mais opções: imposto, fatura de fornecedor, diferença, regra, rascunho, ignorar
+KreaBankWorklistMoreInvoices=Faturas para diferença de pagamento ou validação de rascunho

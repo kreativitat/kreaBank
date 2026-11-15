@@ -2,8 +2,8 @@
 
 ## 1.20.48 — 2026-11-15
 
-- The row "More options" button of the Reconciliation list no longer opens the selected-line workspace. It expands inside the row, like Search, with only the tools the list lacked: tax entry, supplier invoice (product-line review dialog) and skip. Search, batches and bank-movement creation keep their existing row buttons.
-- The new `more_entry` list action is bound to the displayed row, rechecks ownership and permissions, and refuses creation while a possible existing movement is unreviewed (the list holds no override). No schema change and no migration.
+- The row "More options" button of the Reconciliation list no longer opens the selected-line workspace. It expands inside the row, like Search, with only the tools the list lacked: tax entry, supplier invoice (product-line review dialog), skip, rule entry, payment difference and draft-invoice validation. Search, batches and bank-movement creation keep their existing row buttons.
+- The new `more_entry`, `more_rule`, `more_writeoff` and `more_draft` list actions are bound to the displayed row, recheck ownership, permissions and the signed review, and refuse creation while a possible existing movement is unreviewed (the list holds no override). No schema change and no migration.
 
 ## 1.20.47 — 2026-11-15
 

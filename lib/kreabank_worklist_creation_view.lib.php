@@ -81,5 +81,36 @@ function kreabankWorklistMore($row, $line, $id, $model, $langs)
 			. '<div class="kb-wl-dialog-actions"><button type="button" class="butAction" data-krea-modal-close="' . $modalId . '">' . $t('KreaBankQuickSupplierLinesClose') . '</button>'
 			. '<button class="button" type="button" name="entry_submit_action" value="supplier_invoice" id="' . $modalId . '_confirm">' . $t('KreaBankWorkspaceCreateInvoice') . '</button></div></div></div>';
 	}
-	return array('html'=>$html,'form'=>$post . '</form>');
+	// Existing-record choices use the common candidate card; each confirmation is its own signed POST.
+	$review = ''; $forms = $post . '</form>'; $index = 0;
+	$card = static function ($candidate, $actions) use ($e, $langs) {
+		$notes = '';
+		foreach ((array) ($candidate['notes'] ?? array()) as $note) { $notes .= '<span class="kb-wl-caption">' . $e($note) . '</span>'; }
+		return '<div class="kb-wl-candidate"><div class="kb-wl-candidate-evidence">' . kreabankWorklistCandidate($candidate,$langs) . $notes . '</div><div class="kb-wl-candidate-actions">' . $actions . '</div></div>';
+	};
+	if (!empty($form['rule'])) {
+		$actionId = $id . '-more-' . $index++;
+		$review .= $card($form['rule'],'<button type="submit" class="button" form="' . $actionId . '">' . kreabankWorklistIcon('plus') . ' ' . $t('KreaBankWorkspaceCreateBank') . '</button>');
+		$forms .= kreabankWorklistPostForm($actionId,$form['rule'],$model);
+	}
+	foreach ((array) ($form['writeoffs'] ?? array()) as $writeoff) {
+		$actionId = $id . '-more-' . $index++;
+		$options = '<option value="">' . $t('KreaBankWriteOffChooseReason') . '</option>';
+		foreach ((array) $writeoff['reasons'] as $reason=>$label) { $options .= '<option value="' . $e($reason) . '">' . $e($label) . '</option>'; }
+		$review .= $card($writeoff,'<details class="kb-wl-more-confirm"><summary>' . $t('KreaBankWriteOffAction') . '</summary><label for="' . $actionId . '-reason">' . $t('KreaBankWriteOffReason') . '</label>'
+			. '<select class="flat" id="' . $actionId . '-reason" name="writeoff_reason" form="' . $actionId . '" required>' . $options . '</select>'
+			. '<button type="submit" class="button" form="' . $actionId . '">' . kreabankWorklistIcon('check') . ' ' . $t('KreaBankWriteOffAction') . '</button></details>');
+		$forms .= kreabankWorklistPostForm($actionId,$writeoff,$model);
+	}
+	foreach ((array) ($form['drafts'] ?? array()) as $draft) {
+		$draft['consequence'] = 'KreaBankDraftInvoice'; $actions = '';
+		if (!empty($draft['action'])) {
+			$actionId = $id . '-more-' . $index++;
+			$actions = '<details class="kb-wl-more-confirm"><summary>' . $t('KreaBankDraftInvoiceValidate') . '</summary><p>' . $e($draft['confirm'] ?? '') . '</p>'
+				. '<button type="submit" class="button" form="' . $actionId . '">' . kreabankWorklistIcon('check') . ' ' . $t('KreaBankDraftInvoiceConfirmAction') . '</button></details>';
+			$forms .= kreabankWorklistPostForm($actionId,$draft,$model);
+		}
+		$review .= $card($draft,$actions);
+	}
+	return array('html'=>$html,'review'=>$review,'review_search'=>!empty($form['review_search']),'form'=>$forms);
 }

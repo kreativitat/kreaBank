@@ -333,7 +333,15 @@ function kreabankWorklistTable($model, $langs)
 		$html .= '<tr class="kb-wl-detail-row" id="' . $id . '-detail" data-line-key="' . $e($key) . '"><td colspan="' . $columnCount . '"><section class="kb-wl-detail" aria-label="' . $e($line['description'] ?? '') . '"><div class="kb-wl-detail-heading"><strong>' . $t($moreMode ? 'KreaBankWorklistMoreOptions' : ($createMode ? 'KreaBankWorklistCreateMovement' : ($batchMode || $activeBatch ? 'KreaBankWorklistPaymentBatch' : 'KreaBankWorklistFindMatch'))) . '</strong><a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e(kreabankWorklistUrl($model, array('expand'=>null, 'mode'=>null, 'entry_search'=>null, 'q'=>null))) . '" title="' . $t('Close') . '" aria-label="' . $t('Close') . '">' . kreabankWorklistIcon('times') . '</a></div>';
 		if ($moreMode) {
 			$more = kreabankWorklistMore($row,$line,$id,$model,$langs);
-			$html .= $more['html'] . '</section></td></tr>'; $forms .= $more['form']; continue;
+			$html .= $more['html'];
+			if (!empty($more['review_search'])) {
+				// Finds invoices for a payment difference or draft validation; matching stays in Search.
+				$searchId = $id . '-search'; $searchState = $state; unset($searchState['q'], $searchState['entry_search']);
+				$html .= '<div class="kb-wl-search kb-wl-more-review"><label for="' . $searchId . '-query">' . $t('KreaBankWorklistMoreInvoices') . '</label><input class="flat" form="' . $searchId . '" type="search" name="q" id="' . $searchId . '-query" value="' . $e($row['search'] ?? '') . '"><span class="kb-wl-search-actions">' . kreabankWorklistButton(kreabankWorklistTranslate($langs, 'Search'), 'search', 'type="submit" form="' . $searchId . '"') . '</span></div>';
+				$forms .= '<form method="get" action="' . $e(strtok($model['url'], '?')) . '" id="' . $searchId . '">' . kreabankWorklistFields(array_merge($searchState, array('expand'=>$key, 'mode'=>'more'))) . '</form>';
+				$html .= $more['review'] !== '' ? $more['review'] : '<p class="opacitymedium">' . $t('KreaBankWorklistNoResults') . '</p>';
+			}
+			$html .= '</section></td></tr>'; $forms .= $more['form']; continue;
 		}
 		if ($createMode) {
 			$creation = kreabankWorklistCreation($row,$line,$id,$model,$langs);

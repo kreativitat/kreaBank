@@ -47,7 +47,7 @@ foreach (array('history.php', 'pending.php', 'import.php', 'admin/guide.php', 'k
 }
 $view = file_get_contents($root . '/lib/kreabank_worklist_view.lib.php');
 $check(strpos($view, "kreabankWorkspaceUrl('reconcile'") === false && strpos($view, "'mode'=>'more'") !== false && strpos($view, 'KreaBankWorklistMoreOptions') !== false, 'more options open inside the list row, never the line workspace');
-$check(strpos($list, "'more_entry'") !== false && strpos(substr($list, 0, strpos($list, 'line_workspace.inc.php')), 'more_entry') === false, 'the row action stays a list action');
+$check(strpos($list, "'more_rule','more_writeoff','more_draft'") !== false && strpos($list, "'more_entry'") !== false && strpos(substr($list, 0, strpos($list, 'line_workspace.inc.php')), 'more_entry') === false, 'the row action stays a list action');
 foreach (array('en_US', 'pt_PT') as $language) {
 	$check(strpos(file_get_contents($root . '/langs/' . $language . '/worklist.lang'), 'KreaBankWorklistMoreOptions=') !== false, 'row link label exists in ' . $language);
 }
