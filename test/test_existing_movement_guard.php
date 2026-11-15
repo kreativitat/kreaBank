@@ -104,4 +104,40 @@ $controller = file_get_contents(dirname(__DIR__) . '/reconcile.php');
 $check(strpos($controller, '$service->assertNoExistingMovementForCreation($lineId, $confirmedMovementIds);') !== false
 	&& strpos($controller, 'name="confirm_existing_movements"') !== false, 'every creation choice is guarded and confirmable');
 
+// Every flow that would materialize a movement passes the last in-transaction gate.
+$reconcileBody = substr($serviceSource, strpos($serviceSource, 'public function reconcileLine('));
+$check(strpos($reconcileBody, '$this->assertReviewedExistingMovementsForCreation($line);') !== false
+	&& strpos($reconcileBody, '$this->assertReviewedExistingMovementsForCreation($line);') < strpos($reconcileBody, 'ensureNativeLineForStatementLine('), 'reconciliation reviews existing movements before creating one');
+$service->allowConfirmedExistingMovements(19, array(582600, 582569));
+$db->movementIds = array(582569, 582600);
+$audits = count($service->audits);
+$check($blocked($service, $line) === null && count($service->audits) === $audits, 'a restored confirmation of the exact list applies without a second audit');
+$db->movementIds = array(582569, 582600, 582601);
+$check($blocked($service, $line) !== null, 'a restored confirmation is void when the list changes');
+$check(strpos($serviceSource, "throw new Exception('Source native bank line already belongs to another statement line #'") !== false
+	&& strpos($serviceSource, 'claimed.fk_native_bank_line = b.rowid') !== false, 'a movement mapped to one statement line is neither offered nor accepted for another');
+$check(strpos($controller, "\$action === 'confirm_existing_movements'") !== false && strpos($controller, "'expires' => time() + 900") !== false
+	&& strpos($controller, '$service->allowConfirmedExistingMovements((int) $lineId') !== false, 'card actions use a separate, expiring, audited confirmation');
+
+// Native transfer review: repeating the identical transfer confirms it; a double submit does not.
+require_once dirname(__DIR__) . '/class/KreaBankTransferGuard.class.php';
+$guard = new KreaBankTransferGuard($db, 7);
+$transfer = array('from' => 3, 'to' => 4, 'amount' => '15000.00', 'amount_to' => '', 'date' => strtotime('2026-10-01 12:00:00 UTC'));
+$db->movementIds = array();
+$db->queries = array();
+$check($guard->existingMovements(array(array('from' => 3, 'to' => 4, 'amount' => '0', 'amount_to' => '', 'date' => 1)), 3) === array() && !$db->queries, 'an empty or invalid transfer is not searched');
+$key = $guard->confirmationKey(1, array($transfer), array(582569));
+$check($key !== $guard->confirmationKey(1, array($transfer), array(582569, 582600)) && $key !== $guard->confirmationKey(2, array($transfer), array(582569))
+	&& $key !== $guard->confirmationKey(1, array(array_merge($transfer, array('amount' => '15000.01'))), array(582569))
+	&& $key === $guard->confirmationKey(1, array(array_merge($transfer, array('amount' => '15000'))), array(582569)), 'a confirmation is bound to the user, exact transfer and exact existing movements');
+$store = array();
+$check(!KreaBankTransferGuard::consumeConfirmation($store, $key, 1000) && isset($store[$key]), 'the first submission is refused and remembered');
+$check(!KreaBankTransferGuard::consumeConfirmation($store, $key, 1002) && $store[$key] === 1000, 'an immediate repeat is a double submit, not a confirmation');
+$check(KreaBankTransferGuard::consumeConfirmation($store, $key, 1006) && !isset($store[$key]), 'a deliberate repeat confirms once');
+$check(!KreaBankTransferGuard::consumeConfirmation($store, $key, 1007), 'a consumed confirmation cannot be replayed');
+$store = array($key => 1000);
+$check(!KreaBankTransferGuard::consumeConfirmation($store, $key, 1000 + 601) && $store[$key] === 1601, 'an expired confirmation starts over');
+$hook = file_get_contents(dirname(__DIR__) . '/class/actions_kreabank.class.php');
+$check(strpos($hook, 'KreaBankTransferGuard::consumeConfirmation(') !== false && strpos($hook, "\$action = '';\n\t\t\t\t\t\treturn -1;") !== false, 'the native transfer hook blocks an unconfirmed duplicate-looking transfer');
+
 echo 'OK: ' . $checks . " existing-movement creation guard checks (synthetic, no database)\n";

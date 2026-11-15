@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20.46 — 2026-11-15
+
+- Every reconciliation that would create a bank movement (invoice and tax payments, unbanked payments, payment differences, quick and rule entries; one-by-one, matched, bulk and list) is refused while a movement with the same owned account, exact signed amount and nearby date is unreviewed. On the selected-line page a separate audited confirmation of the exact list, valid 15 minutes, allows repeating the action; other pages keep the line pending.
+- A bank movement mapped to one statement line is no longer offered to, or accepted for, another line, even after its reconciled flag was cleared in the native screen.
+- The native internal transfer form refuses a transfer whose leg repeats an existing movement (for example one already created from the statement, or the same transfer entered twice). Entering the identical transfer again after a few seconds confirms it and is audited.
+- Quick entries within rounding tolerance are stored with the exact reconciled line amount. No schema change and no migration.
+
 ## 1.20.45 — 2026-11-15
 
 - Refuse creating a second bank movement from the selected-line creation choices (bank entry, tax, supplier invoice) and rule entries while a movement with the same owned account, exact signed amount and nearby date exists. The message links the existing movements; only an explicit, audited confirmation of the exact current list allows creation. Rule entries cannot override.

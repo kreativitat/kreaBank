@@ -90,6 +90,9 @@ class KreaBankService
 	/** @var bool */
 	protected $coreSchemaChecked = false;
 
+	/** @var array<int,int[]> Existing movements the user confirmed as different, per statement line. */
+	private $confirmedExistingMovements = array();
+
 	/** @var array<int,string> */
 	protected $bankCurrencyCache = array();
 
@@ -1159,6 +1162,7 @@ class KreaBankService
 		if ($onlyBankLineId > 0) { $sql .= ' AND b.rowid = ' . (int) $onlyBankLineId; }
 		// Keep reconciliation focused on imported-vs-native matching, not imported-vs-imported duplicates.
 		$sql .= " AND (m.source_type IS NULL OR m.source_type = '')";
+		$sql .= ' AND NOT EXISTS (SELECT 1 FROM ' . $this->db->prefix() . 'kreabank_statement_line claimed WHERE claimed.entity = ' . ((int) $this->entity) . ' AND claimed.fk_native_bank_line = b.rowid)';
 		if ($direction > 0) {
 			$sql .= ' AND b.amount > 0.0000001';
 		} elseif ($direction < 0) {
@@ -2389,6 +2393,7 @@ class KreaBankService
 					}
 					$taxModeCode = $ruleCreation['payment_mode'];
 				}
+				$this->assertReviewedExistingMovementsForCreation($line);
 				$nativeLineId = $ruleCreation
 					? (int) $this->native->ensureNativeLineForStatementLine((int) $line['rowid'], false, false, '', $taxModeCode, $ruleCreation)
 					: $this->resolveNativeLineIdFromStatementLine($line, true, $taxModeCode);
@@ -3340,6 +3345,7 @@ class KreaBankService
 			$outstanding = max(0.0, abs((float) $line['amount']) - abs((float) $line['allocated_amount']));
 			if ($amount > $outstanding) { $amount = $outstanding; }
 			if (abs($amount - $outstanding) > 0.01) { throw new Exception('Tax quick flow requires full allocation of the statement line amount'); }
+			$amount = $outstanding; // Within rounding tolerance: record exactly what is reconciled.
 		}
 
 		$now = dol_now();
@@ -3494,6 +3500,9 @@ class KreaBankService
 		$confirmed = array_values(array_unique(array_filter(array_map('intval', (array) $confirmedMovementIds))));
 		sort($confirmed, SORT_NUMERIC);
 		if ($confirmed !== $existing) {
+			if (($this->confirmedExistingMovements[(int) $line['rowid']] ?? null) === $existing) {
+				return; // Already confirmed and audited for this exact list.
+			}
 			throw new KreaBankExistingMovementException($existing);
 		}
 		if (!$this->logAudit('existing_movement_override', (int) $line['rowid'], null, array(
@@ -3501,6 +3510,39 @@ class KreaBankService
 			'confirmed_movement_ids' => $existing,
 		))) {
 			throw new Exception('Failed to record the existing-movement confirmation audit');
+		}
+		$this->confirmedExistingMovements[(int) $line['rowid']] = $existing;
+	}
+
+	/**
+	 * Restore a confirmation this user already made (and audited) for one line.
+	 * Execution still requires the current list to equal it exactly.
+	 *
+	 * @param int $lineId
+	 * @param int[] $movementIds
+	 * @return void
+	 */
+	public function allowConfirmedExistingMovements($lineId, $movementIds)
+	{
+		$ids = array_values(array_unique(array_filter(array_map('intval', (array) $movementIds))));
+		sort($ids, SORT_NUMERIC);
+		if ((int) $lineId > 0 && $ids) {
+			$this->confirmedExistingMovements[(int) $lineId] = $ids;
+		}
+	}
+
+	/** Last gate, inside the reconciliation transaction, before any flow materializes a movement. */
+	private function assertReviewedExistingMovementsForCreation($line)
+	{
+		$existing = $this->findExistingMovementsForCreation($line);
+		if (!$existing) {
+			return;
+		}
+		if (count($existing) > 100) {
+			throw new KreaBankExistingMovementException(array_slice($existing, 0, 100), false);
+		}
+		if (($this->confirmedExistingMovements[(int) $line['rowid']] ?? null) !== $existing) {
+			throw new KreaBankExistingMovementException($existing);
 		}
 	}
 
@@ -7037,6 +7079,13 @@ class KreaBankService
 
 		$this->lockReconciliationRow('bank', $sourceLineId);
 		$this->assertPaymentBatchMovementUnclaimed($sourceLineId);
+		// The native reconciled flag can be cleared outside KreaBank; the explicit mapping is authoritative.
+		$claims = $this->transferRows('SELECT rowid FROM ' . $this->db->prefix() . 'kreabank_statement_line WHERE entity=' . $this->entity
+			. ' AND fk_native_bank_line=' . $sourceLineId
+			. (!empty($statementLine['fk_statement']) ? ' AND rowid<>' . (int) $statementLine['rowid'] : '') . $this->db->plimit(1) . ' FOR UPDATE');
+		if ($claims) {
+			throw new Exception('Source native bank line already belongs to another statement line #' . $sourceLineId);
+		}
 		$sourceLine = $this->native->getBankLineById($sourceLineId);
 		if (!$sourceLine) {
 			throw new Exception('Source native bank line not found #' . $sourceLineId);

@@ -159,7 +159,19 @@ $sanitizeUiErrorMessage = static function ($rawMessage) use ($langs) {
 	return $message;
 };
 
-$reportActionException = static function ($exception, $context = '', $safeOverride = '') use ($sanitizeUiErrorMessage, $langs) {
+$existingMovementReview = array();
+$reportActionException = static function ($exception, $context = '', $safeOverride = '') use ($sanitizeUiErrorMessage, $langs, &$existingMovementReview) {
+	if ($exception instanceof KreaBankExistingMovementException) {
+		// A possible duplicate is a review step, not a failure to hide behind a generic message.
+		$existingMovementLinks = array();
+		foreach ($exception->movementIds as $existingMovementId) {
+			$existingMovementLinks[] = '<a href="' . dol_escape_htmltag(DOL_URL_ROOT . '/compta/bank/line.php?rowid=' . ((int) $existingMovementId)) . '" target="_blank" rel="noopener">#' . ((int) $existingMovementId) . '</a>';
+		}
+		if ($exception->complete) { $existingMovementReview = $exception->movementIds; }
+		dol_syslog('KreaBank reconcile action refused [' . trim((string) $context) . ']: ' . $exception->getMessage() . ' ' . implode(',', $exception->movementIds), LOG_WARNING);
+		setEventMessages(dol_escape_htmltag($langs->transnoentitiesnoconv($exception->complete ? 'KreaBankExistingMovementBlocked' : 'KreaBankExistingMovementIncomplete')) . ' ' . implode(', ', $existingMovementLinks), null, 'errors');
+		return;
+	}
 	$rawMessage = '';
 	if ($exception instanceof Throwable || $exception instanceof Exception) {
 		$rawMessage = (string) $exception->getMessage();
@@ -192,6 +204,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	if (!kreabankIsTokenValid()) {
 		accessforbidden('Invalid token');
 	}
+}
+
+// A user's audited "different transaction" confirmation applies to that line for 15 minutes;
+// the service still requires the current movement list to equal it exactly.
+$existingMovementStore = (isset($_SESSION['kreabank_existing_movements']) && is_array($_SESSION['kreabank_existing_movements'])) ? $_SESSION['kreabank_existing_movements'] : array();
+foreach ($existingMovementStore as $existingMovementLine => $existingMovementEntry) {
+	if (!is_array($existingMovementEntry) || (int) ($existingMovementEntry['expires'] ?? 0) < time()
+		|| (int) ($existingMovementEntry['entity'] ?? 0) !== (int) $conf->entity || (int) ($existingMovementEntry['user'] ?? 0) !== (int) $user->id) {
+		unset($_SESSION['kreabank_existing_movements'][$existingMovementLine]);
+	} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && (int) $existingMovementLine === (int) $lineId) {
+		$service->allowConfirmedExistingMovements((int) $lineId, (array) $existingMovementEntry['ids']);
+	}
+}
+if ($action === 'confirm_existing_movements') {
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !kreabankIsTokenValid() || !$user->hasRight('kreabank', 'reconciliation', 'write') || !$canNativeWrite) { accessforbidden(); }
+	try {
+		$confirmedMovementIds = array_values(array_filter(array_map('intval', explode(',', (string) GETPOST('confirm_existing_movements', 'alphanohtml')))));
+		if ($lineId <= 0 || !$confirmedMovementIds || !GETPOSTINT('confirm_existing_checked')) { throw new Exception($langs->trans('KreaBankInvalidInput')); }
+		$service->assertNoExistingMovementForCreation($lineId, $confirmedMovementIds);
+		$_SESSION['kreabank_existing_movements'][(int) $lineId] = array('ids' => $confirmedMovementIds, 'expires' => time() + 900, 'entity' => (int) $conf->entity, 'user' => (int) $user->id);
+		setEventMessages($langs->trans('KreaBankExistingMovementConfirmed'), null, 'mesgs');
+	} catch (Throwable $e) { $reportActionException($e, 'confirm_existing_movements'); }
 }
 
 // Account correction is separate from reconciliation and requires unexpired displayed evidence.
@@ -601,17 +635,8 @@ if ($action === 'quick_entry' && $user->hasRight('kreabank', 'reconciliation', '
 			if ($errorMessage === 'Unable to resolve supplier from VAT/name lookup or ML prediction.') {
 				$errorMessage = $langs->trans('ErrorFieldRequired', $langs->transnoentitiesnoconv('KreaBankQuickSupplierInvoiceSupplier'));
 			}
-			if ($e instanceof KreaBankExistingMovementException) {
-				$existingMovementLinks = array();
-				foreach ($e->movementIds as $existingMovementId) {
-					$existingMovementLinks[] = '<a href="' . dol_escape_htmltag(DOL_URL_ROOT . '/compta/bank/line.php?rowid=' . ((int) $existingMovementId)) . '" target="_blank" rel="noopener">#' . ((int) $existingMovementId) . '</a>';
-				}
-				if ($e->complete) { $quickEntryFormState['existing_movements'] = $e->movementIds; }
-				dol_syslog('KreaBank reconcile action error [quick_entry]: ' . $e->getMessage() . ' ' . implode(',', $e->movementIds), LOG_WARNING);
-				setEventMessages(dol_escape_htmltag($langs->transnoentitiesnoconv($e->complete ? 'KreaBankExistingMovementBlocked' : 'KreaBankExistingMovementIncomplete')) . ' ' . implode(', ', $existingMovementLinks), null, 'errors');
-			} else {
-				$reportActionException($e, 'quick_entry', (string) $sanitizeUiErrorMessage($errorMessage));
-			}
+			$reportActionException($e, 'quick_entry', (string) $sanitizeUiErrorMessage($errorMessage));
+			if ($existingMovementReview) { $quickEntryFormState['existing_movements'] = $existingMovementReview; }
 		}
 	} else {
 		setEventMessages($langs->trans('KreaBankInvalidInput'), null, 'warnings');
@@ -1843,6 +1868,16 @@ if (!$selectedLine) {
 	print '<div class="opacitymedium">' . $langs->trans('KreaBankNoStatementLines') . '</div>';
 } else {
 	$selectedNativeLineId = !empty($selectedLine['native_bank_line_id']) ? (int) $selectedLine['native_bank_line_id'] : 0;
+	if (!empty($existingMovementReview) && $canReconcile) {
+		// Compact, separate confirmation; the refused action must then be repeated.
+		$existingMovementIds = array_map('intval', $existingMovementReview);
+		print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" class="kb-existing-movement-confirm">';
+		print kreabankNavigationHiddenFields($navigationAccountId) . $queueNavigationFields;
+		print '<input type="hidden" name="token" value="' . newToken() . '"><input type="hidden" name="action" value="confirm_existing_movements">';
+		print '<input type="hidden" name="line_id" value="' . ((int) $selectedLine['rowid']) . '"><input type="hidden" name="confirm_existing_movements" value="' . implode(',', $existingMovementIds) . '">';
+		print '<label><input type="checkbox" name="confirm_existing_checked" value="1" required> ' . dol_escape_htmltag($langs->transnoentitiesnoconv('KreaBankExistingMovementConfirm', '#' . implode(', #', $existingMovementIds))) . '</label> ';
+		print '<button class="button small" type="submit">' . $langs->trans('Confirm') . '</button></form>';
+	}
 	$forceBatchUrl = kreabankWorkspaceUrl('reconcile', $navigationAccountId) . '&line_id=' . (int) $selectedLine['rowid'] . '&force_batch_detect=1';
 	if ($openDocumentsSearch !== '') { $forceBatchUrl .= '&open_doc_search=' . urlencode($openDocumentsSearch); }
 	print '<section class="kb-source" aria-labelledby="kb-source-heading">';

@@ -386,6 +386,16 @@
   reconciled state; movements mapped to another imported line are distinct evidence.
   Only the user's confirmation of the exact current list overrides, with an
   `existing_movement_override` audit. Rule entries and truncated searches never override.
+- `reconcileLine()` repeats the check inside its transaction before any flow materializes a
+  movement. `reconcile.php` holds the audited confirmation per line for 15 minutes
+  (`confirm_existing_movements`); matched/bulk/list and unattended paths fail closed.
+- A native movement with a `kreabank_statement_line.fk_native_bank_line` mapping belongs to
+  that line only: never offer or accept it for another line, whatever its native `rappro`.
+- `KreaBankTransferGuard` (hooked on native `transfer.php` add) is read-only review: a leg
+  repeating an owned same-amount, nearby-date movement is refused until the identical
+  transfer is entered again (5 s–10 min). Keep `audit_type` values within 32 characters.
+- `php test/test_reconciliation_fireproof_database.php` replays everyday mistakes with
+  native invoices/payments on the guarded disposable fixture only.
 - Statement deletion checks reconciled lines under account/statement/line locks in one
   transaction with its audit. Never move that check or the audit outside the transaction.
 - Table checks run once per `KreaBankService::schemaFingerprint()` (stored globally in

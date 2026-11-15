@@ -930,3 +930,6 @@ KreaBankWriteOffUnavailable=Payment-difference review is unavailable. Reload the
 KreaBankExistingMovementBlocked=No new bank movement was created: a movement with the same account, amount and date already exists. Reconcile the line with it, or confirm below that it is a different transaction. Existing:
 KreaBankExistingMovementIncomplete=No new bank movement was created: too many movements with the same account, amount and date exist. Review the bank entries first. Examples:
 KreaBankExistingMovementConfirm=I confirm that the existing movements %s are different transactions and a new movement must be created.
+KreaBankExistingMovementConfirmed=Confirmation recorded. Repeat the action within 15 minutes to create the new movement.
+KreaBankTransferExistingBlocked=Transfer not created: a movement with the same account, amount and date already exists (%s). Reconcile or undo that movement instead. If this really is a different transfer, enter it again (after a few seconds, within 10 minutes) to confirm.
+KreaBankTransferExistingIncomplete=Transfer not created: too many movements with the same account, amount and date exist (for example %s). Review the bank entries first.
