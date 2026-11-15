@@ -393,7 +393,7 @@ foreach (array('advance_scan','more_scan') as $readAction) {
 $baselinePath = getenv('KREABANK_PROTECTED_BASELINE');
 if ($baselinePath) {
 	$baseline = json_decode(file_get_contents($baselinePath), true);
-	foreach (array('reconcile.php','css/reconcile.css','js/reconcile.js','js/reconcile-supplier.js') as $file) {
+	foreach (array('css/reconcile.css','js/reconcile.js','js/reconcile-supplier.js') as $file) { // The page itself moved into the list in 1.20.47.
 		checkWorklist(isset($baseline[$file]) && hash_equals((string) $baseline[$file], hash_file('sha256', __DIR__ . '/../' . $file)), 'Existing reconciliation controller and presentation assets are unchanged: ' . $file);
 	}
 } else {

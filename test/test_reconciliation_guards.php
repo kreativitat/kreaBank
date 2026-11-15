@@ -12,7 +12,7 @@ $rootDir = dirname(__DIR__);
 $serviceFile = $rootDir.'/class/KreaBankService.class.php';
 $nativeFile = $rootDir.'/class/KreaBankNativeBankAdapter.class.php';
 $bulkFile = $rootDir.'/bulkmatch.php';
-$reconcileFile = $rootDir.'/reconcile.php';
+$reconcileFile = $rootDir.'/line_workspace.inc.php';
 $pendingFile = $rootDir.'/pending.php';
 $historyFile = $rootDir.'/history.php';
 $importFile = $rootDir.'/import.php';
@@ -116,7 +116,11 @@ if ($pendingBody === '') {
 	$assertContains($pendingBody, 'fk_native_bank_line = NULL', 'pending reset should clear external native bank bindings', $errors);
 }
 
-$deleteImportedBody = $extractFunctionBody($nativeSource, 'deleteImportedStatement');
+$deleteImportedLockBody = $extractFunctionBody($nativeSource, 'deleteImportedStatement');
+$assertContains($deleteImportedLockBody, "' FOR UPDATE'", 'statement deletion should lock its owner account before checking reconciled lines', $errors);
+$assertContains($deleteImportedLockBody, '$this->deleteImportedStatementLocked($bankAccountId, $statementRef, $allowReconciled)', 'statement deletion should check and delete inside one locked transaction', $errors);
+$deleteImportedBody = $extractFunctionBody($nativeSource, 'deleteImportedStatementLocked');
+$assertContains($deleteImportedBody, '$sqlLines .= \' FOR UPDATE\';', 'statement deletion should lock the lines it counts as reconciled', $errors);
 if ($deleteImportedBody === '') {
 	$errors[] = 'Unable to parse deleteImportedStatement body';
 } else {

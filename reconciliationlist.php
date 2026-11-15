@@ -15,6 +15,14 @@ require_once __DIR__ . '/lib/kreabank_worklist_view.lib.php';
 $langs->loadLangs(array('banks','bills','salaries','trips','donations','loan','kreabank@kreabank','worklist@kreabank'));
 if (!isModEnabled('kreabank') || !isModEnabled('banque') || !empty($user->socid)
 	|| !$user->hasRight('banque','lire') || !$user->hasRight('kreabank','reconciliation','read')) { accessforbidden(); }
+// One line at a time: every creation and review option of the former selected-line page.
+// Its POST actions are distinct from the list actions below and keep their own checks.
+if (GETPOST('workspace','aZ09') === '1' || ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array(GETPOST('action','aZ09'), array('reconcile','quick_assign','quick_entry',
+	'skip_line','bulk_skip','batch_safe','confirm_document','confirm_rule_entry','confirm_writeoff','confirm_existing_movements','change_movement_account','validate_draft_invoice'), true))) {
+	define('KREABANK_LINE_WORKSPACE', 1);
+	require __DIR__ . '/line_workspace.inc.php';
+	exit;
+}
 $service = new KreaBankService($db, $user, $langs);
 $worklist = new KreaBankWorklist($db, $conf->entity, $service);
 $canWrite = $user->hasRight('kreabank','reconciliation','write') && ($user->hasRight('banque','modifier') || $user->hasRight('banque','consolidate'));

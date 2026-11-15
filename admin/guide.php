@@ -97,7 +97,7 @@ $operationalPages = array(
 	),
 	array(
 		'label' => $langs->trans('KreaBankReconcile'),
-		'url' => dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile', 1),
+		'url' => dol_buildpath('/custom/kreabank/reconciliationlist.php?mainmenu=bank&leftmenu=bank&workspace=1', 1),
 		'description' => $langs->trans('KreaBankGuidePageReconcileDesc'),
 	),
 	array(

@@ -35,15 +35,29 @@ class KreaBankTaxReconciliation
 			. " OR NOT EXISTS (SELECT 1 FROM {$p}paiementcharge pc WHERE pc.fk_charge=t.rowid AND pc.fk_bank=b.rowid)))";
 	}
 
+	/** Exact persisted decimal text; only values already held as floats use fixed formatting. */
+	private static function persistedDecimal($value)
+	{
+		if (is_float($value)) { $value = number_format($value, 8, '.', ''); }
+		$value = trim((string) $value);
+		if (!preg_match('/^-?[0-9]{1,24}(?:\.[0-9]{1,8})?$/D', $value)) { return ''; }
+		$negative = $value[0] === '-';
+		$parts = explode('.', ltrim($value, '-'), 2);
+		$whole = ltrim($parts[0], '0');
+		$fraction = rtrim($parts[1] ?? '', '0');
+		$out = ($whole === '' ? '0' : $whole) . ($fraction !== '' ? '.' . $fraction : '');
+		return $negative && $out !== '0' ? '-' . $out : $out;
+	}
+
 	/** Tax-like evidence plus exact amount/date is advisory, never automatic identity. */
 	public function accountReview($line, $range)
 	{
-		if (!$this->canRead() || (float) $line['amount'] >= 0
+		$amount = self::persistedDecimal($line['amount'] ?? '');
+		if (!$this->canRead() || $amount === '' || $amount[0] !== '-'
 			|| !preg_match('/\b(DUC|IVA|IRS|IRC|IUC|IMI|IMT|TSU|tax|taxa|imposto|finan[çc]as|seguran[çc]a\s+social)\b/iu', $line['description'] . ' ' . $line['counterparty_name'])) {
 			return array();
 		}
 		$p = $this->db->prefix();
-		$amount = number_format((float) $line['amount'], 8, '.', '');
 		$sql = "SELECT b.rowid,b.fk_account,b.amount,b.dateo,b.rappro,ba.ref AS account_ref,ba.label AS account_label,pc.rowid AS payment_id,t.libelle"
 			. " FROM {$p}paiementcharge pc JOIN {$p}chargesociales t ON t.rowid=pc.fk_charge"
 			. " JOIN {$p}bank b ON b.rowid=pc.fk_bank JOIN {$p}bank_account ba ON ba.rowid=b.fk_account AND ba.entity=t.entity"

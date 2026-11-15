@@ -118,7 +118,7 @@ function submitWriteOffView($nativeWrite=true,$account=81)
 	$action='confirm_writeoff';$canNativeWrite=$nativeWrite;$navigationAccountId=$account;$lineId=GETPOSTINT('line_id');$db=new stdClass();
 	$pendingSort=array('field'=>'b.dateo','order'=>'ASC');$queueOrder=kreabankReconcileQueueIds(GETPOST('queue_order'));$queueNext=kreabankReconcileQueueIds(GETPOST('queue_next'));$queueSearch=GETPOST('queue_search');
 	$reportActionException=static function($e,...$args){$GLOBALS['writeOffEvents'][]=array('error',$e->getMessage());};
-	$source=file_get_contents(__DIR__.'/../reconcile.php');$start=strpos($source,"if (\$action === 'confirm_writeoff') {");$end=strpos($source,"if (\$action === 'confirm_document') {",$start);
+	$source=file_get_contents(__DIR__.'/../line_workspace.inc.php');$start=strpos($source,"if (\$action === 'confirm_writeoff') {");$end=strpos($source,"if (\$action === 'confirm_document') {",$start);
 	if($start===false||$end===false){throw new LogicException('Review shipped write-off controller boundaries');}
 	$block=substr($source,$start,$end-$start);
 	$block=str_replace("header('Location: ' . \$redirectUrl); exit;",'return $redirectUrl;',$block,$redirects);
@@ -132,7 +132,7 @@ function renderWriteOffForms($reviews)
 	global $service,$conf,$user;
 	$writeOffReviewRows=array($service->invoice['doc_type'].'__22'=>$reviews);$selectedLine=$service->line;$navigationAccountId=81;
 	$queueNavigationFields=kreabankReconcileQueueHiddenFields(array(array('rowid'=>11),array('rowid'=>12),array('rowid'=>14),array('rowid'=>13)),11,array('field'=>'b.dateo','order'=>'ASC'),'synthetic settlement');
-	$source=file_get_contents(__DIR__.'/../reconcile.php');$start=strpos($source,'foreach ($writeOffReviewRows as $docKey=>$reviews) {');$end=strpos($source,'foreach ($draftInvoiceForms as $formId=>$key)', $start);
+	$source=file_get_contents(__DIR__.'/../line_workspace.inc.php');$start=strpos($source,'foreach ($writeOffReviewRows as $docKey=>$reviews) {');$end=strpos($source,'foreach ($draftInvoiceForms as $formId=>$key)', $start);
 	if($start===false||$end===false){throw new LogicException('Review shipped write-off form boundaries');}
 	ob_start();eval(substr($source,$start,$end-$start));return ob_get_clean();
 }

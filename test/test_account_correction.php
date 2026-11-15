@@ -27,7 +27,7 @@ function runCorrectionController($saved, $request = array(), $permission = true,
     };
     $errors=array();
     $reportActionException=static function ($e) use (&$errors) { $errors[]=$e->getMessage(); };
-    $source=file_get_contents(__DIR__.'/../reconcile.php');
+    $source=file_get_contents(__DIR__.'/../line_workspace.inc.php');
     $start=strpos($source, 'if ($_SERVER[\'REQUEST_METHOD\'] === \'POST\')');
     $end=strpos($source, "if (\$action === 'batch_safe'",$start);
     try { eval(substr($source,$start,$end-$start)); } catch (Throwable $e) { $errors[]=$e->getMessage(); }

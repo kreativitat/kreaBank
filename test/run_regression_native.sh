@@ -9,6 +9,7 @@ php_files=(
   "import.php"
   "pending.php"
   "reconcile.php"
+  "line_workspace.inc.php"
   "history.php"
   "class/KreaBankHistory.class.php"
   "lib/kreabank_history.lib.php"

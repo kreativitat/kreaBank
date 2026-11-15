@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.20.47 — 2026-11-15
+
+- The selected-line reconciliation page (`reconcile.php`) is retired as a separate address. Its complete workspace — record payment, quick bank entry, tax entry, supplier invoice, payment difference, rule entry, draft validation, account correction, skip — is now served inside the Reconciliation list (`reconciliationlist.php?workspace=1`) with the same permissions, signed reviews and service calls. Each pending list row has a "More options" link to it.
+- `reconcile.php` remains only as a permission-checked redirect for old links and bookmarks; it accepts no action. Deploy `line_workspace.inc.php` with `reconciliationlist.php`. No schema change and no migration.
+
+## 1.20.46 — 2026-11-15
+
+- Every reconciliation that would create a bank movement (invoice and tax payments, unbanked payments, payment differences, quick and rule entries; one-by-one, matched, bulk and list) is refused while a movement with the same owned account, exact signed amount and nearby date is unreviewed. On the selected-line page a separate audited confirmation of the exact list, valid 15 minutes, allows repeating the action; other pages keep the line pending.
+- A bank movement mapped to one statement line is no longer offered to, or accepted for, another line, even after its reconciled flag was cleared in the native screen.
+- The native internal transfer form refuses a transfer whose leg repeats an existing movement (for example one already created from the statement, or the same transfer entered twice). Entering the identical transfer again after a few seconds confirms it and is audited.
+- Quick entries within rounding tolerance are stored with the exact reconciled line amount. No schema change and no migration.
+
+## 1.20.45 — 2026-11-15
+
+- Refuse creating a second bank movement from the selected-line creation choices (bank entry, tax, supplier invoice) and rule entries while a movement with the same owned account, exact signed amount and nearby date exists. The message links the existing movements; only an explicit, audited confirmation of the exact current list allows creation. Rule entries cannot override.
+- Statement deletion locks the owner account, statement and lines before counting reconciled lines, and commits its audit with the deletion.
+- Verify module tables once per deployed code version instead of on every request; module activation forces a new check. No schema change and no migration.
+- Tax wrong-account review compares the exact persisted decimal amount.
+
 ## 1.20.44 — 2026-11-15
 
 - Allocate the new bank-rule management permission in KreaBank's module-qualified range, preserving the legacy KreaTaxMatch permission and all existing grants.

@@ -199,7 +199,7 @@ function renderWorkspaceFixture($case = 'debit', $locale = 'pt_PT', $options = a
 	$batchDetectedAuto = false; $batchDetectedMl = false; $batchDetectWasForced = false; $isLoteBatchLine = in_array($case, array('batch', 'precision'), true);
 	$loteSubsetSuggestion = array(); $lineLinks = array(); $safeScore = 150; $dateTolerance = 3;
 	$_SERVER['PHP_SELF'] = '/synthetic-reconcile';
-	$source = file_get_contents(dirname(__DIR__) . '/reconcile.php');
+	$source = file_get_contents(dirname(__DIR__) . '/line_workspace.inc.php');
 	if (in_array($case, array('batchauto', 'batchml', 'batchkeyword', 'batchforced'), true)) {
 		$selectedLine['fk_statement'] = 1;
 		$service->documents = array();

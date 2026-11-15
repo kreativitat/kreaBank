@@ -46,7 +46,7 @@ function kreabankPaymentAccountReviewHtml($review, $langs)
 	}
 	$html .= '</table></div>';
 	if ($review['truncated']) { $html .= '<p>' . $langs->trans('KreaBankAccountReviewTruncated') . '</p>'; }
-	$html .= '<p><a href="' . dol_escape_htmltag(dol_buildpath('/custom/kreabank/reconcile.php?line_id=' . (int) $line['rowid']
+	$html .= '<p><a href="' . dol_escape_htmltag(dol_buildpath('/custom/kreabank/reconciliationlist.php?mainmenu=bank&leftmenu=bank&workspace=1&line_id=' . (int) $line['rowid']
 		. '&account_context=' . (int) $line['bank_account_id'], 1)) . '">' . $langs->trans('KreaBankReconcile') . '</a></p></div>';
 	return $html;
 }
@@ -315,6 +315,9 @@ function kreabankIsTokenValid($token = null)
 		return false;
 	}
 
+	// Both values are secrets of this session only. Native Dolibarr keeps them equal unless
+	// MAIN_SECURITY_CSRF_TOKEN_RENEWAL_ON_EACH_CALL is set; with it, background scan and
+	// multi-tab POSTs legitimately carry the token rendered for the following request.
 	$currentToken = function_exists('currentToken') ? (string) currentToken() : '';
 	$newToken = function_exists('newToken') ? (string) newToken() : '';
 

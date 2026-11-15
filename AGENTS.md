@@ -377,3 +377,43 @@
   imported statement references so undone lines remain available for review.
   Groups use the existing group controller. See `doc/LISTS.md`; regression checks
   are `test/test_history.php` and guarded disposable `test/test_history_database.php`.
+
+## Existing-movement creation guard
+
+- `KreaBankService::assertNoExistingMovementForCreation()` runs before every selected-line
+  creation choice and inside `createQuickEntryAndReconcile()`. Same owned account, exact
+  signed persisted amount and booking date within tolerance block creation, whatever the
+  reconciled state; movements mapped to another imported line are distinct evidence.
+  Only the user's confirmation of the exact current list overrides, with an
+  `existing_movement_override` audit. Rule entries and truncated searches never override.
+- `reconcileLine()` repeats the check inside its transaction before any flow materializes a
+  movement. `reconcile.php` holds the audited confirmation per line for 15 minutes
+  (`confirm_existing_movements`); matched/bulk/list and unattended paths fail closed.
+- A native movement with a `kreabank_statement_line.fk_native_bank_line` mapping belongs to
+  that line only: never offer or accept it for another line, whatever its native `rappro`.
+- `KreaBankTransferGuard` (hooked on native `transfer.php` add) is read-only review: a leg
+  repeating an owned same-amount, nearby-date movement is refused until the identical
+  transfer is entered again (5 s–10 min). Keep `audit_type` values within 32 characters.
+- `php test/test_reconciliation_fireproof_database.php` replays everyday mistakes with
+  native invoices/payments on the guarded disposable fixture only.
+- Statement deletion checks reconciled lines under account/statement/line locks in one
+  transaction with its audit. Never move that check or the audit outside the transaction.
+- Table checks run once per `KreaBankService::schemaFingerprint()` (stored globally in
+  `KREABANK_SCHEMA_FINGERPRINT`, cleared on module activation). Never add per-request DDL.
+- `kreabankIsTokenValid()` intentionally accepts the current and the next-request session
+  token: both are session secrets and background/multi-tab POSTs need the latter when
+  per-call token renewal is enabled.
+- `php test/test_existing_movement_guard.php` is pure; its database counterpart uses ONLY
+  the guarded disposable localhost:33317 fixture.
+
+## Line workspace inside the reconciliation list
+
+- 2026-11-15: `reconcile.php` is only a permission-checked redirect. The selected-line
+  workspace lives in `line_workspace.inc.php`, included by `reconciliationlist.php` when
+  `workspace=1` or one of its explicitly listed POST actions is requested. Every mention of
+  `reconcile.php` above now means this workspace; its controller, signed reviews, assets
+  (`css/reconcile.css`, `js/reconcile.js`, `js/reconcile-supplier.js`) and tests are unchanged.
+- Keep workspace and list action names disjoint and the routed list explicit. The include
+  has no bootstrap and refuses direct requests. `kreabankWorkspaceUrl('reconcile')` is the
+  only URL builder; never link to `reconcile.php`. Never remove a workspace feature without
+  first providing it in the list. `php test/test_line_workspace_route.php` checks this contract.

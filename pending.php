@@ -222,7 +222,7 @@ if (empty($pendingLines)) {
 		$statusLabel = kreabankStatusLabel((int) $line['status'], $langs);
 		$statusClass = kreabankStatusClass((int) $line['status']);
 		$lineId = (int) $line['rowid'];
-		$reconcileUrl = dol_buildpath('/custom/kreabank/reconcile.php?mainmenu=bank&leftmenu=kreabank_reconcile&account_context=' . $navigationAccountId . '&line_id=' . $lineId, 1);
+		$reconcileUrl = dol_buildpath('/custom/kreabank/reconciliationlist.php?mainmenu=bank&leftmenu=bank&workspace=1&account_context=' . $navigationAccountId . '&line_id=' . $lineId, 1);
 		$operationDateRaw = '';
 		if (!empty($line['operation_date'])) {
 			$operationDateRaw = (string) $line['operation_date'];

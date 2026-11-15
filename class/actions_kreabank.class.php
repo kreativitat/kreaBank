@@ -216,6 +216,43 @@ class ActionsKreaBank extends CommonHookActions
 				$action = ''; // Native transfer.php does not gate its write block on the hook result.
 				return -1;
 			}
+			// A leg that repeats an existing movement would double-count the ledger: review first.
+			if (isModEnabled('kreabank')) {
+				require_once __DIR__ . '/KreaBankTransferGuard.class.php';
+				$transfers = array();
+				for ($i = 1; $i < 20; $i++) {
+					$from = GETPOSTINT($i . '_account_from'); $to = GETPOSTINT($i . '_account_to');
+					$amount = (string) price2num(GETPOST($i . '_amount', 'alpha'), 'MT', 2);
+					if ($from <= 0 || $to <= 0 || (float) $amount <= 0) { continue; }
+					$transfers[] = array('from' => $from, 'to' => $to, 'amount' => $amount,
+						'amount_to' => (string) price2num(GETPOST($i . '_amountto', 'alpha'), 'MT', 2),
+						'date' => (int) dol_mktime(12, 0, 0, GETPOSTINT($i . '_month'), GETPOSTINT($i . '_day'), GETPOSTINT($i . '_year'), 'gmt'));
+					if ((float) $transfers[count($transfers) - 1]['amount_to'] <= 0) { $transfers[count($transfers) - 1]['amount_to'] = ''; }
+				}
+				try {
+					$guard = new KreaBankTransferGuard($this->db, $conf->entity);
+					$existing = $transfers ? $guard->existingMovements($transfers, getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE', 3)) : array();
+				} catch (Throwable $e) {
+					$existing = array();
+					dol_syslog('KreaBank transfer duplicate review unavailable: ' . $e->getMessage(), LOG_WARNING);
+				}
+				if ($existing) {
+					$store = (isset($_SESSION['kreabank_transfer_confirm']) && is_array($_SESSION['kreabank_transfer_confirm'])) ? $_SESSION['kreabank_transfer_confirm'] : array();
+					$confirmed = count($existing) <= 100
+						&& KreaBankTransferGuard::consumeConfirmation($store, $guard->confirmationKey($user->id, $transfers, $existing), time());
+					$_SESSION['kreabank_transfer_confirm'] = $store;
+					if (!$confirmed) {
+						$langs->load('kreabank@kreabank');
+						$this->error = $langs->trans(count($existing) > 100 ? 'KreaBankTransferExistingIncomplete' : 'KreaBankTransferExistingBlocked', '#' . implode(', #', array_slice($existing, 0, 20)));
+						$action = '';
+						return -1;
+					}
+					try { $audited = $guard->auditOverride($user->id, $transfers, $existing); } catch (Throwable $e) { $audited = false; }
+					if (!$audited) {
+						dol_syslog('KreaBank could not audit a confirmed transfer with existing movements ' . implode(',', $existing), LOG_WARNING);
+					}
+				}
+			}
 		}
 		if (!$this->bankingContextAllowed()) {
 			return 0;
