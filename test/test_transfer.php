@@ -8,28 +8,34 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 error_reporting(E_ALL);
 set_error_handler(static function ($level, $message) { if (error_reporting() & $level) { throw new RuntimeException($message); } return false; });
 define('DOL_DOCUMENT_ROOT', getenv('KREABANK_DOLIBARR_ROOT') ?: dirname(__DIR__, 3));
+require_once DOL_DOCUMENT_ROOT . '/core/class/translate.class.php';
 require_once __DIR__ . '/../lib/kreabank_transfer.lib.php';
 $fixtureCase = $argv[2] ?? 'default';
 $locale = $argv[3] ?? 'pt_PT';
 class TransferFixtureLangs
 {
 	public $labels;
+	private $native;
 	public function __construct($locale) {
 		$this->labels = array();
 		foreach (file(__DIR__ . '/../langs/' . $locale . '/kreabank.lang', FILE_IGNORE_NEW_LINES) as $line) {
 			if (preg_match('/^([A-Za-z0-9_]+)=(.*)$/', $line, $match)) { $this->labels[$match[1]] = $match[2]; }
 		}
 		$this->labels = array_merge($this->labels, array('TransferFrom' => 'From', 'TransferTo' => 'To', 'Type' => 'Type', 'Date' => 'Date', 'Description' => 'Description', 'Amount' => 'Amount', 'AmountToOthercurrency' => 'Amount in destination currency', 'ChequeNumber' => 'Cheque number', 'MenuBankInternalTransfer' => 'Internal transfer', 'TransferDesc' => 'Native transfer help', 'Save' => 'Save', 'Add' => 'Add'));
+		$this->native = new Translate(DOL_DOCUMENT_ROOT, (object) array());
+		$this->native->defaultlang = $locale;
+		$this->native->tab_translate = $this->labels;
 	}
 	public function load($file) {}
-	public function trans($key) { return $this->labels[$key] ?? $key; }
+	public function trans(...$args) { return $this->native->trans(...$args); }
+	public function transnoentities(...$args) { return $this->native->transnoentities(...$args); }
 }
 function dol_escape_htmltag($value) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
 function dol_buildpath($path, $absolute = 0) { return '/custom' . $path; }
 function dolBuildUrl($path) { return $path; }
 function getNonce() { return 'synthetic-nonce'; }
 function newToken() { return 'synthetic-token'; }
-function getDolGlobalString($key) { return $GLOBALS['fixtureCase'] === 'cheque'; }
+function getDolGlobalString($key) { return $key === 'BANK_TRANSFER_ASK_CHQ_NUMBER_OF_SRC_ACCOUNT' && $GLOBALS['fixtureCase'] === 'cheque'; }
 function isModEnabled($key) { return true; }
 function GETPOST($key, $type = '') { return $GLOBALS['fixtureRequest'][$key] ?? ''; }
 function GETPOSTINT($key) { return (int) GETPOST($key); }
@@ -82,6 +88,11 @@ foreach (array('en_US', 'pt_PT') as $language) {
 		$dom = new DOMDocument();
 		@$dom->loadHTML($html);
 		$xpath = new DOMXPath($dom);
+		$config = json_decode($xpath->query("//script[@id='kb-transfer-labels']")->item(0)->textContent, true, 512, JSON_THROW_ON_ERROR);
+		foreach (array('add' => 'KreaBankTransferAdd', 'transfer' => 'KreaBankTransferNumber', 'help' => 'KreaBankTransferHelp', 'from' => 'KreaBankTransferFrom', 'to' => 'KreaBankTransferTo') as $name => $key) {
+			$checks++;
+			if ($config[$name] !== $langs->labels[$key]) { throw new RuntimeException($language . ': plain-text label or numbering placeholder changed: ' . $name); }
+		}
 		foreach (array("//form[@name='add']" => 1, "//input[@name='token' and @value='synthetic-token']" => 1, "//tr[contains(@class,'numvir')]" => 19, "//select[contains(@name,'_account_from')]" => 19, "//input[contains(@name,'_num_chq')]" => ($case === 'cheque' ? 19 : 0), "//script[contains(@src,'transfer.js')]" => 1) as $query => $expected) {
 			$checks++;
 			if ($xpath->query($query)->length !== $expected) { throw new RuntimeException($case . ': ' . $query); }

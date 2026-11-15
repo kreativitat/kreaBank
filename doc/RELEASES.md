@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.35 — 2026-11-15
+
+- Preserve Portuguese accents and transfer numbering in the native transfer cards using plain-text translations for JSON labels.
+
 ## 1.20.34 — 2026-11-15
 
 - Use KreaBank consistently for the Portuguese module and workspace name.
