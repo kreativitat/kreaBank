@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.66 — 2026-11-17
+
+- Remove the extra reconciliation-status tabs and account filter panel from the native bank-entry list. Keep its native table filters, banking header, account context and direct filtered links.
+
 ## 1.20.65 — 2026-11-15
 
 - Preserve existing native reference evidence when enriching recorded customer transfers, so receipt details do not suppress a previously eligible match. Keep existing score and ambiguity safeguards unchanged.

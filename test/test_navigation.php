@@ -222,6 +222,22 @@ $_SERVER['PHP_SELF'] = '/compta/bank/card.php';
 $action = 'create';
 checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0 && $hooks->resprints === '' && count($db->queries) === $queryCount, 'New-account creation keeps only the native form without workspace navigation');
 $action = '';
+$_SERVER['PHP_SELF'] = '/compta/bank/bankentries_list.php';
+$navigationRequest = array();
+$queryCount = count($db->queries);
+$hooks->printCommonFooter(array(), $object, $action, null);
+checkNavigation(strpos($hooks->resprints, 'kb-header') !== false && strpos($hooks->resprints, 'KreaBankAllAccounts') !== false
+	&& strpos($hooks->resprints, 'kb-view-switch') === false && strpos($hooks->resprints, 'kb-accounts-filters') === false
+	&& strpos($hooks->resprints, '<form') === false && count($db->queries) === $queryCount,
+	'The native movement list retains its banking header without duplicate status/account filters or selector queries');
+$html = kreabankBankingHeader('movements', (object) array('id' => 45, 'ref' => 'Synthetic bank'), false);
+checkNavigation(strpos($html, 'Synthetic bank') !== false && strpos($html, 'kb-movement-balances') !== false
+	&& strpos($html, 'kb-view-switch') === false && strpos($html, 'kb-accounts-filters') === false,
+	'Scoped movement lists keep bank identity and balances while hiding duplicate filters');
+$user->allowed = array('banque.lire');
+checkNavigation($hooks->printCommonFooter(array(), $object, $action, null) === 0 && $hooks->resprints === '',
+	'Native-only movement readers retain the original list');
+$user->allowed = array('banque.lire', 'kreabank.reconciliation.read');
 $navigationRequest = array('kind' => 'cash', 'account_context' => 45);
 foreach (array('movements', 'worklist', 'bankstatement', 'statement', 'reconcile', 'matched', 'bulkmatch', 'pending', 'feed', 'monthlyreport', 'history') as $page) {
 	$queriesBefore = count($db->queries);

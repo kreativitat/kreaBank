@@ -359,7 +359,8 @@ class ActionsKreaBank extends CommonHookActions
 		if ($page === 'releve.php' && GETPOST('num','alphanohtml') === '' && !GETPOSTINT('native_statements')) {
 			$redirect = 'window.location.replace(' . json_encode(kreabankStatementUrl($accountId), JSON_HEX_TAG|JSON_HEX_AMP) . ');';
 		}
-		$html = kreabankBankingHeader($view,$account);
+		// The native movement list owns its filters; other bank views retain theirs.
+		$html = kreabankBankingHeader($view, $account, $page !== 'bankentries_list.php' || $view !== 'movements');
 		$ordinaryMovements = $page === 'bankentries_list.php' && $accountId > 0 && $action === '' && GETPOST('action', 'aZ09') === '';
 		$this->resprints = '<div id="kreabank-native-context">' . $html . '</div><script nonce="' . dol_escape_htmltag(getNonce()) . '">'
 			. '(function(){document.body.classList.add("kb-native-bank"' . ($ordinaryMovements ? ',"kb-native-movements"' : '') . ');var panel=document.getElementById("kreabank-native-context"),target=document.getElementById("id-right");if(panel&&target){target.insertBefore(panel,target.firstChild);}' . $redirect . '})();</script>';

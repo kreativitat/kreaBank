@@ -215,7 +215,7 @@ function kreabankBankingHeader($page, $account = null, $showFilters = true)
 		}
 		$html .= '</div>';
 	}
-	if ($page === 'movements') {
+	if ($page === 'movements' && $showFilters) {
 		$matched = kreabankMovementFilter();
 		$html .= '<div class="kb-view-switch" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankNavMovements')) . '">';
 		foreach (array(0 => 'KreaBankAllMovements', 1 => 'KreaBankReconciledMovements', 2 => 'KreaBankUnreconciledMovements') as $filter => $label) {

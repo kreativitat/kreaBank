@@ -19,7 +19,8 @@ Internal transfers and new-account creation keep the native layout without a
 workspace header or tabs.
 
 A separate Filters panel below unscoped operational navigation contains one bank-account
-selector, listing only current-company accounts. Opening an account fixes the
+selector, listing only current-company accounts. The native movement list uses
+its own table filters instead. Opening an account fixes the
 request-local context across tabs, subviews, search and pagination. The shared
 header shows its escaped reference and label beside Banking, replacing the
 company name and duplicate reference line, and removes the account selector on every scoped page,
@@ -66,10 +67,15 @@ The all-accounts view has no combined balance. Deploy `lib/kreabank.lib.php`,
 `css/navigation.css` and `accounts.php` with the descriptor/version files.
 The existing `lib/kreabank_integration.lib.php` provides the projection; no
 registration or schema update is required.
-Movements also offers **Unreconciled** (pt_PT: **Por reconciliar**), selecting native
+The direct **Unreconciled** movement view (pt_PT: **Por reconciliar**) selects native
 `b.rappro=0` rows within the same owned-account scope before counting/pagination.
-The explicit `kreabank_matched=2` view persists through account/search forms and
-native sort/page links. Existing reconciled-view semantics remain unchanged.
+Since 1.20.66, `bankentries_list.php` uses only its native table filters: the extra
+All/Reconciled/Unreconciled controls and separate account Filters panel are absent.
+The banking header, scoped balances, bank-entry detail controls and statement
+numbering remain unchanged. Explicit `kreabank_matched=2` links still select
+unreconciled rows and persist through native search/sort/page links; existing
+reconciled-view semantics remain unchanged. This presentation change requires no
+schema, menu-registration or scheduler update.
 
 The native Dolibarr left menu remains visible with its standard layout and
 responsive behavior. For internal workspace readers, the existing `leftblock`
