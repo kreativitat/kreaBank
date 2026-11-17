@@ -12,7 +12,7 @@ references and the statement icon open **Bank statement**; pending counts open
 **Reconcile**. Cash accounts open native **Movements**. The pencil opens account
 details and tools.
 
-Five tabs retain the selected account:
+Six tabs retain the selected account:
 
 | Tab | Purpose |
 | --- | --- |
@@ -20,9 +20,10 @@ Five tabs retain the selected account:
 | Statements | Import files, inspect imported statements and their original evidence. |
 | Reconcile | Review proposed pairs and resolve each bank transaction in its row. |
 | Monthly reports | Read-only reconciliation summary, controls, separate pending bank/ERP lists, and statement/ledger evidence. |
+| Movements | Native Dolibarr entries for the selected bank account, without a repeated account column or filter. |
 | History | Reconciliation history and company-wide audit, with permission-controlled undo. |
 
-**Movements** remains a separate native left-menu page. Lists use Dolibarr header
+**Movements** also remains available in the native left menu. Lists use Dolibarr header
 filters, sorting and pagination. Selected-account views omit repeated bank columns;
 all-account views retain them. Monthly **Summary** and **Controls** use compact
 report tables; transaction subtabs retain filterable, paginated lists.

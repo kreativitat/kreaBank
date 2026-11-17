@@ -146,6 +146,17 @@ class ActionsKreaBank extends CommonHookActions
 		return 1;
 	}
 
+	/** Scoped native lists identify their fixed account in the shared header. */
+	public function completeArrayFields($parameters, &$object, &$action, $hookmanager)
+	{
+		if ($this->bankingContextAllowed() && basename($_SERVER['PHP_SELF'] ?? '') === 'bankentries_list.php'
+			&& $this->nativeAccountId('bankentries_list.php') > 0) {
+			// Remove the field itself: saved native column preferences can override checked=0.
+			unset($parameters['arrayfields']['ba.ref']);
+		}
+		return 0;
+	}
+
 	/** Apply the explicit matched-movements view before native pagination/counting. */
 	public function printFieldListWhere($parameters, &$object, &$action, $hookmanager)
 	{

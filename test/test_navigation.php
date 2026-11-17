@@ -72,10 +72,10 @@ $newHead = kreabankCompleteAccountHead($head, 45);
 checkNavigation($newHead === $head, 'Shared header replaces native tabs without inserting another navigation layer');
 checkNavigation(strpos(kreabankWorkspaceUrl('reconcile', 45), '/reconciliationlist.php?mainmenu=bank&leftmenu=bank&workspace=1&account_context=45') !== false && strpos(kreabankWorkspaceUrl('reconcile', 45), 'reconcile.php') === false, 'The selected-line workspace is served inside the reconciliation list');
 $tabs = kreabankPrepareHead(45);
-checkNavigation(array_column($tabs, 2) === array('bankstatement', 'statement', 'worklist', 'monthlyreport', 'history'), 'Reconcile is third and native Movements is not an operational tab');
+checkNavigation(array_column($tabs, 2) === array('bankstatement', 'statement', 'worklist', 'monthlyreport', 'movements', 'history'), 'Reconcile is third and Movements appears between Monthly reports and History');
 $user->allowed[] = 'kreabank.reconciliation.write';
 $user->allowed[] = 'banque.modifier';
-checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('bankstatement', 'statement', 'worklist', 'monthlyreport', 'history'), 'Write actions do not add another navigation layer');
+checkNavigation(array_column(kreabankPrepareHead(45), 2) === array('bankstatement', 'statement', 'worklist', 'monthlyreport', 'movements', 'history'), 'Write actions do not add another navigation layer');
 foreach (kreabankPrepareHead(45) as $tab) {
 	checkNavigation((strpos($tab[0], 'account_context=45') !== false || strpos($tab[0], 'search_account=45') !== false || preg_match('/[?&]id=45(?:&|$)/', $tab[0])) && strpos($tab[0], 'line_id') === false, 'Carry account without copying a stale line/action');
 }
@@ -126,7 +126,7 @@ foreach (array(array('banque.lire'), array('kreabank.reconciliation.read'), arra
 }
 $user->allowed = $savedPermissions;
 $user->socid = 123;
-checkNavigation(!in_array('worklist', array_column(kreabankPrepareHead(), 2), true), 'External users cannot see the reconciliation tab');
+checkNavigation(!array_intersect(array('worklist', 'movements'), array_column(kreabankPrepareHead(), 2)), 'External users cannot see reconciliation or native movement tabs');
 $user->socid = 0;
 $accountSelect = kreabankAccountFilterSelect();
 checkNavigation(strpos($accountSelect, 'name="account_context"') !== false && strpos(end($db->queries), 'WHERE entity=7 ') !== false, 'Shared account control lists only current-company accounts');
@@ -185,8 +185,8 @@ foreach (array('movements','bankstatement','statement','worklist','monthlyreport
 	@$dom->loadHTML('<meta charset="utf-8">' . $html);
 	$xpath = new DOMXPath($dom);
 	$entries = $xpath->query("//nav[contains(@class,'kb-primary')]/a[contains(@href,'reconciliationlist.php')]");
-	checkNavigation($entryPage === 'movements' ? $entries->length === 0 : ($entries->length === 1 && strpos($entries->item(0)->getAttribute('href'), 'search_account=45') !== false), 'Only operational pages expose the new list in their tab bar');
-	checkNavigation($xpath->query("//nav[contains(@class,'kb-primary')]/a")->length === ($entryPage === 'movements' ? 0 : 5) && strpos($html, 'kb-reconcile-action') === false, 'Standalone Movements has no operational tab bar or header button');
+	checkNavigation($entries->length === 1 && strpos($entries->item(0)->getAttribute('href'), 'search_account=45') !== false, 'Every operational page exposes the account-scoped reconciliation list');
+	checkNavigation($xpath->query("//nav[contains(@class,'kb-primary')]/a")->length === 6 && strpos($html, 'kb-reconcile-action') === false, 'Movements shares the six operational tabs without the removed header button');
 	if ($entryPage === 'worklist') {
 		checkNavigation($entries->item(0)->getAttribute('aria-current') === 'page' && strpos($html, 'KreaBankReviewOneByOne') === false, 'New reconciliation tab is active without legacy review subtabs');
 	}
@@ -252,16 +252,16 @@ foreach (array('movements', 'worklist', 'bankstatement', 'statement', 'reconcile
 	checkNavigation(count($balanceQueries) === ($withBalances ? 2 : 0), 'Selected operational views read only the feed configuration and one scoped account snapshot');
 	if ($withBalances) {
 		checkNavigation(strpos($balanceQueries[1], ' WHERE ba.entity=7 AND ba.rowid=45 ORDER BY ') !== false && strpos($balanceQueries[1], 'LIMIT 0, 1') !== false, 'Balance reads cannot list other accounts or companies');
-		checkNavigation($xpath->query('//header/dl[@class="kb-movement-balances"]')->length === 1 && ($page === 'movements' || $xpath->query('//header/nav/following-sibling::dl[@class="kb-movement-balances"]')->length === 1) && strpos($html, '-1234.56') !== false, 'Selected pages retain one balance panel, after the operational tabs where applicable');
+		checkNavigation($xpath->query('//header/dl[@class="kb-movement-balances"]')->length === 1 && $xpath->query('//header/nav/following-sibling::dl[@class="kb-movement-balances"]')->length === 1 && strpos($html, '-1234.56') !== false, 'Selected pages retain one balance panel, after the operational tabs where applicable');
 		if ($page === 'movements') {
-			checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]')->length === 0 && strpos($html, 'kb-movement-balances') !== false && $xpath->query('//div[contains(@class,"kb-view-switch")]/a')->length === 3, 'Standalone Movements keeps its balances and three native movement views without operational tabs');
+			checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a[@aria-current="page"]')->item(0)->textContent === 'KreaBankNavMovements' && strpos($html, 'kb-movement-balances') !== false && $xpath->query('//div[contains(@class,"kb-view-switch")]/a')->length === 3, 'Movements highlights its operational tab and retains balances and direct movement views');
 		} else {
 			checkNavigation($xpath->query('//nav/a[@aria-current="page"]')->item(0)->textContent === $tabs[array_search($page, array_column($tabs, 2), true)][1], 'Each operational view highlights its own tab');
 		}
 	} else {
 		checkNavigation(strpos($html, 'kb-movement-balances') === false, 'Dormant and configuration views retain their existing layout');
 	}
-	checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a')->length === ($page === 'movements' ? 0 : 5), 'Movements stays separate from the five operational tabs and legacy reconciliation');
+	checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]/a')->length === 6, 'All operational pages share the six banking tabs');
 	checkNavigation($xpath->query('//div[contains(@class,"kb-brand")]/span[@class="kb-account-context"]')->item(0)->textContent === 'Synthetic <account> — Current & savings', 'The bank reference and label remain visible and escaped beside the title');
 	foreach ($xpath->query('//nav/a | //div[contains(@class,"kb-view-switch")]/a') as $link) {
 		checkNavigation(preg_match('/[?&](?:id|account_context|search_account)=45(?:&|$)/', $link->getAttribute('href')) === 1, 'All operational and subview links retain the selected account');

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.67 — 2026-11-17
+
+- Add Movements between Monthly reports and History in the banking workspace, retaining the selected account in native movement-list links and navigation.
+- Remove the account column, filter and column-picker option from scoped native movement lists without changing saved preferences. All-account lists retain the account column.
+
 ## 1.20.66 — 2026-11-17
 
 - Remove the extra reconciliation-status tabs and account filter panel from the native bank-entry list. Keep its native table filters, banking header, account context and direct filtered links.

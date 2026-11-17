@@ -1,14 +1,15 @@
 # Banking workspace
 
-Operational banking pages share five tabs: Bank statement, Statements, Reconcile,
-Monthly reports and History. Movements is in the native left menu directly below New financial
-account. Its standalone page does not render the operational tab bar. Reconcile opens the new `reconciliationlist.php`. The legacy
+Operational banking pages share six tabs: Bank statement, Statements, Reconcile,
+Monthly reports, Movements and History. Movements also remains in the native left
+menu directly below New financial account. Its native list shares the operational
+tab bar and highlights Movements. Reconcile opens the new `reconciliationlist.php`. The legacy
 `reconcile.php` controllers and direct routes remain dormant and intact. Connections also retains its
 direct route without an operational tab. Bank statement combines all imported
 movements; Statements retains the individual import list and details. Account
 management is separate: the native Banks/Cash heading opens the accounts
 overview. Bank references and the statement icon open the account-scoped Bank
-statement with its five tabs; pending counts open Reconcile. An owned account
+statement with its six tabs; pending counts open Reconcile. An owned account
 without imports keeps its empty statement view and account context. Cash accounts retain native Movements because they
 are excluded from bank reconciliation. The pencil icon in the right-aligned
 Actions column opens the account’s native details and tool tabs.
@@ -76,6 +77,16 @@ numbering remain unchanged. Explicit `kreabank_matched=2` links still select
 unreconciled rows and persist through native search/sort/page links; existing
 reconciled-view semantics remain unchanged. This presentation change requires no
 schema, menu-registration or scheduler update.
+
+Since 1.20.67, the Movements tab opens the native list with the selected account's
+`id`, so native account loading fixes the scope before counts and pagination and
+retains it through search, reset, sorting and paging. The `completeArrayFields`
+hook removes `ba.ref` from scoped lists, including its column-picker option;
+saved native column preferences cannot restore the redundant account column or
+filter. Preferences are not rewritten, and all-account lists retain the column.
+The native controller and financial actions remain unchanged. Validate with
+`php test/test_navigation.php` and `php test/test_movement_columns.php`, which
+uses the installed native column selector, including text-browser mode.
 
 The native Dolibarr left menu remains visible with its standard layout and
 responsive behavior. For internal workspace readers, the existing `leftblock`
