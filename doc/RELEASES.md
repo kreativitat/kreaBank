@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.20.71 — 2026-11-18
+
+- Automatically reconcile proven transfers across selected accounts owned by the same company, reusing reciprocal native legs or creating both together atomically.
+- Recognize evidenced UNICRE settlements, distinguish terminal credits by booking day and exact amount, and reuse safe existing receipts.
+- Preserve full imported references while fitting the native reference limit; retain historical value dates and block source/batch conflicts.
+- Reserve bounded scan capacity for receipts and owned transfers; serialize native transfer requests with automatic runs to prevent duplicate creation.
+- Keep expense debits, invoices and invoice payments outside automatic creation. Ambiguous or incomplete evidence remains pending for review.
+
 ## 1.20.70 — 2026-11-18
 
 - Make Saldos banco/ERP the first monthly report: January-to-selected-month closing balances, exact bank-minus-Dolibarr differences and cumulative pending bank movements, following the accountant's workbook.

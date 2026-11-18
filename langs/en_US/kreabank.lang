@@ -462,15 +462,15 @@ KreaBankAuditSkip=skip
 KreaBankAuditDeleteStatement=delete_statement
 
 KreaBankAutomation=Automatic reconciliation
-KreaBankAutoPurpose=Automatically reconcile imported transactions with existing bank movements. Optional settings also handle configured account-pair transfers and card-terminal settlement receipts. Invoice payments require review.
-KreaBankAutoScheduleHelp=The existing Dolibarr scheduler checks every 15 minutes. Each run scans up to 50 pending lines and revisits unresolved lines on subsequent passes. Check job results under Scheduled jobs.
+KreaBankAutoPurpose=Automatically reconcile imported transactions with existing bank movements. Optional settings handle transfers between our own accounts and card-terminal settlement receipts. Expense debits require a recorded document; invoice payments require review.
+KreaBankAutoScheduleHelp=The existing Dolibarr scheduler checks every 15 minutes. Each run scans up to 50 pending lines, reserving up to 10 places for recognized TPA credits and owned-account transfers. Unresolved lines are revisited. Check results under Scheduled jobs.
 KreaBankAutoMode=Mode
 KreaBankAutoOff=Disabled
 KreaBankAutoPreviewMode=Scheduled preview only
 KreaBankAutoEnabled=Automatic matching enabled
 KreaBankAutoAccounts=Accounts selected for automatic matching
 KreaBankAutoNoAccounts=No open bank accounts are configured for reconciliation in this company.
-KreaBankAutoSafetyHelp=Requires the same account, currency and signed amount, a nearby booking date and a strong identity match with a clear lead over other candidates. Duplicates, skipped lines and source conflicts remain for review. Existing-movement matching creates no invoices, payments or bank movements. The separate paired-transfer option may create both native transfer legs from two proven imported transactions.
+KreaBankAutoSafetyHelp=Existing-movement matching requires the same account, currency and signed amount, a nearby booking date and a strong identity with a clear lead. The transfer options require proven owned endpoints and reuse existing legs before creating a complete transfer. Ambiguous evidence stays pending. Automation never creates expense debits, invoices or invoice payments.
 KreaBankAutoPreviewHelp=Save the account selection first. Preview scans the first 50 pending lines using the saved settings and makes no financial changes, even when automatic matching is enabled.
 KreaBankAutoPreview=Preview matches
 KreaBankAutoSelectAccounts=Select accounts and save the settings before running a preview.
@@ -1006,3 +1006,8 @@ KreaBankExistingMovementConfirm=I confirm that the existing movements %s are dif
 KreaBankExistingMovementConfirmed=Confirmation recorded. Repeat the action within 15 minutes to create the new movement.
 KreaBankTransferExistingBlocked=Transfer not created: a movement with the same account, amount and date already exists (%s). Reconcile or undo that movement instead. If this really is a different transfer, enter it again (after a few seconds, within 10 minutes) to confirm.
 KreaBankTransferExistingIncomplete=Transfer not created: too many movements with the same account, amount and date exist (for example %s). Review the bank entries first.
+
+KreaBankOwnTransferEnable=Automatically reconcile transfers between our own accounts
+KreaBankOwnTransferHelp=Uses both selected accounts owned by this company, exact opposite amounts and verified transfer identity. Reuses complete existing transfers; creates both transfer legs together only when neither exists. Incomplete or ambiguous evidence stays pending. No expense debit or invoice payment is created.
+KreaBankTpaExistingReceipt=Reuse existing card-terminal receipt
+KreaBankTransferReviewUnavailable=Transfer not created: automatic reconciliation or the existing-movement check is unavailable. Try again after the current operation finishes.

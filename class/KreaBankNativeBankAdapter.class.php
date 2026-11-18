@@ -69,6 +69,14 @@ class KreaBankNativeBankAdapter
 		return $modes;
 	}
 
+	/** Native bank.num_chq is limited to 50 characters; imported evidence remains complete in metadata. */
+	public static function nativePaymentReference($reference)
+	{
+		$reference = (string) $reference;
+		if (dol_strlen($reference) <= 50) { return $reference; }
+		return dol_substr($reference, 0, 33) . '-' . substr(hash('sha256', $reference), 0, 16);
+	}
+
 	/**
 	 * Ensure all native-assistant storage objects exist.
 	 *
@@ -572,7 +580,15 @@ class KreaBankNativeBankAdapter
 
 		$account = $this->assertBankAccountIsOpen((int) $line['bank_account_id']);
 		$dateo = $this->toTimestamp((string) $line['operation_date']);
-		$datev = $this->toTimestamp((string) ($cardReceipt && empty($line['value_date']) ? $line['operation_date'] : $line['value_date']));
+		$valueDate = (string) ($line['value_date'] ?? '');
+		if ($isTransfer || $cardReceipt) {
+			if ($valueDate === '') { $valueDate = (string) $line['operation_date']; }
+			if (!preg_match('/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/D', $valueDate, $dateParts)
+				|| !checkdate((int) $dateParts[2], (int) $dateParts[3], (int) $dateParts[1])) {
+				throw new RuntimeException('Transfer or receipt value date is invalid');
+			}
+		}
+		$datev = $this->toTimestamp($valueDate);
 		$amount = (float) price2num((string) $line['amount'], 'MU');
 		if ($cardReceipt && ($isTransfer || $amount <= 0)) { throw new Exception('Card receipts require a positive non-transfer movement'); }
 		if ($cardReceipt && !array_key_exists((string) $receiptOperationCode, self::activePaymentModes($this->db, true))) {
@@ -583,7 +599,7 @@ class KreaBankNativeBankAdapter
 		}
 		$operationCode = $paymentOperationCode !== '' ? $paymentOperationCode : ($cardReceipt ? (string) $receiptOperationCode : ($isTransfer ? 'VIR' : $this->guessOperationCode($amount)));
 		$label = $this->buildLabel($line);
-		$numChq = (string) (!empty($line['payment_reference']) ? $line['payment_reference'] : $line['bank_reference']);
+		$numChq = self::nativePaymentReference(!empty($line['payment_reference']) ? $line['payment_reference'] : $line['bank_reference']);
 		$statementRef = !empty($line['statement_ref']) ? (string) $line['statement_ref'] : '';
 		$notePrivate = 'KreaBank staged import ' . dol_escape_htmltag((string) $line['source_type']) . ' / ' . dol_escape_htmltag((string) $line['source_file']);
 		if ($manualPrefill) {

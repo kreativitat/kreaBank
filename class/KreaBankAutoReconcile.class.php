@@ -12,6 +12,7 @@ class KreaBankAutoReconcile
 	public $output = '';
 	public $error = '';
 	public $errors = array();
+	private $companyLock;
 
 	public function __construct($db)
 	{
@@ -22,7 +23,7 @@ class KreaBankAutoReconcile
 
 	public function setting($suffix, $default = '')
 	{
-		if (!in_array($suffix, array('MODE', 'ACCOUNTS', 'CURSOR', 'PAIRS_ENABLED', 'TPA_ENABLED', 'TPA_PAYMENT_MODE'), true)) {
+		if (!in_array($suffix, array('MODE', 'ACCOUNTS', 'CURSOR', 'PRIORITY_CURSOR', 'PAIRS_ENABLED', 'OWN_TRANSFERS_ENABLED', 'TPA_ENABLED', 'TPA_PAYMENT_MODE'), true)) {
 			throw new Exception('Invalid automatic reconciliation setting');
 		}
 		$rows = $this->rows('SELECT value FROM ' . $this->db->prefix() . 'const WHERE entity=' . $this->entity
@@ -37,14 +38,15 @@ class KreaBankAutoReconcile
 	}
 
 	/** Saving configuration also installs/updates exactly one native job for this company. */
-	public function configure($actor, $mode, $accountIds, $pairedTransfers = false, $tpaReceipts = false, $tpaPaymentMode = null)
+	public function configure($actor, $mode, $accountIds, $pairedTransfers = false, $tpaReceipts = false, $tpaPaymentMode = null, $ownTransfers = null)
 	{
 		$this->assertActor($actor, true);
+		$ownTransfers = $ownTransfers === null ? $this->setting('OWN_TRANSFERS_ENABLED', '0') === '1' : (bool) $ownTransfers;
 		$tpaPaymentMode = $tpaPaymentMode === null ? $this->setting('TPA_PAYMENT_MODE') : (string) $tpaPaymentMode;
 		if ($tpaReceipts && !array_key_exists($tpaPaymentMode, KreaBankNativeBankAdapter::activePaymentModes($this->db))) {
 			throw new Exception('Select an active native payment mode for TPA receipts');
 		}
-		if ($pairedTransfers && !$actor->hasRight('banque', 'transfer')) { throw new Exception('Bank transfer permission is required'); }
+		if (($pairedTransfers || $ownTransfers) && !$actor->hasRight('banque', 'transfer')) { throw new Exception('Bank transfer permission is required'); }
 		if (!in_array($mode, array('off', 'preview', 'enabled'), true)) {
 			throw new Exception('Invalid automatic reconciliation mode');
 		}
@@ -64,7 +66,9 @@ class KreaBankAutoReconcile
 				$this->saveSetting('MODE', $mode);
 				$this->saveSetting('ACCOUNTS', implode(',', $ids));
 				$this->saveSetting('CURSOR', '0');
+				$this->saveSetting('PRIORITY_CURSOR', '0');
 				$this->saveSetting('PAIRS_ENABLED', $pairedTransfers ? '1' : '0');
+				$this->saveSetting('OWN_TRANSFERS_ENABLED', $ownTransfers ? '1' : '0');
 				$this->saveSetting('TPA_ENABLED', $tpaReceipts ? '1' : '0');
 				$this->saveSetting('TPA_PAYMENT_MODE', $tpaPaymentMode);
 				$jobs = $this->rows('SELECT rowid FROM ' . $this->db->prefix() . 'cronjob WHERE entity=' . $this->entity
@@ -141,58 +145,82 @@ class KreaBankAutoReconcile
 			}
 			$service = new KreaBankService($this->db, $actor, $langs);
 			$cursor = $preview ? 0 : max(0, (int) $this->setting('CURSOR', '0'));
+			$pairedTransfers = $this->setting('PAIRS_ENABLED', '0') === '1';
+			$ownTransfers = $this->setting('OWN_TRANSFERS_ENABLED', '0') === '1';
+			$tpaReceipts = $this->setting('TPA_ENABLED', '0') === '1';
+			$priorityCursor = $preview ? 0 : max(0, (int) $this->setting('PRIORITY_CURSOR', '0'));
+			$priority = $this->priorityRows($ids, $ownTransfers, $tpaReceipts, $priorityCursor);
+			$priorityIds = array_map(static function ($row) { return (int) $row->rowid; }, $priority['rows']);
+			$prioritySet = array_fill_keys($priorityIds, true);
 			$sql = 'SELECT l.rowid FROM ' . $this->db->prefix() . 'kreabank_statement_line l'
 				. ' INNER JOIN ' . $this->db->prefix() . 'kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity'
 				. ' INNER JOIN ' . $this->db->prefix() . 'bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=l.entity'
 				. ' WHERE l.entity=' . $this->entity . ' AND l.status=0 AND l.rowid>' . $cursor
-				. ' AND ba.rowid IN (' . implode(',', $ids) . ') ORDER BY l.rowid' . $this->db->plimit(50);
-			$rows = $this->rows($sql);
+				. ' AND ba.rowid IN (' . implode(',', $ids) . ')'
+				. ($priorityIds ? ' AND l.rowid NOT IN (' . implode(',', $priorityIds) . ')' : '')
+				. ' ORDER BY l.rowid' . $this->db->plimit(50 - count($priorityIds));
+			$ordinaryRows = $this->rows($sql);
+			$rows = array_merge($priority['rows'], $ordinaryRows);
 			$result = array('status' => $preview || $mode !== 'enabled' ? 'preview' : 'completed',
 				'scanned' => 0, 'eligible' => 0, 'reconciled' => 0, 'failed' => 0, 'matches' => array(), 'errors' => array(), 'review_required' => 0, 'account_reviews' => array());
-			$pairedTransfers = $this->setting('PAIRS_ENABLED', '0') === '1';
-			$tpaReceipts = $this->setting('TPA_ENABLED', '0') === '1';
 			$previewedPairs = array();
+			$priorityProcessed = 0;
 			$started = microtime(true);
 			foreach ($rows as $row) {
-				$cursor = (int) $row->rowid;
+				$isPriority = isset($prioritySet[(int) $row->rowid]);
+				if ($isPriority && microtime(true) - $started >= 6) { continue; }
+				$lineId = (int) $row->rowid;
+				if ($isPriority) { $priorityCursor = $lineId; $priorityProcessed++; }
+				else { $cursor = $lineId; }
 				$result['scanned']++;
 				try {
-					$review = $service->getPaymentAccountReview($cursor, $ids);
+					if (isset($previewedPairs[$lineId])) { continue; }
+					$review = $service->getPaymentAccountReview($lineId, $ids);
 					if ($review) {
 						$result['review_required']++;
 						// IDs only in scheduled output; previews may display current-company evidence.
-						$result['account_reviews'][] = $preview ? $review : array('statement_line_id'=>$cursor);
+						$result['account_reviews'][] = $preview ? $review : array('statement_line_id'=>$lineId);
 					} else {
-						$pair = $pairedTransfers ? $service->getAutomaticTransferSuggestion($cursor, $ids) : null;
-						if ($pair) {
-							$other = (int) $pair['lines'][1]->rowid;
-							if (!isset($previewedPairs[$cursor])) {
+						$own = $ownTransfers ? $service->getAutomaticOwnTransferSuggestion($lineId, $ids) : null;
+						if ($own) {
+							$result['eligible']++;
+							$match = array('statement_line_id'=>$lineId, 'bank_line_id'=>(int)$own['bank_ids'][0], 'score'=>null, 'own_transfer'=>true);
+							foreach ($own['lines'] as $member) { $previewedPairs[(int)$member->rowid]=true; }
+							if (count($own['lines'])===2) { $match['paired_statement_line_id']=(int)$own['lines'][1]->rowid; }
+							$result['matches'][]=$match;
+							if (!$preview && $mode==='enabled') { $result['reconciled']+=$service->reconcileAutomaticOwnTransfer($lineId,$ids); }
+						} else {
+							$pair = $pairedTransfers ? $service->getAutomaticTransferSuggestion($lineId, $ids) : null;
+							if ($pair) {
+								$other = (int) $pair['lines'][1]->rowid;
+								if (!isset($previewedPairs[$lineId])) {
+									$result['eligible']++;
+										$result['matches'][] = array('statement_line_id' => $lineId, 'paired_statement_line_id' => $other,
+										'bank_line_id' => (int) $pair['bank_ids'][0], 'score' => null);
+									$previewedPairs[$other] = true;
+									if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticTransferPair($lineId, $ids)) {
+										$result['reconciled'] += 2;
+									}
+								}
+								$match = null;
+							} else {
+								$match = $service->getAutomaticNativeSuggestion($lineId, $ids);
+							}
+							if ($match) {
 								$result['eligible']++;
-								$result['matches'][] = array('statement_line_id' => $cursor, 'paired_statement_line_id' => $other,
-									'bank_line_id' => (int) $pair['bank_ids'][0], 'score' => null);
-								$previewedPairs[$other] = true;
-								if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticTransferPair($cursor, $ids)) {
-									$result['reconciled'] += 2;
+								$result['matches'][] = array('statement_line_id' => $lineId,
+									'bank_line_id' => (int) $match['suggestion']['doc_id'], 'score' => (int) $match['suggestion']['score']);
+								if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticNativeLine($lineId, $ids)) {
+									$result['reconciled']++;
 								}
 							}
-							$match = null;
-						} else {
-							$match = $service->getAutomaticNativeSuggestion($cursor, $ids);
-						}
-						if ($match) {
-							$result['eligible']++;
-							$result['matches'][] = array('statement_line_id' => $cursor,
-								'bank_line_id' => (int) $match['suggestion']['doc_id'], 'score' => (int) $match['suggestion']['score']);
-							if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticNativeLine($cursor, $ids)) {
-								$result['reconciled']++;
-							}
-						}
-						if (!$pair && !$match && $tpaReceipts) {
-							$tpa = $service->getAutomaticTpaSuggestion($cursor, $ids);
-							if ($tpa) {
-								$result['eligible']++;
-								$result['matches'][] = array('statement_line_id' => $cursor, 'bank_line_id' => 0, 'score' => null, 'tpa_receipt' => true);
-								if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticTpaReceipt($cursor, $ids)) { $result['reconciled']++; }
+							if (!$pair && !$match && $tpaReceipts) {
+								$tpa = $service->getAutomaticTpaSuggestion($lineId, $ids);
+								if ($tpa) {
+									$result['eligible']++;
+									$result['matches'][] = array('statement_line_id' => $lineId, 'bank_line_id' => (int)$tpa['bank_line_id'], 'score' => null, 'tpa_receipt' => true);
+									if (!$preview && $mode === 'enabled' && $service->reconcileAutomaticTpaReceipt($lineId, $ids)) { $result['reconciled']++; }
+								}
 							}
 						}
 					}
@@ -200,8 +228,8 @@ class KreaBankAutoReconcile
 				} catch (Throwable $e) {
 					$result['failed']++;
 					// No descriptions, account details or database diagnostics in the job output.
-					$result['errors'][] = array('statement_line_id' => $cursor, 'reason' => 'processing_failed');
-					dol_syslog('KreaBank automatic reconciliation failed for company ' . $this->entity . ', staged line ' . $cursor, LOG_ERR);
+					$result['errors'][] = array('statement_line_id' => $lineId, 'reason' => 'processing_failed');
+					dol_syslog('KreaBank automatic reconciliation failed for company ' . $this->entity . ', staged line ' . $lineId, LOG_ERR);
 				}
 				if (microtime(true) - $started >= 20) {
 					break;
@@ -210,12 +238,36 @@ class KreaBankAutoReconcile
 			if (!$preview) {
 				require_once DOL_DOCUMENT_ROOT . '/core/lib/admin.lib.php';
 				// Keyset pagination revisits unresolved lines after reaching the end; no permanent starvation.
-				$this->saveSetting('CURSOR', $rows ? (string) $cursor : '0');
+				$this->saveSetting('CURSOR', $ordinaryRows ? (string) $cursor : '0');
+				$this->saveSetting('PRIORITY_CURSOR', $priorityProcessed === count($priority['rows']) ? (string)$priority['cursor'] : (string)$priorityCursor);
 			}
 			return $result;
 		} finally {
 			$this->releaseLock();
 		}
+	}
+
+	/** A reserved bounded lane prevents proven receipt/transfer types waiting behind the full expense queue. */
+	private function priorityRows($ids, $ownTransfers, $tpaReceipts, $cursor)
+	{
+		if (!$ownTransfers && !$tpaReceipts) { return array('rows'=>array(),'cursor'=>0); }
+		$p=$this->db->prefix(); $types=array();
+		if ($tpaReceipts) { $types[]="(l.amount>0 AND (l.description LIKE '%TPA%' OR l.description LIKE '%UNICRE%'))"; }
+		if ($ownTransfers) { $types[]="(l.description REGEXP '^(TRF|TRANSF|TRANSFER)')"; }
+		$rows=$this->rows("SELECT l.rowid,l.amount,l.direction,l.description,l.counterparty_iban FROM {$p}kreabank_statement_line l"
+			." JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=l.entity"
+			.' WHERE l.entity='.$this->entity.' AND l.status=0 AND l.rowid>'.(int)$cursor.' AND ba.rowid IN ('.implode(',',$ids).')'
+			.' AND ('.implode(' OR ',$types).') ORDER BY l.rowid'.$this->db->plimit(100));
+		if (!$rows) { return array('rows'=>array(),'cursor'=>0); }
+		$selected=array(); $company=getDolGlobalString('MAIN_INFO_SOCIETE_NOM');
+		foreach ($rows as $row) {
+			$cursor=(int)$row->rowid;
+			$isReceipt=$tpaReceipts && KreaBankDecimal::compare((string)$row->amount,'0')>0
+				&& (KreaBankMatcher::tpaSettlementIdentity($row->description)!=='' || preg_match('/^TRF CRED SEPA\+ DE UNICRE S\.A\.$/iD',trim($row->description)));
+			if ($isReceipt || ($ownTransfers && KreaBankOwnTransferEvidence::ownedIdentity((array)$row,$company,(string)$row->counterparty_iban)!=='')) { $selected[]=$row; }
+			if (count($selected)>=10) { break; }
+		}
+		return array('rows'=>$selected,'cursor'=>$cursor);
 	}
 
 	private function assertActor($actor, $admin = false)
@@ -244,22 +296,15 @@ class KreaBankAutoReconcile
 		}
 	}
 
-	private function lockName()
-	{
-		return 'kb-auto-' . substr(hash('sha256', $this->db->prefix()), 0, 24) . '-' . $this->entity;
-	}
-
 	private function acquireLock()
 	{
-		$rows = $this->rows("SELECT GET_LOCK('" . $this->lockName() . "',0) acquired");
-		if (!$rows || (int) $rows[0]->acquired !== 1) {
-			throw new Exception('Automatic reconciliation is already running for this company');
-		}
+		if (!$this->companyLock) { $this->companyLock = new KreaBankReconciliationLock($this->db, $this->entity); }
+		$this->companyLock->acquire();
 	}
 
 	private function releaseLock()
 	{
-		$this->db->query("SELECT RELEASE_LOCK('" . $this->lockName() . "')");
+		if ($this->companyLock) { $this->companyLock->release(); }
 	}
 
 	private function rows($sql)

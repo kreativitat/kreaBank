@@ -230,10 +230,17 @@ class ActionsKreaBank extends CommonHookActions
 			// A leg that repeats an existing movement would double-count the ledger: review first.
 			if (isModEnabled('kreabank')) {
 				require_once __DIR__ . '/KreaBankTransferGuard.class.php';
+				require_once __DIR__ . '/KreaBankReconciliationLock.class.php';
 				$transfers = array();
 				for ($i = 1; $i < 20; $i++) {
 					$from = GETPOSTINT($i . '_account_from'); $to = GETPOSTINT($i . '_account_to');
 					$amount = (string) price2num(GETPOST($i . '_amount', 'alpha'), 'MT', 2);
+					if ((float) $amount < 0) {
+						$langs->load('errors');
+						$this->error = $langs->trans('AmountMustBePositive');
+						$action = '';
+						return -1;
+					}
 					if ($from <= 0 || $to <= 0 || (float) $amount <= 0) { continue; }
 					$transfers[] = array('from' => $from, 'to' => $to, 'amount' => $amount,
 						'amount_to' => (string) price2num(GETPOST($i . '_amountto', 'alpha'), 'MT', 2),
@@ -241,11 +248,42 @@ class ActionsKreaBank extends CommonHookActions
 					if ((float) $transfers[count($transfers) - 1]['amount_to'] <= 0) { $transfers[count($transfers) - 1]['amount_to'] = ''; }
 				}
 				try {
+					$ownerEntities = array();
+					if ($transfers) {
+						$accounts = $this->nativeTransferAccounts($transfers);
+						$ownerEntities = array_values(array_unique(array_map(static function ($account) { return (int) $account['entity']; }, $accounts)));
+						$lockEntities = array_unique(array_merge(array((int) $conf->entity), $ownerEntities));
+						sort($lockEntities, SORT_NUMERIC);
+						// Shared native accounts retain their owners' exclusion windows too.
+						foreach ($lockEntities as $owner) {
+							$transferLock = new KreaBankReconciliationLock($this->db, $owner);
+							$transferLock->acquire();
+							$transferLock->holdUntilShutdown();
+						}
+						if ($accounts !== $this->nativeTransferAccounts($transfers)) {
+							throw new RuntimeException('Native transfer account scope changed');
+						}
+						foreach ($transfers as &$transfer) {
+							// Native transfer.php ignores amountto for equal account currencies.
+							if ($accounts[$transfer['from']]['currency_code'] === $accounts[$transfer['to']]['currency_code']) { $transfer['amount_to'] = ''; }
+						}
+						unset($transfer);
+					}
 					$guard = new KreaBankTransferGuard($this->db, $conf->entity);
-					$existing = $transfers ? $guard->existingMovements($transfers, getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE', 3)) : array();
-				} catch (Throwable $e) {
 					$existing = array();
+					foreach ($ownerEntities as $owner) {
+						$ownerGuard = new KreaBankTransferGuard($this->db, $owner);
+						$existing = array_values(array_unique(array_merge($existing, $ownerGuard->existingMovements($transfers, getDolGlobalInt('KREABANK_AUTOMATCH_DATE_TOLERANCE', 3)))));
+						sort($existing, SORT_NUMERIC);
+						$existing = array_slice($existing, 0, 101);
+						if (count($existing) > 100) { break; }
+					}
+				} catch (Throwable $e) {
 					dol_syslog('KreaBank transfer duplicate review unavailable: ' . $e->getMessage(), LOG_WARNING);
+					$langs->load('kreabank@kreabank');
+					$this->error = $langs->trans('KreaBankTransferReviewUnavailable');
+					$action = '';
+					return -1;
 				}
 				if ($existing) {
 					$store = (isset($_SESSION['kreabank_transfer_confirm']) && is_array($_SESSION['kreabank_transfer_confirm'])) ? $_SESSION['kreabank_transfer_confirm'] : array();
@@ -288,6 +326,27 @@ class ActionsKreaBank extends CommonHookActions
 			kreabankNavigationAccount($accountId);
 		}
 		return 0;
+	}
+
+	/** Match the native transfer selector's open/shared account scope before reading owner data. */
+	private function nativeTransferAccounts(array $transfers)
+	{
+		$scope = array();
+		foreach (explode(',', (string) getEntity('bank_account')) as $entity) {
+			$entity = trim($entity);
+			if (!ctype_digit($entity) || (int) $entity <= 0) { throw new RuntimeException('Native bank account scope is invalid'); }
+			$scope[] = (int) $entity;
+		}
+		$ids = array();
+		foreach ($transfers as $transfer) { $ids[] = (int) $transfer['from']; $ids[] = (int) $transfer['to']; }
+		$ids = array_values(array_unique($ids)); sort($ids, SORT_NUMERIC);
+		$result = $this->db->query('SELECT rowid,entity,currency_code FROM ' . $this->db->prefix() . 'bank_account WHERE entity IN (' . implode(',', array_unique($scope))
+			. ') AND clos=0 AND rowid IN (' . implode(',', $ids) . ') ORDER BY rowid');
+		if (!$result) { throw new RuntimeException('Cannot validate native transfer accounts'); }
+		$accounts = array();
+		while ($row = $this->db->fetch_object($result)) { $accounts[(int) $row->rowid] = (array) $row; }
+		if (count($accounts) !== count($ids)) { throw new RuntimeException('Native transfer accounts are outside the selector scope'); }
+		return $accounts;
 	}
 
 	private function bankingContextAllowed()

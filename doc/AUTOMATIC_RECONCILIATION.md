@@ -1,4 +1,4 @@
-# Automatic reconciliation of existing bank movements
+# Automatic reconciliation
 
 KreaBank 1.14 can reconcile pending imported statement lines with movements that
 already exist in the native Dolibarr bank account. It uses the same matcher,
@@ -28,14 +28,15 @@ Fintable collection job continues to collect only; reconciliation picks up eligi
 posted imports on a subsequent scheduler run, also supporting file imports and
 bank movements entered after the initial collection.
 
-Each scheduled pass scans at most 50 staging IDs with a 20-second between-line
-budget. A persisted cursor moves past unresolved rows, resets at the end, and
-revisits them on later passes. Large queues therefore take multiple ticks; the
-20-second budget does not interrupt an individual database operation. Check the
-native job's result/output for scanned, eligible, reconciled and failed counts.
-Failures identify staging IDs without publishing financial descriptions. Other
-lines continue; failed rows remain pending and are revisited on the next full pass.
-Normal pending/history and native bank pages remain available for review.
+Each scheduled pass evaluates at most 50 staging IDs with a 20-second between-line
+budget. Up to ten slots and six seconds are reserved for recognized TPA credits
+and own-account transfer descriptions. A separate persisted priority cursor rotates
+that lane; the ordinary cursor continues through the remaining expense/document
+queue without jumping over unresolved rows. Neither cursor changes during an
+explicit preview. Large queues take multiple ticks; the time budgets do not
+interrupt an individual database operation. Job output reports scanned, eligible,
+reconciled and failed counts without financial descriptions. Failed or ambiguous
+rows remain pending and are revisited on later passes.
 
 ## Eligibility
 
@@ -110,6 +111,43 @@ Release 1.15.0 adds a separate, disabled-by-default paired-transfer option to th
 runner. It requires two imported legs and explicit company account relationships,
 and may create a complete native transfer atomically. The existing-movement path
 above still creates no bank movement. See [account pairs](ACCOUNT_PAIRS.md).
+
+## Transfers between all owned bank accounts
+
+The independent **Automatically reconcile transfers between our own accounts**
+option uses the same runner, service and native adapter. It defaults off. Select
+both open, reconcilable bank accounts in the current company; existing restricted
+account mappings remain enforced, but ordinary banks need no restricted mapping.
+Accounts in another company never become eligible through shared visibility.
+
+A debit and credit must carry exact opposite persisted amounts and the same
+currency. Each imported description must name the complete current legal company
+with an explicit transfer direction, or supply the exact checksum-valid IBAN of
+the opposite owned account. Conflicting IBANs, fee/payroll/refund markers and
+ambiguous legal names across companies fail closed. Creation based on company
+names requires the same booking day; mutual IBANs permit the configured tolerance.
+The candidate must be unique in both directions, including unselected accounts
+and competing sources. Generic transfer text or amount/date alone is insufficient.
+
+A complete reciprocal native transfer is reused. One pending imported leg may
+reuse its native side when the opposite side already has a complete, exact owned
+source mapping. One-sided ledger records, invoice/payment links, active batch
+claims, foreign ownership or opening-reconciliation cutoffs prevent execution.
+When neither side has possible native evidence, two proven imported legs may
+create exactly two reciprocal `VIR` movements, only in company currency. Missing
+value dates use the original booking day; invalid supplied dates remain pending.
+No expense debit, invoice, salary, tax or invoice payment is created by this path.
+
+Both mappings and `auto_transfer` audits commit atomically. Repeated execution
+reuses persisted completion. A reentrant company advisory lock also spans native
+transfer POST preflight through request shutdown, preventing manual and automatic
+transfer creation from passing the duplicate check concurrently. Explicit native
+review of a real repeated transfer retains the existing confirmation contract.
+
+Validate with `test/test_own_transfer_evidence.php`,
+`test/test_own_transfers_database.php` and
+`test/test_automatic_priority_database.php`; database suites use only the guarded
+disposable port 33317 fixture described above. No schema migration is required.
 
 ## Optional TPA receipts
 

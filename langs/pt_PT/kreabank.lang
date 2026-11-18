@@ -462,15 +462,15 @@ KreaBankAuditSkip=saltar
 KreaBankAuditDeleteStatement=apagar_extrato
 
 KreaBankAutomation=Reconciliação automática
-KreaBankAutoPurpose=Concilia automaticamente movimentos importados com movimentos bancários existentes. As opções adicionais permitem tratar transferências entre pares de contas e recebimentos de TPA. Os pagamentos de faturas exigem revisão.
-KreaBankAutoScheduleHelp=O agendador existente do Dolibarr verifica a cada 15 minutos. Cada execução analisa até 50 linhas pendentes e volta a analisar as linhas por resolver nas passagens seguintes. Consulte os resultados nas tarefas agendadas.
+KreaBankAutoPurpose=Concilia automaticamente movimentos importados com movimentos bancários existentes. As opções adicionais tratam transferências entre contas da própria empresa e recebimentos de TPA. Os débitos de despesas exigem um documento registado; os pagamentos de faturas exigem revisão.
+KreaBankAutoScheduleHelp=O agendador existente do Dolibarr verifica a cada 15 minutos. Cada execução analisa até 50 linhas pendentes e reserva até 10 lugares para créditos de TPA e transferências entre contas próprias reconhecidos. As linhas por resolver voltam a ser analisadas. Consulte os resultados nas tarefas agendadas.
 KreaBankAutoMode=Modo
 KreaBankAutoOff=Desativado
 KreaBankAutoPreviewMode=Apenas pré-visualização agendada
 KreaBankAutoEnabled=Reconciliação automática ativada
 KreaBankAutoAccounts=Contas selecionadas para reconciliação automática
 KreaBankAutoNoAccounts=Esta empresa não tem contas bancárias abertas configuradas para reconciliação.
-KreaBankAutoSafetyHelp=Exige a mesma conta, moeda e montante com sinal, uma data próxima e uma identificação forte com vantagem clara sobre os restantes candidatos. Duplicados, linhas ignoradas e conflitos na origem ficam para revisão. A correspondência com movimentos existentes não cria pagamentos, faturas nem movimentos bancários. A opção de transferências entre pares pode criar os dois movimentos nativos a partir de duas transações importadas verificadas.
+KreaBankAutoSafetyHelp=A correspondência com movimentos existentes exige a mesma conta, moeda e montante com sinal, uma data próxima e uma identificação forte com vantagem clara. As opções de transferência exigem contas próprias verificadas e reutilizam os movimentos existentes antes de criar uma transferência completa. A evidência ambígua fica pendente. A automatização nunca cria débitos de despesas, faturas nem pagamentos de faturas.
 KreaBankAutoPreviewHelp=Guarde primeiro a seleção de contas. A pré-visualização analisa as primeiras 50 linhas pendentes com as definições guardadas e não altera dados financeiros, mesmo com a reconciliação automática ativada.
 KreaBankAutoPreview=Pré-visualizar correspondências
 KreaBankAutoSelectAccounts=Selecione contas e guarde as definições antes de executar uma pré-visualização.
@@ -1006,3 +1006,8 @@ KreaBankExistingMovementConfirm=Confirmo que os movimentos existentes %s são tr
 KreaBankExistingMovementConfirmed=Confirmação registada. Repita a ação nos próximos 15 minutos para criar o novo movimento.
 KreaBankTransferExistingBlocked=Transferência não criada: já existe um movimento com a mesma conta, montante e data (%s). Reconcilie ou anule esse movimento. Se for realmente uma transferência diferente, introduza-a novamente (após alguns segundos, nos próximos 10 minutos) para confirmar.
 KreaBankTransferExistingIncomplete=Transferência não criada: existem demasiados movimentos com a mesma conta, montante e data (por exemplo %s). Reveja primeiro os movimentos bancários.
+
+KreaBankOwnTransferEnable=Conciliar automaticamente transferências entre contas da própria empresa
+KreaBankOwnTransferHelp=Utiliza ambas as contas selecionadas da empresa, montantes exatamente opostos e identificação verificada da transferência. Reutiliza transferências completas já registadas; só cria os dois movimentos em conjunto quando nenhum existe. A evidência incompleta ou ambígua fica pendente. Não cria débitos de despesas nem pagamentos de faturas.
+KreaBankTpaExistingReceipt=Reutilizar recebimento de TPA existente
+KreaBankTransferReviewUnavailable=Transferência não criada: a reconciliação automática ou a verificação dos movimentos existentes está indisponível. Tente novamente depois de terminar a operação em curso.
