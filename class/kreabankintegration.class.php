@@ -207,11 +207,23 @@ class KreaBankIntegration
 	}
 
 	/** Read-only running balances anchored to a successfully collected bank snapshot. */
-	public function bankStatementWithBalancesSql($accountId = 0)
+	public function bankStatementWithBalancesSql($accountId = 0, $latestFeedBefore = '')
 	{
 		$p = $this->db->prefix();
 		$e = $this->entity;
 		$source = '(' . $this->bankStatementSql($accountId) . ') h';
+		if ($latestFeedBefore !== '') {
+			if ((int) $accountId <= 0 || !is_string($latestFeedBefore)
+				|| !preg_match('/^([1-9][0-9]{3})-([0-9]{2})-([0-9]{2})$/D', $latestFeedBefore, $date)
+				|| !checkdate((int) $date[2], (int) $date[3], (int) $date[1])) {
+				throw new InvalidArgumentException('A scoped account and calendar cutoff are required');
+			}
+			// Materialize one source endpoint before the correlated calculation.
+			// Historical reports can then subtract their complete loaded amounts.
+			$source = '(SELECT endpoint.* FROM (' . $this->bankStatementSql($accountId) . ") endpoint WHERE endpoint.source_storage='staging'"
+				. " AND endpoint.source_type='fintable' AND endpoint.operation_date<" . $this->quote($latestFeedBefore)
+				. ' ORDER BY endpoint.operation_date DESC,endpoint.statement_id DESC,endpoint.line_rank DESC,endpoint.rowid DESC LIMIT 1) h';
+		}
 		$config = $this->db->fetch_object($this->query("SELECT value FROM {$p}const WHERE entity=0 AND name='KREABANK_FINTABLE_WORKSPACE'"));
 		if (!$config || trim((string) $config->value) === '') {
 			return 'SELECT h.*,h.running_balance display_balance,0 balance_calculated,NULL balance_updated_at FROM ' . $source;
@@ -239,10 +251,13 @@ class KreaBankIntegration
 			. " OR xl.currency<>JSON_UNQUOTE(JSON_EXTRACT($payload,'$.currency'))"
 			. " OR xl.operation_date<>JSON_UNQUOTE(JSON_EXTRACT($payload,'$.operation_date'))))))"
 			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_feed_transaction x WHERE x.fk_feed_account=f.rowid AND x.status='imported' GROUP BY x.fk_statement_line HAVING COUNT(*)>1)"
+			// Materialize complete mapping identities instead of rescanning an
+			// unindexed source pointer for every historical statement line.
 			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement_line xl JOIN {$p}kreabank_statement xs ON xs.rowid=xl.fk_statement AND xs.entity=xl.entity"
-			. " WHERE xs.entity=f.entity AND xs.bank_account_id=f.fk_bank_account AND xs.source_type='fintable'"
-			. " AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_feed_transaction x WHERE x.fk_feed_account=f.rowid AND x.entity=f.entity"
-			. " AND x.fk_statement_line=xl.rowid AND x.source_uid=xl.line_uid AND x.status='imported'))";
+			. " LEFT JOIN (SELECT DISTINCT fk_feed_account,fk_statement_line,source_uid FROM {$p}kreabank_feed_transaction"
+			. " WHERE entity=$e AND status='imported' AND fk_statement_line IS NOT NULL) mapped"
+			. " ON mapped.fk_feed_account=f.rowid AND mapped.fk_statement_line=xl.rowid AND mapped.source_uid=xl.line_uid"
+			. " WHERE xs.entity=f.entity AND xs.bank_account_id=f.fk_bank_account AND xs.source_type='fintable' AND mapped.fk_statement_line IS NULL)";
 		// Exact DECIMAL subtraction includes every later source line, independent of
 		// the visible page or chosen sort. Same-day ordering follows the default table.
 		$later = "SELECT SUM(nl.amount) FROM {$p}kreabank_feed_transaction nt"

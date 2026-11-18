@@ -184,4 +184,17 @@ $stream=fopen('php://temp','w+'); kreabankMonthlyReportCsv($stream,$displayRepor
 checkMonthlyNativeTranslation(strpos($rawCsv,'(SupplierInvoicePayment)') !== false && strpos($rawCsv,'native:99') !== false && strpos($rawCsv,$ledgerRow['reference']) !== false
 	&& $rawCsv === $beforeDisplayCsv && serialize($displayReport) === $displayBefore, 'UI localization changes neither original exported evidence nor report facts');
 
+$balancesReport = (new KreaBankMonthlyReport(null,1))->assembleWithBalances(
+	array('rowid'=>101,'entity'=>1,'ref'=>'ST_TEST','currency_code'=>'EUR'), '2026-09', $source, array());
+$balancesReport['company'] = $report['company'];
+$balancesState = array_merge($nativeState,array('view'=>'balances'));
+$html = kreabankMonthlyReportHtml($balancesReport,$balancesState,$langs);
+checkMonthlyNativeTranslation(strpos($html,'KreaBankMonthly') === false && strpos($html,'&amp;aacute;') === false
+	&& strpos($html,'&amp;ecirc;') === false && strpos($html,'id="kb-monthly-table-balances_pending"') !== false,
+	'Workbook report uses the installed Portuguese translations and native list helpers with one encoding pass');
+$stream=fopen('php://temp','w+'); kreabankMonthlyBalancesCsv($stream,$balancesReport,$langs); rewind($stream); $csv=stream_get_contents($stream); fclose($stream);
+checkMonthlyNativeTranslation(strpos($csv,'Saldos banco/ERP') !== false && strpos($csv,'Comentário') !== false && strpos($csv,'Mês de origem') !== false
+	&& strpos($csv,'&aacute;') === false && strpos($csv,"'\t=HYPERLINK") !== false,
+	'Workbook CSV exports plain Portuguese labels and protects original formula-like source evidence');
+
 print "OK: $checks native monthly translation/render/CSV checks\n";

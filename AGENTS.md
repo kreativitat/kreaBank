@@ -112,6 +112,12 @@
 
 ## Monthly reports
 
+- `balances` is the first/default view: January-to-selected-month bank/Dolibarr
+  closes and raw bank-minus-Dolibarr differences, then cumulative pending bank
+  movements. Reuse one owned evidence load; preserve each month's cutoff/opening
+  and global claims. Missing evidence remains unknown. Comments are not saved;
+  the workbook-style CSV and print contain the two complete sections. See
+  `lib/kreabank_monthly_balances.lib.php` and `test/test_monthly_balances.php`.
 - `monthlyreport.php` and `KreaBankMonthlyReport` are read-only current-evidence
   reports, not a second matcher or historical close/approval system. Keep exact
   owned-account amounts, both booking-date cutoffs, carried open items and explicit

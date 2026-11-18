@@ -26,6 +26,11 @@ checkAuto($r['bank']['movement']==='0.10000000' && $r['ledger']['closing']==='10
 checkAuto($r['bank']['matched']===1 && $r['map']['difference']==='0.00000000','Loader shares native statement references and verified one-to-one matching');
 checkAuto($r['bank']['count']===2 && count($r['bank_rows'])===2 && count($r['ledger_rows'])===1,'Loader carries balances without repeating old matched details');
 checkAuto($r['ledger_rows'][0]['balance']==='100.10000002','Visible native running balance includes prior matched history with exact precision');
+$balances=$monthly->load(19901,'2026-09','',true);
+checkAuto(count($balances['balances'])===9 && $balances['balances'][7]['bank']==='100.00000001'
+	&& $balances['balances'][8]['difference']==='-0.00000001' && $balances['bank_pending_total']==='-0.00000001',
+	'Annual overview uses scoped month-end raw balances and cumulative pending totals');
+checkAuto($balances['bank_pending']===$r['bank_pending'] && $balances['map']===$r['map'],'First report retains the same selected-period evidence as the existing reports');
 checkAuto($before===array(countAuto('bank'),countAuto('kreabank_statement'),countAuto('kreabank_statement_line'),countAuto('kreabank_recon_audit')),'Monthly loading writes no financial, source or audit records');
 foreach (array(19902,999999,0) as $id) {
 	try { $monthly->load($id,'2026-09'); throw new RuntimeException('Foreign or missing account accepted'); } catch (InvalidArgumentException $e) { $checks++; }
@@ -42,6 +47,9 @@ stageAuto(199004,'0.10000001','MONTHLY',19901);
 $db->query("UPDATE kbauto_kreabank_statement_line SET operation_date='2026-10-02',fk_native_bank_line=199012,status=2 WHERE rowid=199004");
 $r=$monthly->load(19901,'2026-09');
 checkAuto($r['bank']['matched']===0 && $r['map']['difference']===null,'Global future claims invalidate a current native pairing');
+$balances=$monthly->load(19901,'2026-09','',true);
+checkAuto($balances['balances'][8]['comment']==='EvidenceReview' && $balances['bank']['matched']===0,
+	'Overview preserves global future-claim checks rather than trusting month-local source subsets');
 $db->query('UPDATE kbauto_kreabank_statement_line SET fk_native_bank_line=NULL WHERE rowid=199004');
 // Native ownership is enforced even if staged data contains a foreign target ID.
 bankAuto(199022,'0.10000001','FOREIGN',19902,'2026-09-01');

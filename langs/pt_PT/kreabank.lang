@@ -715,6 +715,27 @@ KreaBankDraftInvoiceChanged=Esta revisão da fatura em rascunho expirou ou foi a
 KreaBankDraftInvoiceNativeValidation=Abra a fatura para a validar com as opções de armazém e de stock necessárias.
 KreaBankDraftInvoiceOpen=Validar na fatura
 # Relatórios mensais de reconciliação
+KreaBankMonthlyBalances=Saldos banco/ERP
+KreaBankMonthlyBalancesShort=Saldos banco/ERP
+KreaBankMonthlyBalancesExport=Exportar saldos banco/ERP e movimentos pendentes (CSV)
+KreaBankMonthlyRawDifference=Diferença
+KreaBankMonthlyClosingDate=Data de fecho
+KreaBankMonthlyReferenceType=Ref. / tipo
+KreaBankMonthlySignedAmount=Montante (±)
+KreaBankMonthlyNature=Natureza
+KreaBankMonthlyOriginMonth=Mês de origem
+KreaBankMonthlyOriginalId=ID original
+KreaBankMonthlyComment=Comentário
+KreaBankMonthlyReceipt=Recebimento
+KreaBankMonthlyPayment=Pagamento
+KreaBankMonthlyPendingTotal=Total de movimentos bancários pendentes
+KreaBankMonthlyBalanceUnavailable=Saldo bancário indisponível
+KreaBankMonthlyEvidenceReview=Rever os dados de origem
+KreaBankMonthlyCurrencyReview=Moeda diferente da conta (%s)
+KreaBankMonthlyBalanceSnapshot=Calculado a partir do saldo bancário de %s
+KreaBankMonthlyBalancesPending=Movimentos pendentes do banco — %s
+KreaBankMonthlyBalancesHelp=Diferença = saldo bancário no fecho − saldo do Dolibarr no fecho. Os saldos bancários são provisórios, salvo confirmação explícita para o mês selecionado; — significa indisponível. Os valores refletem os dados atuais.
+KreaBankMonthlyBalancesPendingHelp=Inclui movimentos bancários de meses anteriores ainda pendentes até ao mês selecionado. O total abrange toda a lista, incluindo linhas filtradas ou não apresentadas, e pode diferir da diferença de saldos quando existem também movimentos ERP pendentes. Recebimento/pagamento indica apenas o sinal do montante. Pode preencher os comentários no CSV exportado; não são guardados aqui.
 KreaBankMonthlyTitle=Relatórios mensais de reconciliação
 KreaBankMonthlyPeriod=Mês
 KreaBankMonthlyOfficialBalance=Saldo bancário oficial de fecho (opcional)

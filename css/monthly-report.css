@@ -66,6 +66,18 @@
 .kb-monthly-report .div-table-responsive { width:0; min-width:100%; max-width:100%; overflow-x:auto; }
 .kb-monthly-map > p { font-size:.88em; line-height:1.5; margin:12px 0 0; }
 .kb-monthly-empty { padding:24px; text-align:center; color:var(--colortexttitlenotab,#526579); }
+.kb-monthly-balances-note { font-size:.9em; line-height:1.5; margin:12px 0 0; }
+.kb-monthly-balances .kb-monthly-static-table { min-width:620px; }
+.kb-monthly-balances-pending .kb-monthly-col-date { width:10%; }
+.kb-monthly-balances-pending .kb-monthly-col-description { width:22%; }
+.kb-monthly-balances-pending .kb-monthly-col-reference { width:10%; }
+.kb-monthly-balances-pending .kb-monthly-col-amount { width:11%; }
+.kb-monthly-balances-pending .kb-monthly-col-nature { width:11%; }
+.kb-monthly-balances-pending .kb-monthly-col-origin_month { width:8%; }
+.kb-monthly-balances-pending .kb-monthly-col-original_id { width:12%; }
+.kb-monthly-balances-pending .kb-monthly-col-comment { width:12%; }
+.kb-monthly-balances-pending .kb-monthly-col-actions { width:4%; }
+.kb-monthly-balances-pending tfoot th, .kb-monthly-balances-pending tfoot td { padding:12px 8px; }
 .kb-monthly-filters :focus-visible, .kb-monthly-actions :focus-visible, .kb-monthly-views a:focus-visible, .kb-monthly-basis summary:focus-visible { outline:2px solid #3b7660; outline-offset:3px; }
 @media (max-width:1100px) { .kb-monthly-summary-grid { grid-template-columns:minmax(0,1fr); } }
 @media (max-width:700px) {
@@ -78,6 +90,7 @@
 }
 @media screen and (max-width:700px) {
   .kb-monthly-report .kb-monthly-detail-table { min-width:850px; }
+  .kb-monthly-balances-pending .kb-monthly-detail-table { min-width:1050px; }
   .kb-monthly-list-form > .table-fiche-title,
   .kb-monthly-list-form > .table-fiche-title > tbody,
   .kb-monthly-list-form > .table-fiche-title > tbody > tr { display:block; width:100%; }

@@ -5,6 +5,15 @@ account and a calendar month, then generate the report. The same reports work fo
 any supported bank; the Santander workbook is a reporting reference, not imported
 business data or a replacement matching algorithm.
 
+- **Bank/ERP balances** is the first/default report, following the accountant's
+  workbook: January through the selected month, one month-end bank close,
+  Dolibarr bank close, exact bank-minus-Dolibarr difference and comment per row.
+  A second table lists cumulative pending bank movements with date, description,
+  original reference, signed amount, receipt/payment direction, booking month,
+  stable source identity and comment, followed by the complete pending total.
+  CSV and print from this view contain these two sections only. Earlier-month
+  balances use current evidence; they are not saved historical closes. The
+  optional entered official balance applies only to the selected month.
 - **Reconciliation map:** bank and native ledger closing balances, signed open
   items on both sides, adjusted balances and unexplained/opening/month differences.
 - **Quality checks:** source integrity, exact currencies and amounts, duplicate or
@@ -37,9 +46,13 @@ bank balances. Integrity errors prevent a complete reconciliation conclusion.
 Eight-decimal fixed-point arithmetic rejects overflow rather than rounding source
 amounts; displayed amounts use the module's two-decimal formatter.
 
-The workbook's Excel capacity checks do not apply. Classifications, explanatory
-comments, preparer/reviewer approvals and immutable period locking require a
-separate close workflow; these read-only reports do not imply those controls exist.
+The workbook's Excel capacity checks do not apply. The first report's Nature is
+only receipt/payment from the signed amount; payment methods are not guessed.
+Comments are empty or identify unavailable/review evidence, and can be completed
+in the exported CSV. They are not saved in Dolibarr. Original source identities
+are retained rather than assigning workbook row numbers. Classifications, saved
+accountant comments, preparer/reviewer approvals and immutable period locking
+require a separate close workflow.
 
 An independently applied [opening reconciliation](OPENING_RECONCILIATION.md) can
 establish the historical boundary and official opening bank balance for one owned
@@ -55,19 +68,28 @@ and owner-scoped native bank rows. It refuses more than 20,000 rows per side rat
 than producing truncated totals. `monthlyreport.php` enforces native/module read
 permissions and denies external users. The renderer/export are shared in
 `lib/kreabank_monthly_report.lib.php`; tables paginate only after complete totals.
+The workbook renderer/export is in `lib/kreabank_monthly_balances.lib.php`.
+Its annual view reads the evidence once and assembles each cutoff in memory,
+retaining global claim guards and per-month opening applicability. Future
+malformed values cannot invalidate earlier months. Missing bank evidence remains
+unknown; invalid-date/amount/currency pending evidence also makes its total
+unknown. The pending-bank total is independent of the balance difference because
+ERP-only open items can exist.
 
 ```sh
 php test/test_monthly_report.php
+php test/test_monthly_balances.php
 php test/test_monthly_report_view.php
 php test/test_monthly_report_native_translation.php
 node test/test_monthly_report_client.cjs
 php test/test_monthly_report_database.php
+php test/test_monthly_balances_database.php
 php test/test_navigation.php
 ```
 
 The database suite uses only the guarded disposable localhost:33317
 `kreabank_auto_test` fixture and installed Dolibarr source. Never run it against
-an installation database. The view suite's `--html [en_US|pt_PT] [summary|checks|pending|bank|ledger|print]`
+an installation database. The view suite's `--html [en_US|pt_PT] [balances|summary|checks|pending|bank|ledger|print]`
 mode renders synthetic data without an application bootstrap or database.
 
 Design reference: existing `bankstatement.php`, native bank annual reporting and
@@ -80,7 +102,7 @@ CSV/print actions. Detailed evidence/basis explanations remain expandable and op
 in print. Summary and indicators sit side by side on desktop and stack on mobile.
 Historical report values never use the header’s current-balance panel.
 
-Deploy the controller, class, library, CSS, JS and translations together. No schema
+Deploy the controller, class, both report libraries, list library, CSS, JS and translations together. No schema
 migration, job or module reactivation is required. Source publication does not
 deploy production. Roll back these files and the shared navigation together.
 
@@ -101,3 +123,16 @@ to each table frame; native headings and page controls wrap above them.
 Deploy the shared `lib/kreabank_worklist_view.lib.php` label helper with these views.
 See `lib/kreabank_monthly_list.lib.php` and the pure/native view suites.
 Legacy `view=pending` links open Pending bank. Full print and CSV retain both sides.
+
+The first report also reuses the existing guarded bank-statement balance
+projection for Fintable transactions without supplied running balances. These
+calculated closes are provisional, retain the bank snapshot date in the tooltip
+and CSV comment, and fail closed on incomplete, changed or conflicting feed
+evidence. Earlier cutoffs subtract later source movements from the same snapshot;
+months before any bank evidence remain unknown. Same-day feed collections use
+the projection's exact statement/rank/ID order, only when all calculated rows
+share that snapshot. Other report views retain their original balance contract.
+The shared projection's optional owned-account/calendar endpoint mode calculates
+only the latest feed line before the cutoff. The report derives earlier running
+balances from its complete source set in memory, within the same SELECT snapshot;
+it does not issue a correlated balance calculation for every historical row.

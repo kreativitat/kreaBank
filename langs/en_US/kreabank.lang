@@ -715,6 +715,27 @@ KreaBankDraftInvoiceChanged=This draft invoice review expired or changed. Reload
 KreaBankDraftInvoiceNativeValidation=Open the invoice to validate it with the required warehouse and stock options.
 KreaBankDraftInvoiceOpen=Validate on invoice
 # Monthly reconciliation reports
+KreaBankMonthlyBalances=Bank/ERP balances
+KreaBankMonthlyBalancesShort=Bank/ERP balances
+KreaBankMonthlyBalancesExport=Export bank/ERP balances and pending movements (CSV)
+KreaBankMonthlyRawDifference=Difference
+KreaBankMonthlyClosingDate=Closing date
+KreaBankMonthlyReferenceType=Ref. / type
+KreaBankMonthlySignedAmount=Amount (±)
+KreaBankMonthlyNature=Nature
+KreaBankMonthlyOriginMonth=Original month
+KreaBankMonthlyOriginalId=Original ID
+KreaBankMonthlyComment=Comment
+KreaBankMonthlyReceipt=Receipt
+KreaBankMonthlyPayment=Payment
+KreaBankMonthlyPendingTotal=Total pending bank movements
+KreaBankMonthlyBalanceUnavailable=Bank balance unavailable
+KreaBankMonthlyEvidenceReview=Review source evidence
+KreaBankMonthlyCurrencyReview=Currency differs from account (%s)
+KreaBankMonthlyBalanceSnapshot=Calculated from bank snapshot dated %s
+KreaBankMonthlyBalancesPending=Pending bank movements — %s
+KreaBankMonthlyBalancesHelp=Difference = bank closing balance − Dolibarr closing balance. Bank balances remain provisional unless explicitly confirmed for the selected month; — means unavailable. Figures use current evidence.
+KreaBankMonthlyBalancesPendingHelp=Includes earlier unresolved bank movements through the selected month. The total covers the full list, including filtered or undisplayed rows, and may differ from the balance difference when ERP movements are also pending. Receipt/payment describes the sign only. Comments can be completed in the CSV export; they are not saved here.
 KreaBankMonthlyTitle=Monthly reconciliation reports
 KreaBankMonthlyPeriod=Month
 KreaBankMonthlyOfficialBalance=Official bank closing balance (optional)

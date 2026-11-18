@@ -23,7 +23,7 @@ class KreaBankMonthlyReport
 	}
 
 	/** SELECT only: no service initialization, matching, schema synchronization or writes. */
-	public function load($accountId, $month, $confirmedBankBalance = '')
+	public function load($accountId, $month, $confirmedBankBalance = '', $includeBalances = false)
 	{
 		list($start, $end, $next) = $this->period($month);
 		$accountId = (int) $accountId;
@@ -63,7 +63,17 @@ class KreaBankMonthlyReport
 		}
 		$claims = 'SELECT claims.fk_native_bank_line,COUNT(*) claim_count FROM (' . $claimRows . ') claims GROUP BY claims.fk_native_bank_line';
 		$source = '(' . $projection->bankStatementSql($accountId) . ') h';
-		$bank = $this->rows($projection, 'SELECT h.*,n.dateo native_operation_date,COALESCE(c.claim_count,0) claim_count FROM ' . $source
+		$anchorJoin = ''; $anchorFields = '';
+		if ($includeBalances) {
+			// Calculate one endpoint through the existing guarded projection, then
+			// subtract loaded feed amounts in memory. Keep source and anchor in one
+			// SELECT snapshot, without a correlated balance query per historical row.
+			$anchorJoin = ' LEFT JOIN (SELECT a.rowid,a.display_balance,a.balance_calculated,a.balance_updated_at FROM ('
+				. $projection->bankStatementWithBalancesSql($accountId, $next) . ') a LIMIT 1) anchor ON 1=1';
+			$anchorFields = ',anchor.rowid feed_anchor_id,anchor.display_balance feed_anchor_balance,anchor.balance_calculated feed_anchor_calculated,anchor.balance_updated_at feed_anchor_date';
+		}
+		$bank = $this->rows($projection, 'SELECT h.*' . $anchorFields . ',n.dateo native_operation_date,COALESCE(c.claim_count,0) claim_count FROM ' . $source
+			. $anchorJoin
 			. " LEFT JOIN {$p}bank n ON n.rowid=h.native_id AND n.fk_account=h.bank_account_id"
 			. " LEFT JOIN ($claims) c ON c.fk_native_bank_line=h.expected_native_id"
 			. " WHERE h.operation_date<'$next' OR h.operation_date IS NULL OR h.operation_date='0000-00-00'"
@@ -93,7 +103,98 @@ class KreaBankMonthlyReport
 			}
 			unset($row);
 		}
-		return $this->assemble((array) $account, $month, $bank, $native, $confirmedBankBalance, $opening);
+		if ($includeBalances) { $bank = $this->feedBalances($bank); }
+		return $includeBalances
+			? $this->assembleWithBalances((array) $account, $month, $bank, $native, $confirmedBankBalance, $opening, true)
+			: $this->assemble((array) $account, $month, $bank, $native, $confirmedBankBalance, $opening);
+	}
+
+	/** One verified feed endpoint supplies provisional balances, never persisted evidence. */
+	private function feedBalances($rows)
+	{
+		if (!$rows || empty($rows[0]['feed_anchor_calculated']) || empty($rows[0]['feed_anchor_date'])) { return $rows; }
+		$indices = array();
+		foreach ($rows as $index=>$row) {
+			if (($row['source_storage'] ?? '') === 'staging' && ($row['source_type'] ?? '') === 'fintable') { $indices[] = $index; }
+		}
+		usort($indices, static function ($a, $b) use ($rows) {
+			return strcmp($rows[$b]['operation_date'], $rows[$a]['operation_date'])
+				?: ((int) $rows[$b]['statement_id'] <=> (int) $rows[$a]['statement_id'])
+				?: ((int) $rows[$b]['line_rank'] <=> (int) $rows[$a]['line_rank'])
+				?: ((int) $rows[$b]['rowid'] <=> (int) $rows[$a]['rowid']);
+		});
+		if (!$indices || (int) $rows[$indices[0]]['rowid'] !== (int) $rows[0]['feed_anchor_id']) { return $rows; }
+		$balance = $this->units($rows[0]['feed_anchor_balance']);
+		foreach ($indices as $index) {
+			$row = $rows[$index];
+			if (!isset($row['running_balance']) || $row['running_balance'] === '') {
+				$rows[$index]['running_balance'] = $this->decimal($balance);
+				$rows[$index]['balance_calculated'] = 1;
+				$rows[$index]['balance_updated_at'] = $rows[0]['feed_anchor_date'];
+			}
+			$balance = $this->add($balance, -$this->units($row['amount']));
+		}
+		return $rows;
+	}
+
+	/** Reuse one complete owned evidence set for January through the selected cutoff. */
+	public function assembleWithBalances($account, $month, $bankRows, $nativeRows, $confirmedBankBalance = '', $opening = null, $claimsLoaded = false)
+	{
+		// Pure callers need the same all-period claim fence as the SQL loader.
+		// The loader already supplies it; avoid cloning its entire evidence set.
+		if (!$claimsLoaded) {
+			$claims = array();
+			foreach ($bankRows as $row) {
+				if (!empty($row['is_duplicate'])) { continue; }
+				$ids = !empty($row['group_id']) ? array_column($row['group_components'] ?? array(), 'expected_native_id') : array($row['expected_native_id'] ?? 0);
+				foreach ($ids as $id) { if ((int) $id > 0) { $claims[(int) $id] = ($claims[(int) $id] ?? 0) + 1; } }
+			}
+			foreach ($bankRows as &$row) {
+				$row['claim_count'] = max((int) ($row['claim_count'] ?? 0), $claims[(int) ($row['expected_native_id'] ?? 0)] ?? 0);
+				if (isset($row['group_components'])) {
+					foreach ($row['group_components'] as &$component) {
+						$component['claim_count'] = max((int) ($component['claim_count'] ?? 0), $claims[(int) ($component['expected_native_id'] ?? 0)] ?? 0);
+					}
+					unset($component);
+				}
+			}
+			unset($row);
+			foreach ($nativeRows as &$row) { $row['claim_count'] = max((int) ($row['claim_count'] ?? 0), $claims[(int) $row['rowid']] ?? 0); }
+			unset($row);
+		}
+		$report = $this->assemble($account, $month, $bankRows, $nativeRows, $confirmedBankBalance, $opening);
+		$report['balances'] = array();
+		for ($number = 1; $number <= (int) substr($month, 5, 2); $number++) {
+			$period = substr($month, 0, 4) . '-' . sprintf('%02d', $number);
+			if ($period === $month) {
+				$current = $report;
+			} else {
+				list(, , $next) = $this->period($period);
+				// Match the loader's cutoff before validation. Future malformed amounts
+				// cannot contaminate earlier months; persisted global claims stay intact.
+				$before = function ($row) use ($next) {
+					$date = $this->date($row['operation_date'] ?? '');
+					return $date === '' || $date < $next;
+				};
+				$current = $this->assemble($account, $period, array_values(array_filter($bankRows, $before)),
+					array_values(array_filter($nativeRows, $before)), '', $opening);
+			}
+			$bank = $current['map']['bank_close'];
+			$ledger = $current['map']['ledger_close'];
+			$snapshot = '';
+			foreach ($bankRows as $row) {
+				if (!empty($row['balance_calculated']) && $this->date($row['operation_date'] ?? '') !== ''
+					&& substr($row['operation_date'], 0, 7) <= $period) { $snapshot = max($snapshot, (string) ($row['balance_updated_at'] ?? '')); }
+			}
+			$report['balances'][] = array('date'=>$current['end'], 'bank'=>$bank, 'ledger'=>$ledger,
+				'difference'=>$bank !== null && $ledger !== null ? $this->decimal($this->add($this->units($bank), -$this->units($ledger))) : null,
+				'confirmed'=>$current['map']['balance_confirmed'], 'balance_date'=>$current['map']['balance_date'], 'snapshot_date'=>$snapshot,
+				'comment'=>$bank === null ? 'BalanceUnavailable' : (count(array_filter($current['checks'], static function ($check) { return $check['status'] === 'error'; })) ? 'EvidenceReview' : ''));
+		}
+		$report['bank_pending_total'] = count(array_filter($report['bank_pending'], static function ($row) use ($account) {
+			return $row['amount'] === null || $row['date'] === '' || $row['currency'] !== $account['currency_code'];
+		})) ? null : $report['bank']['pending_amount'];
+		return $report;
 	}
 
 	private function rows($projection, $sql)
@@ -509,9 +610,14 @@ class KreaBankMonthlyReport
 				$sequences = array(); $statements = array(); $ranks = array();
 				foreach ($group as $row) { $sequences[] = $row['statement_sequence'] ?? null; $statements[] = (int) ($row['statement_id'] ?? 0); $ranks[] = (int) ($row['line_rank'] ?? 0); }
 				$refs = array_map(static function ($row) { return (string) ($row['evidence_statement_ref'] ?? ''); }, $group);
+				// The shared feed projection supplies one coherent snapshot and exact
+				// backwards balances in this same statement/rank/ID order. This permits
+				// repeated feed collections on one day without guessing file order.
+				$calculated = count(array_filter($group, static function ($row) { return !empty($row['balance_calculated']) && !empty($row['balance_updated_at']); })) === count($group)
+					&& count(array_unique(array_column($group, 'balance_updated_at'))) === 1;
 				if (!in_array(null, $sequences, true) && count(array_unique($sequences)) === count($group) && count(array_unique($refs)) === 1 && $refs[0] !== '') {
 					usort($group, static function ($a, $b) { return (int) $a['statement_sequence'] <=> (int) $b['statement_sequence']; });
-				} elseif (($opening === null || $hasBalances) && (count(array_unique($statements)) !== 1 || !$statements[0] || in_array(0, $ranks, true) || count(array_unique($ranks)) !== count($group)
+				} elseif (!$calculated && ($opening === null || $hasBalances) && (count(array_unique($statements)) !== 1 || !$statements[0] || in_array(0, $ranks, true) || count(array_unique($ranks)) !== count($group)
 					|| count(array_filter($group, static function ($row) { return isset($row['running_balance']) && $row['running_balance'] !== ''; })) !== count($group))) {
 					$order = false;
 				}

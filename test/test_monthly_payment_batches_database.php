@@ -106,11 +106,15 @@ function createMonthlyGroupFixture($accountId, $sourceId, $sourceDate, $firstId,
 	$db->query("INSERT INTO kbauto_bank_account(rowid,entity,ref,label,currency_code,clos,courant,rappro,fk_pays) VALUES($accountId,1,'MGR-$accountId','Synthetic monthly group','EUR',0,1,1,1)");
 	stageAuto($sourceId,$amounts[0],'MONTHLY-GROUP-'.$sourceId,$accountId);
 	$db->query("UPDATE kbauto_kreabank_statement_line SET operation_date='$sourceDate',value_date='$sourceDate',running_balance=" . $amounts[0] . " WHERE rowid=$sourceId");
-	bankAuto($firstId,$amounts[1],'MONTHLY-A-'.$sourceId,$accountId,$firstDate);
-	bankAuto($firstId+1,$amounts[2],'MONTHLY-B-'.$sourceId,$accountId,$secondDate);
+	// Create under the current same-day approval contract, then simulate the
+	// historical posting differences that this read-only report must preserve.
+	bankAuto($firstId,$amounts[1],'MONTHLY-A-'.$sourceId,$accountId,$sourceDate);
+	bankAuto($firstId+1,$amounts[2],'MONTHLY-B-'.$sourceId,$accountId,$sourceDate);
 	$before = countAuto('bank');
 	$groupId = $service->reconcilePaymentBatch($service->preparePaymentBatchReview($sourceId,array($firstId,$firstId+1),'Monthly salary batch'));
 	checkMonthlyGroup($groupId > 0 && countAuto('bank') === $before, 'Creating an approved group does not create a summary bank movement');
+	$db->query("UPDATE kbauto_bank SET dateo='$firstDate' WHERE rowid=$firstId");
+	$db->query("UPDATE kbauto_bank SET dateo='$secondDate' WHERE rowid=" . ($firstId+1));
 	return $groupId;
 }
 function monthlyGroupDbCounts()
@@ -125,6 +129,9 @@ checkMonthlyGroup($report['bank']['matched'] === 1 && $report['ledger']['matched
 checkMonthlyGroup($report['bank_rows'][0]['native_id'] === 0 && $report['bank_rows'][0]['group_id'] === $groupId
 	&& $report['bank_rows'][0]['native_ids'] === array(34001,34002), 'Database report exposes every owned component without a scalar substitute');
 checkMonthlyGroup(monthlyGroupDbCounts() === $before, 'Group-aware monthly report loading writes no financial, source, mapping or audit record');
+$annual = $monthly->load(32101,'2026-11','',true);
+checkMonthlyGroup($annual['bank_pending']===$report['bank_pending'] && $annual['balances'][10]['difference']==='0.00000000',
+	'Annual balances preserve complete historical groups without creating an aggregate movement');
 $db->query("UPDATE kbauto_bank SET dateo='2026-12-01' WHERE rowid=34002");
 $report = $monthly->load(32101,'2026-11');
 checkMonthlyGroup($report['bank']['pending'] === 1 && $report['ledger']['pending'] === 1 && $report['ledger']['closing'] === '-40.00000001'

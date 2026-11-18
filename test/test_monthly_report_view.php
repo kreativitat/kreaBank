@@ -68,7 +68,7 @@ $source[2]['description'] = '<script>unsafe()</script> Monthly bank fee';
 $source[2]['payment_reference'] = 'acc_' . str_repeat('0123456789abcdef',16) . '_gocardless';
 $native = array(monthlyNative(11, '2026-08-01', '1000.00', true), monthlyNative(12, '2026-09-02', '125.50', true), monthlyNative(13, '2026-09-29', '-50.00'));
 $native[2]['description'] = '(SupplierInvoicePayment)';
-$report = $monthly->assemble($account, '2026-09', $source, $native);
+$report = $monthly->assembleWithBalances($account, '2026-09', $source, $native);
 $report['company'] = 'Synthetic company';
 $report['entity'] = 1;
 $state = array('account_context' => 101, 'month' => '2026-09', 'view' => 'summary', 'bank_balance' => '1109.70', 'balance_account'=>101, 'balance_month'=>'2026-09');
@@ -76,7 +76,7 @@ $checks = 0;
 function monthlyViewCheck($ok, $message) { global $checks; if (!$ok) { throw new RuntimeException($message); } $checks++; }
 foreach (array('en_US', 'pt_PT') as $locale) {
 	$langs = new MonthlyViewLangs($locale);
-	foreach (array('summary', 'checks', 'bank_pending', 'ledger_pending', 'bank', 'ledger') as $view) {
+	foreach (array('balances', 'summary', 'checks', 'bank_pending', 'ledger_pending', 'bank', 'ledger') as $view) {
 		$html = kreabankMonthlyReportHtml($report, array_merge($state, array('view' => $view)), $langs);
 		monthlyViewCheck(strpos($html, 'KreaBankMonthly') === false, 'All monthly labels are translated: ' . $locale . '/' . $view);
 		monthlyViewCheck(strpos($html, '<script>unsafe') === false, 'Evidence is escaped: ' . $locale . '/' . $view);
@@ -107,7 +107,7 @@ $csvHeader = str_getcsv(strtok($csv, "\n"), ';', '"', '');
 monthlyViewCheck(array_slice($csvHeader, 1) === array('Synthetic company', '1', 'ST_TEST', '101', '2026-09', 'EUR') && strpos(kreabankMonthlyReportHtml($report, $state, $langs, true), 'Synthetic company') !== false, 'CSV and print retain explicit company and account identity');
 $controller = file_get_contents(__DIR__ . '/../monthlyreport.php');
 monthlyViewCheck(strpos($controller, "!empty(\$user->socid)") !== false && strpos($controller, "hasRight('banque', 'lire')") !== false && strpos($controller, "hasRight('kreabank', 'reconciliation', 'read')") !== false, 'Controller retains both read rights and external-user denial');
-monthlyViewCheck(strpos($controller, 'KreaBankService') === false && strpos($controller, '->load($accountId, $month, $bankBalance)') !== false, 'Read-only controller uses the report loader only');
+monthlyViewCheck(strpos($controller, 'KreaBankService') === false && strpos($controller, '->load($accountId, $month, $bankBalance,') !== false, 'Read-only controller uses the report loader only');
 // Execute the shipped authorization guard, without running the native bootstrap.
 function isModEnabled($module) { return !in_array($module, $GLOBALS['monthlyDisabledModules'] ?? array(), true); }
 function accessforbidden() { throw new LogicException('Forbidden'); }
@@ -256,9 +256,9 @@ monthlyViewCheck(strpos($print,'kb-monthly-table-map') !== false && strpos($prin
 	&& strpos($print,'kb-monthly-table-ledger_pending') !== false, 'Print retains the complete map, indicators, checks and both pending tables');
 monthlyViewCheck(serialize($report) === $reportBefore, 'Filtering every view preserves all report facts and KPI totals');
 monthlyViewCheck(strpos($controller,'kreabankMonthlyListRequestState(array_merge($_GET, $_POST)') !== false
-	&& strpos($controller,'->load($accountId, $month, $bankBalance)') !== false, 'Controller confines unrounded list inputs to presentation state, outside the financial loader');
+	&& strpos($controller,"->load(\$accountId, \$month, \$bankBalance, \$view === 'balances')") !== false, 'Controller confines unrounded list inputs to presentation state, outside the financial loader');
 
-monthlyViewCheck(kreabankMonthlyReportView('pending') === 'bank_pending' && kreabankMonthlyReportView('not-a-view') === 'summary', 'Legacy pending bookmarks resolve to the bank subtab and unknown views fail closed');
+monthlyViewCheck(kreabankMonthlyReportView('pending') === 'bank_pending' && kreabankMonthlyReportView('not-a-view') === 'balances', 'Legacy pending bookmarks resolve to the bank subtab and default views open bank/ERP balances');
 $legacyHtml = kreabankMonthlyReportHtml($report,array_merge($state,array('view'=>'pending')),$langs);
 monthlyViewCheck(strpos($legacyHtml,'id="kb-monthly-table-bank_pending"') !== false && strpos($legacyHtml,'id="kb-monthly-table-ledger_pending"') === false,
 	'Legacy pending bookmarks display only the bank side');
@@ -267,7 +267,7 @@ foreach (array('en_US'=>array('Pending bank','Pending ERP'),'pt_PT'=>array('Pend
 	$langs = new MonthlyViewLangs($locale);
 	$navigation=kreabankMonthlyViewsHtml($navState,$langs);
 	$previousLibxml=libxml_use_internal_errors(true); $dom=new DOMDocument(); $dom->loadHTML('<?xml encoding="utf-8" ?>' . $navigation); $xp=new DOMXPath($dom); libxml_clear_errors(); libxml_use_internal_errors($previousLibxml);
-	monthlyViewCheck($xp->query('//nav/a')->length === 6 && $xp->query('//nav/a[@aria-current="page"]')->length === 1, 'Six report subtabs have exactly one active state in ' . $locale);
+	monthlyViewCheck($xp->query('//nav/a')->length === 7 && $xp->query('//nav/a[@aria-current="page"]')->length === 1, 'Seven report subtabs have exactly one active state in ' . $locale);
 	$labels=array(); $views=array();
 	foreach ($xp->query('//nav/a') as $link) {
 		parse_str((string)parse_url($link->getAttribute('href'),PHP_URL_QUERY),$params); $views[]=$params['view']; $labels[$params['view']]=$link->textContent;
@@ -276,7 +276,7 @@ foreach (array('en_US'=>array('Pending bank','Pending ERP'),'pt_PT'=>array('Pend
 			&& ($params['ml_ledger_pending_search_status'] ?? '') === 'pending' && ($params['ml_bank_pending_search_amount'] ?? '') === '>999999'
 			&& !isset($params['token'],$params['action']), 'Changing subtabs preserves report scope and independent transaction state without replaying writes');
 	}
-	monthlyViewCheck($views === array('summary','checks','bank_pending','ledger_pending','bank','ledger')
+	monthlyViewCheck($views === array('balances','summary','checks','bank_pending','ledger_pending','bank','ledger')
 		&& $labels['bank_pending'] === $shortLabels[0] && $labels['ledger_pending'] === $shortLabels[1], 'Pending tabs have the requested short translated labels and distinct identities in ' . $locale);
 }
 $langs = new MonthlyViewLangs('en_US');
@@ -296,7 +296,7 @@ monthlyViewCheck(strpos($controller,"kreabankMonthlyReportView(GETPOST('view', '
 // All detail lists share widths and translate only reserved display tokens.
 foreach (array('en_US','pt_PT') as $locale) {
 	$langs = new MonthlyViewLangs($locale);
-	foreach (array('summary','checks','bank_pending','ledger_pending','bank','ledger') as $view) {
+	foreach (array('balances','summary','checks','bank_pending','ledger_pending','bank','ledger') as $view) {
 		$html = kreabankMonthlyReportHtml($report,array_merge($state,array('view'=>$view)),$langs);
 		$text = html_entity_decode(strip_tags($html),ENT_QUOTES,'UTF-8');
 		monthlyViewCheck(!preg_match('/\bKreaBank[A-Za-z]+|\(SupplierInvoicePayment\)|\b(?:staging|native|legacy_native):\d+/',$text), 'No raw module keys, native placeholders or source namespaces in ' . $locale . '/' . $view);

@@ -36,7 +36,7 @@ $report = null;
 $error = '';
 if ($accountId > 0) {
 	try {
-		$report = (new KreaBankMonthlyReport($db, $conf->entity))->load($accountId, $month, $bankBalance);
+		$report = (new KreaBankMonthlyReport($db, $conf->entity))->load($accountId, $month, $bankBalance, $view === 'balances');
 		$report['company'] = (string) $mysoc->name;
 		$report['entity'] = (int) $conf->entity;
 	} catch (InvalidArgumentException $e) {
@@ -53,7 +53,8 @@ if (GETPOST('export', 'aZ09') === 'csv') {
 	header('Cache-Control: private, no-store');
 	$stream = fopen('php://output', 'wb');
 	fwrite($stream, "\xEF\xBB\xBF");
-	kreabankMonthlyReportCsv($stream, $report, $langs);
+	if ($view === 'balances') { kreabankMonthlyBalancesCsv($stream, $report, $langs); }
+	else { kreabankMonthlyReportCsv($stream, $report, $langs); }
 	fclose($stream);
 	exit;
 }

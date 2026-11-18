@@ -19,7 +19,7 @@ Six tabs retain the selected account:
 | Bank statement | Combined imported transactions, booking/value dates, debit/credit and bank balances. |
 | Statements | Import files, inspect imported statements and their original evidence. |
 | Reconcile | Review proposed pairs and resolve each bank transaction in its row. |
-| Monthly reports | Read-only reconciliation summary, controls, separate pending bank/ERP lists, and statement/ledger evidence. |
+| Monthly reports | Bank/ERP month-end balances and pending movements first, followed by reconciliation summary, controls, separate pending bank/ERP lists and statement/ledger evidence. |
 | Movements | Native Dolibarr entries for the selected bank account, without a repeated account column or filter. |
 | History | Reconciliation history and company-wide audit, with permission-controlled undo. |
 

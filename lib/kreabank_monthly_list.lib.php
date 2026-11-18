@@ -8,7 +8,8 @@ function kreabankMonthlyListDefinitions()
 {
 	$details = array('date'=>'date', 'description'=>'text', 'reference'=>'text', 'amount'=>'decimal', 'balance'=>'decimal', 'status'=>'status', 'age'=>'integer');
 	return array(
-		'bank_pending'=>$details, 'ledger_pending'=>$details, 'bank'=>$details, 'ledger'=>$details
+		'bank_pending'=>$details, 'ledger_pending'=>$details, 'bank'=>$details, 'ledger'=>$details,
+		'balances_pending'=>array('date'=>'date','description'=>'text','reference'=>'text','amount'=>'decimal','nature'=>'text','origin_month'=>'text','original_id'=>'text','comment'=>'text')
 	);
 }
 
@@ -196,7 +197,7 @@ function kreabankMonthlyListPager($title, $list, $state)
 }
 
 /** Render a native, read-only list; printing deliberately bypasses all presentation state. */
-function kreabankMonthlyListHtml($rows, $key, $title, $labels, $state, $langs, $values, $render, $print = false)
+function kreabankMonthlyListHtml($rows, $key, $title, $labels, $state, $langs, $values, $render, $print = false, $footer = '')
 {
 	global $db, $conf;
 	$columns = kreabankMonthlyListDefinitions()[$key];
@@ -257,5 +258,5 @@ function kreabankMonthlyListHtml($rows, $key, $title, $labels, $state, $langs, $
 	$visible = $print ? $rows : $list['rows'];
 	foreach ($visible as $row) { $html .= $render($row, $print ? '' : '<td></td>'); }
 	if (!$visible) { $html .= '<tr><td colspan="' . (count($columns) + ($print ? 0 : 1)) . '">' . $langs->trans('KreaBankMonthlyEmpty') . '</td></tr>'; }
-	return $html . '</tbody></table></div>' . ($print ? '' : '</form>');
+	return $html . '</tbody>' . $footer . '</table></div>' . ($print ? '' : '</form>');
 }

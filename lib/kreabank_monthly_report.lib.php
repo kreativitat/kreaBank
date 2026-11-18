@@ -6,12 +6,13 @@
 require_once __DIR__ . '/kreabank_csv.lib.php';
 require_once __DIR__ . '/kreabank_monthly_list.lib.php';
 require_once __DIR__ . '/kreabank_worklist_view.lib.php';
+require_once __DIR__ . '/kreabank_monthly_balances.lib.php';
 
 /** Keep old pending bookmarks on the bank side; new subtabs are independent. */
 function kreabankMonthlyReportView($view)
 {
 	if ($view === 'pending') { return 'bank_pending'; }
-	return in_array($view,array('summary','checks','bank_pending','ledger_pending','bank','ledger'),true) ? $view : 'summary';
+	return in_array($view,array('balances','summary','checks','bank_pending','ledger_pending','bank','ledger'),true) ? $view : 'balances';
 }
 
 /** Read-only report links carry only the displayed report's filter state. */
@@ -53,7 +54,8 @@ function kreabankMonthlyFiltersHtml($state, $langs, $accountSelector = '')
 
 function kreabankMonthlyActionsHtml($state, $langs, $print = false)
 {
-	$html = '<div class="kb-monthly-actions"><a class="button" href="' . dol_escape_htmltag(kreabankMonthlyReportUrl($state, array('export'=>'csv'))) . '" title="' . dol_escape_htmltag($langs->trans('KreaBankMonthlyExport')) . '" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankMonthlyExport')) . '"><span class="fas fa-file-csv" aria-hidden="true"></span> CSV</a>';
+	$export = $langs->trans(kreabankMonthlyReportView($state['view'] ?? '') === 'balances' ? 'KreaBankMonthlyBalancesExport' : 'KreaBankMonthlyExport');
+	$html = '<div class="kb-monthly-actions"><a class="button" href="' . dol_escape_htmltag(kreabankMonthlyReportUrl($state, array('export'=>'csv'))) . '" title="' . dol_escape_htmltag($export) . '" aria-label="' . dol_escape_htmltag($export) . '"><span class="fas fa-file-csv" aria-hidden="true"></span> CSV</a>';
 	$label = $langs->trans($print ? 'KreaBankMonthlyPrint' : 'KreaBankMonthlyPrintView');
 	$html .= $print ? '<button type="button" class="button" id="kb-monthly-print"' : '<a class="button" href="' . dol_escape_htmltag(kreabankMonthlyReportUrl($state, array('print_report'=>1))) . '"';
 	return $html . ' aria-label="' . dol_escape_htmltag($label) . '" title="' . dol_escape_htmltag($label) . '"><span class="fas fa-print" aria-hidden="true"></span>' . ($print ? '</button>' : '</a>') . '</div>';
@@ -62,7 +64,7 @@ function kreabankMonthlyActionsHtml($state, $langs, $print = false)
 function kreabankMonthlyViewsHtml($state, $langs)
 {
 	$html = '<nav class="kb-view-switch kb-monthly-views" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankMonthlyNav')) . '">';
-	foreach (array('summary'=>'Summary','checks'=>'Checks','bank_pending'=>'BankPending','ledger_pending'=>'LedgerPending','bank'=>'Bank','ledger'=>'Ledger') as $key=>$label) {
+	foreach (array('balances'=>'Balances','summary'=>'Summary','checks'=>'Checks','bank_pending'=>'BankPending','ledger_pending'=>'LedgerPending','bank'=>'Bank','ledger'=>'Ledger') as $key=>$label) {
 		$html .= '<a' . (kreabankMonthlyReportView($state['view']) === $key ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag(kreabankMonthlyReportUrl($state, array('view'=>$key))) . '" title="' . dol_escape_htmltag($langs->trans('KreaBankMonthly' . $label)) . '">' . $langs->trans('KreaBankMonthly' . $label . 'Short') . '</a>';
 	}
 	return $html . '</nav>';
@@ -185,12 +187,13 @@ function kreabankMonthlyDetailsHtml($rows, $side, $title, $state, $langs, $print
 
 function kreabankMonthlyReportHtml($report, $state, $langs, $print = false)
 {
-	$view = kreabankMonthlyReportView($state['view'] ?? 'summary');
+	$view = kreabankMonthlyReportView($state['view'] ?? '');
 	$html = '<div class="kb-monthly-report"><div class="kb-monthly-status"><span class="kb-monthly-identity"><strong>' . dol_escape_htmltag($report['company'] ?? '') . '</strong> · ' . dol_escape_htmltag($report['account']['ref']) . ' · ' . dol_escape_htmltag($report['account']['currency_code']) . ' · ' . dol_escape_htmltag($report['month']) . '</span>';
 	$errors = count(array_filter($report['checks'], static function ($check) { return $check['status'] === 'error'; }));
 	$warnings = count(array_filter($report['checks'], static function ($check) { return $check['status'] === 'warning'; }));
 	$html .= '<a class="badge ' . ($errors ? 'badge-status8' : ($warnings ? 'badge-status1' : 'badge-status4')) . '" href="' . dol_escape_htmltag(kreabankMonthlyReportUrl($state, array('view'=>'checks'))) . '">' . $langs->trans('KreaBankMonthlyCheckCounts', $errors, $warnings) . '</a></div>';
 	$html .= '<details class="kb-help kb-monthly-basis"' . ($print ? ' open' : '') . '><summary>' . $langs->trans('KreaBankMonthlyEvidenceShort', dol_escape_htmltag($report['end'])) . '</summary><p>' . $langs->trans('KreaBankMonthlyCurrentEvidence', dol_escape_htmltag($report['end']), dol_escape_htmltag($report['generated_at'])) . '</p><p>' . $langs->trans('KreaBankMonthlyLedgerBasis') . '</p></details>';
+	if ($view === 'balances') { return $html . kreabankMonthlyBalancesHtml($report, $state, $langs, $print) . '</div>'; }
 	if (!$print) {
 		$html .= '<dl class="kb-monthly-totals">';
 		foreach (array('bank_close'=>'BankCloseShort','ledger_close'=>'LedgerCloseShort','difference'=>'DifferenceShort') as $key=>$label) {

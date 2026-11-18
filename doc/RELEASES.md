@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20.70 — 2026-11-18
+
+- Make Saldos banco/ERP the first monthly report: January-to-selected-month closing balances, exact bank-minus-Dolibarr differences and cumulative pending bank movements, following the accountant's workbook.
+- Include source references, signed receipt/payment direction, original month/identity, comment columns and the full pending total. CSV and print retain both complete sections; comments can be completed in the export.
+- Reuse one owned read-only evidence load, preserve per-month opening and global claim checks, and keep missing balances or incomplete pending totals unknown. No schema, scheduler or financial-record changes.
+- Reuse verified Fintable balance snapshots as provisional evidence, retaining their date and rejecting incomplete or changed source data.
+
 ## 1.20.69 — 2026-11-18
 
 - Add Setup → Opening reconciliation: preview and explicitly confirm a start date and official opening bank balance for each owned bank account. Preserve existing transactions and matches; post only the reviewed native opening-balance difference before the start date.
