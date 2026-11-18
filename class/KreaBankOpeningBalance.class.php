@@ -185,24 +185,51 @@ class KreaBankOpeningBalance
 			$payload = $fresh;
 			$payload['fk_adjustment_bank_line'] = $adjustmentId ?: null;
 			$payload['version'] = 1;
-			$json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+			// Keep SQL transport ASCII-safe on existing Latin1 columns; the review/facts hash retains its original encoding contract.
+			$json = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+			$createdAt = $this->db->idate(time());
 			$this->query("INSERT INTO {$p}kreabank_opening_balance (entity,fk_bank_account,start_date,currency,opening_balance,ledger_balance,adjustment_amount,"
 				. 'fk_adjustment_bank_line,statement_ref,evidence_ref,fk_user,datec,facts_hash,payload_json) VALUES ('
 				. $this->entity . ',' . $fresh['account_id'] . ',' . $this->text($fresh['start_date']) . ',' . $this->text($fresh['currency']) . ','
 				. $this->text($fresh['opening_balance']) . ',' . $this->text($fresh['ledger_balance']) . ',' . $this->text($fresh['adjustment_amount']) . ','
 				. ($adjustmentId ?: 'NULL') . ',' . $this->text($fresh['statement_ref']) . ',' . $this->text($fresh['evidence_ref']) . ','
-				. (int) $this->user->id . ',' . $this->text($this->db->idate(time())) . ',' . $this->text($fresh['facts_hash']) . ',' . $this->text($json) . ')');
+				. (int) $this->user->id . ',' . $this->text($createdAt) . ',' . $this->text($fresh['facts_hash']) . ',' . $this->text($json) . ')');
 			$id = (int) $this->db->last_insert_id($p . 'kreabank_opening_balance');
 			if ($id <= 0) { throw new RuntimeException('KreaBankOpeningDatabaseError'); }
 			$this->query("INSERT INTO {$p}kreabank_recon_audit (entity,audit_type,payload_json,fk_user,datec) VALUES ("
-				. $this->entity . ",'opening_reconciliation'," . $this->text($json) . ',' . (int) $this->user->id . ',' . $this->text($this->db->idate(time())) . ')');
+				. $this->entity . ",'opening_reconciliation'," . $this->text($json) . ',' . (int) $this->user->id . ',' . $this->text($createdAt) . ')');
+			$auditId = (int) $this->db->last_insert_id($p . 'kreabank_recon_audit');
 			$result = $this->get($fresh['account_id']);
-			if (!$result || (int) $result['rowid'] !== $id || !$this->db->commit()) { throw new RuntimeException('KreaBankOpeningDatabaseError'); }
+			$this->assertPersistedOpening($result, $fresh, $id, $adjustmentId, $auditId, $createdAt, $json);
+			if (!$this->db->commit()) { throw new RuntimeException('KreaBankOpeningDatabaseError'); }
 			return $result;
 		} catch (Throwable $e) {
 			$this->db->rollback();
 			throw $e;
 		}
+	}
+
+	/** Native writes must roll back if storage changes any approved declaration or audit evidence. */
+	private function assertPersistedOpening($saved, $review, $id, $adjustmentId, $auditId, $createdAt, $json)
+	{
+		if (!$saved || $auditId <= 0) { throw new RuntimeException('KreaBankOpeningDatabaseError'); }
+		foreach (array('rowid'=>$id, 'entity'=>$this->entity, 'fk_bank_account'=>$review['account_id'], 'fk_user'=>(int) $this->user->id) as $key=>$expected) {
+			if (!isset($saved[$key]) || (int) $saved[$key] !== $expected) { throw new RuntimeException('KreaBankOpeningDatabaseError'); }
+		}
+		foreach (array('start_date','currency','statement_ref','evidence_ref','facts_hash') as $key) {
+			if (!isset($saved[$key]) || $saved[$key] !== $review[$key]) { throw new RuntimeException('KreaBankOpeningDatabaseError'); }
+		}
+		foreach (array('opening_balance','ledger_balance','adjustment_amount') as $key) {
+			if (!isset($saved[$key]) || self::decimal($saved[$key]) !== $review[$key]) { throw new RuntimeException('KreaBankOpeningDatabaseError'); }
+		}
+		if (!array_key_exists('fk_adjustment_bank_line', $saved)
+			|| ($adjustmentId > 0 ? (int) $saved['fk_adjustment_bank_line'] !== $adjustmentId : $saved['fk_adjustment_bank_line'] !== null)
+			|| !isset($saved['datec'], $saved['payload_json']) || $saved['datec'] !== $createdAt || $saved['payload_json'] !== $json) { throw new RuntimeException('KreaBankOpeningDatabaseError'); }
+		$audit = $this->rows('SELECT rowid,entity,audit_type,fk_statement_line,fk_reconciliation,payload_json,fk_user,datec FROM '
+			. $this->db->prefix() . 'kreabank_recon_audit WHERE entity=' . $this->entity . ' AND rowid=' . (int) $auditId);
+		if (count($audit) !== 1 || (int) $audit[0]['rowid'] !== $auditId || (int) $audit[0]['entity'] !== $this->entity || (int) $audit[0]['fk_user'] !== (int) $this->user->id
+			|| $audit[0]['audit_type'] !== 'opening_reconciliation' || $audit[0]['fk_statement_line'] !== null || $audit[0]['fk_reconciliation'] !== null
+			|| $audit[0]['payload_json'] !== $json || $audit[0]['datec'] !== $createdAt) { throw new RuntimeException('KreaBankOpeningDatabaseError'); }
 	}
 
 	private function prepare($accountId, $startDate, $officialBalance, $statementRef, $evidenceRef, $lock)

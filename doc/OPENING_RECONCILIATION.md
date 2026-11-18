@@ -36,6 +36,11 @@ is committed with it. Original imported amounts, raw statuses, links, payment an
 invoice allocations remain intact; no payment or invented source/native link is
 created.
 
+Snapshot JSON escapes Unicode for storage so legacy table character sets cannot
+change copied source text. Confirmation reads the saved declaration and audit
+back before committing. A changed amount, identity, evidence reference or snapshot
+rolls the entire opening back.
+
 Previously reconciled native movements retain their existing statement references
 and reconciliation actors. Other native movements before the start are reconciled
 through `AccountLine::update_conciliation()` using the reviewed statement reference.

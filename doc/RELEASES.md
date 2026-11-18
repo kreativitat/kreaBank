@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.21.1 — 2026-11-18
+
+- Preserve exact Unicode in opening reconciliation snapshots on installations with legacy database character sets.
+- Verify the saved opening declaration and audit before committing; roll back the entire opening if storage changes the reviewed evidence.
+- Synchronize the packaged version marker with the module descriptor.
+
 ## 1.21.0 — 2026-11-18
 
 - Connect reviewed KreaEats payouts to bank credits through an explicitly configured, company-owned Uber clearing account.

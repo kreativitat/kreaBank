@@ -145,4 +145,88 @@ checkAuto((int)$restrictedApplied['fk_adjustment_bank_line'] > 0 && (new KreaBan
 	'An explicitly reviewed initial SOLD balance supports a restricted account without changing its transfer-only configuration');
 $db->query("DELETE FROM kbauto_const WHERE entity=1 AND name='KREABANK_ACCOUNT_PAIRS'");
 foreach ($pairBefore as $row) { $db->query("INSERT INTO kbauto_const (rowid,entity,name,value) VALUES(" . (int)$row['rowid'] . ",1,'KREABANK_ACCOUNT_PAIRS','" . $db->escape($row['value']) . "')"); }
+
+// Reproduce upgraded installations whose financial source is UTF-8 but module snapshots inherited Latin1.
+$sqlModeBefore = $db->query('SELECT @@SESSION.sql_mode mode')->fetch_object()->mode;
+$charsetBefore = $db->connection->character_set_name();
+$db->connection->set_charset('utf8mb4');
+$db->query("SET SESSION sql_mode=''");
+try {
+	$db->query('ALTER TABLE kbauto_kreabank_opening_balance MODIFY payload_json LONGTEXT CHARACTER SET latin1 NOT NULL, MODIFY evidence_ref VARCHAR(255) CHARACTER SET latin1 NOT NULL');
+	$db->query('ALTER TABLE kbauto_kreabank_recon_audit MODIFY payload_json LONGTEXT CHARACTER SET latin1 NULL');
+	$db->query('ALTER TABLE kbauto_bank MODIFY label VARCHAR(255) CHARACTER SET utf8mb4 NULL, MODIFY note TEXT CHARACTER SET utf8mb4 NULL');
+	$db->query('ALTER TABLE kbauto_kreabank_statement_line MODIFY description TEXT CHARACTER SET utf8mb4 NULL');
+	$db->query('ALTER TABLE kbauto_kreabank_bankmeta MODIFY description TEXT CHARACTER SET utf8mb4 NULL');
+	foreach (array(111,112,113,114,115) as $account) {
+		$db->query("INSERT INTO kbauto_bank_account (rowid,entity,ref,label,currency_code,clos,courant,rappro,fk_pays) VALUES ($account,1,'UNICODE-$account','Synthetic charset fixture','EUR',0,1,1,1)");
+		bankAuto(978000+$account,'5.00','UNICODE-PRIOR',$account,'2026-10-31');
+	}
+	$unicode = "Synthetic \u{FFFD} deposit \u{9280}\u{884C}";
+	$escapedUnicode = $db->escape($unicode);
+	$db->query("UPDATE kbauto_bank SET label='$escapedUnicode',note='$escapedUnicode' WHERE rowid=978111");
+	stageAuto(978501,'2.00','UNICODE-SOURCE',111);
+	$db->query("UPDATE kbauto_kreabank_statement_line SET operation_date='2026-10-31',description='$escapedUnicode' WHERE rowid=978501");
+	$db->query("INSERT INTO kbauto_kreabank_bankmeta (entity,fk_bank_line,bank_account_id,idempotency_hash,amount,currency,operation_date,description,datec) VALUES(1,978111,111,SHA2('unicode-opening',256),5,'EUR','2026-10-31','$escapedUnicode',NOW())");
+	$unicodeReview = $opening->preview(111,'2026-11-01','10.25','OPEN-UNICODE','Synthetic bank evidence with an ASCII reference');
+	$rawJson = json_encode($unicodeReview,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+	$legacyTransport = $db->query("SELECT CONVERT('" . $db->escape($rawJson) . "' USING latin1) payload")->fetch_object()->payload;
+	checkAuto($legacyTransport !== $rawJson && strpos($legacyTransport,$unicode) === false, 'The regression reproduces silent loss of unescaped Unicode under non-strict Latin1 transport');
+	$unicodeSourceBefore = openingState(111)['sources'];
+	$legacyBefore = $db->query('SELECT * FROM kbauto_kreabank_bankmeta WHERE fk_bank_line=978111')->fetch_all(MYSQLI_ASSOC);
+	$unicodeApplied = $opening->apply($unicodeReview);
+	$unicodeJson = $unicodeApplied['payload_json'];
+	$decoded = json_decode($unicodeJson,true,512,JSON_THROW_ON_ERROR);
+	checkAuto(!preg_match('/[\x80-\xff]/',$unicodeJson) && strpos($unicodeJson,'\\ufffd') !== false && strpos($unicodeJson,'\\u9280\\u884c') !== false,
+		'Only SQL transport is ASCII-escaped; unsupported source Unicode remains representable in legacy payload columns');
+	checkAuto($decoded['native_rows'][0]['label'] === $unicode && $decoded['native_rows'][0]['note'] === $unicode
+		&& $decoded['staged_rows'][0]['description'] === $unicode && $decoded['legacy_rows'][0]['description'] === $unicode,
+		'Opening snapshots retain exact native, staged and legacy Unicode text after database readback');
+	$facts = $decoded;
+	foreach (array('facts_hash','issued_at','expires_at','fk_adjustment_bank_line','version') as $key) { unset($facts[$key]); }
+	checkAuto(hash('sha256',json_encode($facts,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)) === $unicodeReview['facts_hash']
+		&& $unicodeApplied['facts_hash'] === $unicodeReview['facts_hash'], 'Persisted Unicode snapshots reconstruct the unchanged public facts hash');
+	$unicodeAudit = $db->query("SELECT payload_json FROM kbauto_kreabank_recon_audit WHERE audit_type='opening_reconciliation' AND JSON_UNQUOTE(JSON_EXTRACT(payload_json,'$.account_id'))='111'")->fetch_all(MYSQLI_ASSOC);
+	checkAuto(count($unicodeAudit) === 1 && $unicodeAudit[0]['payload_json'] === $unicodeJson, 'Opening declaration and audit retain byte-identical, complete JSON transport');
+	$nativeUnicode = $db->query('SELECT label,note FROM kbauto_bank WHERE rowid=978111')->fetch_object();
+	checkAuto($nativeUnicode->label === $unicode && $nativeUnicode->note === $unicode && openingState(111)['sources'] === $unicodeSourceBefore
+		&& $db->query('SELECT * FROM kbauto_kreabank_bankmeta WHERE fk_bank_line=978111')->fetch_all(MYSQLI_ASSOC) === $legacyBefore,
+		'Unicode persistence never rewrites original native, staged or legacy evidence');
+
+	$plainEvidence = $opening->preview(112,'2026-11-01','10.25','OPEN-PLAIN',"Unsupported plain reference \u{9280}\u{884C}");
+	$plainBefore = openingState(112);
+	rejectAuto(static function () use ($opening,$plainEvidence) { $opening->apply($plainEvidence); }, 'A legacy plain-text evidence column cannot silently substitute unsupported characters');
+	checkAuto(openingState(112) === $plainBefore && $opening->get(112) === null && $db->depth === 0,
+		'Lossy plain metadata rolls back native flags, the SOLD entry, declaration and audit together');
+
+	/** Simulate damaged/truncated readback without changing the native lifecycle or shared database adapter. */
+	class OpeningCorruptReadbackDb extends DoliDB
+	{
+		public $fault = '';
+		public function fetch_object($result)
+		{
+			$row = parent::fetch_object($result);
+			if ($row && isset($row->facts_hash,$row->payload_json)) {
+				if ($this->fault === 'opening_json') { $row->payload_json .= ' '; }
+				if ($this->fault === 'opening_identity') { $row->currency = 'USD'; }
+			}
+			if ($row && isset($row->audit_type,$row->payload_json) && $this->fault === 'audit_json') { $row->payload_json .= ' '; }
+			return $row;
+		}
+	}
+	$corruptDb = new OpeningCorruptReadbackDb();
+	$corruptDb->connection->set_charset('utf8mb4'); $corruptDb->query("SET SESSION sql_mode=''");
+	$corruptOpening = new KreaBankOpeningBalance($corruptDb,$user,1);
+	foreach (array(113=>'opening_json',114=>'audit_json',115=>'opening_identity') as $account=>$fault) {
+		$corruptReview = $corruptOpening->preview($account,'2026-11-01','10.25','OPEN-READBACK','Synthetic readback evidence');
+		$readbackBefore = openingState($account); $corruptDb->fault = $fault;
+		rejectAuto(static function () use ($corruptOpening,$corruptReview) { $corruptOpening->apply($corruptReview); }, 'Changed declaration or audit readback cannot return success: ' . $fault);
+		$corruptDb->fault = '';
+		checkAuto(openingState($account) === $readbackBefore && $corruptOpening->get($account) === null && $corruptDb->depth === 0,
+			'Precommit readback failure leaves no native adjustment, reconciliation flag, opening or audit: ' . $fault);
+	}
+	$corruptDb->connection->close();
+} finally {
+	$db->query("SET SESSION sql_mode='" . $db->escape($sqlModeBefore) . "'");
+	$db->connection->set_charset($charsetBefore);
+}
 echo 'OK: ' . ($checks - $initialChecks) . " opening-balance database checks\n";

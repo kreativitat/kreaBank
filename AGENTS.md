@@ -15,6 +15,9 @@
 
 ## Opening reconciliation
 
+- Persist snapshot JSON with escaped Unicode and verify declaration/audit readback
+  before commit. Legacy installations can have Latin-1 module tables alongside
+  Unicode native bank rows; never normalize or discard original source characters.
 - `admin/opening.php` is the setup-only, explicit preview/confirmation flow for
   `KreaBankOpeningBalance`. Storage installation is POST-only. One immutable
   company/account opening records the official previous-day booked balance and
