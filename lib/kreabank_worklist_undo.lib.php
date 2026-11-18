@@ -21,7 +21,7 @@ function kreabankWorklistUndoRowMatches($row, $source, $id, $accountId)
 {
 	return is_array($row) && (int)($row['rowid']??0)===$id && ($row['line_source']??'')===$source
 		&& (int)($row['bank_account_id']??0)===$accountId && (int)($row['native_bank_line_id']??0)>0
-		&& (int)($row['rappro']??0)===1 && empty($row['needs_review']) && empty($row['group_id']) && empty($row['is_reversed']);
+		&& (int)($row['rappro']??0)===1 && empty($row['opening_reconciled']) && empty($row['needs_review']) && empty($row['group_id']) && empty($row['is_reversed']);
 }
 
 /** Prepare only the exact fresh History row; the opaque native nonce keeps its original snapshot. */

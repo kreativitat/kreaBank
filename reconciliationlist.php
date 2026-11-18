@@ -383,7 +383,7 @@ foreach ($page['rows'] as $indexRow) {
 			$row['ambiguous'] = count($prepared['account_candidates']) > 1;
 			if (!empty($prepared['account_review']['truncated'])) { $row['notice'] = kreabankWorklistTranslate($langs,'KreaBankWorklistRefineSearch'); }
 			$row['needs_review'] = !empty($row['line']['needs_review']);
-			$row['batch_unavailable'] = $row['batch_unavailable'] || strpos($key,'native:') === 0 || empty($row['line']['account_open']) || (int) $row['line']['status'] !== 0;
+			$row['batch_unavailable'] = $row['batch_unavailable'] || !empty($row['line']['opening_reconciled']) || strpos($key,'native:') === 0 || empty($row['line']['account_open']) || (int) $row['line']['status'] !== 0;
 			if (strpos($key,'native:') === 0 && (int) $row['line']['status'] === 0) { $row['notice'] = kreabankWorklistTranslate($langs,'KreaBankWorklistLegacySelectionUnavailable'); }
 			if (!$row['account_mismatch'] && !empty($prepared['pair'])) {
 				$row['review'] = $candidateModel($prepared['pair'],empty($prepared['account_candidates']) && empty($prepared['batch']['active']) && empty($prepared['batch']['draft']) ? $paymentUrl($prepared['pair']) : '');
@@ -409,7 +409,7 @@ foreach ($page['rows'] as $indexRow) {
 				foreach ($batch['active']['components'] as $c) { $row['batch_components'][] = array('key'=>(string) $c['fk_bank_line'],'doc_type'=>'native_bank','doc_id'=>(int) $c['fk_bank_line'],'reference'=>$c['ref'] ?: '#' . $c['fk_bank_line'],'date'=>$c['doc_date'],'amount'=>$c['current_amount'],'currency'=>$row['line']['currency'],'account_ref'=>$c['bank_account_ref'],'description'=>$c['description']); }
 				if ($canUndo && !$row['needs_review']) { $row['undo_review'] = array('action'=>'undo_batch','fields'=>array_merge($baseParams,array('review'=>$remember('undo',array('key'=>$key,'batch'=>$service->preparePaymentBatchUndoReview((int) $row['line']['rowid'])))))); }
 			}
-			if ($canUndo && empty($row['batch_active']) && !$row['needs_review'] && ($row['line']['worklist_status'] ?? '') === 'reconciled') {
+			if ($canUndo && empty($row['line']['opening_reconciled']) && empty($row['batch_active']) && !$row['needs_review'] && ($row['line']['worklist_status'] ?? '') === 'reconciled') {
 				$undo = kreabankWorklistPrepareUndo($history,$key,(int) $row['line']['bank_account_id']);
 				if ($undo) { $row['undo_review'] = array('action'=>'undo_pair','fields'=>array_merge($baseParams,array('source_key'=>$key,'undo_review'=>$undo['nonce'])),
 					'effect'=>!empty($undo['snapshot']['writeoff']) ? 'KreaBankWorklistUndoWriteoffEffect' : 'KreaBankWorklistUndoReconciliationEffect'); }

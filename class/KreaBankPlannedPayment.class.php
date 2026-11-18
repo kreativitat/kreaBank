@@ -217,6 +217,7 @@ final class KreaBankPlannedPayment
 			. " JOIN {$p}bank_account a ON a.rowid=s.bank_account_id AND a.entity=s.entity WHERE l.entity=$e AND l.rowid=$id$suffix");
 		if (count($rows) !== 1) { throw new DomainException('The owned staged statement is unavailable'); }
 		$source = $rows[0];
+		(new KreaBankReconciliationScope($this->db, $e))->assertLine($source);
 		foreach (array('rowid','entity','fk_statement','fk_native_bank_line','bank_account_id','direction','status','is_duplicate','duplicate_of','clos','rappro','courant') as $field) { $source[$field] = (int) $source[$field]; }
 		$source['amount'] = KreaBankPaymentBatchDecimal::normalize($source['amount']);
 		$source['allocated_amount'] = KreaBankPaymentBatchDecimal::normalize($source['allocated_amount']);

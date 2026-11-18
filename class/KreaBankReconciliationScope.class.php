@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/KreaBankAccountPairs.class.php';
 require_once __DIR__ . '/KreaBankTaxReconciliation.class.php';
+require_once __DIR__ . '/KreaBankOpeningBalance.class.php';
 
 /** Deterministic owner-company and account boundaries for the existing reconciliation path. */
 class KreaBankReconciliationScope
@@ -32,8 +33,10 @@ class KreaBankReconciliationScope
 			$sql = "SELECT l.rowid FROM {$p}kreabank_statement_line l JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity"
 				. " JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=s.entity"
 				. " WHERE l.entity=$e AND l.rowid=$id AND s.rowid=" . (int) $line['fk_statement'] . " AND ba.rowid=$a";
+			$sql .= ' AND NOT (' . KreaBankOpeningBalance::historicalSql($this->db, $e, 'ba.rowid', 'l.operation_date', 'l.currency') . ')';
 		} else {
 			$sql = "SELECT b.rowid FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account WHERE ba.entity=$e AND ba.rowid=$a AND b.rowid=$id";
+			$sql .= ' AND NOT (' . KreaBankOpeningBalance::historicalSql($this->db, $e, 'ba.rowid', 'b.dateo', 'ba.currency_code') . ')';
 		}
 		$this->requireRow($sql);
 	}

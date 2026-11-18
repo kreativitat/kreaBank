@@ -1165,6 +1165,7 @@ class KreaBankService
 		$sql .= ' AND ba.clos = 0';
 		$sql .= ' AND ba.rappro = 1';
 		$sql .= ' AND b.rappro = 0';
+		$sql .= ' AND NOT (' . KreaBankOpeningBalance::historicalSql($this->db, $this->entity, 'ba.rowid', 'b.dateo', 'ba.currency_code') . ')';
 		$sql .= $this->paymentBatchUnclaimedSql();
 		if ($bankAccountId > 0) {
 			$sql .= ' AND b.fk_account = ' . $bankAccountId;
@@ -2678,6 +2679,7 @@ class KreaBankService
 			. ' AND l.status=0 AND l.is_duplicate=0 AND l.allocated_amount=0 AND l.amount<>0'
 			. ' AND l.fk_native_bank_line IS NULL AND ba.clos=0 AND ba.rappro=1 AND ba.courant<>2'
 			. ' AND l.currency=ba.currency_code AND ba.rowid IN (' . implode(',', $ids) . ')';
+		$sql .= ' AND NOT (' . KreaBankOpeningBalance::historicalSql($this->db, $this->entity, 'ba.rowid', 'l.operation_date', 'l.currency') . ')';
 		$feedExists = $this->tableExists($this->db->prefix() . 'kreabank_feed_transaction');
 		if ($feedExists) {
 			$sql .= " AND (s.source_type<>'fintable' OR EXISTS (SELECT ft.rowid FROM " . $this->db->prefix()
@@ -3390,6 +3392,7 @@ class KreaBankService
 		}
 		// Rule entries have no confirmation step: an existing movement always fails closed there.
 		$this->assertNoExistingMovementForCreation($line, $ruleReview ? array() : $confirmedMovementIds);
+		(new KreaBankReconciliationScope($this->db, $this->entity))->assertLine($line);
 		(new KreaBankAccountPairs($this->db, $this->entity))->assertDocument('quick_entry', 0, (int) $line['bank_account_id']);
 		if ((int) (!empty($line['status']) ? $line['status'] : 0) === 2) {
 			throw new Exception('Bank line already reconciled');
@@ -3701,7 +3704,7 @@ class KreaBankService
 				throw new Exception('The source mapping changed; review the reconciliation again');
 			}
 			$line = (new KreaBankHistory($this->db, $this->entity))->find($lineId, $source, $accountId);
-			if (!$line || $line['needs_review'] || !empty($line['group_id']) || KreaBankHistory::snapshot($line) !== $review) {
+			if (!$line || !empty($line['opening_reconciled']) || $line['needs_review'] || !empty($line['group_id']) || KreaBankHistory::snapshot($line) !== $review) {
 				throw new Exception('The reconciliation changed; review it again');
 			}
 			$writeOffReversed = $this->undoWriteOffReview($line, $review);
@@ -3795,6 +3798,7 @@ class KreaBankService
 			. ' WHERE l.entity=' . $this->entity . ' AND l.status=0 AND l.is_duplicate=0 AND l.allocated_amount=0 AND l.amount<>0'
 			. ' AND l.fk_native_bank_line IS NULL AND ba.clos=0 AND ba.rappro=1 AND ba.courant<>2 AND l.currency=ba.currency_code'
 			. " AND (l.direction=0 OR (l.amount>0 AND l.direction=1) OR (l.amount<0 AND l.direction=-1))";
+		$sql .= ' AND NOT (' . KreaBankOpeningBalance::historicalSql($this->db, $this->entity, 'ba.rowid', 'l.operation_date', 'l.currency') . ')';
 		$sql .= $this->tableExists($p . 'kreabank_feed_transaction')
 			? " AND (s.source_type<>'fintable' OR EXISTS (SELECT ft.rowid FROM {$p}kreabank_feed_transaction ft WHERE ft.entity=l.entity AND ft.fk_statement_line=l.rowid AND ft.status='imported' AND ft.conflict_payload IS NULL))"
 			: " AND s.source_type<>'fintable'";

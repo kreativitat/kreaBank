@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.20.69 — 2026-11-18
+
+- Add Setup → Opening reconciliation: preview and explicitly confirm a start date and official opening bank balance for each owned bank account. Preserve existing transactions and matches; post only the reviewed native opening-balance difference before the start date.
+- Persist historical opening acceptance separately from verified transaction matches. Keep earlier imports out of pending counts and matching, preserve start-date transactions, protect opening evidence from ordinary Undo/deletion, and use the confirmed opening in monthly reports.
+- Require current administrator/native/module rights, a single-use scoped review, complete locked evidence and an atomic audit. Storage initialization is explicit; no opening, balance, schedule or financial record changes on page views or deployment.
+
 ## 1.20.68 — 2026-11-18
 
 - Separate the left-menu global Movements list from the selected-account workspace: keep its bank-account column/filter and omit workspace tabs, even when filtering one account.

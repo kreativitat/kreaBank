@@ -91,8 +91,8 @@ class KreaBankWorklist
 			preg_match('/^(>=|<=|<>|>|<|=)?\s*([+-]?\d+(?:[.,]\d{1,8})?)$/D', $f['amount'], $m);
 			$where .= ' AND h.amount' . ($m[1] ?: '=') . str_replace(',', '.', $m[2]);
 		}
-		if ($includeStatus && in_array($f['status'], array('pending','draft'), true)) { $where .= ' AND h.status IN (0,1) AND COALESCE(h.rappro,0)=0 AND ba.clos=0 AND ba.rappro=1'; }
-		elseif ($includeStatus && $f['status'] === 'reconciled') { $where .= " AND (h.status=2 OR (h.source_storage='legacy_native' AND h.rappro=1))"; }
+		if ($includeStatus && in_array($f['status'], array('pending','draft'), true)) { $where .= ' AND h.opening_reconciled=0 AND h.status IN (0,1) AND COALESCE(h.rappro,0)=0 AND ba.clos=0 AND ba.rappro=1'; }
+		elseif ($includeStatus && $f['status'] === 'reconciled') { $where .= " AND (h.opening_reconciled=1 OR h.status=2 OR (h.source_storage='legacy_native' AND h.rappro=1))"; }
 		return 'SELECT h.*,ba.clos AS account_closed,ba.rappro AS account_reconcilable FROM (' . $projection->bankStatementSql((int)$f['account']) . ') h JOIN ' . $this->db->prefix()
 			. 'bank_account ba ON ba.rowid=h.bank_account_id AND ba.entity=' . $this->entity . $where
 			. ' ORDER BY h.operation_date,h.bank_account_id,h.statement_id,h.line_rank,h.rowid,h.source_storage';
@@ -147,7 +147,7 @@ class KreaBankWorklist
 		$line['bank_account_ref'] = $account[0]['ref'];
 		$line['account_open'] = !(int) $account[0]['clos'] && (int) $account[0]['rappro'] === 1;
 		$line['amount_decimal'] = (string) $raw[0]['amount'];
-		foreach (array('group_id','group_count','group_valid','group_date') as $field) { $line[$field] = $raw[0][$field] ?? null; }
+		foreach (array('group_id','group_count','group_valid','group_date','opening_reconciled') as $field) { $line[$field] = $raw[0][$field] ?? null; }
 		$line['needs_review'] = kreabankIntegrationLineState((object) $raw[0],$raw[0]['statement_ref']) === 'KreaBankLinkNeedsReview';
 		$line['worklist_status']=$raw[0]['worklist_status']??kreabankWorklistProjectionStatus($raw[0]);
 		return $line;
@@ -228,9 +228,9 @@ class KreaBankWorklist
 	public function prepare($key)
 	{
 		$line = $this->load($key);
-		$batch = $this->batches && !empty($line['fk_statement']) ? $this->readBatch($line) : array();
+		$batch = $this->batches && !empty($line['fk_statement']) && empty($line['opening_reconciled']) ? $this->readBatch($line) : array();
 		$pair = null; $accountCandidates = array(); $accountReview = null; $completed = null;
-		if ((int) $line['status'] === 0 && $line['account_open'] && empty($line['needs_review']) && empty($batch['active'])) {
+		if (empty($line['opening_reconciled']) && (int) $line['status'] === 0 && $line['account_open'] && empty($line['needs_review']) && empty($batch['active'])) {
 			$accountReview = !empty($line['fk_statement']) ? $this->service->getWorklistPaymentAccountReview((int) $line['rowid'],array($line['bank_account_id'])) : null;
 			$prepared = $accountReview ? array() : ($this->callbacks['prepareReviewRow'])($line);
 			$accountReview = $accountReview ?: ($prepared['account_review'] ?? null);

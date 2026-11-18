@@ -237,7 +237,7 @@ function kreabankMonthlyListHtml($rows, $key, $title, $labels, $state, $langs, $
 			};
 			if ($type === 'date') { $html .= '<div class="kb-monthly-date-filter">' . $input($field . '_from','date',' — ' . $langs->transnoentities('From')) . $input($field . '_to','date',' — ' . $langs->transnoentities('To')) . '</div>'; }
 			elseif (in_array($type,array('status','check_status'),true)) {
-				$options = $type === 'status' ? array('matched','pending','review','duplicate') : array('ok','warning','error');
+				$options = $type === 'status' ? array('matched','opening','pending','review','duplicate') : array('ok','warning','error');
 				$html .= '<select class="flat maxwidth150" name="' . $list['prefix'] . 'search_' . $field . '" aria-label="' . dol_escape_htmltag($labels[$field]) . '"><option value="">' . $langs->trans('All') . '</option>';
 				foreach ($options as $option) { $html .= '<option value="' . $option . '"' . ($list['filters'][$field] === $option ? ' selected' : '') . '>' . $langs->trans('KreaBankMonthly' . ($type === 'status' ? 'State' : 'CheckState') . ucfirst($option)) . '</option>'; }
 				$html .= '</select>';

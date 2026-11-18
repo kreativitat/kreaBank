@@ -203,6 +203,9 @@ class KreaBankQuickFlowFakeDb
 	public function query($sql)
 	{
 		$this->queries[] = (string) $sql;
+		if (strpos($sql, 'SELECT l.rowid FROM llx_kreabank_statement_line l') === 0 && preg_match('/l.rowid=([0-9]+)/', $sql, $source)) {
+			return (object) array('rows'=>array((object) array('rowid'=>(int) $source[1])));
+		}
 		if ($this->failFailureStatusUpdates && strpos($sql, 'UPDATE llx_kreabank_quick_entry SET status = 9') === 0) {
 			$this->lastError = 'Synthetic status update failure';
 			return false;
@@ -211,7 +214,7 @@ class KreaBankQuickFlowFakeDb
 		return true;
 	}
 
-	public function fetch_object($result) { return false; } // No existing movements or configured account pairs.
+	public function fetch_object($result) { return is_object($result) ? array_shift($result->rows) : false; } // Only the explicit synthetic source exists.
 	public function last_insert_id($table) { return 901; }
 	public function plimit($limit = 0, $offset = 0) { return ' LIMIT ' . (int) $limit; }
 

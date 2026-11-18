@@ -96,6 +96,10 @@ $adapter->getPendingLines(10, 0, 'operation_date', 'ASC', array('bank_account_id
 $adapter->getPendingLinesCount(array('bank_account_id' => 45));
 $adapter->getRecentReconciledLines(10, 0, 45);
 foreach ($db->queries as $sql) {
+	if (strpos($sql, 'FROM information_schema.tables') !== false) {
+		checkNavigation(strpos($sql, "table_name='navtest_kreabank_opening_balance'") !== false, 'Optional opening storage is inspected without reading another company or changing schema');
+		continue;
+	}
 	checkNavigation(strpos($sql, 'ba.rowid = 45') !== false && strpos($sql, 'ba.entity = 7') !== false, 'Scope native and staged reads before pagination');
 }
 $hooks = new ActionsKreaBank($db);

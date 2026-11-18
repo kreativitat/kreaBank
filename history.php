@@ -859,10 +859,12 @@ if ($historyTotalRecords === 0) {
 			print '<a class="button smallpaddingimp krea-history-action-btn" href="' . $nativeLineUrl . '" target="_blank" rel="noopener">' . $nativeEntryLabel . '</a>';
 		} elseif (!empty($row['group_id'])) {
 			print '<a class="button smallpaddingimp krea-history-action-btn" href="' . dol_buildpath('/custom/kreabank/reconciliationlist.php?search_account=' . $row['bank_account_id'] . '&search_status=all&expand=staged:' . $lineId, 1) . '">' . dol_escape_htmltag(kreabankWorklistTranslate($langs,'KreaBankHistoryReview')) . '</a>';
+		} elseif (!empty($row['opening_reconciled'])) {
+			print '<span class="opacitymedium">' . dol_escape_htmltag($langs->trans('KreaBankOpeningReconciled')) . '</span>';
 		} else {
 			print '<a class="button smallpaddingimp krea-history-action-btn" href="' . $lineUrl . '" target="_blank" rel="noopener">' . $langs->trans('KreaBankReconcile') . '</a>';
 		}
-		if (!$isReversed && !$row['needs_review'] && empty($row['group_id']) && $user->hasRight('kreabank', 'reconciliation', 'undo') && $canNativeWrite) {
+		if (!$isReversed && !$row['needs_review'] && empty($row['opening_reconciled']) && empty($row['group_id']) && $user->hasRight('kreabank', 'reconciliation', 'undo') && $canNativeWrite) {
 			$undoFormId = 'kreaUndoForm' . $row['line_source'] . ((int) $lineId);
 			print '<br><form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '" id="' . $undoFormId . '" style="margin:4px 0 0 0">';
 			print kreabankNavigationHiddenFields($navigationAccountId);

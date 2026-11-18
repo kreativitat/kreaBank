@@ -33,8 +33,10 @@ movements are not imported evidence and do not enter this table.
 It preserves original imported amounts and shows the linked native ID, native
 amount when different, and whether reconciliation flags, signed amount, account
 and statement reference agree. A missing or inconsistent native link is a review
-issue, not permission to create a replacement or rewrite history. Only verified
-links count toward the verified reconciliation total. Viewing, exporting and the
+issue, not permission to create a replacement or rewrite history. Ordinary matches
+require verified links. An explicitly applied [opening reconciliation](OPENING_RECONCILIATION.md)
+also contributes earlier evidence to reconciled counts, labelled separately as
+**Reconciled at opening**, without inventing a native movement or link. Viewing, exporting and the
 legacy `ensureNativeStatementLines()` helper perform no financial writes.
 
 One shared banking header connects module views and native bank pages through

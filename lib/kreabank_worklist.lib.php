@@ -15,14 +15,14 @@ function kreabankWorklistProjectionStatus($source, $hasDraft = false)
 	require_once __DIR__ . '/kreabank_integration.lib.php';
 	$nativeState=kreabankIntegrationLineState((object)$source,(string)($source['statement_ref']??''));
 	if ($nativeState==='KreaBankLinkNeedsReview') { return 'review'; }
-	if ($nativeState==='KreaBankReconciled') { return 'reconciled'; }
+	if (in_array($nativeState,array('KreaBankReconciled','KreaBankOpeningReconciled'),true)) { return 'reconciled'; }
 	return $hasDraft ? 'draft' : 'pending';
 }
 
 /** Match the existing Pending source gate; historic closed/skipped rows remain available in All. */
 function kreabankWorklistPendingSource($source)
 {
-	return in_array((int)$source['status'],array(0,1),true) && (int)($source['rappro']??0)===0
+	return empty($source['opening_reconciled']) && in_array((int)$source['status'],array(0,1),true) && (int)($source['rappro']??0)===0
 		&& (int)($source['account_closed']??1)===0 && (int)($source['account_reconcilable']??0)===1;
 }
 

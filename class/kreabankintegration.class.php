@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/KreaBankStatementEvidence.class.php';
 require_once __DIR__ . '/KreaBankPaymentBatchProjection.class.php';
+require_once __DIR__ . '/KreaBankOpeningBalance.class.php';
 
 /** Read-only projection of imported evidence and its native ledger links. */
 class KreaBankIntegration
@@ -31,21 +32,23 @@ class KreaBankIntegration
 		$groupJoin = $groups ? ' LEFT JOIN (' . KreaBankPaymentBatchProjection::aggregateSql($this->db, $e) . ') gs ON gs.fk_statement_line=l.rowid' : '';
 		$groupMatched = $groups ? 'gs.batch_id IS NOT NULL AND gs.is_valid=1' : '0=1';
 		$scalar = $groups ? 'gs.batch_id IS NULL AND ' : '';
+		$opening = KreaBankOpeningBalance::historicalSql($this->db, $e, 'ba.rowid', 'l.operation_date', 'l.currency');
 		$nativeCount = $groups ? 'CASE WHEN gs.batch_id IS NOT NULL THEN gs.native_count WHEN b.rowid IS NOT NULL THEN 1 ELSE 0 END' : 'CASE WHEN b.rowid IS NOT NULL THEN 1 ELSE 0 END';
 		$sql = "SELECT s.bank_account_id, ba.ref bank_account_ref, ba.label bank_account_label, s.ref statement_ref,"
 			. " MIN(l.operation_date) first_operation_date, MAX(l.operation_date) last_operation_date,"
 			. " COUNT(l.rowid) imported_lines, COALESCE(SUM(l.amount),0) amount_total, s.source_type, s.filename source_file, s.date_import imported_at,"
 			. " SUM($nativeCount) native_lines,"
-			. " SUM(CASE WHEN ($groupMatched) OR ($scalar l.status=2 AND b.rappro=1 AND ABS(b.amount-l.amount)<=0.01 AND b.num_releve=s.ref AND l.currency=ba.currency_code) THEN 1 ELSE 0 END) reconciled_lines,"
-			. " SUM(CASE WHEN l.status=2 AND NOT (($groupMatched) OR ($scalar b.rowid IS NOT NULL AND b.rappro=1 AND ABS(b.amount-l.amount)<=0.01 AND b.num_releve=s.ref AND l.currency=ba.currency_code)) THEN 1 ELSE 0 END) issue_lines,s.currency"
+			. " SUM(CASE WHEN ($opening) OR ($groupMatched) OR ($scalar l.status=2 AND b.rappro=1 AND ABS(b.amount-l.amount)<=0.01 AND b.num_releve=s.ref AND l.currency=ba.currency_code) THEN 1 ELSE 0 END) reconciled_lines,"
+			. " SUM(CASE WHEN NOT ($opening) AND l.status=2 AND NOT (($groupMatched) OR ($scalar b.rowid IS NOT NULL AND b.rappro=1 AND ABS(b.amount-l.amount)<=0.01 AND b.num_releve=s.ref AND l.currency=ba.currency_code)) THEN 1 ELSE 0 END) issue_lines,s.currency"
 			. " FROM {$p}kreabank_statement s JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=$e"
 			. " LEFT JOIN {$p}kreabank_statement_line l ON l.fk_statement=s.rowid AND l.entity=s.entity"
 			. " LEFT JOIN {$p}bank b ON b.rowid=l.fk_native_bank_line AND b.fk_account=ba.rowid"
 			. $groupJoin
 			. " WHERE s.entity=$e$account GROUP BY s.rowid,s.bank_account_id,ba.ref,ba.label,s.ref,s.source_type,s.filename,s.date_import,s.currency";
+		$legacyOpening = KreaBankOpeningBalance::historicalSql($this->db, $e, 'ba.rowid', 'b.dateo', 'ba.currency_code');
 		$sql .= " UNION ALL SELECT b.fk_account,ba.ref,ba.label,b.num_releve,MIN(COALESCE(m.operation_date,b.dateo)),MAX(COALESCE(m.operation_date,b.dateo)),"
 			. " COUNT(b.rowid),SUM(b.amount),COALESCE(MAX(m.source_type),''),COALESCE(MAX(m.source_file),''),MAX(m.datec),COUNT(b.rowid),"
-			. " SUM(CASE WHEN b.rappro=1 THEN 1 ELSE 0 END),SUM(CASE WHEN m.status=2 AND b.rappro<>1 THEN 1 ELSE 0 END),ba.currency_code"
+			. " SUM(CASE WHEN ($legacyOpening) OR b.rappro=1 THEN 1 ELSE 0 END),SUM(CASE WHEN NOT ($legacyOpening) AND m.status=2 AND b.rappro<>1 THEN 1 ELSE 0 END),ba.currency_code"
 			. " FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account AND ba.entity=$e"
 			. " LEFT JOIN {$p}kreabank_bankmeta m ON m.fk_bank_line=b.rowid AND m.entity=$e"
 			. " WHERE COALESCE(b.num_releve,'')<>''$account"
@@ -107,10 +110,12 @@ class KreaBankIntegration
 		$now = $this->quote($this->db->idate(dol_now()));
 		$accountFilter = (int) $accountId > 0 ? ' AND ba.rowid=' . (int) $accountId : '';
 		$filter = $kind === 'all' ? '' : ($kind === 'closed' ? ' AND ba.clos=1' : ' AND ba.clos=0' . ($kind === 'cash' ? ' AND ba.courant=2' : ' AND ba.courant<>2'));
+		$opening = KreaBankOpeningBalance::historicalSql($this->db, $e, 's.bank_account_id', 'l.operation_date', 'l.currency');
+		$legacyOpening = KreaBankOpeningBalance::historicalSql($this->db, $e, 'b.fk_account', 'b.dateo', 'ba.currency_code');
 		$sql = "SELECT ba.rowid,ba.ref,ba.label,ba.currency_code,ba.clos,COALESCE(nb.balance,0) balance,COALESCE(st.pending_count,0)+COALESCE(lg.pending_count,0) pending_count" . $feedColumns
 			. " FROM {$p}bank_account ba LEFT JOIN (SELECT b.fk_account,SUM(b.amount) balance FROM {$p}bank b JOIN {$p}bank_account owner ON owner.rowid=b.fk_account AND owner.entity=$e WHERE b.dateo<=$now GROUP BY b.fk_account) nb ON nb.fk_account=ba.rowid"
-			. " LEFT JOIN (SELECT s.bank_account_id,COUNT(*) pending_count FROM {$p}kreabank_statement_line l JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity LEFT JOIN {$p}bank b ON b.rowid=l.fk_native_bank_line WHERE s.entity=$e AND l.status IN (0,1) AND COALESCE(b.rappro,0)=0 GROUP BY s.bank_account_id) st ON st.bank_account_id=ba.rowid"
-			. " LEFT JOIN (SELECT b.fk_account,COUNT(*) pending_count FROM {$p}kreabank_bankmeta m JOIN {$p}bank b ON b.rowid=m.fk_bank_line WHERE m.entity=$e AND m.status IN (0,1) AND b.rappro=0 AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement_line l WHERE l.entity=$e AND l.fk_native_bank_line=b.rowid) GROUP BY b.fk_account) lg ON lg.fk_account=ba.rowid"
+			. " LEFT JOIN (SELECT s.bank_account_id,COUNT(*) pending_count FROM {$p}kreabank_statement_line l JOIN {$p}kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity LEFT JOIN {$p}bank b ON b.rowid=l.fk_native_bank_line WHERE s.entity=$e AND l.status IN (0,1) AND COALESCE(b.rappro,0)=0 AND NOT ($opening) GROUP BY s.bank_account_id) st ON st.bank_account_id=ba.rowid"
+			. " LEFT JOIN (SELECT b.fk_account,COUNT(*) pending_count FROM {$p}kreabank_bankmeta m JOIN {$p}bank b ON b.rowid=m.fk_bank_line JOIN {$p}bank_account ba ON ba.rowid=b.fk_account AND ba.entity=m.entity WHERE m.entity=$e AND m.status IN (0,1) AND b.rappro=0 AND NOT ($legacyOpening) AND NOT EXISTS (SELECT 1 FROM {$p}kreabank_statement_line l WHERE l.entity=$e AND l.fk_native_bank_line=b.rowid) GROUP BY b.fk_account) lg ON lg.fk_account=ba.rowid"
 			. $feedJoin . " WHERE ba.entity=$e$filter$accountFilter ORDER BY $order";
 		if ((int) $limit > 0) {
 			$sql .= $this->db->plimit((int) $limit, max(0, (int) $offset));
@@ -148,14 +153,16 @@ class KreaBankIntegration
 		$groupJoin = $groups ? ' LEFT JOIN (' . KreaBankPaymentBatchProjection::aggregateSql($this->db, $e) . ') gs ON gs.fk_statement_line=l.rowid' : '';
 		$native = $groups ? "b.rowid native_id,CASE WHEN gs.batch_id IS NOT NULL THEN gs.native_amount ELSE CAST(b.amount AS DECIMAL(24,8)) END native_amount,CASE WHEN gs.batch_id IS NOT NULL THEN gs.rappro ELSE b.rappro END rappro,CASE WHEN gs.batch_id IS NOT NULL THEN gs.num_releve ELSE b.num_releve END num_releve" : 'b.rowid native_id,CAST(b.amount AS DECIMAL(24,8)) native_amount,b.rappro,b.num_releve';
 		$groupFields = $groups ? 'COALESCE(gs.batch_id,0) group_id,COALESCE(gs.component_count,0) group_count,COALESCE(gs.is_valid,0) group_valid,gs.max_operation_date group_date' : '0 group_id,0 group_count,0 group_valid,NULL group_date';
+		$opening = KreaBankOpeningBalance::historicalSql($this->db, $e, 'ba.rowid', 'l.operation_date', 'l.currency');
+		$legacyOpening = KreaBankOpeningBalance::historicalSql($this->db, $e, 'ba.rowid', 'b.dateo', 'ba.currency_code');
 		return "SELECT l.rowid,l.line_rank,l.operation_date,l.value_date,CAST(l.amount AS DECIMAL(24,8)) amount,l.currency,l.running_balance,l.payment_reference,l.bank_reference,l.counterparty_name,l.counterparty_iban,l.description,l.status,l.is_duplicate,"
-			. " $native,l.fk_native_bank_line expected_native_id,ba.currency_code native_currency,'staging' source_storage,$groupFields"
+			. " $native,l.fk_native_bank_line expected_native_id,ba.currency_code native_currency,'staging' source_storage,$groupFields,($opening) opening_reconciled"
 			. " FROM {$p}kreabank_statement s JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=$e"
 			. " JOIN {$p}kreabank_statement_line l ON l.fk_statement=s.rowid AND l.entity=s.entity"
 			. " LEFT JOIN {$p}bank b ON b.rowid=l.fk_native_bank_line AND b.fk_account=ba.rowid"
 			. $groupJoin
 			. " WHERE s.entity=$e AND ba.rowid=$a AND s.ref=$r"
-			. " UNION ALL SELECT b.rowid,b.rowid,COALESCE(m.operation_date,b.dateo),COALESCE(m.value_date,b.datev),CAST(b.amount AS DECIMAL(24,8)),ba.currency_code,m.running_balance,m.payment_reference,m.bank_reference,m.counterparty_name,m.counterparty_iban,COALESCE(m.description,b.label),COALESCE(m.status,0),0,b.rowid,CAST(b.amount AS DECIMAL(24,8)),b.rappro,b.num_releve,b.rowid,ba.currency_code,'legacy_native',0,0,0,NULL"
+			. " UNION ALL SELECT b.rowid,b.rowid,COALESCE(m.operation_date,b.dateo),COALESCE(m.value_date,b.datev),CAST(b.amount AS DECIMAL(24,8)),ba.currency_code,m.running_balance,m.payment_reference,m.bank_reference,m.counterparty_name,m.counterparty_iban,COALESCE(m.description,b.label),COALESCE(m.status,0),0,b.rowid,CAST(b.amount AS DECIMAL(24,8)),b.rappro,b.num_releve,b.rowid,ba.currency_code,'legacy_native',0,0,0,NULL,($legacyOpening)"
 			. " FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account AND ba.entity=$e"
 			. " LEFT JOIN {$p}kreabank_bankmeta m ON m.fk_bank_line=b.rowid AND m.entity=$e"
 			. " WHERE ba.rowid=$a AND b.num_releve=$r"
@@ -175,9 +182,11 @@ class KreaBankIntegration
 		$groupJoin = $groups ? ' LEFT JOIN (' . KreaBankPaymentBatchProjection::aggregateSql($this->db, $e) . ') gs ON gs.fk_statement_line=l.rowid' : '';
 		$native = $groups ? "b.rowid native_id,CASE WHEN gs.batch_id IS NOT NULL THEN gs.native_amount ELSE CAST(b.amount AS DECIMAL(24,8)) END native_amount,CASE WHEN gs.batch_id IS NOT NULL THEN gs.rappro ELSE b.rappro END rappro,CASE WHEN gs.batch_id IS NOT NULL THEN gs.num_releve ELSE b.num_releve END num_releve" : 'b.rowid native_id,CAST(b.amount AS DECIMAL(24,8)) native_amount,b.rappro,b.num_releve';
 		$groupFields = $groups ? 'COALESCE(gs.batch_id,0) group_id,COALESCE(gs.component_count,0) group_count,COALESCE(gs.is_valid,0) group_valid,gs.max_operation_date group_date' : '0 group_id,0 group_count,0 group_valid,NULL group_date';
+		$opening = KreaBankOpeningBalance::historicalSql($this->db, $e, 'ba.rowid', 'l.operation_date', 'l.currency');
+		$legacyOpening = KreaBankOpeningBalance::historicalSql($this->db, $e, 'ba.rowid', 'b.dateo', 'ba.currency_code');
 		return "SELECT l.rowid,l.line_rank,s.rowid statement_id,s.ref statement_ref,ba.rowid bank_account_id,ba.ref bank_account_ref,ba.label bank_account_label,"
 			. " l.operation_date,COALESCE(ev.value_date,l.value_date) value_date,COALESCE(CONVERT(ev.description USING utf8mb4),CONVERT(l.description USING utf8mb4)) description,l.payment_reference,l.bank_reference,CAST(l.amount AS DECIMAL(24,8)) amount,l.currency,COALESCE(ev.running_balance,l.running_balance) running_balance,l.status,l.is_duplicate,"
-			. " $native,l.fk_native_bank_line expected_native_id,ba.currency_code native_currency,'staging' source_storage,s.source_type,ev.statement_sequence,ev.evidence_statement_ref,$groupFields"
+			. " $native,l.fk_native_bank_line expected_native_id,ba.currency_code native_currency,'staging' source_storage,s.source_type,ev.statement_sequence,ev.evidence_statement_ref,$groupFields,($opening) opening_reconciled"
 			. " FROM {$p}kreabank_statement s JOIN {$p}bank_account ba ON ba.rowid=s.bank_account_id AND ba.entity=$e"
 			. " JOIN {$p}kreabank_statement_line l ON l.fk_statement=s.rowid AND l.entity=s.entity"
 			. " LEFT JOIN {$p}bank b ON b.rowid=l.fk_native_bank_line AND b.fk_account=ba.rowid"
@@ -188,7 +197,7 @@ class KreaBankIntegration
 			. " WHERE s.entity=$e$account"
 			. " UNION ALL SELECT b.rowid,b.rowid,0,b.num_releve,ba.rowid,ba.ref,ba.label,"
 			. " COALESCE(m.operation_date,b.dateo),COALESCE(m.value_date,b.datev),CONVERT(COALESCE(m.description,b.label) USING utf8mb4),m.payment_reference,m.bank_reference,"
-			. " CAST(b.amount AS DECIMAL(24,8)),ba.currency_code,m.running_balance,COALESCE(m.status,0),0,b.rowid,CAST(b.amount AS DECIMAL(24,8)),b.rappro,b.num_releve,b.rowid,ba.currency_code,'legacy_native',m.source_type,NULL,NULL,0,0,0,NULL"
+			. " CAST(b.amount AS DECIMAL(24,8)),ba.currency_code,m.running_balance,COALESCE(m.status,0),0,b.rowid,CAST(b.amount AS DECIMAL(24,8)),b.rappro,b.num_releve,b.rowid,ba.currency_code,'legacy_native',m.source_type,NULL,NULL,0,0,0,NULL,($legacyOpening)"
 			. " FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account AND ba.entity=$e"
 			. " LEFT JOIN {$p}kreabank_bankmeta m ON m.fk_bank_line=b.rowid AND m.entity=$e"
 			. " WHERE COALESCE(b.num_releve,'')<>''$account"

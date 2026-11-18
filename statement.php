@@ -165,6 +165,8 @@ if ($statement) {
 		} elseif (!empty($row->group_id)) {
 			$batchUrl = dol_buildpath('/custom/kreabank/reconciliationlist.php',1) . '?' . http_build_query(array('mainmenu'=>'bank','leftmenu'=>'kreabank_worklist','search_account'=>$navigationAccountId,'search_status'=>'all','expand'=>'staged:' . (int) $row->rowid,'mode'=>'batch'),'','&',PHP_QUERY_RFC3986);
 			print '<a href="' . dol_escape_htmltag($batchUrl) . '">' . $langs->trans('KreaBankWorklistViewBatch') . ' (' . (int) $row->group_count . ')</a>';
+		} elseif (!empty($row->opening_reconciled)) {
+			print '—';
 		} else {
 			print $langs->trans((int) $row->expected_native_id > 0 ? 'KreaBankNativeMissing' : 'KreaBankAwaitingReconciliation');
 		}

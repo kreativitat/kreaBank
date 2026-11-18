@@ -38,6 +38,18 @@ class KreaBankMonthlyReport
 		if (!$account) {
 			throw new InvalidArgumentException('Bank account is unavailable');
 		}
+		$opening = null;
+		// Read independently of the execution service: reports already own their
+		// account scope and must never install the optional migration schema.
+		$openingSchema = $projection->query("SELECT COUNT(*) nb FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='" . $this->db->escape($p . 'kreabank_opening_balance') . "'");
+		$openingSchemaRow = $this->db->fetch_object($openingSchema);
+		if ((int) ($openingSchemaRow->nb ?? 0) === 1) {
+			$openingResult = $projection->query("SELECT o.rowid,o.entity,o.fk_bank_account,o.start_date,o.currency,o.opening_balance,o.ledger_balance,o.adjustment_amount,o.fk_adjustment_bank_line,o.statement_ref"
+				. " FROM {$p}kreabank_opening_balance o JOIN {$p}bank_account ba ON ba.rowid=o.fk_bank_account AND ba.entity=o.entity"
+				. " WHERE o.entity=$e AND ba.rowid=$accountId");
+			$openingRow = $this->db->fetch_object($openingResult);
+			if ($openingRow) { $opening = (array) $openingRow; }
+		}
 		// Claims deliberately include future and foreign-account statements in this
 		// company: they cannot make an already claimed movement safe by date filtering.
 		$hasGroups = KreaBankPaymentBatchProjection::available($this->db);
@@ -56,7 +68,7 @@ class KreaBankMonthlyReport
 			. " LEFT JOIN ($claims) c ON c.fk_native_bank_line=h.expected_native_id"
 			. " WHERE h.operation_date<'$next' OR h.operation_date IS NULL OR h.operation_date='0000-00-00'"
 			. ' ORDER BY h.operation_date,h.statement_id,h.line_rank,h.rowid');
-		$native = $this->rows($projection, "SELECT b.rowid,b.fk_account bank_account_id,b.dateo operation_date,b.label description,b.amount,b.rappro,b.num_releve,ba.currency_code currency,COALESCE(c.claim_count,0) claim_count"
+		$native = $this->rows($projection, "SELECT b.rowid,b.fk_account bank_account_id,b.dateo operation_date,b.label description,b.amount,b.fk_type,b.rappro,b.num_releve,ba.currency_code currency,COALESCE(c.claim_count,0) claim_count"
 			. " FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account AND ba.entity=$e"
 			. " LEFT JOIN ($claims) c ON c.fk_native_bank_line=b.rowid WHERE ba.rowid=$accountId"
 			. " AND (b.dateo<'$next' OR b.dateo IS NULL OR b.dateo='0000-00-00') ORDER BY b.dateo,b.rowid");
@@ -81,7 +93,7 @@ class KreaBankMonthlyReport
 			}
 			unset($row);
 		}
-		return $this->assemble((array) $account, $month, $bank, $native, $confirmedBankBalance);
+		return $this->assemble((array) $account, $month, $bank, $native, $confirmedBankBalance, $opening);
 	}
 
 	private function rows($projection, $sql)
@@ -98,7 +110,7 @@ class KreaBankMonthlyReport
 	}
 
 	/** Pure assembly accepts the same rows returned by the scoped SQL loader. */
-	public function assemble($account, $month, $bankRows, $nativeRows, $confirmedBankBalance = '')
+	public function assemble($account, $month, $bankRows, $nativeRows, $confirmedBankBalance = '', $opening = null)
 	{
 		list($start, $end, $next) = $this->period($month);
 		$account = (array) $account;
@@ -110,6 +122,7 @@ class KreaBankMonthlyReport
 			throw new RuntimeException('Monthly report exceeds its complete-evidence limit');
 		}
 		$confirmed = (string) $confirmedBankBalance !== '' ? $this->units($confirmedBankBalance) : null;
+		$opening = $this->opening($opening, $account, $start);
 		$issues = array_fill_keys(array('InvalidDates','InvalidAmounts','CurrencyMismatch','DuplicateEvidence','ConflictingLinks','ReconciliationFlags','UnreconciledNative'), 0);
 		$bank = array();
 		$native = array();
@@ -158,6 +171,7 @@ class KreaBankMonthlyReport
 		uasort($native, static function ($a, $b) {
 			return strcmp($a['_date'], $b['_date']) ?: ((int) $a['rowid'] <=> (int) $b['rowid']);
 		});
+		$openingValid = $opening === null || $this->openingLedgerValid($opening, $native);
 		$covered = array();
 		$openingCovered = array();
 		$timingNative = array();
@@ -173,12 +187,13 @@ class KreaBankMonthlyReport
 				continue;
 			}
 			$duplicate = !empty($raw['is_duplicate']);
+			$historical = $opening !== null && $raw['_valid'] && $raw['_date'] < $opening['start_date'];
 			if ($duplicate) {
 				$issues['DuplicateEvidence']++;
 			}
 			$openingMatched = false;
 			if (!empty($raw['group_id'])) {
-				$group = $this->groupState($raw, $account, $native, $futureNative, $claims, $start, $next, $issues);
+				$group = $this->groupState($raw, $account, $native, $futureNative, $claims, $start, $next, $issues, $opening['start_date'] ?? null);
 				$matched = !$duplicate && $group['matched'];
 				$review = $group['review'];
 				$openingMatched = $matched && $group['opening'];
@@ -208,10 +223,21 @@ class KreaBankMonthlyReport
 					|| (string) ($raw['native_currency'] ?? '') !== (string) $account['currency_code']
 					|| $this->safeUnits($raw['native_amount'] ?? '', $issues) !== $raw['_units']);
 				$futureDate = $this->date($raw['native_operation_date'] ?? ($futureNative[$nativeId]['_date'] ?? ''));
+				$targetDate = $n['_date'] ?? $futureDate;
+				if ($opening !== null && $nativeId > 0 && $raw['_date'] !== '' && $targetDate !== ''
+					&& (($raw['_date'] < $opening['start_date']) !== ($targetDate < $opening['start_date']))) { $linkInvalid = true; }
 				if ($nativeId > 0 && !$n && ($futureDate === '' || $futureDate < $next)) { $linkInvalid = true; }
 				$flagsInvalid = (int) ($raw['status'] ?? 0) === 2 && ($nativeId <= 0 || $linkInvalid
 					|| (int) ($raw['rappro'] ?? 0) !== 1 || (string) ($raw['num_releve'] ?? '') !== (string) ($raw['statement_ref'] ?? ''));
-				if (($raw['source_storage'] ?? '') === 'staging' && (int) ($raw['status'] ?? 0) !== 2 && $nativeId > 0 && (int) ($raw['rappro'] ?? 0) === 1) { $flagsInvalid = true; }
+				// Opening application reconciles an existing native row with its
+				// migration reference while deliberately preserving the staging status.
+				$openingFlag = $historical && $openingValid && !$linkInvalid && !$conflict && $n && $n['_valid']
+					&& $n['_date'] < $opening['start_date'] && $n['_units'] === $raw['_units']
+					&& (int) ($raw['native_id'] ?? 0) === $nativeId && (int) ($n['rappro'] ?? 0) === 1
+					&& (string) ($opening['statement_ref'] ?? '') !== ''
+					&& (string) ($n['num_releve'] ?? '') === (string) $opening['statement_ref']
+					&& (string) ($raw['num_releve'] ?? '') === (string) $opening['statement_ref'];
+				if (($raw['source_storage'] ?? '') === 'staging' && (int) ($raw['status'] ?? 0) !== 2 && $nativeId > 0 && (int) ($raw['rappro'] ?? 0) === 1 && !$openingFlag) { $flagsInvalid = true; }
 				if (!$duplicate && ($linkInvalid || $flagsInvalid || ((int) ($raw['status'] ?? 0) === 2 && $n && !$matched))) {
 					$matched = false;
 					$review = true;
@@ -223,17 +249,21 @@ class KreaBankMonthlyReport
 				}
 				$openingMatched = isset($openingCovered[$nativeId]);
 			}
-			$status = $duplicate ? 'duplicate' : ($matched ? 'matched' : ($review ? 'review' : 'pending'));
+			// A migration declaration is not a source/native match. Keep raw link
+			// integrity checks above, but accept intact historical evidence separately.
+			$historical = $historical && !$duplicate && !$review;
+			$accepted = $matched || $historical;
+			$status = $duplicate ? 'duplicate' : ($historical ? 'opening' : ($matched ? 'matched' : ($review ? 'review' : 'pending')));
 			$detail = $this->detail($raw, $raw['_id'], $status, $end, $start, (string) ($raw['source_storage'] ?? 'staging'), (int) ($raw['native_id'] ?? 0), $issues);
-			if ($raw['_date'] === '' || $raw['_date'] >= $start || !$matched) {
+			if ($raw['_date'] === '' || $raw['_date'] >= $start || !$accepted) {
 				$bankDetails[] = $detail;
 			}
-			if (!$duplicate && !$matched) {
+			if (!$duplicate && !$accepted) {
 				$bankPending[] = $detail;
 			}
 			if (!$duplicate && $raw['_valid']) {
-				$this->accumulate($bankSummary, $raw, $matched, $start, $detail['age'], $openingMatched);
-				$balanceRows[] = $raw;
+				$this->accumulate($bankSummary, $raw, $accepted, $start, $detail['age'], $openingMatched || $historical);
+				if ($opening === null || $raw['_date'] >= $opening['start_date']) { $balanceRows[] = $raw; }
 			}
 		}
 		$ledgerSummary = $this->summary();
@@ -246,37 +276,48 @@ class KreaBankMonthlyReport
 			if ($runningValid) { $runningBalance = $this->add($runningBalance, $raw['_units']); }
 			$raw['_balance_units'] = $runningValid ? $runningBalance : null;
 			$matched = isset($covered[$id]);
+			$historical = $opening !== null && $raw['_valid'] && $raw['_date'] < $opening['start_date'];
 			$conflict = max((int) ($raw['claim_count'] ?? 0), $claims[$id] ?? 0) > 1;
 			if ($conflict) { $issues['ConflictingLinks']++; }
-			$review = !$raw['_valid'] || $conflict || (!$matched && (int) ($raw['rappro'] ?? 0) === 1 && !isset($timingNative[$id]));
-			if (!$matched && (int) ($raw['rappro'] ?? 0) === 1 && !isset($timingNative[$id])) {
+			$review = !$raw['_valid'] || $conflict || (!$matched && !$historical && (int) ($raw['rappro'] ?? 0) === 1 && !isset($timingNative[$id]));
+			if (!$matched && !$historical && (int) ($raw['rappro'] ?? 0) === 1 && !isset($timingNative[$id])) {
 				$issues['UnreconciledNative']++;
 			}
-			$detail = $this->detail($raw, 'native:' . $id, $matched ? 'matched' : ($review ? 'review' : 'pending'), $end, $start, 'native', $id, $issues);
-			if ($raw['_date'] === '' || $raw['_date'] >= $start || !$matched) {
+			$historical = $historical && !$review;
+			$accepted = $matched || $historical;
+			$detail = $this->detail($raw, 'native:' . $id, $historical ? 'opening' : ($matched ? 'matched' : ($review ? 'review' : 'pending')), $end, $start, 'native', $id, $issues);
+			if ($raw['_date'] === '' || $raw['_date'] >= $start || !$accepted) {
 				$ledgerDetails[] = $detail;
 			}
-			if (!$matched) {
+			if (!$accepted) {
 				$ledgerPending[] = $detail;
 			}
 			if ($raw['_valid']) {
-				$this->accumulate($ledgerSummary, $raw, $matched, $start, $detail['age'], isset($openingCovered[$id]));
+				$this->accumulate($ledgerSummary, $raw, $accepted, $start, $detail['age'], isset($openingCovered[$id]) || $historical);
 			}
 		}
-		$balance = $this->balances($balanceRows, $start, $issues);
+		$balance = $this->balances($balanceRows, $start, $issues, $opening);
 		$sourceIncomplete = $issues['InvalidDates'] + $issues['InvalidAmounts'] + $issues['CurrencyMismatch'] + $issues['DuplicateEvidence'];
 		$bankClose = $confirmed !== null ? $confirmed : (!$sourceIncomplete ? $balance['close'] : null);
 		$bankOpen = $bankClose !== null ? $this->add($bankClose, -$bankSummary['movement']) : null;
+		if ($opening !== null) {
+			$bankOpen = null;
+			if (!$sourceIncomplete && ($start === $opening['start_date'] || count($balanceRows) > 0)) {
+				$bankOpen = $opening['_units'];
+				foreach ($balanceRows as $raw) { if ($raw['_date'] < $start) { $bankOpen = $this->add($bankOpen, $raw['_units']); } }
+			}
+		}
 		$bankSummary['opening'] = $bankOpen;
 		$bankSummary['closing'] = $bankClose;
 		$ledgerSummary['closing'] = $this->add($ledgerSummary['opening'], $ledgerSummary['movement']);
 		$bankAdjusted = $bankClose !== null ? $this->add($bankClose, $ledgerSummary['pending_amount']) : null;
 		$ledgerAdjusted = $this->add($ledgerSummary['closing'], $bankSummary['pending_amount']);
-		$blocked = $sourceIncomplete + $issues['ConflictingLinks'] + $issues['ReconciliationFlags'] + ($balance['chain'] ? 0 : 1);
+		$blocked = $sourceIncomplete + $issues['ConflictingLinks'] + $issues['ReconciliationFlags'] + ($balance['chain'] ? 0 : 1) + ($openingValid ? 0 : 1);
 		$difference = !$blocked && $bankAdjusted !== null ? $this->add($bankAdjusted, -$ledgerAdjusted) : null;
-		$opening = !$blocked && $bankOpen !== null ? $this->add($this->add($bankOpen, $ledgerSummary['_prior_pending']), -$this->add($ledgerSummary['opening'], $bankSummary['_prior_pending'])) : null;
+		$openingDifference = !$blocked && $bankOpen !== null ? $this->add($this->add($bankOpen, $ledgerSummary['_prior_pending']), -$this->add($ledgerSummary['opening'], $bankSummary['_prior_pending'])) : null;
 		if (!$ledgerComplete) { $ledgerSummary['opening'] = null; $ledgerSummary['closing'] = null; $ledgerAdjusted = null; $bankAdjusted = null; }
 		$checks = array(array('key'=>'CurrentEvidence','status'=>'warning','value'=>''));
+		if ($opening !== null) { $checks[] = array('key'=>'HistoricalOpening','status'=>$openingValid ? 'ok' : 'error','value'=>$opening['start_date']); }
 		foreach ($issues as $key => $value) {
 			$checks[] = array('key'=>$key,'status'=>$value ? ($key === 'UnreconciledNative' ? 'warning' : 'error') : 'ok','value'=>(string) $value);
 		}
@@ -289,17 +330,69 @@ class KreaBankMonthlyReport
 		foreach (array('Bank'=>$bankSummary,'Ledger'=>$ledgerSummary) as $name=>$side) {
 			$checks[] = array('key'=>'Missing' . $name . 'Period','status'=>$side['count'] ? 'ok' : 'warning','value'=>(string) $side['count']);
 		}
-		$checks[] = array('key'=>'OpeningDifference','status'=>$opening === null ? 'warning' : ($opening === 0 ? 'ok' : 'error'),'value'=>$opening !== null ? $this->decimal($opening) : '');
+		$checks[] = array('key'=>'OpeningDifference','status'=>$openingDifference === null ? 'warning' : ($openingDifference === 0 ? 'ok' : 'error'),'value'=>$openingDifference !== null ? $this->decimal($openingDifference) : '');
 		$checks[] = array('key'=>'UnexplainedDifference','status'=>$difference === null ? 'warning' : ($difference === 0 ? 'ok' : 'error'),'value'=>$difference !== null ? $this->decimal($difference) : '');
 		$checks[] = array('key'=>'AgedItems','status'=>$bankSummary['over90'] + $ledgerSummary['over90'] ? 'warning' : 'ok','value'=>(string) ($bankSummary['over90'] + $ledgerSummary['over90']));
-		return array('account'=>array_intersect_key($account, array_flip(array('rowid','ref','label','currency_code'))), 'month'=>$month,'start'=>$start,'end'=>$end,'generated_at'=>gmdate('Y-m-d H:i:s'),
+		$report = array('account'=>array_intersect_key($account, array_flip(array('rowid','ref','label','currency_code'))), 'month'=>$month,'start'=>$start,'end'=>$end,'generated_at'=>gmdate('Y-m-d H:i:s'),
 			'bank'=>$this->formatSummary($bankSummary),'ledger'=>$this->formatSummary($ledgerSummary),
-			'map'=>array('bank_close'=>$this->nullableDecimal($bankClose),'ledger_close'=>$this->nullableDecimal($ledgerSummary['closing']),'bank_adjusted'=>$this->nullableDecimal($bankAdjusted),'ledger_adjusted'=>$this->nullableDecimal($ledgerAdjusted),'difference'=>$this->nullableDecimal($difference),'opening_difference'=>$this->nullableDecimal($opening),'month_difference'=>$difference !== null && $opening !== null ? $this->decimal($this->add($difference, -$opening)) : null,'balance_date'=>$confirmed !== null ? $end : $balance['date'],'balance_confirmed'=>$confirmed !== null),
+			'map'=>array('bank_close'=>$this->nullableDecimal($bankClose),'ledger_close'=>$this->nullableDecimal($ledgerSummary['closing']),'bank_adjusted'=>$this->nullableDecimal($bankAdjusted),'ledger_adjusted'=>$this->nullableDecimal($ledgerAdjusted),'difference'=>$this->nullableDecimal($difference),'opening_difference'=>$this->nullableDecimal($openingDifference),'month_difference'=>$difference !== null && $openingDifference !== null ? $this->decimal($this->add($difference, -$openingDifference)) : null,'balance_date'=>$confirmed !== null ? $end : $balance['date'],'balance_confirmed'=>$confirmed !== null),
 			'checks'=>$checks,'bank_rows'=>$bankDetails,'ledger_rows'=>$ledgerDetails,'bank_pending'=>$bankPending,'ledger_pending'=>$ledgerPending);
+		if ($opening !== null) {
+			$report['map'] += array('opening_date'=>$opening['start_date'],'opening_balance'=>$this->decimal($opening['_units']),
+				'opening_valid'=>$openingValid,'balance_basis'=>$confirmed !== null ? 'confirmed' : 'opening_projection');
+		}
+		return $report;
+	}
+
+	/** The persisted boundary is company/account/currency specific, never global. */
+	private function opening($opening, $account, $reportStart)
+	{
+		if ($opening === null) { return null; }
+		$opening = (array) $opening;
+		if ((int) ($opening['entity'] ?? 0) !== $this->entity
+			|| (int) ($opening['fk_bank_account'] ?? 0) !== (int) $account['rowid']
+			|| (string) ($opening['currency'] ?? '') !== (string) $account['currency_code']) {
+			throw new InvalidArgumentException('Historical opening belongs to another company, account or currency');
+		}
+		$date = (string) ($opening['start_date'] ?? '');
+		if ($date === '' || $this->date($date) !== $date) { throw new InvalidArgumentException('Historical opening date is invalid'); }
+		// A monthly report that straddles or precedes the boundary retains its
+		// ordinary evidence contract; it cannot claim a month-start opening.
+		if ($reportStart < $date) { return null; }
+		$opening['_units'] = $this->units($opening['opening_balance'] ?? '');
+		$opening['_ledger_units'] = $this->units($opening['ledger_balance'] ?? '');
+		$opening['_adjustment_units'] = $this->units($opening['adjustment_amount'] ?? '');
+		if ($this->add($opening['_ledger_units'], $opening['_adjustment_units']) !== $opening['_units']
+			|| (($opening['_adjustment_units'] !== 0) !== ((int) ($opening['fk_adjustment_bank_line'] ?? 0) > 0))) {
+			throw new InvalidArgumentException('Historical opening amounts or adjustment identity disagree');
+		}
+		return $opening;
+	}
+
+	/** Later edits to the established opening must stay visible, never be rebased. */
+	private function openingLedgerValid($opening, $native)
+	{
+		$sum = 0;
+		foreach ($native as $raw) {
+			if ($raw['_date'] === '' || !$raw['_valid']) { return false; }
+			if ($raw['_date'] >= $opening['start_date']) { continue; }
+			if ((int) ($raw['rappro'] ?? 0) !== 1) { return false; }
+			$sum = $this->add($sum, $raw['_units']);
+		}
+		if ($sum !== $opening['_units']) { return false; }
+		$id = (int) ($opening['fk_adjustment_bank_line'] ?? 0);
+		if ($id <= 0) { return true; }
+		$row = $native[$id] ?? null;
+		$previous = (new DateTimeImmutable($opening['start_date'], new DateTimeZone('UTC')))->modify('-1 day')->format('Y-m-d');
+		return $row && $row['_valid'] && $row['_date'] === $previous
+			&& $row['_units'] === $opening['_adjustment_units'] && (string) ($row['fk_type'] ?? '') === 'SOLD'
+			&& (int) ($row['rappro'] ?? 0) === 1
+			&& (string) ($row['num_releve'] ?? '') === (string) ($opening['statement_ref'] ?? '')
+			&& (string) ($opening['statement_ref'] ?? '') !== '';
 	}
 
 	/** Verify the whole group against its actual members; a future leg is timing evidence. */
-	private function groupState($raw, $account, $native, $futureNative, $claims, $start, $next, &$issues)
+	private function groupState($raw, $account, $native, $futureNative, $claims, $start, $next, &$issues, $openingDate = null)
 	{
 		$components = (array) ($raw['group_components'] ?? array());
 		$valid = $raw['_valid'] && (int) ($raw['status'] ?? 0) === 2 && (int) ($raw['group_valid'] ?? 0) === 1
@@ -321,6 +414,7 @@ class KreaBankMonthlyReport
 			if (max((int) ($component['claim_count'] ?? 0), $claims[$id] ?? 0, (int) ($known['claim_count'] ?? 0)) > 1) { $conflict = true; }
 			$date = $this->date($component['operation_date'] ?? '');
 			if ($date === '') { $valid = false; }
+			if ($openingDate !== null && $date !== '' && (($raw['_date'] < $openingDate) !== ($date < $openingDate))) { $valid = false; }
 			if ($date >= $next) { $future = true; }
 			if ($date === '' || $date >= $start) { $opening = false; }
 			try {
@@ -398,7 +492,7 @@ class KreaBankMonthlyReport
 	}
 
 	/** Supplied balances must share one exact chain and an unambiguous daily order. */
-	private function balances($rows, $start, &$issues)
+	private function balances($rows, $start, &$issues, $opening = null)
 	{
 		usort($rows, static function ($a, $b) {
 			return strcmp($a['_date'], $b['_date']) ?: ((int) ($a['statement_id'] ?? 0) <=> (int) ($b['statement_id'] ?? 0)) ?: ((int) ($a['line_rank'] ?? 0) <=> (int) ($b['line_rank'] ?? 0)) ?: ((int) $a['rowid'] <=> (int) $b['rowid']);
@@ -409,19 +503,23 @@ class KreaBankMonthlyReport
 		$ordered = array();
 		foreach ($groups as $group) {
 			if (count($group) > 1) {
+				// With an explicit opening, unordered same-day amounts still have an
+				// exact closing sum. Supplied per-row balances require their real order.
+				$hasBalances = count(array_filter($group, static function ($row) { return isset($row['running_balance']) && $row['running_balance'] !== ''; })) > 0;
 				$sequences = array(); $statements = array(); $ranks = array();
 				foreach ($group as $row) { $sequences[] = $row['statement_sequence'] ?? null; $statements[] = (int) ($row['statement_id'] ?? 0); $ranks[] = (int) ($row['line_rank'] ?? 0); }
 				$refs = array_map(static function ($row) { return (string) ($row['evidence_statement_ref'] ?? ''); }, $group);
 				if (!in_array(null, $sequences, true) && count(array_unique($sequences)) === count($group) && count(array_unique($refs)) === 1 && $refs[0] !== '') {
 					usort($group, static function ($a, $b) { return (int) $a['statement_sequence'] <=> (int) $b['statement_sequence']; });
-				} elseif (count(array_unique($statements)) !== 1 || !$statements[0] || in_array(0, $ranks, true) || count(array_unique($ranks)) !== count($group)
-					|| count(array_filter($group, static function ($row) { return isset($row['running_balance']) && $row['running_balance'] !== ''; })) !== count($group)) {
+				} elseif (($opening === null || $hasBalances) && (count(array_unique($statements)) !== 1 || !$statements[0] || in_array(0, $ranks, true) || count(array_unique($ranks)) !== count($group)
+					|| count(array_filter($group, static function ($row) { return isset($row['running_balance']) && $row['running_balance'] !== ''; })) !== count($group))) {
 					$order = false;
 				}
 			}
 			foreach ($group as $row) { $ordered[] = $row; }
 		}
-		$sum = 0; $base = null; $date = null; $chain = true;
+		$sum = 0; $base = $opening !== null ? $opening['_units'] : null; $date = null; $chain = true;
+		if ($opening !== null) { $date = (new DateTimeImmutable($opening['start_date'], new DateTimeZone('UTC')))->modify('-1 day')->format('Y-m-d'); }
 		foreach ($ordered as $row) {
 			$sum = $this->add($sum, $row['_units']);
 			if (isset($row['running_balance']) && $row['running_balance'] !== '') {
@@ -432,7 +530,7 @@ class KreaBankMonthlyReport
 				$base = $candidate; $date = $row['_date'];
 			}
 		}
-		return array('close'=>$base !== null && $order && $chain ? $this->add($base, $sum) : null,'date'=>$date,'order'=>$order,'chain'=>$chain);
+		return array('close'=>$base !== null && $order && $chain && ($opening === null || count($rows) > 0) ? $this->add($base, $sum) : null,'date'=>$date,'order'=>$order,'chain'=>$chain);
 	}
 
 	private function formatSummary($summary)

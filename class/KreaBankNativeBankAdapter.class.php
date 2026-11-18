@@ -9,6 +9,7 @@
 
 require_once DOL_DOCUMENT_ROOT . '/compta/bank/class/account.class.php';
 require_once __DIR__ . '/KreaBankWriteOffNativeTrait.php';
+require_once __DIR__ . '/KreaBankOpeningBalance.class.php';
 
 /**
  * Adapter to persist KreaBank statement imports and native reconciliation links.
@@ -315,6 +316,7 @@ class KreaBankNativeBankAdapter
 		$sql .= " AND b.num_releve IS NOT NULL AND b.num_releve <> ''";
 		$sql .= $this->buildPendingLinesStatusSql((bool) $includeSkipped);
 		$sql .= ' AND b.rappro = 0';
+		$sql .= ' AND NOT (' . KreaBankOpeningBalance::historicalSql($this->db, $this->entity, 'ba.rowid', 'COALESCE(l.operation_date,b.dateo)', 'ba.currency_code') . ')';
 		$sql .= $this->buildPendingLinesFilterSql((array) $filters);
 		$sql .= $this->buildPendingLinesOrderBySql((string) $sortfield, (string) $sortorder);
 		$sql .= $this->db->plimit((int) $limit, (int) $offset);
@@ -377,6 +379,7 @@ class KreaBankNativeBankAdapter
 		$sql .= " AND s.ref IS NOT NULL AND s.ref <> ''";
 		$sql .= ' AND m.rowid IS NULL';
 		$sql .= ' AND (b.rowid IS NULL OR b.rappro = 0)';
+		$sql .= ' AND NOT (' . KreaBankOpeningBalance::historicalSql($this->db, $this->entity, 'ba.rowid', 'l.operation_date', 'l.currency') . ')';
 		$sql .= $this->buildPendingLinesStatusSql((bool) $includeSkipped);
 		$sql .= $this->buildPendingLinesFilterSql((array) $filters);
 		$sql .= $this->buildPendingLinesOrderBySql((string) $sortfield, (string) $sortorder);
@@ -423,6 +426,7 @@ class KreaBankNativeBankAdapter
 		$sql .= " AND b.num_releve IS NOT NULL AND b.num_releve <> ''";
 		$sql .= $this->buildPendingLinesStatusSql((bool) $includeSkipped);
 		$sql .= ' AND b.rappro = 0';
+		$sql .= ' AND NOT (' . KreaBankOpeningBalance::historicalSql($this->db, $this->entity, 'ba.rowid', 'COALESCE(l.operation_date,b.dateo)', 'ba.currency_code') . ')';
 		$sql .= $this->buildPendingLinesFilterSql((array) $filters);
 
 		$resql = $this->db->query($sql);
@@ -472,6 +476,7 @@ class KreaBankNativeBankAdapter
 		$sql .= " AND s.ref IS NOT NULL AND s.ref <> ''";
 		$sql .= ' AND m.rowid IS NULL';
 		$sql .= ' AND (b.rowid IS NULL OR b.rappro = 0)';
+		$sql .= ' AND NOT (' . KreaBankOpeningBalance::historicalSql($this->db, $this->entity, 'ba.rowid', 'l.operation_date', 'l.currency') . ')';
 		$sql .= $this->buildPendingLinesStatusSql((bool) $includeSkipped);
 		$sql .= $this->buildPendingLinesFilterSql((array) $filters);
 
@@ -859,6 +864,7 @@ class KreaBankNativeBankAdapter
 		if ($lineId <= 0) {
 			return -1;
 		}
+		$this->assertOutsideOpening($lineId);
 
 		$line = new AccountLine($this->db);
 		if ($line->fetch($lineId) <= 0) {
@@ -893,6 +899,7 @@ class KreaBankNativeBankAdapter
 		if ($lineId <= 0) {
 			return -1;
 		}
+		$this->assertOutsideOpening($lineId);
 
 		$line = new AccountLine($this->db);
 		if ($line->fetch($lineId) <= 0) {
@@ -901,6 +908,18 @@ class KreaBankNativeBankAdapter
 		$line->num_releve = (string) $statementRef;
 
 		return (int) $line->update_conciliation($this->user, 0, 0);
+	}
+
+	/** Opening acceptance is immutable through ordinary reconciliation and Undo. */
+	private function assertOutsideOpening($lineId)
+	{
+		$historical = KreaBankOpeningBalance::historicalSql($this->db, $this->entity, 'ba.rowid', 'b.dateo', 'ba.currency_code');
+		if ($historical === '0=1') { return; }
+		$p = $this->db->prefix();
+		$result = $this->db->query("SELECT b.rowid FROM {$p}bank b JOIN {$p}bank_account ba ON ba.rowid=b.fk_account"
+			. ' WHERE ba.entity=' . $this->entity . ' AND b.rowid=' . (int) $lineId . ' AND (' . $historical . ')');
+		if (!$result) { throw new RuntimeException('KreaBankOpeningDatabaseError'); }
+		if ($this->db->fetch_object($result)) { throw new DomainException('KreaBankOpeningAlreadyApplied'); }
 	}
 
 	/** Account-only equivalent of the native bank form; caller holds account/source/native locks. */
@@ -1239,8 +1258,10 @@ class KreaBankNativeBankAdapter
 		}
 		$statementId = (int) $objStatement->rowid;
 
-		$sqlLines = 'SELECT l.rowid, l.fk_native_bank_line, l.status, b.rappro';
+		$sqlLines = 'SELECT l.rowid, l.fk_native_bank_line, l.status, b.rappro, ('
+			. KreaBankOpeningBalance::historicalSql($this->db, $this->entity, 's.bank_account_id', 'l.operation_date', 'l.currency') . ') opening_reconciled';
 		$sqlLines .= ' FROM ' . $this->db->prefix() . 'kreabank_statement_line as l';
+		$sqlLines .= ' JOIN ' . $this->db->prefix() . 'kreabank_statement s ON s.rowid=l.fk_statement AND s.entity=l.entity';
 		$sqlLines .= ' LEFT JOIN ' . $this->db->prefix() . 'bank as b ON b.rowid = l.fk_native_bank_line';
 		$sqlLines .= ' WHERE l.entity = ' . ((int) $this->entity);
 		$sqlLines .= ' AND l.fk_statement = ' . $statementId;
@@ -1254,6 +1275,7 @@ class KreaBankNativeBankAdapter
 		$rows = array();
 		$reconciledCount = 0;
 		while ($obj = $this->db->fetch_object($resLines)) {
+			if (!empty($obj->opening_reconciled)) { throw new DomainException('KreaBankOpeningAlreadyApplied'); }
 			$rows[] = $obj;
 			$isReconciled = ((int) $obj->status === 2 || (int) $obj->rappro === 1);
 			if ($isReconciled) {
@@ -1711,7 +1733,7 @@ class KreaBankNativeBankAdapter
 	 */
 	protected function deleteLegacyImportedStatement($bankAccountId, $statementRef, $allowReconciled = false)
 	{
-		$sql = 'SELECT b.rowid, b.rappro';
+		$sql = 'SELECT b.rowid, b.rappro, (' . KreaBankOpeningBalance::historicalSql($this->db, $this->entity, 'ba.rowid', 'b.dateo', 'ba.currency_code') . ') opening_reconciled';
 		$sql .= ' FROM ' . $this->db->prefix() . 'bank as b';
 		$sql .= ' INNER JOIN ' . $this->db->prefix() . 'bank_account as ba ON ba.rowid = b.fk_account';
 		$sql .= ' INNER JOIN ' . $this->db->prefix() . 'kreabank_bankmeta as m ON m.entity = ' . ((int) $this->entity) . ' AND m.fk_bank_line = b.rowid';
@@ -1728,6 +1750,7 @@ class KreaBankNativeBankAdapter
 		$lineIds = array();
 		$reconciledCount = 0;
 		while ($obj = $this->db->fetch_object($resql)) {
+			if (!empty($obj->opening_reconciled)) { throw new DomainException('KreaBankOpeningAlreadyApplied'); }
 			$lineIds[] = (int) $obj->rowid;
 			if ((int) $obj->rappro === 1) {
 				$reconciledCount++;

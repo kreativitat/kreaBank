@@ -94,7 +94,7 @@ function kreabankMonthlyDetailFacts($row, $langs)
 {
 	return array('date'=>$row['date'],'description'=>kreabankWorklistNativeLabel($row['description'], $langs) . ' ' . kreabankMonthlySourceLabel($row, $langs),
 		'reference'=>kreabankWorklistNativeLabel($row['reference'], $langs) . ($row['native_id'] > 0 ? ' #' . $row['native_id'] : ''),
-		'amount'=>$row['amount'],'balance'=>$row['balance'],'status'=>$row['status'],'age'=>$row['status'] === 'matched' ? null : $row['age']);
+		'amount'=>$row['amount'],'balance'=>$row['balance'],'status'=>$row['status'],'age'=>in_array($row['status'],array('matched','opening'),true) ? null : $row['age']);
 }
 
 /** Prepare the map once so screen, print and CSV use identical figures. */
@@ -178,7 +178,7 @@ function kreabankMonthlyDetailsHtml($rows, $side, $title, $state, $langs, $print
 		if ($row['native_id'] > 0) {
 			$html .= '<br><a href="' . dol_escape_htmltag(dol_buildpath('/compta/bank/line.php?rowid=' . (int) $row['native_id'], 1)) . '">#' . (int) $row['native_id'] . '</a>';
 		}
-		return $html . '</td><td class="right nowrap">' . kreabankMonthlyAmount($row['amount']) . ' ' . dol_escape_htmltag($row['currency']) . '</td><td class="right nowrap">' . kreabankMonthlyAmount($row['balance']) . '</td><td>' . $langs->trans('KreaBankMonthlyState' . ucfirst($row['status'])) . '</td><td class="right">' . ($row['status'] === 'matched' ? '—' : (int) $row['age']) . '</td>' . $extra . '</tr>';
+		return $html . '</td><td class="right nowrap">' . kreabankMonthlyAmount($row['amount']) . ' ' . dol_escape_htmltag($row['currency']) . '</td><td class="right nowrap">' . kreabankMonthlyAmount($row['balance']) . '</td><td>' . $langs->trans('KreaBankMonthlyState' . ucfirst($row['status'])) . '</td><td class="right">' . (in_array($row['status'],array('matched','opening'),true) ? '—' : (int) $row['age']) . '</td>' . $extra . '</tr>';
 	}, $print);
 	return $html . '</section>';
 }

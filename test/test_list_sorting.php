@@ -45,6 +45,7 @@ class SortTestDb
 	public function escape($value) { return addslashes($value); }
 	public function idate($value) { return '2026-01-01'; }
 	public function query($sql) { $this->sql = $sql; return true; }
+	public function fetch_object($result) { return false; }
 }
 $db = new SortTestDb();
 $conf = (object) array('liste_limit'=>25);

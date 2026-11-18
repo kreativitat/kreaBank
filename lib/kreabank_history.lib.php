@@ -28,6 +28,7 @@ function kreabankHistoryCodeLabel($value, $kind, $langs)
 		'planned_payment_create'=>'Payment',
 		'statement_evidence'=>'KreaBankHistoryActionStatementEvidence','audit_purge'=>'KreaBankHistoryActionAuditPurge',
 		'trigger_event'=>'KreaBankHistoryActionTriggerEvent',
+		'opening_balance'=>'KreaBankOpeningTitle','opening_reconciliation'=>'KreaBankOpeningTitle',
 	);
 	$strategies = array(
 		'native'=>'KreaBankHistoryNativeEntry','legacy_staging'=>'KreaBankHistoryTypeLegacyImport','manual'=>'KreaBankHistoryTypeManual',
@@ -37,6 +38,7 @@ function kreabankHistoryCodeLabel($value, $kind, $langs)
 		'manual_payment_batch'=>'KreaBankHistoryTypePaymentBatch','manual_worklist_movement'=>'KreaBankHistoryTypeCreatedMovement',
 		'quick_entry'=>$actions['quick_entry'],'quick_tax_entry'=>$actions['quick_tax_entry'],'quick_supplier_invoice'=>$actions['quick_supplier_invoice'],
 		'planned_payment_create'=>$actions['planned_payment_create'],
+		'opening_balance'=>'KreaBankOpeningReconciled',
 	);
 	$maps = array('document'=>$documents,'action'=>$actions,'strategy'=>$strategies);
 	$key = $maps[$kind][$value] ?? '';
@@ -74,6 +76,7 @@ function kreabankHistoryReferenceLabel($value, $id, $langs)
 function kreabankHistoryUndoReview($row)
 {
 	global $conf, $user;
+	if (!empty($row['opening_reconciled'])) { throw new DomainException('KreaBankOpeningAlreadyApplied'); }
 	$reviews = $_SESSION['kreabank_history_undo'] ?? array();
 	foreach ($reviews as $key => $review) {
 		if ($review['expires'] < time()) { unset($reviews[$key]); }

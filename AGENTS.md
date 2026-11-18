@@ -1,5 +1,21 @@
 # AGENTS.md — KreaBank
 
+## Opening reconciliation
+
+- `admin/opening.php` is the setup-only, explicit preview/confirmation flow for
+  `KreaBankOpeningBalance`. Storage installation is POST-only. One immutable
+  company/account opening records the official previous-day booked balance and
+  audit; native reconciliation plus an optional exact `SOLD` difference commit
+  atomically. Preserve original staged statuses/links and existing native matches.
+- Historical acceptance is the separate `opening_reconciled` projection; never
+  forge a native link or assign normal matched status. Pending counts, statement
+  filters, worklist, History and monthly reports must agree. Recheck the boundary
+  under ordinary execution locks; protect it from scalar/batch Undo and staged
+  or legacy statement deletion. Start-date transactions remain ordinary work.
+- See [opening reconciliation](doc/OPENING_RECONCILIATION.md). Its database suites
+  use only the guarded disposable port 33317 fixture; deployment never applies an
+  opening or enables jobs.
+
 ## Continuous integration
 
 - 2026-11-15: GitHub Actions runs every non-database PHP test and Node CJS suite with Dolibarr 24 source on PHP 8.1/8.3. Missing private parser fixtures skip explicitly; database suites remain restricted to their documented disposable fixtures.

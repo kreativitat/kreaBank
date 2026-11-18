@@ -45,6 +45,7 @@ $conf = (object) array('entity'=>1, 'currency'=>'EUR');
 class DraftRelevanceDb {
 	public $rollbacks=0; public $queries=array();
 	public function prefix() { return 'llx_'; }
+	public function escape($value) { return addslashes((string) $value); }
 	public function query($sql) { if (strpos($sql,'SELECT ') !== 0) { throw new RuntimeException('Unexpected write'); } $this->queries[]=$sql; return (object) array('rows'=>strpos($sql, 'SELECT value FROM') === 0 ? array() : array((object) array('rowid'=>11))); }
 	public function fetch_object($result) { return array_shift($result->rows); }
 	public function begin() { return true; }

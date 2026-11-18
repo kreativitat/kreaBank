@@ -97,9 +97,10 @@ function kreabankIntegrationAmountNeedsReview($amount, $nativeAmount)
 	} catch (DomainException $e) { return true; }
 }
 
-/** Only a verified native match is presented as reconciled. */
+/** Historical opening acceptance stays distinct from a verified native match. */
 function kreabankIntegrationLineState($line, $reference)
 {
+	if (!empty($line->opening_reconciled)) { return 'KreaBankOpeningReconciled'; }
 	if (!empty($line->group_id)) {
 		return (int) ($line->group_valid ?? 0) === 1 && (int) $line->status === 2 ? 'KreaBankReconciled' : 'KreaBankLinkNeedsReview';
 	}

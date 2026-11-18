@@ -41,6 +41,13 @@ The workbook's Excel capacity checks do not apply. Classifications, explanatory
 comments, preparer/reviewer approvals and immutable period locking require a
 separate close workflow; these read-only reports do not imply those controls exist.
 
+An independently applied [opening reconciliation](OPENING_RECONCILIATION.md) can
+establish the historical boundary and official opening bank balance for one owned
+account. Reports starting on or after that date verify its native ledger and
+opening adjustment, accept intact earlier evidence separately from transaction
+matches, and carry only post-start pending items. Calculated subsequent closes
+remain provisional. A report never applies, changes or repairs an opening.
+
 ## Implementation and checks
 
 `KreaBankMonthlyReport` loads only SELECT projections through `KreaBankIntegration`

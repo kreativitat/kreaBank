@@ -29,7 +29,7 @@ class KreaBankHistory
 	private function sql($accountId = 0)
 	{
 		return 'SELECT h.* FROM (' . (new KreaBankIntegration($this->db, $this->entity))->bankStatementSql($accountId)
-			. ") h WHERE (h.status=2 OR h.rappro=1)";
+			. ") h WHERE (h.status=2 OR h.rappro=1 OR h.opening_reconciled=1)";
 	}
 
 	public function find($id, $source, $accountId = 0)
@@ -48,6 +48,10 @@ class KreaBankHistory
 		$row['native_bank_line_id'] = (int) ($row['native_id'] ?? 0);
 		$row['date_validate'] = $row['operation_date'];
 		$row['strategy'] = !empty($row['group_id']) ? 'manual_payment_batch' : 'native';
+		if (!empty($row['opening_reconciled'])) {
+			$row['strategy'] = 'opening_balance'; $row['needs_review'] = false;
+			return $row;
+		}
 		$row['needs_review'] = !empty($row['is_duplicate']) || (int) $row['rappro'] !== 1
 			|| (string) $row['currency'] !== (string) $row['native_currency']
 			|| (string) $row['num_releve'] !== (string) $row['statement_ref']
@@ -73,6 +77,7 @@ class KreaBankHistory
 
 	private function withReconciliationAudit($row, $audits)
 	{
+		if (!empty($row['opening_reconciled'])) { return $row; }
 		foreach ($audits as $audit) {
 			$payload = json_decode((string) $audit['payload_json'], true);
 			if (!is_array($payload)) { continue; }

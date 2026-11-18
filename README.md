@@ -139,6 +139,14 @@ the module or change scheduled jobs as a routine upgrade step. See
 pairs, automation and Fintable have separate administration tabs. **About** shows
 the installed version, current capabilities, license and documentation links.
 
+**Setup → Opening reconciliation** establishes a reviewed starting position for
+each owned bank account. Enter the reconciliation start date and the official
+closing booked bank balance from the previous day, preview the historical counts
+and exact ledger difference, then explicitly approve. Earlier imports are accepted
+as historical opening data; start-date transactions still require reconciliation.
+See [opening reconciliation](doc/OPENING_RECONCILIATION.md) for evidence, safeguards,
+installation and recovery. Installing the feature does not apply any opening.
+
 Run targeted checks from the module root using installed Dolibarr source:
 
 ```sh

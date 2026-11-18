@@ -340,12 +340,13 @@ function kreabankWorklistTable($model, $langs)
 		$batchReview = !empty($row['batch_review']);
 		$activeBatch = !empty($row['batch_active']);
 		$draft = (array) ($row['draft'] ?? array());
-		$done = (int) ($line['status'] ?? 0) === 2 || !empty($row['reconciled']);
+		$done = (int) ($line['status'] ?? 0) === 2 || !empty($line['opening_reconciled']) || !empty($row['reconciled']);
 		$bankReviews = !$done ? (array) ($row['bank_reviews'] ?? (!empty($review['correction']) ? array($review) : array())) : array();
 		$accountMismatch = !$done && (!empty($row['account_mismatch']) || $bankReviews);
 		$needsReview = !empty($row['needs_review']);
 		$html .= '<tr class="oddeven kb-wl-row" id="' . $id . '" data-line-key="' . $e($key) . '"><td class="nowrap">' . $e(kreabankWorklistDate($line['operation_date'] ?? $line['date'] ?? '')) . '</td>' . (!$hideStatementAccount ? '<td>' . $e($line['bank_account_ref'] ?? '') . '</td>' : '') . '<td class="kb-wl-statement">' . $e($line['description'] ?? '') . '</td><td class="right nowrap">' . kreabankWorklistMoney($line['amount'], $line['currency']) . '</td><td class="kb-wl-match">';
-		if ($review) { $html .= kreabankWorklistCandidate($review, $langs); }
+		if (!empty($line['opening_reconciled'])) { $html .= '<span class="badge badge-status4">' . $t('KreaBankOpeningReconciled') . '</span>'; }
+		elseif ($review) { $html .= kreabankWorklistCandidate($review, $langs); }
 		elseif ($draft) { $html .= '<strong>' . $e(count((array) ($draft['member_keys'] ?? array())) === 1 ? kreabankWorklistTranslate($langs, 'KreaBankWorklistSelectedMovement') : (($draft['name'] ?? '') ?: kreabankWorklistTranslate($langs, 'KreaBankWorklistPaymentBatch'))) . '</strong><span class="kb-wl-caption">' . $t(!empty($row['batch_suggestion']) || count((array) ($draft['member_keys'] ?? array())) === 1 ? 'KreaBankWorklistSelected' : 'Draft') . ' · ' . count((array) ($draft['member_keys'] ?? array())) . ' ' . $t(count((array) ($draft['member_keys'] ?? array())) === 1 ? 'KreaBankWorklistMovement' : 'KreaBankWorklistMovements') . '</span>'; }
 		else { $html .= '<span class="opacitymedium">' . $t(!empty($row['ambiguous']) ? 'KreaBankWorklistAmbiguous' : (!empty($row['pending_analysis']) ? 'KreaBankWorklistAwaitingAnalysis' : 'KreaBankWorklistNoMatch')) . '</span>'; }
 		if (!empty($row['notice'])) { $html .= '<span class="kb-wl-caption" role="status">' . $e($row['notice']) . '</span>'; }
@@ -380,7 +381,7 @@ function kreabankWorklistTable($model, $langs)
 		if ($done && $activeBatch) {
 			$html .= '<a class="button kb-wl-icon" data-kb-row-navigation="' . $e($key) . '" href="' . $e(kreabankWorklistUrl($model, array('expand'=>$key, 'mode'=>'view'))) . '" title="' . $t('KreaBankWorklistViewBatch') . '" aria-label="' . $t('KreaBankWorklistViewBatch') . '" aria-controls="' . $id . '-detail" aria-expanded="' . ($expanded ? 'true' : 'false') . '">' . kreabankWorklistIcon('eye') . '</a>';
 		}
-		if ($canWrite && $done && !$needsReview && !empty($row['undo_review'])) {
+		if ($canWrite && $done && empty($line['opening_reconciled']) && !$needsReview && !empty($row['undo_review'])) {
 			$undo = kreabankWorklistUndo($row['undo_review'],$line,$id,$model,$langs);
 			$html .= $undo['button']; $forms .= $undo['form']; $dialogs .= $undo['dialog'];
 		}
