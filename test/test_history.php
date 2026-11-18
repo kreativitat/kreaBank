@@ -23,7 +23,7 @@ if (in_array('--native', $argv ?? array(), true)) {
 			$label = kreabankHistoryCodeLabel($code,'document',$langs);
 			$check($label !== $code && strpos($label,'KreaBank') === false, 'Known document type uses installed translations: ' . $locale . '/' . $code);
 		}
-		foreach (array('native','legacy_staging','manual','drag_drop','bulk_manual','auto_native','auto_safe','auto_pair','auto_tpa','manual_payment_batch','manual_worklist_movement','quick_entry','quick_tax_entry','quick_supplier_invoice') as $code) {
+		foreach (array('native','legacy_staging','manual','drag_drop','bulk_manual','auto_native','auto_safe','auto_pair','auto_transfer','auto_tpa','manual_payment_batch','manual_worklist_movement','quick_entry','quick_tax_entry','quick_supplier_invoice') as $code) {
 			$label = kreabankHistoryCodeLabel($code,'strategy',$langs);
 			$check($label !== $code && strpos($label,'KreaBank') === false, 'Known reconciliation strategy uses installed translations: ' . $locale . '/' . $code);
 		}

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.72 — 2026-11-18
+
+- Display owned-account automation with the existing translated automatic-transfer label in History.
+
+
 ## 1.20.71 — 2026-11-18
 
 - Automatically reconcile proven transfers across selected accounts owned by the same company, reusing reciprocal native legs or creating both together atomically.

@@ -34,7 +34,7 @@ function kreabankHistoryCodeLabel($value, $kind, $langs)
 		'native'=>'KreaBankHistoryNativeEntry','legacy_staging'=>'KreaBankHistoryTypeLegacyImport','manual'=>'KreaBankHistoryTypeManual',
 		'drag_drop'=>'KreaBankHistoryTypeAssignment','bulk_manual'=>'KreaBankHistoryTypeReviewed',
 		'auto_native'=>'KreaBankHistoryTypeAutomaticMovement','auto_safe'=>'KreaBankHistoryTypeAutomaticSafe',
-		'auto_pair'=>'KreaBankHistoryTypeAutomaticTransfer','auto_tpa'=>'KreaBankHistoryTypeAutomaticCard',
+		'auto_pair'=>'KreaBankHistoryTypeAutomaticTransfer','auto_transfer'=>'KreaBankHistoryTypeAutomaticTransfer','auto_tpa'=>'KreaBankHistoryTypeAutomaticCard',
 		'manual_payment_batch'=>'KreaBankHistoryTypePaymentBatch','manual_worklist_movement'=>'KreaBankHistoryTypeCreatedMovement',
 		'quick_entry'=>$actions['quick_entry'],'quick_tax_entry'=>$actions['quick_tax_entry'],'quick_supplier_invoice'=>$actions['quick_supplier_invoice'],
 		'planned_payment_create'=>$actions['planned_payment_create'],

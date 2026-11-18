@@ -41,6 +41,13 @@ checkAuto(count($created)===2&&$created[0]['fk_type']==='VIR'&&$created[1]['fk_t
 checkAuto($service->reconcileAutomaticOwnTransfer(900001,array(3104,3105))===0&&countAuto('bank')===$beforeBank+2,'Opposite-side retry cannot duplicate transfer');
 $audit=json_decode($db->query('SELECT payload_json FROM kbauto_kreabank_recon_audit WHERE fk_statement_line=900000 ORDER BY rowid DESC LIMIT 1')->fetch_object()->payload_json,true);
 checkAuto($audit['strategy']==='auto_transfer'&&$audit['source']==='staged'&&$audit['paired_statement_line_id']===900001&&$audit['created_transfer'],'Audit binds exact source/native pair and creation');
+require_once __DIR__.'/../class/KreaBankHistory.class.php';
+$history=new KreaBankHistory($db,1);$completed=$history->find(900000,'staged');
+checkAuto($completed&&$completed['strategy']==='auto_transfer'&&!$completed['needs_review'],'History retains the exact owned-transfer audit and native mapping');
+$beforeUndo=countAuto('bank');
+checkAuto($service->undoReconciliation(900000,'Synthetic owned-transfer Undo',KreaBankHistory::snapshot($completed)),'Ordinary transfer uses the shared reviewed Undo lifecycle');
+checkAuto($service->reconcileAutomaticOwnTransfer(900000,array(3104,3105))===0&&countAuto('bank')===$beforeUndo
+	&&$service->getBulkReviewLine(900000,'staged')['status']===0,'Reviewed Undo retains its managed native leg for manual review without automatic recreation');
 
 ownPair(900010,'752.23');ownNativePair(901010,901011,'752.23');
 $beforeBank=countAuto('bank');
