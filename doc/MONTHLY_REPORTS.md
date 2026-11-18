@@ -136,3 +136,27 @@ The shared projection's optional owned-account/calendar endpoint mode calculates
 only the latest feed line before the cutoff. The report derives earlier running
 balances from its complete source set in memory, within the same SELECT snapshot;
 it does not issue a correlated balance calculation for every historical row.
+
+## Production acceptance — 2026-11-18
+
+The accountant's report from
+[`6ae0b3a`](https://github.com/kreativitat/kreaBank/commit/6ae0b3a1604fb682aec097291930218ede3ad1a6)
+was confirmed live within KreaBank **1.20.72**, deployed source
+[`ac87dd4`](https://github.com/kreativitat/kreaBank/commit/ac87dd4636ca7b446c9a1c9ff228466afb825872).
+All ten report runtime paths matched that source exactly, including the newer
+descriptor and translations. No replacement or downgrade was necessary.
+
+Authenticated checks in the Codex internal browser verified the first/default
+Saldos banco/ERP view, owned-account month selection, native pagination, complete
+CSV and print sections, translated labels and desktop/mobile rendering without
+page overflow. Exact CSV figures matched independent read-only SQL sums for ten
+native month-end balances and the three bank closes supported by available
+history. Original eight-decimal figures, signed differences and the complete
+pending total were retained. Reports can advance between views as existing
+reconciliation activity continues; they are not immutable closes.
+
+On production PHP 8.1.34, the matching staged source passed 22 balance-report and
+91 native translation/render/CSV checks. No production database test fixture,
+financial action, schema update, configuration change or scheduler operation was
+performed. Existing unavailable historical balances and data-review conditions
+remain visible. The browser's physical print/PDF dialog was not exercised.
