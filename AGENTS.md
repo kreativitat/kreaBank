@@ -1,5 +1,18 @@
 # AGENTS.md — KreaBank
 
+## Reviewed Uber settlements
+
+- `KreaBankUberSettlementTrait` connects complete KreaEats payout evidence to a
+  positive imported EUR credit through an explicitly configured clearing account.
+  Keep the existing service/native lifecycle, exact cents, owned accounts, signed
+  review, duplicate guards and one atomic bank/KreaEats transaction. Never feed
+  payout advice to automatic matching or create invoice payments/adjustment plugs.
+- `admin/uber.php` stores only current-company store/account mappings. Cash
+  clearing accounts use native `LIQ` transfer semantics. Bank Undo retains the
+  transfer and KreaEats association; document association is a separate status.
+  See [Uber settlements](doc/UBER_SETTLEMENTS.md) for dependencies and disposable
+  port 33317 checks. Deployment configures no mappings and executes no settlement.
+
 ## Opening reconciliation
 
 - `admin/opening.php` is the setup-only, explicit preview/confirmation flow for

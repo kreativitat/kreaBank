@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.21.0 — 2026-11-18
+
+- Connect reviewed KreaEats payouts to bank credits through an explicitly configured, company-owned Uber clearing account.
+- Reuse a complete native transfer or create both legs atomically, reconcile the receiving leg and associate it with the same payout. Preserve native cash-account operation rules and all original bank/report evidence.
+- Require a signed, single-use review and current permissions; reject changed, split, duplicated or previously associated payouts and conflicting movements. Keep invoice payments, fees, adjustments, learning and unattended matching separate.
+
 ## 1.20.72 — 2026-11-18
 
 - Display owned-account automation with the existing translated automatic-transfer label in History.

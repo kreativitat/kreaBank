@@ -24,6 +24,7 @@ require_once __DIR__ . '/KreaBankRuleServiceTrait.php';
 require_once __DIR__ . '/KreaBankWriteOffServiceTrait.php';
 require_once __DIR__ . '/KreaBankAutomaticTpaTrait.php';
 require_once __DIR__ . '/KreaBankOwnTransferTrait.php';
+require_once __DIR__ . '/KreaBankUberSettlementTrait.php';
 require_once __DIR__ . '/../lib/kreabank.lib.php';
 
 /**
@@ -53,6 +54,7 @@ class KreaBankService
 	use KreaBankWriteOffServiceTrait;
 	use KreaBankAutomaticTpaTrait;
 	use KreaBankOwnTransferTrait;
+	use KreaBankUberSettlementTrait;
 
 	/** Legacy samples were repeatedly scaled and cannot be reconstructed safely. */
 	const BATCH_ML_FEATURE_VERSION = 2;

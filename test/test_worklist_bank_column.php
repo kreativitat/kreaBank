@@ -30,7 +30,7 @@ function bankColumnModel($review,$options=array())
 	$page=array('rows'=>array(array('key'=>'staged:11','line'=>$line)));
 	$sourceKeys=array('staged:11');
 	$cache=array('summaries'=>array('staged:11'=>array()));$expand=!empty($options['expanded'])?'staged:11':'';$mode='batch';$search='';
-	$canWrite=empty($options['readonly']);$canMove=$canWrite;$canCreate=$canWrite;$canUndo=false;$baseParams=array('search_account'=>'101');
+	$canWrite=empty($options['readonly']);$canMove=$canWrite;$canCreate=$canWrite;$canUndo=false;$canUber=false;$baseParams=array('search_account'=>'101');
 	$remembered=array();$remember=static function($kind,$payload)use(&$remembered){$remembered[]=array($kind,$payload);return 'synthetic-review';};
 	$paymentUrl=$candidateModel=$pairDescriptor=static function(){throw new LogicException('A bank warning cannot create a financial approval');};
 	$_SESSION=array();$modelRows=array();

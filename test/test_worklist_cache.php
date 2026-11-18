@@ -38,7 +38,7 @@ function cacheRenderActualRows(&$cache,$sources,$read,$reuse){
 	$worklist=$read;$sourceKeys=array_keys($sources);$state=kreabankWorklistState(array());$baseParams=$state['params'];
 	$page=array('rows'=>array());foreach(array_slice($sources,0,10,true) as $key=>$line){$page['rows'][]=array('key'=>$key,'line'=>$line);}
 	kreabankWorklistPresentationPage($cache,array_column($page['rows'],'key'),10);
-	$reusePrepared=$reuse;$expand='';$mode='batch';$search='';$canWrite=true;$canMove=true;$canCreate=true;$canUndo=false;
+	$reusePrepared=$reuse;$expand='';$mode='batch';$search='';$canWrite=true;$canMove=true;$canCreate=true;$canUndo=false;$canUber=false;
 	$paymentUrl=static function(){return '';};$pairDescriptor=static function(){return array('action'=>'confirm_pair','fields'=>array());};
 	$candidateModel=static function($pair){$s=$pair['suggestion'];return array('doc_type'=>$s['doc_type'],'doc_id'=>$s['doc_id'],'account_ref'=>'SYNTHETIC');};
 	$langs=new class{public function trans($key){return $key;}};$service=new stdClass();$modelRows=array();$_SESSION=array();

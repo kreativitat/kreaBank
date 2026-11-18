@@ -123,6 +123,7 @@ function kreabankWorklistDocumentUrl($type, $id)
 		'payment_supplier'=>'/fourn/paiement/card.php?id=', 'payment_supplier_linked'=>'/fourn/paiement/card.php?id=',
 		'tax'=>'/compta/sociales/card.php?id=', 'payment_tax'=>'/compta/payment_sc/card.php?id=',
 		'salary'=>'/salaries/card.php?id=', 'payment_salary'=>'/salaries/payment_salary/card.php?id=',
+		'uber_payout'=>'/custom/kreaeats/kreaeatsindex.php?view=settlement&id=',
 	);
 	if (!is_string($type) || !isset($paths[$type]) || (!is_int($id) && !is_string($id))
 		|| !preg_match('/^[1-9][0-9]{0,9}$/D',(string) $id)) { return ''; }
@@ -369,6 +370,13 @@ function kreabankWorklistTable($model, $langs)
 			$disabled = !empty($review['action']['disabled']) || in_array($review['doc_type'] ?? '',array('customer_invoice','supplier_invoice','tax','salary'),true);
 			$html .= kreabankWorklistButton(kreabankWorklistTranslate($langs, $disabled ? 'KreaBankWorklistPaymentRequired' : ($review['action']['label'] ?? 'KreaBankWorklistReconcile')), 'check', $disabled ? 'type="button"' : 'type="submit" form="' . $formId . '"', !$disabled, $disabled);
 			if (!$disabled) { $forms .= kreabankWorklistPostForm($formId, $review['action'], $model); }
+		}
+		if ($canWrite && !$done && !$accountMismatch) {
+			foreach ((array) ($row['uber_candidates'] ?? array()) as $uber) {
+				$uberUrl = dol_buildpath('/custom/kreabank/ubersettlement.php', 1) . '?' . http_build_query(array_merge(
+					kreabankWorklistViewState($model['state'] ?? array()), array('source_key'=>$key, 'settlement_id'=>(int) $uber['doc_id'])), '', '&', PHP_QUERY_RFC3986);
+				$html .= '<a class="button" data-kb-row-navigation="' . $e($key) . '" href="' . $e($uberUrl) . '" title="' . $e($uber['reference']) . '">' . kreabankWorklistIcon('eye') . ' ' . $t('KreaBankUberReview') . (count($row['uber_candidates']) > 1 ? ' · ' . $e($uber['reference']) : '') . '</a>';
+			}
 		}
 		if (!$done) {
 			foreach (array('batch'=>'KreaBankWorklistSelectMovements', 'create'=>'KreaBankWorklistCreateMovement') as $mode => $label) {

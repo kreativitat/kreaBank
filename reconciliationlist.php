@@ -32,6 +32,8 @@ $history = new KreaBankHistory($db, (int) $conf->entity);
 $canWrite = $user->hasRight('kreabank','reconciliation','write') && ($user->hasRight('banque','modifier') || $user->hasRight('banque','consolidate'));
 $canMove = $canWrite && $user->hasRight('banque','modifier');
 $canCreate = $canMove && !getDolGlobalInt('BANK_DISABLE_DIRECT_INPUT');
+$canUber = $canMove && PHP_VERSION_ID >= 80100 && isModEnabled('kreaeats') && $user->hasRight('banque','transfer')
+	&& $user->hasRight('kreaeats','read') && $user->hasRight('kreaeats','reconcile');
 $paymentPermissions = array(
 	'customer_invoice'=>$canWrite && isModEnabled('invoice') && $user->hasRight('facture','lire') && $user->hasRight('facture','paiement'),
 	'supplier_invoice'=>$canWrite && isModEnabled('supplier_invoice') && ($user->hasRight('fournisseur','facture','lire') || $user->hasRight('supplier_invoice','lire'))
@@ -416,6 +418,22 @@ foreach ($page['rows'] as $indexRow) {
 			}
 			$row['create_available'] = $canCreate && strpos($key,'staged:') === 0 && !$row['batch_unavailable']
 				&& empty($row['needs_review']) && empty($prepared['pair']) && !$row['account_mismatch'] && empty($batch['draft']) && empty($batch['active']);
+			// Provider advice is read afresh for the displayed page and never enters matching or unattended scans.
+			if ($canUber && strpos($key,'staged:') === 0 && !$row['batch_unavailable'] && !$row['account_mismatch']
+				&& empty($row['needs_review']) && empty($batch['draft']) && empty($batch['active'])) {
+				try {
+					foreach ($service->listUberSettlements($key) as $uber) {
+						$row['uber_candidates'][] = array('doc_type'=>'uber_payout','doc_id'=>(int) $uber['settlement']['rowid'],
+							'reference'=>$uber['settlement']['payout_ref'], 'date'=>$uber['window']['start'],
+							'amount'=>KreaBankUberSettings::money($uber['settlement']['net']), 'currency'=>$row['line']['currency'],
+							'account_ref'=>$uber['receiving_account']['ref'], 'description'=>$uber['store']['label'], 'consequence'=>'KreaBankUberReviewRequired');
+					}
+					if (!empty($row['uber_candidates'])) {
+						$row['create_available'] = false;
+						if (empty($row['review']) && count($row['uber_candidates']) === 1) { $row['review'] = $row['uber_candidates'][0]; }
+					}
+				} catch (Throwable $error) { dol_syslog('KreaBank Uber advice unavailable: ' . get_class($error), LOG_WARNING); }
+			}
 			if ($isExpanded && $mode === 'create') {
 				if (!$row['create_available']) { $row['creation_notice'] = kreabankWorklistTranslate($langs, 'KreaBankWorklistMovementUnavailable'); }
 				else {

@@ -53,6 +53,11 @@ current page size; **More** processes another bounded group.
   payment is created.
 
 See the [reconciliation list and batch guide](doc/RECONCILIATION_LIST.md).
+Optional [reviewed Uber settlements](doc/UBER_SETTLEMENTS.md) connect a KreaEats
+payout to the bank credit through an explicitly configured Uber clearing account.
+Review an existing reciprocal transfer or create its two native legs together,
+reconcile the receiving leg and associate that same movement in KreaEats. Sales
+payments, supplier payments and adjustments retain their separate evidence.
 The original selected-line workspace at `reconcile.php` remains supported through
 its direct routes, with its existing creation and review flows. See the
 [selected-line guide](doc/RECONCILIATION_UI.md).
