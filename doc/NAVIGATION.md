@@ -1,9 +1,10 @@
 # Banking workspace
 
 Operational banking pages share six tabs: Bank statement, Statements, Reconcile,
-Monthly reports, Movements and History. Movements also remains in the native left
-menu directly below New financial account. Its native list shares the operational
-tab bar and highlights Movements. Reconcile opens the new `reconciliationlist.php`. The legacy
+Monthly reports, Movements and History. The selected-account Movements view shares
+the operational tab bar and highlights Movements. The native left-menu Movements
+entry directly below New financial account opens a separate global list without
+operational tabs. Reconcile opens the new `reconciliationlist.php`. The legacy
 `reconcile.php` controllers and direct routes remain dormant and intact. Connections also retains its
 direct route without an operational tab. Bank statement combines all imported
 movements; Statements retains the individual import list and details. Account
@@ -83,7 +84,13 @@ Since 1.20.67, the Movements tab opens the native list with the selected account
 retains it through search, reset, sorting and paging. The `completeArrayFields`
 hook removes `ba.ref` from scoped lists, including its column-picker option;
 saved native column preferences cannot restore the redundant account column or
-filter. Preferences are not rewritten, and all-account lists retain the column.
+filter. Preferences are not rewritten. Since 1.20.68, the left-menu global list
+has no workspace tabs and retains the bank-account column, filter and picker
+option, including when narrowed to one account. Native `search_account` and its
+`account` alias remain editable list filters; only fixed `id`/`ref` or explicit
+legacy `account_context` select workspace presentation. Search, reset, sorting and
+paging never promote an editable filter to fixed context. Both context and filter
+IDs retain direct current-company ownership validation.
 The native controller and financial actions remain unchanged. Validate with
 `php test/test_navigation.php` and `php test/test_movement_columns.php`, which
 uses the installed native column selector, including text-browser mode.

@@ -191,7 +191,7 @@ function kreabankBankingHeader($page, $account = null, $showFilters = true)
 	$html .= '</div></div>';
 	$accountTools = $accountId > 0 ? kreabankAccountToolEntries($accountId) : array();
 	$active = in_array($page, array('card', 'documents', 'reports', 'forecast', 'native_statements', 'numbering'), true) ? 'account' : (in_array($page, array('matched', 'bulkmatch', 'pending'), true) ? 'reconcile' : ($page === 'import' ? 'statement' : $page));
-	if ($page !== 'accounts' && $active !== 'account') {
+	if ($page !== 'accounts' && $active !== 'account' && ($page !== 'movements' || $accountId > 0)) {
 		$html .= '<nav class="kb-primary" aria-label="' . dol_escape_htmltag($langs->trans('KreaBankBanking')) . '">';
 		foreach (kreabankPrepareHead($accountId) as $tab) {
 			$html .= '<a' . ($active === $tab[2] ? ' class="active" aria-current="page"' : '') . ' href="' . dol_escape_htmltag($tab[0]) . '">' . $tab[1] . '</a>';

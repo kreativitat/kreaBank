@@ -227,9 +227,40 @@ $navigationRequest = array();
 $queryCount = count($db->queries);
 $hooks->printCommonFooter(array(), $object, $action, null);
 checkNavigation(strpos($hooks->resprints, 'kb-header') !== false && strpos($hooks->resprints, 'KreaBankAllAccounts') !== false
+	&& strpos($hooks->resprints, 'kb-primary') === false
 	&& strpos($hooks->resprints, 'kb-view-switch') === false && strpos($hooks->resprints, 'kb-accounts-filters') === false
 	&& strpos($hooks->resprints, '<form') === false && count($db->queries) === $queryCount,
-	'The native movement list retains its banking header without duplicate status/account filters or selector queries');
+	'The global native movement list keeps its banking header without workspace tabs or duplicate filters');
+foreach (array(
+	array('search_account' => 45),
+	array('account' => 45),
+	array('id' => 0, 'search_account' => 45, 'contextpage' => 'banktransactionlist', 'sortfield' => 'ba.ref', 'page' => 1),
+	array('id' => 0, 'search_account' => 0, 'button_removefilter' => 1),
+) as $request) {
+	$navigationRequest = $request;
+	$queryCount = count($db->queries);
+	$hooks->printCommonFooter(array(), $object, $action, null);
+	checkNavigation(strpos($hooks->resprints, 'kb-primary') === false && strpos($hooks->resprints, 'KreaBankAllAccounts') !== false
+		&& strpos($hooks->resprints, 'kb-movement-balances') === false && count($db->queries) === $queryCount,
+		'Global account searches, sorting, paging and reset never select a workspace account or tabs');
+	$hooks->printFieldPreListTitle(array(), $object, $action, null);
+	checkNavigation(strpos($hooks->resprints, 'account_context') === false, 'The global search form never pins its editable account filter as workspace context');
+}
+foreach (array('id', 'account_context') as $field) {
+	$navigationRequest = array($field => 45, 'search_account' => 45);
+	$hooks->printFieldPreListTitle(array(), $object, $action, null);
+	checkNavigation(strpos($hooks->resprints, 'name="account_context" value="45"') !== false, 'Explicit workspace context survives native search and reset');
+}
+foreach (array('search_account', 'account') as $field) {
+	$navigationRequest = array($field => 999);
+	try {
+		$hooks->doActions(array(), $object, $action, null);
+		throw new RuntimeException('Foreign account filter accepted');
+	} catch (LogicException $e) {
+		checkNavigation(strpos(end($db->queries), 'rowid = 999 AND entity = 7') !== false, 'Global filters retain direct current-company account authorization');
+	}
+}
+$navigationRequest = array();
 $html = kreabankBankingHeader('movements', (object) array('id' => 45, 'ref' => 'Synthetic bank'), false);
 checkNavigation(strpos($html, 'Synthetic bank') !== false && strpos($html, 'kb-movement-balances') !== false
 	&& strpos($html, 'kb-view-switch') === false && strpos($html, 'kb-accounts-filters') === false,
@@ -272,6 +303,9 @@ foreach (array('movements', 'worklist', 'bankstatement', 'statement', 'reconcile
 	$xpath = new DOMXPath($dom);
 	checkNavigation($xpath->query('//span[@class="kb-account-context"]')->item(0)->textContent === 'KreaBankAllAccounts', 'All-account views identify their combined scope without naming an arbitrary bank');
 	checkNavigation(strpos($html, 'kb-movement-balances') === false, 'Combined views never display a summed monetary balance');
+	if ($page === 'movements') {
+		checkNavigation($xpath->query('//nav[contains(@class,"kb-primary")]')->length === 0, 'Standalone all-account movements have no operational tabs');
+	}
 	$accountField = $page === 'movements' ? 'id' : 'account_context';
 	checkNavigation($xpath->query('//form[contains(@class,"kb-accounts-filters")]')->length === ($page === 'worklist' ? 0 : 1) && $xpath->query('//select[@name="' . $accountField . '"]')->length === ($page === 'worklist' ? 0 : 1), 'Unscoped pages retain their selector; the worklist owns its statement-bank column filter');
 	if ($page === 'movements') {

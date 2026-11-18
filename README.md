@@ -23,9 +23,11 @@ Six tabs retain the selected account:
 | Movements | Native Dolibarr entries for the selected bank account, without a repeated account column or filter. |
 | History | Reconciliation history and company-wide audit, with permission-controlled undo. |
 
-**Movements** also remains available in the native left menu. Lists use Dolibarr header
-filters, sorting and pagination. Selected-account views omit repeated bank columns;
-all-account views retain them. Monthly **Summary** and **Controls** use compact
+**Movements** in the native left menu opens a separate global list without the
+workspace tabs. Its bank-account column and editable filter remain available even
+when filtering one account. The selected-account workspace tab keeps its six tabs
+and omits that repeated column/filter. Both lists use native sorting and pagination.
+Monthly **Summary** and **Controls** use compact
 report tables; transaction subtabs retain filterable, paginated lists.
 
 ## Reconciliation

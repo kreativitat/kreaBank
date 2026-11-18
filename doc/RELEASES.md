@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.68 — 2026-11-18
+
+- Separate the left-menu global Movements list from the selected-account workspace: keep its bank-account column/filter and omit workspace tabs, even when filtering one account.
+- Retain the six tabs and omit the repeated bank-account column/filter only for fixed account workspace context. Preserve native search, reset, sorting, pagination and company ownership checks.
+
 ## 1.20.67 — 2026-11-17
 
 - Add Movements between Monthly reports and History in the banking workspace, retaining the selected account in native movement-list links and navigation.

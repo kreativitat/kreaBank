@@ -41,7 +41,7 @@ $original = array(
 	'ba.ref' => array('label' => 'BankAccount', 'checked' => 1),
 	'b.debit' => array('label' => 'Debit', 'checked' => 1),
 );
-foreach (array(array('id' => '45'), array('account_context' => '45'), array('search_account' => '45')) as $request) {
+foreach (array(array('id' => '45'), array('account_context' => '45'), array('id' => '45', 'search_account' => '45')) as $request) {
 	foreach (array(0, 1) as $textBrowser) {
 		$_GET = $request;
 		$_POST = array();
@@ -58,6 +58,9 @@ foreach (array(array('id' => '45'), array('account_context' => '45'), array('sea
 }
 foreach (array(
 	array('/compta/bank/bankentries_list.php', array(), true),
+	array('/compta/bank/bankentries_list.php', array('search_account' => '45'), true),
+	array('/compta/bank/bankentries_list.php', array('account' => '45'), true),
+	array('/compta/bank/bankentries_list.php', array('id' => '0', 'search_account' => '45', 'contextpage' => 'banktransactionlist', 'sortfield' => 'ba.ref', 'page' => '1'), true),
 	array('/compta/bank/bankentries_list.php', array('id' => '45'), false),
 	array('/compta/bank/card.php', array('id' => '45'), true),
 ) as $case) {

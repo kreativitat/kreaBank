@@ -276,14 +276,14 @@ class ActionsKreaBank extends CommonHookActions
 			header('Location: ' . kreabankWorkspaceUrl('accounts'));
 			exit;
 		}
-		if ($page === 'bankentries_list.php' && GETPOSTISSET('account_context')) {
+		$accountId = $this->nativeAccountId($page);
+		if ($page === 'bankentries_list.php') {
 			foreach (array('account', 'id', 'search_account') as $field) {
-				if (GETPOSTINT($field) > 0 && GETPOSTINT($field) !== GETPOSTINT('account_context')) {
+				if (GETPOSTINT($field) > 0 && GETPOSTINT($field) !== $accountId) {
 					kreabankNavigationAccount(GETPOSTINT($field));
 				}
 			}
 		}
-		$accountId = $this->nativeAccountId($page);
 		if ($accountId > 0) {
 			kreabankNavigationAccount($accountId);
 		}
@@ -313,7 +313,8 @@ class ActionsKreaBank extends CommonHookActions
 		if ($page === 'bankentries_list.php' && GETPOSTISSET('account_context')) {
 			return max(0, GETPOSTINT('account_context'));
 		}
-		$id = GETPOSTINT('account') ?: (GETPOSTINT('id') ?: GETPOSTINT('search_account'));
+		// Native id/ref fix the workspace account; account/search_account only filter the global list.
+		$id = $page === 'bankentries_list.php' ? GETPOSTINT('id') : (GETPOSTINT('account') ?: (GETPOSTINT('id') ?: GETPOSTINT('search_account')));
 		$ref = GETPOST('ref','alpha');
 		if (!$id && $ref !== '') {
 			$r = $db->query('SELECT rowid FROM ' . $db->prefix() . 'bank_account WHERE entity=' . (int) $conf->entity . " AND ref='" . $db->escape($ref) . "'");
