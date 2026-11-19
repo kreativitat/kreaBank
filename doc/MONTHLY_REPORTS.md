@@ -54,6 +54,10 @@ are retained rather than assigning workbook row numbers. Classifications, saved
 accountant comments, preparer/reviewer approvals and immutable period locking
 require a separate close workflow.
 
+In Bank/ERP balances, Ref. / type stays on one line with an ellipsis in screen
+and print views. The full value remains in the cell text and hover title, and
+filtering and CSV exports retain the complete reference.
+
 An independently applied [opening reconciliation](OPENING_RECONCILIATION.md) can
 establish the historical boundary and official opening bank balance for one owned
 account. Reports starting on or after that date verify its native ledger and

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.21.2 — 2026-11-19
+
+- Keep Ref. / type values on one truncated line in the bank/ERP balances report so long references no longer increase row height. Retain the full reference on hover, for filtering and in CSV exports.
+
 ## 1.21.1 — 2026-11-18
 
 - Preserve exact Unicode in opening reconciliation snapshots on installations with legacy database character sets.

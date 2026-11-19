@@ -71,6 +71,7 @@
 .kb-monthly-balances-pending .kb-monthly-col-date { width:10%; }
 .kb-monthly-balances-pending .kb-monthly-col-description { width:22%; }
 .kb-monthly-balances-pending .kb-monthly-col-reference { width:10%; }
+.kb-monthly-balances-pending .kb-monthly-reference-compact { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .kb-monthly-balances-pending .kb-monthly-col-amount { width:11%; }
 .kb-monthly-balances-pending .kb-monthly-col-nature { width:11%; }
 .kb-monthly-balances-pending .kb-monthly-col-origin_month { width:8%; }

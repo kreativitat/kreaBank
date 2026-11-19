@@ -60,7 +60,11 @@ function kreabankMonthlyBalancesHtml($report, $state, $langs, $print = false)
 			foreach ($facts as $field=>$value) {
 				if ($field === 'date' && $value !== '') { $value = DateTimeImmutable::createFromFormat('!Y-m-d', $value, new DateTimeZone('UTC'))->format('d/m/Y'); }
 				$amountCurrency = $field === 'amount' && $row['currency'] !== $report['account']['currency_code'] ? ' ' . dol_escape_htmltag($row['currency']) : '';
-				$html .= '<td' . ($field === 'amount' ? ' class="right nowrap"' : '') . '>' . ($field === 'amount' ? kreabankMonthlyAmount($value) . $amountCurrency : dol_escape_htmltag($value !== '' ? $value : '—')) . '</td>';
+				$content = $field === 'amount' ? kreabankMonthlyAmount($value) . $amountCurrency : dol_escape_htmltag($value !== '' ? $value : '—');
+				if ($field === 'reference') {
+					$content = '<span class="kb-monthly-reference-compact" title="' . dol_escape_htmltag($value) . '">' . $content . '</span>';
+				}
+				$html .= '<td' . ($field === 'amount' ? ' class="right nowrap"' : '') . '>' . $content . '</td>';
 			}
 			return $html . $extra . '</tr>';
 		}, $print, $footer);
