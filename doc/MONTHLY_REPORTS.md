@@ -164,3 +164,20 @@ On production PHP 8.1.34, the matching staged source passed 22 balance-report an
 financial action, schema update, configuration change or scheduler operation was
 performed. Existing unavailable historical balances and data-review conditions
 remain visible. The browser's physical print/PDF dialog was not exercised.
+
+### Compact references — 2026-11-19
+
+The Ref. / type display patch from
+[`8e6e753`](https://github.com/kreativitat/kreaBank/commit/8e6e753e8b867b9a6ce1c43e53c6f6b275c45125)
+was deployed only to `lib/kreabank_monthly_balances.lib.php` and
+`css/monthly-report.css`. The installed 1.20.72 descriptor and version marker
+were retained to avoid deploying unrelated newer features. Both live file hashes
+and the publicly served CSS matched the reviewed source; production PHP 8.1 lint,
+renderer/export/native translation checks and source CI passed. Stable module
+configuration and scheduler definitions were unchanged, and private source
+preimages were retained for rollback. No schema or financial operation ran.
+
+Visual row-height and print-layout acceptance is **UNVERIFIED** for this patch:
+both internal-browser and Chrome access were unavailable in the chat. Synthetic
+DOM checks confirmed full escaped tooltip/text retention, suffix filtering and
+unchanged complete CSV references.
